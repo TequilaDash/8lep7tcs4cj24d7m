@@ -286,6 +286,21 @@ final class CellularTunnelManager: @unchecked Sendable {
         }
 
         let name = turnOffShortcutName
+        // v0.3.650：**没建快捷指令就绝不跳转**。
+        //
+        // 原实现直接 `UIApplication.shared.open(shortcuts://run-shortcut?name=...)`，
+        // 用户没建过该快捷指令时会被强行跳到快捷指令 App，并看到
+        // 「该文件不存在。未找到快捷指令 "TurnOffData"」—— 这正是用户截图报的问题。
+        //
+        // 现在先用持久化标记判断（iOS 无公开 API 可查快捷指令是否存在，
+        // 但「用户是否已确认建好」是我们自己的信息，不算伪造系统状态）。
+        guard CellularShortcutInstaller.isShortcutInstalled(name) else {
+            LoginLogger.shared.log(
+                "[Cellular] 快捷指令「\(name)」未创建，跳过跳转（引导用户先创建）",
+                category: .general)
+            return false
+        }
+
         let url = Self.shortcutURL(for: name)
         LoginLogger.shared.log("[Cellular] 执行关蜂窝快捷指令「\(name)」…", category: .general)
         let ok = await UIApplication.shared.open(url)

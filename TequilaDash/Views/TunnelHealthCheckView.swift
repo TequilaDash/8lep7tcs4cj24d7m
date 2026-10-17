@@ -180,7 +180,30 @@ struct TunnelHealthCheckView: View {
     var body: some View {
         List {
             if !viewModel.loaded {
-                Section { ProgressView("正在检查…") }
+                // v0.3.650：加载态**整页居中**。
+                //
+                // 原实现是一个孤立 Section，转圈图标停在页面顶部、下面大片空白，
+                // 用户第一眼以为页面坏了。改为：
+                //   1) Section 不带头部、行背景透明、无行内边距
+                //   2) 用 ZStack + Color.clear 把内容在剩余空间里撑满并居中
+                // 与全站其它耗时页（虚拟定位加载、应用列表首屏）一致的观感。
+                Section {
+                    ZStack {
+                        Color.clear
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("正在检查…")
+                                .font(AppFont.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 320)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                .listRowSeparator(.hidden)
             } else {
                 Section(header: Text("诊断结果")) {
                     ForEach(viewModel.rows) { row in

@@ -130,13 +130,34 @@ enum CallRecordingToneService {
     ///
     /// 先探**可达性**（经 `AirLiftService` 读一次开始提示音）：读不出即 `.unreachable`，
     /// 不拿持久化标记冒充成功。可达时以持久化标记为准（判据说明见文件头「诚实边界」）。
-    static func currentState() async -> ToneState {
+    /// 查询当前状态。
+    ///
+    /// v0.3.650：**不再启动时探可达性**（照 AirBeep `refresh()`）。
+    ///
+    /// 原实现每次都做一次 airlift 读，读不出就返回 `.unreachable`。
+    /// AirBeep 源码注释（`CallRecordingToneService.swift:123-125`）明确说：
+    ///
+    ///   > Never probe the system disclosure files at app-open:
+    ///   > airlift reads are unreliable on some iOS releases and would surface a spurious error.
+    ///
+    /// 也就是说这个探测在某些 iOS 版本上**必然失败**，于是本页常年显示「不可达」，
+    /// 而且 `.unreachable` 会让「恢复」按钮被 `.disabled` 掉 —— 用户想恢复都点不了。
+    ///
+    /// 现在与 AirBeep 一致：**以持久化标记为准**，不做网络探测。
+    /// 真实可达性留给具体的禁用 / 恢复动作去验证（那时失败也会如实报错）。
+    static func currentState() -> ToneState {
+        UserDefaults.standard.bool(forKey: disabledKey) ? .silenced : .original
+    }
+
+    /// 保留一个**显式**的探测入口（用户点「重新检查」时才用），
+    /// 不再由页面加载自动调用。
+    static func probeReachable() async -> Bool {
         do {
             _ = try await AirLiftService.readFile(at: startTone.path)
+            return true
         } catch {
-            return .unreachable
+            return false
         }
-        return UserDefaults.standard.bool(forKey: disabledKey) ? .silenced : .original
     }
 
     // MARK: - 禁用

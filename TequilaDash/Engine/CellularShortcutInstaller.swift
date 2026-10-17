@@ -1,22 +1,78 @@
 import Foundation
 import Network
+import UIKit
 
-/// Legacy import entry point. URL acceptance is not proof of a shortcut import.
-/// The unsigned, airplane-mode shortcut generator is intentionally not used.
+/// 「关 / 开蜂窝」快捷指令的可达性检查与创建引导。
+///
+/// ## 为什么没有「自动静默安装」了（v0.3.650 重新设计）
+///
+/// v0.3.599 曾试过 `shortcuts://import-shortcut?url=...&silent=true` 静默导入，
+/// **真机实测失败**：URL 无效 + 强制跳转到快捷指令 App（v0.3.616 撤销）。
+/// v0.3.616 之后 `ensureInstalled()` 被改成恒返回 false 的死函数，
+/// 但蜂窝开关仍然去跑 `shortcuts://run-shortcut?name=TurnOffData` ⇒
+/// 用户看到的就是「未找到快捷指令 TurnOffData」这个弹窗。
+///
+/// ## 源码对照结论（LiveContainer + SideStore 都读了）
+///
+/// · LiveContainer：自己的 Swift/ObjC 里 `NWPathMonitor|cellular|shortcut` 命中 **0**，
+///   刷新整个通过 App Intents/XPC 外包给 SideStore ⇒ 它不是实现方。
+/// · SideStore `Core/Shortcuts/CellularRefreshManager.swift`：只按名字调
+///   `shortcuts://run-shortcut?name=TurnOffData`，**自己不创建、也不引导创建**
+///   （SideStore issue #1393 / #1413 / #1191 全是用户抱怨「找不到快捷指令」）。
+///   Shortcuts 目录下只有这一个文件，无任何 `.shortcut` 生成代码。
+///
+/// ⇒ **两个参考项目都不自动创建快捷指令**，用户看到的「LiveContainer 自动创建且不跳转」
+///   在这个版本里没有源码依据。不再照一个不存在的做法去实现。
+///
+/// ## 现在的做法
+///
+/// 1. **运行前先探测**快捷指令是否存在（`isShortcutInstalled`）——
+///    不存在就**不跳转**，改为引导用户一键创建（见 `createShortcutURL`）。
+/// 2. 创建用 `shortcuts://create-shortcut`（Apple 官方 URL scheme），
+///    **无法静默**（Apple 不允许第三方代建）—— 这一步如实告知用户。
+/// 3. 蜂窝开关打开时主动提示一次，不要让用户在建隧道时才撞见弹窗。
 enum CellularShortcutInstaller {
-    @MainActor
-    @discardableResult
-    static func ensureInstalled() async -> Bool {
-        UserDefaults.standard.removeObject(forKey: "TequilaDash.CellularShortcutsImported")
-        LoginLogger.shared.log("[Cellular] 已停止未验证的快捷指令导入，不切换飞行模式、不拉起快捷指令 App.", category: .general)
-        return false
+
+    /// 持久化键：用户是否已被告知「需要自建快捷指令」.
+    static let advisedKey = "TequilaDash.CellularShortcutAdvised"
+
+    /// 以 `shortcuts://open-shortcut?name=` 探测某个快捷指令是否存在。
+    ///
+    /// ⚠️ **无法真正检测**：iOS 没有「查询快捷指令是否存在」的公开 API。
+    /// 这里用一个保守的近似的**用户是否已确认建好**的持久化标记，
+    /// 不伪造系统返回值（v0.3.616 的教训：URL 被受理 ≠ 事情已办成）。
+    static func isShortcutInstalled(_ name: String) -> Bool {
+        let key = "TequilaDash.CellularShortcut.\(name)"
+        return UserDefaults.standard.bool(forKey: key)
+    }
+
+    /// 标记某个快捷指令已建好（由 UI 在用户确认后调用）。
+    static func markShortcutInstalled(_ name: String) {
+        UserDefaults.standard.set(true, forKey: "TequilaDash.CellularShortcut.\(name)")
+    }
+
+    /// 生成「一键创建快捷指令」的 URL（Apple 官方 `shortcuts://create-shortcut`）。
+    ///
+    /// 无法静默：Apple 不允许第三方应用替用户建快捷指令，必然跳转到快捷指令 App。
+    /// 这一步如实告知，不包装成「自动安装」。
+    static func createShortcutURL(name: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "shortcuts"
+        components.host = "create-shortcut"
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+        return components.url
+    }
+
+    /// 供 UI 判断：是否该提示用户去建快捷指令。
+    ///   两个都没建 ⇒ 提示（返回 false 表示「不该直接跑」）。
+    static var shouldPromptCreation: Bool {
+        !isShortcutInstalled("TurnOffData") || !isShortcutInstalled("TurnOnData")
     }
 
     static func resetImportedFlag() {
-        UserDefaults.standard.removeObject(forKey: "TequilaDash.CellularShortcutsImported")
+        UserDefaults.standard.removeObject(forKey: advisedKey)
     }
 }
-
 /// Loopback-only file server retained for local diagnostics. Readiness and
 /// requests share one serial queue; no caller holds a lock while waiting.
 final class LocalShortcutServer: @unchecked Sendable {

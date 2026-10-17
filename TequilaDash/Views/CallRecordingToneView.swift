@@ -49,7 +49,11 @@ struct CallRecordingToneView: View {
                 } label: {
                     Label("恢复原始提示音", systemImage: "arrow.uturn.backward")
                 }
-                .disabled(busy || state != .silenced)
+                // v0.3.650：`.disabled(busy || state != .silenced)` 会把 `.unreachable`
+                // 也一起禁掉 —— 而 `.unreachable` 恰恰是最该允许用户尝试恢复的时候
+                // （AirBeep 的探测在某些 iOS 版本上必然失败，会常年卡在这个状态）。
+                // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试。
+                .disabled(busy || state == .original)
             } header: {
                 Label("操作", systemImage: "slider.horizontal.3")
             } footer: {
@@ -60,7 +64,7 @@ struct CallRecordingToneView: View {
         .navigationTitle("禁用通话录音")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            state = await loadState()
+            state = loadState()
         }
         .alert(item: $alert) { item in
             Alert(
@@ -113,7 +117,7 @@ struct CallRecordingToneView: View {
                 try await Task.detached(priority: .userInitiated) {
                     try await action.perform()
                 }.value
-                state = await loadState()
+                state = loadState()
                 busy = false
                 AppHaptics.success()
                 alert = ToneAlert(title: "完成", message: action.doneMessage)
@@ -124,11 +128,9 @@ struct CallRecordingToneView: View {
         }
     }
 
-    /// 状态查询含一次 airlift 读取（阻塞），放到后台执行.
-    private func loadState() async -> CallRecordingToneService.ToneState {
-        await Task.detached(priority: .utility) {
-            await CallRecordingToneService.currentState()
-        }.value
+    /// 读状态。v0.3.650 起**不做 airlift 探测**（照 AirBeep），同步即可。
+    private func loadState() -> CallRecordingToneService.ToneState {
+        CallRecordingToneService.currentState()
     }
 }
 

@@ -322,11 +322,27 @@ struct SettingsForm: View {
             // 放在「本地隧道」设备 IP 之前：先选隧道方式，再填对端 IP。
             TunnelPickerView()
 
-            // The toggle must not launch Shortcuts or change airplane mode.
-            // Cellular tunnel readiness is not proof that cellular refresh works.
+            // v0.3.650：本区改为如实描述「需要自建快捷指令」。
+            //
+            // 旧 footer 写「不切换飞行模式、不跳转其他 App」，读起来像「什么都不做」；
+            // 而 v0.3.647 起蜂窝下**确实**会去跑快捷指令（照 SideStore），
+            // 只是没建指令时会先拦下来引导创建，不再硬跳。
             Section(header: Text("Cellular隧道支持"),
-                    footer: Text("蜂窝网络下检查本地隧道，不切换飞行模式、不跳转其他 App.")) {
+                    footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复）。iOS 不允许第三方代建快捷指令，故需你手动创建一次；创建后会记住，不再提示。")) {
                 Toggle("Cellular隧道支持", isOn: $cellularTunnelSupport)
+
+                // 已开开关但快捷指令未建 ⇒ 给出创建入口
+                // （而不是等建隧道时才撞见「未找到指令」弹窗）
+                if cellularTunnelSupport,
+                   !CellularShortcutInstaller.isShortcutInstalled("TurnOffData")
+                    || !CellularShortcutInstaller.isShortcutInstalled("TurnOnData") {
+                    NavigationLink {
+                        CellularShortcutGuideView()
+                    } label: {
+                        Label("创建蜂窝快捷指令（需 1 分钟）", systemImage: "bolt.badge.plus")
+                            .foregroundStyle(AppTheme.pending)
+                    }
+                }
             }
 
             Section(header: Text("本地隧道"), footer: Text("必须与 LocalDevVPN 的隧道/设备 IP 一致.保持默认的 10.7.0.1，除非你修改过 LocalDevVPN.")) {
