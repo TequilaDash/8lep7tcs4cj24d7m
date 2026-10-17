@@ -339,22 +339,31 @@ final class CellularTunnelManager: @unchecked Sendable {
         #endif
     }
 
-    // MARK: - 快捷指令自动安装（v0.3.614）
+    // MARK: - 快捷指令（v0.3.650 起改为「引导用户自建」）
 
-    /// 用户打开「Cellular隧道支持」开关时调用：**自动把两个快捷指令装进系统**.
+    /// ⚠️ 这里**没有**「自动安装快捷指令」。
     ///
-    /// 为什么加这一步：SideStore 只按名字调 `shortcuts://run-shortcut?name=TurnOffData`，
-    /// 但**自己不提供快捷指令** —— 用户没建就报「Could not find the shortcut」
-    /// （SideStore issue #1393 / #1413 / #1191 都记着这个坑）。
-    /// 本仓用 Apple 官方的 `shortcuts://import-shortcut?...&silent=true` 补上，
-    /// **用户完全不用手动建、也不会被跳转到快捷指令 App**。
+    /// 历史（三段都留记录，避免下一个人再走一遍）：
+    /// · v0.3.599 试过 `shortcuts://import-shortcut?...&silent=true` 静默导入
+    ///   ⇒ 真机实测 URL 无效 + 强制跳转（v0.3.616 撤销）。
+    /// · v0.3.616 把 installer 改成恒 false 的死函数，但没删这个入口，
+    ///   于是 v0.3.647 让蜂窝真的去跑指令时就炸了「未找到 TurnOffData」。
+    /// · v0.3.650 源码对照确认：LiveContainer 自己无蜂窝代码（外包 SideStore）；
+    ///   SideStore `Core/Shortcuts/` 下只有 `CellularRefreshManager.swift`，
+    ///   **不创建也不引导创建**（issue #1393/#1413/#1191 全是用户抱怨）。
     ///
-    /// 幂等：已装过直接返回（见 `CellularShortcutInstaller.hasImported`）。
+    /// ⇒ 结论：iOS 不允许第三方代建快捷指令，两个参考项目都要求用户自建。
+    ///   所以改为 UI 引导（`CellularShortcutGuideView`）+ 运行前拦截（见 `turnOffDataIfNeeded`）。
+    ///
+    /// 本函数保留为**兼容占位**（无调用点），不再声称能装任何东西。
     @MainActor
     @discardableResult
     func ensureShortcutsInstalled() async -> Bool {
-        guard isSupported else { return false }
-        return await CellularShortcutInstaller.ensureInstalled()
+        // 如实返回 false：我们不会、也不能替用户创建快捷指令。
+        LoginLogger.shared.log(
+            "[Cellular] 快捷指令需用户自建（iOS 不允许第三方代建），引导页见设置 → Cellular隧道支持",
+            category: .general)
+        return false
     }
 }
 
