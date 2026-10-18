@@ -207,7 +207,8 @@ struct I4StoreFreeView: View {
             ImageGalleryViewer(urls: target.urls, startIndex: target.index)
         }
         .task {
-            downloadedCount = IPADownloadLibrary.shared.items().count
+            // v0.3.658（task-3 D6）：只要个数 ⇒ 用目录列举，别再走 items()（会逐条开 IPA 包）。
+            downloadedCount = IPADownloadLibrary.shared.downloadedFileCount
             if apps.isEmpty { await load() }
         }
     }
@@ -1098,7 +1099,8 @@ struct I4StoreFreeView: View {
                                            version: app.version,
                                            iconURL: app.icon,
                                            remoteURL: ipaURL.absoluteString)
-        downloadedCount = IPADownloadLibrary.shared.items().count
+        // v0.3.658（task-3 D6）：只要个数 ⇒ 用目录列举，别再走 items()（会逐条开 IPA 包）。
+        downloadedCount = IPADownloadLibrary.shared.downloadedFileCount
     }
 
     // MARK: - v0.3.414 NB 源（按 App Store ID 取包）

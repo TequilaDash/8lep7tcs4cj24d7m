@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.658] - 2026-10-18
+
+> **一句话**：下载台账的「读-改-写」补锁（D7），并把只为算体积而逐条开 IPA 包的两处 API 拆掉（D6）。
+
+### D7 —— 台账读-改-写无锁，并发时后写覆盖先写
+
+`Engine/IPADownloadLibrary.swift` 的记忆索引是一条 JSON 台账，11 处操作都是
+「loadIndex() -> 改内存 -> saveIndex()」的裸序列。两个写者交错时：
+
+1. A 读旧内容；2. B 读同一份旧内容；3. A 写回（A 的改动生效）；4. B 写回 —— **把 A 的改动整体覆盖**。
+
+用户可见表现：下载完成后图标回填丢失、刚下完的包不在列表里、删掉的条目过一会又回来。
+
+修法：一把 `NSRecursiveLock`（`mutationLock`）包住整段临界区，统一入口 `withLedger(_:)`。
+用**递归锁**而不是普通锁，是因为 `record(...)` / `markInstalled(...)` 等内部会回头调 `items()`，
+普通锁会自己把自己锁死。`items()` 拆成公开的持锁版本 + `private func itemsLocked()`，
+内部调用只走 `itemsLocked()`。只读的 `sinf(forFileName:)` 不进锁。
+
+### D6 —— totalBytes 为了算总大小把每个 IPA 包都开一遍
+
+原来 `items().reduce { $0 + $1.sizeBytes }` 会逐条解析 IPA 包只为拿体积。
+改为直接对磁盘文件取大小；另加 `downloadedFileCount`，
+替掉 `Views/I4StoreFreeView.swift:210` 与 `:1102` 两处 `items().count`
+（那里只关心个数，却触发了全量开包）。
+
+`totalBytes` 全仓**没有任何调用点**，改它只是为了不留下一个「一调就扫全盘开包」的 API。
+
+### 验证
+
+- `normalize_eol.py --base 57277bb --check`：与基线一致；
+- `swiftc -parse`（Swift 6.4 / `-swift-version 6` / `-strict-concurrency=complete`）：两文件 EXIT=0。
+
 ## [0.3.657] - 2026-10-18
 
 > **一句话**：修 v0.3.656 的遗留编译错 —— `clear(categories:)` 收 `Set<Category>` 不是数组，

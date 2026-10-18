@@ -90,15 +90,46 @@ struct IPADownloadItem: Codable, Identifiable, Hashable {
     }
 }
 
-/// 下载库（单例；只在主线程使用）
+/// 下载库（单例）
 ///
-/// `@unchecked Sendable`：本类**没有任何可变实例状态**——唯一的持久化状态是磁盘上的
+/// `@unchecked Sendable`：本类**没有任何业务可变实例状态**——唯一的持久化状态是磁盘上的
 /// `Documents/ipa_downloads.json` 台账（每次调用现场读、现场写），实例本身只是一个
 /// 无状态门面，因此跨隔离域共享引用是安全的。
+///
+/// v0.3.658（task-3 D7）：加了一把**递归锁** `mutationLock`。
+///
+/// 为什么需要：台账的每个写入口都是「loadIndex → 改数组 → saveIndex」三步，
+/// 而这三步**全程不持任何锁**。多条路径会并发写同一份文件：
+///   · 主 actor：`items()` 列表刷新时顺手 saveIndex（补齐 size/图标/sinf）；
+///   · 后台下载完成：`record()` / `updateSourceURL()` / `markSinf()`；
+///   · 后台安装完成：`markInstalled()`；
+///   · 用户左滑删除：`remove(...)`。
+/// 两个写者交错时，后一个会把前一个的改动**整体覆盖**（后写的 loadIndex 读到的是
+/// 前一个写盘前的旧内容）—— 表现为「图标回填莫名丢失」「刚下完的包从列表消失」。
+/// 用递归锁的原因：写入口内部会调 notifyWriteRejected / logReadOnly（不重入），
+/// 但 items() 在持锁期间会走 saveIndex，而 items() 自身也可能是被锁内调用者触发的；
+/// `NSRecursiveLock` 保证同一条线程重入不会自锁死（`NSLock` 会）。
 final class IPADownloadLibrary: @unchecked Sendable {
 
     static let shared = IPADownloadLibrary()
     private init() {}
+
+    /// 台账「读-改-写」的串行化锁（见类文档 v0.3.658 D7 段）。
+    ///
+    /// 只包住**台账操作**，不包 `IPAPackageInspector` 开包（那才是真正的耗时大户，
+    /// 串起来会让列表刷新明显变慢）—— 锁的职责是「不要覆盖别人的写入」，
+    /// 不是「把磁盘读串行化」。
+    private let mutationLock = NSRecursiveLock()
+
+    /// 在台账锁内执行一段读-改-写。
+    ///
+    /// 所有「loadIndex … saveIndex」序列都必须走这里 —— 分开写就是 D7 的病根
+    /// （中间可被别人插入一次完整写入，把本次改动整体覆盖掉）。
+    private func withLedger<T>(_ body: () -> T) -> T {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+        return body()
+    }
 
     /// 磁盘扫描现场构造条目时的**占位来源**（`makeItem`）.
     ///
@@ -196,7 +227,14 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// 全部当新条目重建（丢直链 / sinf / 商品号 / 显示名），随后 `saveIndex` 覆盖原文件
     /// —— 好数据被残缺数据静默替换且不可恢复。现在只要 `loadIndex()` 报告有任何丢失
     /// （文件读不出、JSON 坏、或有记录解不出），就**不写盘**，只把能读到的那部分返回给界面。
-    func items() -> [IPADownloadItem] {
+    func items() -> [IPAPDownloadItemPlaceholder] {
+        // v0.3.658（D7）：整段读-改-写进锁内 —— 下面可写时会 saveIndex，
+        // 不锁就会与后台的 record / markInstalled / remove 互相覆盖。
+        return withLedger { itemsLocked() }
+    }
+
+    /// items() 的真身（由 withLedger 持锁调用）。
+    private func itemsLocked() -> [IPADownloadItem] {
         let load = loadIndex()
         var index = load.items
         let onDisk = diskFiles()
@@ -259,8 +297,30 @@ final class IPADownloadLibrary: @unchecked Sendable {
         return index.sorted { $0.downloadedAt > $1.downloadedAt }
     }
 
+    /// v0.3.658（task-3 D6）：**不再走 items()**。
+    ///
+    /// 旧实现 `items().reduce(0){ $0 + max(0,$1.sizeBytes) }` 会让「只想算个总大小」
+    /// 付出 items() 的全部代价：磁盘扫描 + 台账解码 + **逐条开 IPA 包**补 size/加密态/sinf
+    /// （20 个包就要开 20 次 ZIP）。而 sizeBytes 本就来自 fileSize()（文件属性），
+    /// 与包内容无关 ⇒ 直接用文件属性累加即可，语义完全一致。
+    ///
+    /// 注意：全仓没有任何调用点（grep 只命中 Job.totalBytes 等同名无关字段），
+    /// 所以这一改**不为性能、只为「别留一个会扫全盘开包的 API」**。
     var totalBytes: Int64 {
-        items().reduce(0) { $0 + max(0, $1.sizeBytes) }
+        withLedger {
+            diskFiles().reduce(Int64(0)) { sum, name in
+                sum + max(0, fileSize(name))
+            }
+        }
+    }
+
+    /// v0.3.658（D6）：已下载包**个数** —— 给「已下载 N 个」这类角标用。
+    ///
+    /// 与 `items().count` 等价（两者都以「盘上有 .ipa」为准，台账只是补元信息），
+    /// 但代价从「解码台账 + 逐条开包」降到「一次目录列举」。
+    /// 调用点：I4StoreFreeView 两处（.task 与下载发起后刷新角标）。
+    var downloadedFileCount: Int {
+        withLedger { diskFiles().count }
     }
 
     /// 下载完成后登记（同一个应用重复下载会覆盖旧记录的元信息）.
@@ -274,26 +334,30 @@ final class IPADownloadLibrary: @unchecked Sendable {
                 storeItemId: String? = nil,
                 sinfBase64: String? = nil) {
         let name = fileURL.lastPathComponent
-        let load = loadIndex()
-        // 台账没完整读出来时**不写盘**：否则会把没读到的条目当成「不存在」而覆盖掉。
-        guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
-        var index = load.items
-        index.removeAll { $0.fileName == name }
-        var item = makeItem(fileName: name)
-        item.displayName = displayName
-        item.bundleId = bundleId ?? item.bundleId
-        item.version = version ?? item.version
-        item.iconURL = iconURL
-        item.source = source
-        // 只在拿到真直链时才覆盖，避免 Apple ID 通道把已有直链抹掉
-        if let sourceURL, !sourceURL.isEmpty { item.sourceURL = sourceURL }
-        // 同理：没给商品号就保留台账里已有的（别把它抹成 nil）
-        if let storeItemId, !storeItemId.isEmpty { item.storeItemId = storeItemId }
-        // v0.3.413（D8 B）：sinf 也落台账 —— 同样只在真拿到时覆盖，别把已有的抹成 nil。
-        // 这是「重装不用重下」的关键：`installLocal` 会从这里读回来写进包内。
-        if let sinfBase64, !sinfBase64.isEmpty { item.sinfBase64 = sinfBase64 }
-        index.append(item)
-        saveIndex(index)
+        // v0.3.658（D7）：读-改-写整段进锁 —— 它与「列表刷新的 saveIndex」「安装完成的
+        // markInstalled」并发时，后者会把本次登记整体覆盖掉（表现为刚下完的包不在列表里）。
+        withLedger {
+            let load = loadIndex()
+            // 台账没完整读出来时**不写盘**：否则会把没读到的条目当成「不存在」而覆盖掉。
+            guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
+            var index = load.items
+            index.removeAll { $0.fileName == name }
+            var item = makeItem(fileName: name)
+            item.displayName = displayName
+            item.bundleId = bundleId ?? item.bundleId
+            item.version = version ?? item.version
+            item.iconURL = iconURL
+            item.source = source
+            // 只在拿到真直链时才覆盖，避免 Apple ID 通道把已有直链抹掉
+            if let sourceURL, !sourceURL.isEmpty { item.sourceURL = sourceURL }
+            // 同理：没给商品号就保留台账里已有的（别把它抹成 nil）
+            if let storeItemId, !storeItemId.isEmpty { item.storeItemId = storeItemId }
+            // v0.3.413（D8 B）：sinf 也落台账 —— 同样只在真拿到时覆盖，别把已有的抹成 nil。
+            // 这是「重装不用重下」的关键：`installLocal` 会从这里读回来写进包内。
+            if let sinfBase64, !sinfBase64.isEmpty { item.sinfBase64 = sinfBase64 }
+            index.append(item)
+            saveIndex(index)
+        }
     }
 
     /// v0.3.413（D8 修法 B）：读回该包**下载时拿到的 sinf**（base64）。没有则 `nil`。
@@ -314,25 +378,31 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// v0.3.570：`structurallyValid` 改为 `Bool?` —— 包内 sinf 存在但**格式不认识**时传 `nil`
     /// （标签落「未校验」），不得把「不知道」写成 `false` 冻死成「sinf 异常」。
     func markSinf(fileName: String, structurallyValid: Bool?) {
-        let load = loadIndex()
-        guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
-        var index = load.items
-        guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
-        // 幂等：值没变就不写盘
-        guard index[i].hasSINF != true || index[i].sinfStructurallyValid != structurallyValid else { return }
-        index[i].hasSINF = true
-        index[i].sinfStructurallyValid = structurallyValid
-        saveIndex(index)
+        // v0.3.658（D7）：读-改-写进锁（与 record / items / remove 一致）。
+        withLedger {
+            let load = loadIndex()
+            guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
+            var index = load.items
+            guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
+            // 幂等：值没变就不写盘
+            guard index[i].hasSINF != true || index[i].sinfStructurallyValid != structurallyValid else { return }
+            index[i].hasSINF = true
+            index[i].sinfStructurallyValid = structurallyValid
+            saveIndex(index)
+        }
     }
 
     /// 安装成功后打时间戳
     func markInstalled(fileName: String) {
-        let load = loadIndex()
-        guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
-        var index = load.items
-        guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
-        index[i].lastInstalledAt = Date()
-        saveIndex(index)
+        // v0.3.658（D7）：读-改-写进锁（与 record / items / remove 一致）。
+        withLedger {
+            let load = loadIndex()
+            guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
+            var index = load.items
+            guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
+            index[i].lastInstalledAt = Date()
+            saveIndex(index)
+        }
     }
 
     /// v0.3.360：把查到的图标地址**落盘**。
@@ -342,14 +412,17 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// 于是列表永远只能显示占位图。界面侧会按 bundleId 反查图标补齐，
     /// **这里把结果持久化**，避免每次进页面都重新发一轮 lookup 请求（条目多了会变成请求风暴）。
     func updateIconURL(fileName: String, url: String) {
-        guard !url.isEmpty else { return }
-        let load = loadIndex()
-        guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
-        var index = load.items
-        guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
-        guard index[i].iconURL != url else { return }
-        index[i].iconURL = url
-        saveIndex(index)
+        // v0.3.658（D7）：读-改-写进锁（与 record / items / remove 一致）。
+        withLedger {
+            guard !url.isEmpty else { return }
+            let load = loadIndex()
+            guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
+            var index = load.items
+            guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
+            guard index[i].iconURL != url else { return }
+            index[i].iconURL = url
+            saveIndex(index)
+        }
     }
 
     /// v0.3.378：把**来源直链**回填进台账（供操作面板「提取下载链接」用）。
@@ -357,15 +430,18 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// 补齐方式与 `updateIconURL` 同源：下载中心的任务里记着 `remoteURL`，
     /// 界面侧把「已完成且有直链」的任务回填到这里并落盘，于是历史记录里也有链接可复制。
     func updateSourceURL(fileName: String, url: String) {
-        let link = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !link.isEmpty else { return }
-        let load = loadIndex()
-        guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
-        var index = load.items
-        guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
-        guard index[i].sourceURL != link else { return }
-        index[i].sourceURL = link
-        saveIndex(index)
+        // v0.3.658（D7）：读-改-写进锁（与 record / items / remove 一致）。
+        withLedger {
+            let link = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !link.isEmpty else { return }
+            let load = loadIndex()
+            guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
+            var index = load.items
+            guard let i = index.firstIndex(where: { $0.fileName == fileName }) else { return }
+            guard index[i].sourceURL != link else { return }
+            index[i].sourceURL = link
+            saveIndex(index)
+        }
     }
 
     // MARK: - 删除
@@ -381,54 +457,62 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// 返回值 `@discardableResult`：既有调用方（左滑 / 批量 / 取消任务）不关心结果时可忽略。
     @discardableResult
     func remove(_ item: IPADownloadItem) -> RemoveResult {
-        let load = loadIndex()
-        guard load.writable else {
-            logReadOnly(load.note)
-            notifyWriteRejected(load.userReason, prefix: "未删除安装包")
-            return .rejectedReadOnly
-        }
-        let filePath = path(for: item)
-        do {
-            try FileManager.default.removeItem(atPath: filePath)
-        } catch {
-            // 文件**本就不存在**（早已删）不算失败；仍存在 = 真删不掉（被占用 / 权限）。
-            // 删不掉时**不动台账**：条目仍原样保留，磁盘与台账继续一致。
-            if FileManager.default.fileExists(atPath: filePath) {
-                LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(item.fileName)）",
-                                       category: .download)
-                return .fileRemovalFailed
+        // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
+        // 或反过来都会被下一次 items() 的磁盘对齐改回去。
+        withLedger {
+            let load = loadIndex()
+            guard load.writable else {
+                logReadOnly(load.note)
+                notifyWriteRejected(load.userReason, prefix: "未删除安装包")
+                return .rejectedReadOnly
             }
+            let filePath = path(for: item)
+            do {
+                try FileManager.default.removeItem(atPath: filePath)
+            } catch {
+                // 文件**本就不存在**（早已删）不算失败；仍存在 = 真删不掉（被占用 / 权限）。
+                // 删不掉时**不动台账**：条目仍原样保留，磁盘与台账继续一致。
+                if FileManager.default.fileExists(atPath: filePath) {
+                    LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(item.fileName)）",
+                                           category: .download)
+                    return .fileRemovalFailed
+                }
+            }
+            var index = load.items
+            index.removeAll { $0.fileName == item.fileName }
+            saveIndex(index)
+            return .removed
         }
-        var index = load.items
-        index.removeAll { $0.fileName == item.fileName }
-        saveIndex(index)
-        return .removed
     }
 
     /// 删除单个包（按文件名）—— 下载中心取消任务时用。
     /// 顺序与返回值语义同 `remove(_:)`：只读时**不删文件**、返回 `.rejectedReadOnly`。
     @discardableResult
     func remove(fileName: String) -> RemoveResult {
-        let load = loadIndex()
-        guard load.writable else {
-            logReadOnly(load.note)
-            notifyWriteRejected(load.userReason, prefix: "未删除安装包")
-            return .rejectedReadOnly
-        }
-        let filePath = directory.appendingPathComponent(fileName)
-        do {
-            try FileManager.default.removeItem(at: filePath)
-        } catch {
-            if FileManager.default.fileExists(atPath: filePath.path) {
-                LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(fileName)）",
-                                       category: .download)
-                return .fileRemovalFailed
+        // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
+        // 或反过来都会被下一次 items() 的磁盘对齐改回去。
+        withLedger {
+            let load = loadIndex()
+            guard load.writable else {
+                logReadOnly(load.note)
+                notifyWriteRejected(load.userReason, prefix: "未删除安装包")
+                return .rejectedReadOnly
             }
+            let filePath = directory.appendingPathComponent(fileName)
+            do {
+                try FileManager.default.removeItem(atPath: filePath)
+            } catch {
+                if FileManager.default.fileExists(atPath: filePath.path) {
+                    LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(fileName)）",
+                                           category: .download)
+                    return .fileRemovalFailed
+                }
+            }
+            var index = load.items
+            index.removeAll { $0.fileName == fileName }
+            saveIndex(index)
+            return .removed
         }
-        var index = load.items
-        index.removeAll { $0.fileName == fileName }
-        saveIndex(index)
-        return .removed
     }
 
     /// 批量删除（配合列表编辑模式）。
@@ -437,30 +521,33 @@ final class IPADownloadLibrary: @unchecked Sendable {
     @discardableResult
     func remove(fileNames: Set<String>) -> RemoveResult {
         guard !fileNames.isEmpty else { return .removed }
-        let load = loadIndex()
-        guard load.writable else {
-            logReadOnly(load.note)
-            notifyWriteRejected(load.userReason, prefix: "未删除安装包")
-            return .rejectedReadOnly
-        }
-        var index = load.items
-        var anyFailed = false
-        for name in fileNames {
-            let filePath = directory.appendingPathComponent(name)
-            do {
-                try FileManager.default.removeItem(at: filePath)
-            } catch {
-                if FileManager.default.fileExists(atPath: filePath.path) {
-                    LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(name)）",
-                                           category: .download)
-                    anyFailed = true
-                    continue
-                }
+        // v0.3.658（D7）：同上 —— 一批删除也要原子。
+        withLedger {
+            let load = loadIndex()
+            guard load.writable else {
+                logReadOnly(load.note)
+                notifyWriteRejected(load.userReason, prefix: "未删除安装包")
+                return .rejectedReadOnly
             }
-            index.removeAll { $0.fileName == name }
+            var index = load.items
+            var anyFailed = false
+            for name in fileNames {
+                let filePath = directory.appendingPathComponent(name)
+                do {
+                    try FileManager.default.removeItem(atPath: filePath)
+                } catch {
+                    if FileManager.default.fileExists(atPath: filePath.path) {
+                        LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(name)）",
+                                               category: .download)
+                        anyFailed = true
+                        continue
+                    }
+                }
+                index.removeAll { $0.fileName == name }
+            }
+            saveIndex(index)
+            return anyFailed ? .fileRemovalFailed : .removed
         }
-        saveIndex(index)
-        return anyFailed ? .fileRemovalFailed : .removed
     }
 
     // MARK: - 内部

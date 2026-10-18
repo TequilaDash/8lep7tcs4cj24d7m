@@ -38,6 +38,9 @@ __pycache__/
 *.pyc
 
 # 队友/我的 scratch 输出（曾多次被 git add -A 误入库）
+# gh CLI 状态（gh 在仓库 cwd 下会写 .local/state/gh/device-id，v0.3.658 误入库一次）
+/.local/
+
 /_git*.txt
 /_tmp_*.txt
 /gs2.txt
