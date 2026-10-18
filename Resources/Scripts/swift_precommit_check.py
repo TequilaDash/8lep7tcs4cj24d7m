@@ -68,6 +68,7 @@ CHECKS = [
     ("ObjC 桥接调用口径防复发", "swift_objc_bridge_guard.py", False),
     ("禁用通话录音走 airlift 防复发", "swift_airlift_guard.py", False),
     ("版本号三处同步防复发", "swift_version_sync_guard.py", False),
+    ("界面文案硬规则防复发", "swift_ui_copy_guard.py", False),
 ]
 
 
