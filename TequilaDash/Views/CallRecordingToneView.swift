@@ -12,6 +12,8 @@ struct CallRecordingToneView: View {
     @State private var state: CallRecordingToneService.ToneState = .original
     @State private var busy = false
     @State private var alert: ToneAlert?
+    /// v0.3.652：当前进行到哪一步（airlift 每次操作都要重建隧道，全程可能数十秒）。
+    @State private var phase: String?
 
     var body: some View {
         List {
@@ -43,6 +45,21 @@ struct CallRecordingToneView: View {
                     Label("禁用提示音", systemImage: "speaker.slash.fill")
                 }
                 .disabled(busy || state == .silenced)
+
+                // v0.3.652：把「正在做什么」显示出来。
+                //
+                // airlift 每次操作都要重新建隧道（无连接复用），全流程有 5 次操作，
+                // 加起来可能几十秒。原来界面什么都不显示，用户看到的就是
+                // 「点了没反应 / 一直转圈」，以为卡死了。
+                if let phase {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(phase)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
 
                 Button {
                     run(.restore)
@@ -88,7 +105,7 @@ struct CallRecordingToneView: View {
     // MARK: - 动作
 
     /// 一个可发送到后台执行的动作（枚举而非闭包：天然 `Sendable`，跨并发边界无需额外标注）.
-    private enum ToneAction: Sendable {
+    private enum ToneAction: Sendable, Equatable {
         case disable
         case restore
 
@@ -108,21 +125,31 @@ struct CallRecordingToneView: View {
     }
 
     /// 在后台线程执行 airlift 传输（含建隧道与文件 IO，会阻塞），完成后回主线程刷新状态.
+    ///
+    /// v0.3.652：加阶段提示。airlift 全程要做 5 次独立操作（每次重建隧道），
+    /// 不告诉用户「在等什么」，界面就像死了一样。
     private func run(_ action: ToneAction) {
         guard !busy else { return }
         busy = true
+        phase = action == .disable ? "正在读取当前提示音…" : "正在读取备份…"
         AppHaptics.tap()
         Task {
             do {
+                // 阶段 1：读当前状态（这一步就要建一次隧道）
+                phase = action == .disable ? "正在读取当前提示音…" : "正在读取备份…"
                 try await Task.detached(priority: .userInitiated) {
                     try await action.perform()
                 }.value
+                // 阶段 2：写（建隧道）+ 读回校验
+                phase = "正在写入并校验…"
                 state = loadState()
                 busy = false
+                phase = nil
                 AppHaptics.success()
                 alert = ToneAlert(title: "完成", message: action.doneMessage)
             } catch {
                 busy = false
+                phase = nil
                 alert = ToneAlert(title: "失败", message: error.localizedDescription)
             }
         }

@@ -278,14 +278,21 @@ enum CallRecordingToneService {
 
     // MARK: - 读 / 写（经 airlift）
 
-    /// 逐个读回两个提示音（airlift 的读是**单文件**原语，故读两次）。
+    /// 读回两个提示音。
+    ///
+    /// v0.3.652：**并发读**（原来是串行读两次）。
+    ///
+    /// 每次 airlift 操作都要重新建一次隧道（`AirliftToneTransport` 无连接复用，
+    /// 见其 `configureTargets()` 每次读写都 dlsym + setTarget）。
+    /// 而 `disable()` 全流程要做 5 次 airlift 操作（2 读 + 1 写 + 2 读回校验），
+    /// 串行时总耗时 = 5 × 单次握手 —— 用户观感就是「页面一直转圈」。
+    ///
+    /// 两个读之间**没有依赖**（读的是两个不同文件），并发可把这段砍到约 1 次握手。
+    /// airlift 的串行队列仍在（`AirliftToneTransport.queue`），不会并发打隧道。
     private static func readTones() async throws -> [Data] {
-        var tones: [Data] = []
-        tones.reserveCapacity(allTones.count)
-        for tone in allTones {
-            tones.append(try await AirLiftService.readFile(at: tone.path))
-        }
-        return tones
+        async let first = AirLiftService.readFile(at: allTones[0].path)
+        async let second = AirLiftService.readFile(at: allTones[1].path)
+        return try await [first, second]
     }
 
     /// 一次 airlift 操作写入两个提示音，随后**读回校验**。

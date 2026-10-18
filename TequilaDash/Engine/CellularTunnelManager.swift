@@ -96,7 +96,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         if !turnedOff {
             // 没关成（快捷指令没装 / 没被受理）—— 不阻断，由后续 ensureHeartbeat 如实报错。
             LoginLogger.shared.log("[Cellular] 关蜂窝未执行，继续尝试建隧道",
-                                  category: .general)
+                                  category: .tunnelCellular)
         }
 
         let ready = waitForTunnelReady(timeout: Self.readyTimeout)
@@ -109,7 +109,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         LoginLogger.shared.log(
             "[Cellular] 蜂窝模式，已关蜂窝=\(didTurnOffData)，隧道就绪=\(ready). utun=\(LocalDevVPN.isConnected) "
             + "候选对端=[\(peers.joined(separator: ", "))] 本机接口=\(LocalDevVPN.ipv4InterfaceSummary()).",
-            category: .general)
+            category: .tunnelCellular)
         return ready
     }
 
@@ -190,7 +190,7 @@ final class CellularTunnelManager: @unchecked Sendable {
             // 打一条日志，让「首帧没抢到」这件事可见（否则它是静默的）
             LoginLogger.shared.log(
                 "[Cellular] NWPathMonitor 首帧 \(timeout)s 未到，按「Wi-Fi 满足」放行（避免误判蜂窝阻塞 2.25s）.",
-                category: .general)
+                category: .tunnelCellular)
         }
         return box.value
     }
@@ -281,7 +281,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         // Wi-Fi 下不跑快捷指令（SideStore 同款闸门）。
         guard !Self.isWiFiSatisfied() else {
             LoginLogger.shared.log("[Cellular] Wi-Fi 已连接，跳过关闭蜂窝快捷指令",
-                                  category: .general)
+                                  category: .tunnelCellular)
             return false
         }
 
@@ -297,16 +297,16 @@ final class CellularTunnelManager: @unchecked Sendable {
         guard CellularShortcutInstaller.isShortcutInstalled(name) else {
             LoginLogger.shared.log(
                 "[Cellular] 快捷指令「\(name)」未创建，跳过跳转（引导用户先创建）",
-                category: .general)
+                category: .tunnelCellular)
             return false
         }
 
         let url = Self.shortcutURL(for: name)
-        LoginLogger.shared.log("[Cellular] 执行关蜂窝快捷指令「\(name)」…", category: .general)
+        LoginLogger.shared.log("[Cellular] 执行关蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
         guard ok else {
             LoginLogger.shared.log("[Cellular] 关蜂窝快捷指令未被系统受理（URL: \(url.absoluteString)）",
-                                  category: .general)
+                                  category: .tunnelCellular)
             return false
         }
 
@@ -323,7 +323,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         guard didTurnOffData else { return false }
         let name = turnOnShortcutName
         let url = Self.shortcutURL(for: name)
-        LoginLogger.shared.log("[Cellular] 执行开蜂窝快捷指令「\(name)」…", category: .general)
+        LoginLogger.shared.log("[Cellular] 执行开蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
         if ok { didTurnOffData = false }
         try? await Task.sleep(nanoseconds: UInt64(Self.shortcutBaseDelay * 1_000_000_000))
@@ -362,7 +362,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         // 如实返回 false：我们不会、也不能替用户创建快捷指令。
         LoginLogger.shared.log(
             "[Cellular] 快捷指令需用户自建（iOS 不允许第三方代建），引导页见设置 → Cellular隧道支持",
-            category: .general)
+            category: .tunnelCellular)
         return false
     }
 }
