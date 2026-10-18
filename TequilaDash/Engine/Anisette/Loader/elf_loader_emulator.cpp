@@ -142,13 +142,28 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
 
 uint64_t PageAllocator::alloc(uint64_t bytes) {
     uint64_t align_mask = alignment - 1;
+    // v0.3.662：对齐后的长度按 64 位回绕处理，而不是直接交给下面的偏移量比较.
+    // 为什么：guest 的 malloc(0xFFFFFFFFFFFFFFF0) 这类参数会让 bytes + align_mask 溢出成
+    // 极小的值，旧实现于是「分配成功」并把一个比请求小得多的区间交给 guest ——
+    // 越界写就发生在 hook_mem_invalid 眼里「已映射」的堆里，既不报错也不可检测.
+    if (bytes > UINT64_MAX - align_mask) {
+        LOG_UC("[Emulator] Error: Heap allocation size overflow (requested %llu)!\n",
+               (unsigned long long)bytes);
+        out_of_memory = true;
+        return 0;
+    }
     uint64_t aligned_size = (bytes + align_mask) & ~align_mask;
     if (aligned_size == 0) aligned_size = alignment;
 
-    if (offset + aligned_size > size) {
+    // 同样用减法而不是加法判断越界，避免 offset + aligned_size 自身回绕.
+    // offset 必须先证明不超过 size，否则 size - offset 自己也会回绕成天文数字.
+    if (offset > size || aligned_size > size - offset) {
         LOG_UC("[Emulator] Error: Out of virtual memory heap allocation range (needed %llu, offset %llu / %llu)!\n",
                (unsigned long long)aligned_size, (unsigned long long)offset, (unsigned long long)size);
-        abort();
+        // v0.3.662：不再 abort()。这是宿主进程里执行 guest 代码，guest 申请不到内存
+        // 应该表现为 guest 拿到 NULL，而不是整个 App 被信号杀掉.
+        out_of_memory = true;
+        return 0;
     }
     uint64_t addr = base + offset;
     offset += aligned_size;
@@ -211,6 +226,14 @@ uint64_t EmulatorVM::register_import(const std::string &name) {
         return it->second;
     }
 
+    // v0.3.662：import 区只有 kImportSize(0x10000) = 65536 字节，每个桩占 8 字节 ⇒ 上限 8192 个.
+    // 原来没有任何上限判断：越界后 uc_mem_write 写不进去，hook 范围也覆盖不到，
+    // guest 一跳就是未定义行为。超限时明确失败（返回 0），由调用方的判空兜住.
+    if (next_import_address + 8 > kImportAddress + kImportSize) {
+        LOG_UC("[Emulator] Error: import stub area exhausted (%zu imports)\n", imported_symbols.size());
+        return 0;
+    }
+
     uint64_t stub_addr = next_import_address;
     next_import_address += 8;
 
@@ -225,7 +248,9 @@ uint64_t EmulatorVM::register_import(const std::string &name) {
 
 uint64_t EmulatorVM::write_bytes(const uint8_t *data, size_t len) {
     if (!data || len == 0) return 0;
-    uint64_t addr = heap.alloc(len + 16);
+    uint64_t addr = heap.alloc((uint64_t)len + 16);
+    // v0.3.662：堆耗尽时返回 0（调用方须当作失败），不再让 alloc 内部 abort 整个进程.
+    if (!addr) return 0;
     uc_mem_write(uc, addr, data, len);
     return addr;
 }
@@ -245,10 +270,32 @@ static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data) {
     LOG_UC("[Emulator] Interrupt %u at PC=0x%llx\n", intno, (unsigned long long)pc);
 }
 
+/// v0.3.662：guest 侧「内存不够」的唯一出口 —— 写回 X0 = NULL 并置 errno = ENOMEM，
+/// 由 guest 自己处理（ADI 引擎会走它自己的错误分支），宿主不再 abort.
+static void return_guest_oom(EmulatorVM *vm) {
+    uint64_t null_ptr = 0;
+    uc_reg_write(vm->uc, UC_ARM64_REG_X0, &null_ptr);
+    uint32_t enomem = 12;  // Linux/Android 与 Darwin 上 ENOMEM 都是 12.
+    uc_mem_write(vm->uc, vm->errno_addr, &enomem, sizeof(enomem));
+}
+
 static void hook_malloc(EmulatorVM *vm) {
     uint64_t size = 0;
     uc_reg_read(vm->uc, UC_ARM64_REG_X0, &size);
+    // v0.3.662：上面 alloc 只保证 (bytes + align_mask) 不回绕，挡住的是 bytes 本身；
+    // 这里的 size + 16 在 alloc 之前就已经能回绕（malloc(SIZE_MAX - 8)），
+    // 必须自己先挡一次，否则又变成「分配成功但区间远小于请求」.
+    if (size > UINT64_MAX - 16) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uint64_t ptr = vm->heap.alloc(size + 16);
+    if (!ptr) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uc_reg_write(vm->uc, UC_ARM64_REG_X0, &ptr);
 }
 
@@ -256,8 +303,20 @@ static void hook_calloc(EmulatorVM *vm) {
     uint64_t num = 0, size = 0;
     uc_reg_read(vm->uc, UC_ARM64_REG_X0, &num);
     uc_reg_read(vm->uc, UC_ARM64_REG_X1, &size);
+    // v0.3.662：num * size 的乘积可能回绕成小值（calloc(0x100000000, 0x100000000) 之类），
+    // 那样会「分配成功」一个远小于请求的区间，guest 一 memset 就越界到别的堆块.
+    if (size != 0 && num > UINT64_MAX / size) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uint64_t total = num * size;
     uint64_t ptr = vm->heap.alloc(total + 16);
+    if (!ptr) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     std::vector<uint8_t> zeros(total, 0);
     if (total > 0) {
         uc_mem_write(vm->uc, ptr, zeros.data(), total);
@@ -269,7 +328,19 @@ static void hook_realloc(EmulatorVM *vm) {
     uint64_t ptr = 0, new_size = 0;
     uc_reg_read(vm->uc, UC_ARM64_REG_X0, &ptr);
     uc_reg_read(vm->uc, UC_ARM64_REG_X1, &new_size);
+    // v0.3.662：同 hook_malloc —— new_size + 16 在进入 alloc 之前就可能回绕.
+    if (new_size > UINT64_MAX - 16) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uint64_t new_ptr = vm->heap.alloc(new_size + 16);
+    // v0.3.662：分配失败时按 C 语义返回 NULL 并保留原块（不能把 0 当新地址写回 X0 的旧值语义）.
+    if (!new_ptr) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     if (ptr != 0 && new_size > 0) {
         std::vector<uint8_t> buf(new_size);
         uc_mem_read(vm->uc, ptr, buf.data(), new_size);
@@ -812,7 +883,19 @@ static void hook_cxa_guard_release(EmulatorVM *vm) {
 static void hook_cxa_allocate_exception(EmulatorVM *vm) {
     uint64_t size = 0;
     uc_reg_read(vm->uc, UC_ARM64_REG_X0, &size);
+    // v0.3.662：size + 128 在进入 alloc 之前就可能回绕.
+    if (size > UINT64_MAX - 128) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uint64_t ptr = vm->heap.alloc(size + 128);
+    // v0.3.662：C++ 运行时探测到 NULL 会直接 std::terminate，但那是 guest 的终止而不是宿主的 abort.
+    if (!ptr) {
+        vm->heap.take_out_of_memory();
+        return_guest_oom(vm);
+        return;
+    }
     uc_reg_write(vm->uc, UC_ARM64_REG_X0, &ptr);
 }
 
@@ -1018,6 +1101,13 @@ static uint64_t vm_resolve_symbol(EmulatorVM *vm, const EmulatorVM::LibraryInfo 
         auto it = vm->imported_symbols.find(sym_name);
         if (it != vm->imported_symbols.end()) return it->second;
         uint64_t dummy = vm->heap.alloc(256);
+        // v0.3.662：堆耗尽时让这个数据符号解析失败（返回 0），由调用方判空，
+        // 而不是拿 0 当地址去 uc_mem_write —— 旧实现在这里会写 0x0 页并 abort.
+        if (!dummy) {
+            vm->heap.take_out_of_memory();
+            LOG_UC("[Emulator] Error: heap exhausted while reserving data symbol %s\n", sym_name.c_str());
+            return 0;
+        }
         std::vector<uint8_t> zeros(256, 0);
         uc_mem_write(vm->uc, dummy, zeros.data(), 256);
         vm->imported_symbols[sym_name] = dummy;
@@ -1070,8 +1160,16 @@ bool load_library_to_vm(EmulatorVM *vm, const std::string &file_path, const std:
     }
 
     fseek(f, 0, SEEK_END);
-    size_t file_size = ftell(f);
+    // v0.3.662：ftell 失败返回 -1，强转 size_t 就是 SIZE_MAX —— 下一行会拿它去
+    // std::vector 分配，直接 std::bad_alloc 抛穿 C ABI（未定义行为 / 宿主终止）.
+    long file_len = ftell(f);
     fseek(f, 0, SEEK_SET);
+    if (file_len <= 0) {
+        LOG_UC("[Emulator] Cannot determine size of ELF file: %s\n", file_path.c_str());
+        fclose(f);
+        return false;
+    }
+    size_t file_size = (size_t)file_len;
 
     std::vector<uint8_t> buffer(file_size);
     if (fread(buffer.data(), 1, file_size, f) != file_size) {
@@ -1090,6 +1188,17 @@ bool load_library_to_vm(EmulatorVM *vm, const std::string &file_path, const std:
 
     uint64_t min_vaddr = UINT64_MAX;
     uint64_t max_vaddr = 0;
+    // v0.3.662：e_phoff / e_phnum 来自文件本身，必须先证明「整张程序头表都在 buffer 里」.
+    // 为什么：旧实现只检查了 file_size >= sizeof(Elf64_Ehdr) 就直接 phdrs[i] 取值，
+    // 一个 e_phoff 越界或 e_phnum 虚高的 .so 会让这里读出 std::vector 之外（堆越界读）.
+    if (ehdr->e_phnum > 0 &&
+        ((uint64_t)ehdr->e_phoff > buffer.size() ||
+         (uint64_t)ehdr->e_phnum > (buffer.size() - (uint64_t)ehdr->e_phoff) / sizeof(Elf64_Phdr))) {
+        LOG_UC("[Emulator] Invalid program header table in ELF (phoff=%llu, phnum=%u, size=%llu): %s\n",
+               (unsigned long long)ehdr->e_phoff, (unsigned)ehdr->e_phnum,
+               (unsigned long long)buffer.size(), so_name.c_str());
+        return false;
+    }
     const Elf64_Phdr *phdrs = (const Elf64_Phdr *)(buffer.data() + ehdr->e_phoff);
 
     for (int i = 0; i < ehdr->e_phnum; i++) {
@@ -1104,7 +1213,15 @@ bool load_library_to_vm(EmulatorVM *vm, const std::string &file_path, const std:
     if (min_vaddr >= max_vaddr) return false;
     uint64_t total_span = max_vaddr - min_vaddr;
 
+    // v0.3.662：library_alloc 现在空间不足会返回 0 而不是 abort，这里必须当成失败处理 ——
+    // 否则下面会拿 0 当 base 去 uc_mem_map（映射 0x0 起的一大段等于凭空给 guest 一段内存）.
     uint64_t base_address = vm->library_alloc.alloc(total_span);
+    if (!base_address) {
+        vm->library_alloc.take_out_of_memory();
+        LOG_UC("[Emulator] Out of library address space for '%s' (span 0x%llx)\n",
+               so_name.c_str(), (unsigned long long)total_span);
+        return false;
+    }
     LOG_UC("[Emulator] Mapped library '%s' span 0x%llx at base address: 0x%llx\n",
            so_name.c_str(), (unsigned long long)total_span, (unsigned long long)base_address);
 
@@ -1217,7 +1334,9 @@ void run_library_constructors(EmulatorVM *vm) {
         if (lib.init_func) {
             LOG_UC("[Emulator] Calling DT_INIT at 0x%llx for '%s'...\n",
                    (unsigned long long)lib.init_func, lib.name.c_str());
-            run_vm_procedure(vm, lib.init_func, {});
+            // v0.3.662：同一个库的构造器可能很多，每个都吃 5 秒兜底会叠成几分钟.
+            // 这里显式给 1 秒：正常构造器是毫秒级，超时说明 guest 卡住了，早停早回退.
+            run_vm_procedure(vm, lib.init_func, {}, kConstructorTimeoutUs);
         }
         if (lib.init_array && lib.init_arraysz) {
             size_t count = lib.init_arraysz / 8;
@@ -1226,7 +1345,7 @@ void run_library_constructors(EmulatorVM *vm) {
                 if (uc_mem_read(vm->uc, lib.init_array + i * 8, &ctor_ptr, 8) == UC_ERR_OK && ctor_ptr != 0) {
                     LOG_UC("[Emulator] Calling DT_INIT_ARRAY[%zu] at 0x%llx for '%s'...\n",
                            i, (unsigned long long)ctor_ptr, lib.name.c_str());
-                    run_vm_procedure(vm, ctor_ptr, {});
+                    run_vm_procedure(vm, ctor_ptr, {}, kConstructorTimeoutUs);
                 }
             }
         }
@@ -1245,8 +1364,13 @@ int32_t run_vm_procedure(EmulatorVM *vm, uint64_t proc_addr, const std::vector<u
     if (!proc_addr) return -1;
     g_active_vm = vm;
 
-    if (timeout_us == 0) timeout_us = 0;
-    if (max_count == 0) max_count = 0;
+    // v0.3.662：原来这两行是 `if (timeout_us == 0) timeout_us = 0;` 的自赋值空操作，
+    // 而全部 9 个调用点都不传这两个参数 ⇒ uc_emu_start 既无超时也无指令上限.
+    // 后果：guest(ADI) 只要死循环/自旋，uc_emu_start 就永不返回，调用方在持有 g_vm_mutex 的
+    // 同步函数里被永久钉死 —— Swift 侧的 withAttemptTimeout 取消不了系统线程，整个 Anisette
+    // 子系统从此卡死。这里给出兜底上限，显式传参的调用点仍可覆盖.
+    if (timeout_us == 0) timeout_us = kDefaultExecTimeoutUs;
+    if (max_count == 0) max_count = kDefaultExecMaxCount;
 
     static const int arm64_arg_regs[8] = {
         UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X2, UC_ARM64_REG_X3,

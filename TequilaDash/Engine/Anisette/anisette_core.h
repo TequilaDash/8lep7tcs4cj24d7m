@@ -22,6 +22,11 @@ typedef enum {
     ANISETTE_ERR_SYMBOL_MISSING            = -3,
     ANISETTE_ERR_READ_FILE_FAILED          = -4,
     ANISETTE_ERR_INVALID_JSON_RESPONSE     = -5,
+    // v0.3.662：宿主侧写盘失败（adi.pb 写不进去）。原来这种失败是静默的，
+    // 最终只表现为一段看不懂的 OTP 失败；现在显式上报，便于区分「磁盘/沙盒问题」与「Apple 拒绝」.
+    ANISETTE_ERR_WRITE_FILE_FAILED         = -6,
+    // v0.3.662：guest(ADI) 回填的出参读不出来 / 长度荒谬（不是 ADI 自己的业务错误码）.
+    ANISETTE_ERR_INVALID_DATA              = -7,
 
     ADI_ERR_INVALID_PARAMS                 = -45001,
     ADI_ERR_INVALID_PARAMS_DECIPHER        = -45002,

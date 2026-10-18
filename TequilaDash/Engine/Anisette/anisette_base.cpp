@@ -44,6 +44,8 @@ const char* get_anisette_error_description(int32_t code) {
         case ANISETTE_ERR_SYMBOL_MISSING:          return "Required ADI symbol missing";
         case ANISETTE_ERR_READ_FILE_FAILED:        return "Failed to read generated file";
         case ANISETTE_ERR_INVALID_JSON_RESPONSE:   return "Failed to parse response JSON";
+        case ANISETTE_ERR_WRITE_FILE_FAILED:       return "Failed to write generated file";
+        case ANISETTE_ERR_INVALID_DATA:            return "Emulator returned invalid data";
         case ADI_ERR_INVALID_PARAMS:               return "Invalid ADI parameters (-45001)";
         case ADI_ERR_INVALID_PARAMS_DECIPHER:      return "Invalid ADI decipher params (-45002)";
         case ADI_ERR_INVALID_TRUST_KEY:            return "Invalid ADI trust key (-45003)";

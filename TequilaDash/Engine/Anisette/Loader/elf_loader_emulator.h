@@ -38,6 +38,16 @@ static const uint32_t kStackSize     = 0x1000000;
 static const uint64_t kImportAddress = 0x80000000;
 static const uint32_t kImportSize    = 0x10000;
 
+// v0.3.662：run_vm_procedure 的兜底执行上限（调用方不传时生效）.
+// 为什么需要：uc_emu_start 的 0 == 无限。guest(ADI) 一次正常调用是毫秒级、
+// 百万级指令；给 5 秒 / 5 亿条指令足够宽松，又不至于让一次死循环把 Anisette
+// 子系统永久卡死（调用方全程持有 g_vm_mutex）.
+static const uint64_t kDefaultExecTimeoutUs = 5000000ULL;   // 5 秒
+static const uint64_t kDefaultExecMaxCount  = 500000000ULL; // 5 亿条指令
+// 库构造器（DT_INIT / DT_INIT_ARRAY）单个上限。为什么单独给：一个 .so 可能有几十个构造器，
+// 若都按 5 秒兜底，最坏情况（全卡住）会叠成几分钟；构造器正常是毫秒级，1 秒足够，早停早回退.
+static const uint64_t kConstructorTimeoutUs = 1000000ULL;   // 1 秒
+
 struct AndroidSystemProperties {
     const char *sdk_version  = "30";
     const char *release      = "11";
@@ -58,11 +68,26 @@ private:
     uint64_t offset;
     uint64_t alignment;
 
+    /// v0.3.662：上一次 alloc 是否因为地址空间耗尽而失败.
+    /// 为什么需要：guest 侧的 malloc/calloc 可能真的把 512MB 堆用光（ADI 引擎只 free 不归还，
+    /// 见 hook_free）。旧实现在这里 abort() —— 整个宿主 App 当场消失，用户只看到闪退，
+    /// 也走不到「回退远程 Anisette」的分支。
+    bool out_of_memory = false;
+
 public:
     PageAllocator(uint64_t base_addr, uint64_t total_size, uint64_t align_bytes = 16)
         : base(base_addr), size(total_size), offset(0), alignment(align_bytes) {}
 
+    /// 分配一段 guest 地址；**空间不足时返回 0**（不再 abort）.
+    /// 调用方必须把 0 当作失败处理（guest 侧返回 NULL / 本函数返回失败）.
     uint64_t alloc(uint64_t bytes);
+
+    /// 读并清除「上次 alloc 是否失败」标志（失败时已经打过日志）.
+    bool take_out_of_memory() {
+        bool f = out_of_memory;
+        out_of_memory = false;
+        return f;
+    }
 };
 
 struct EmulatorVM {
