@@ -303,18 +303,34 @@ enum RepairService {
                 progress: { p in progress?(p, "安装中") },
                 onLog: { note($0) })
         } catch {
+            // v0.3.661：**不再用子串猜原因**。
+            //
+            // 旧实现按 `msg.contains("sinf")` 判定「属于另一个 Apple ID」。
+            // 两个问题：
+            //   1. **反过来也会误判**：安装链路里 `IPAInstallService.swift:776` 的兜底文案就是
+            //      「加密包安装失败（sinf 可能与本设备不匹配）」，所以**任何**加密包安装失败
+            //      （隧道断了 / 磁盘满 / installd 忙）都会命中 "sinf"，被报成「Apple ID 不匹配」；
+            //   2. **漏判**：明文分支 `installSignedIPA` 失败时文案里没有 "sinf"，
+            //      于是真正的授权问题被报成笼统的「安装被系统拒绝」，用户只会「重试」——
+            //      而重试 100 次也不会成功。
+            //
+            // 根因：`IPAInstallService.swift:755` 把带 code 的 NSError 又包成纯字符串
+            // （`throw makeError("\(base.localizedDescription) ...")`），错误码在这一层就丢了，
+            // 这里**拿不到可判别的 info**。所以不臆造「是/不是 Apple ID 问题」的结论，
+            // 改为：如实复述 installd 原文 + 两条互斥的自救方向，并把加密通道的事实写清。
             let msg = error.localizedDescription
-            let isAccount = msg.localizedCaseInsensitiveContains("sinf")
-                || msg.localizedCaseInsensitiveContains("SINF")
-            let code = isAccount ? "E8b" : "E8"
-            return .failure(.install, code: code,
-                message: isAccount
-                    ? "此安装包属于另一个 Apple ID，本机无法安装运行."
-                    : "安装被系统拒绝.",
-                suggestion: isAccount
-                    ? "在本机登录与发送方相同的 Apple ID 后重试；或改用「同 Apple ID 正规重下」."
-                    : "重试；若持续失败请反馈日志.",
-                details: log + [msg])
+            let detail = "installd 原文：" + (msg.isEmpty ? "（空）" : msg)
+            // 本线（RepairService）只处理加密包：`installWithSINF` 以 PackageType=Customer +
+            // ApplicationSINF 递交（见 AppStoreInstallService.swift:199）。因此**安装失败与
+            // 「授权/解密」高度相关**是结构事实，但**不能据此断言**具体是哪一种。
+            return .failure(.install, code: "E8",
+                message: "安装被系统拒绝：\(msg.isEmpty ? "installd 未返回原因" : msg)",
+                suggestion: "本线装的是加密包（走 ApplicationSINF 解密通道），失败常见于三类原因，请按序排查："
+                    + "① 包内授权不属于本机——需在本机登录与发送方相同的 Apple ID 后重试，"
+                    + "或改用「同 Apple ID 正规重下」；"
+                    + "② LocalDevVPN / 配对文件异常——先重连隧道再试；"
+                    + "③ 设备端磁盘或 installd 临时故障——重启 App 后重试.",
+                details: log + [detail])
         }
         note("安装完成")
 
@@ -422,10 +438,17 @@ enum RepairService {
                 progress: { p in progress?(p, "安装中") },
                 onLog: { note($0) })
         } catch {
+            // v0.3.661：与加密包分支同口径 —— 把 installd 原文放进 message，
+            // 不再让用户只看到一句「安装被系统拒绝」而无从下手。
+            // 明文包（cryptid==0）走的是常规 Install，不涉及 ApplicationSINF 解密，
+            // 因此这里的失败**基本不是「Apple ID 不匹配」**，不要给那条建议（会把人带偏）。
+            let msg = error.localizedDescription
             return .failure(.install, code: "E8",
-                message: "安装被系统拒绝.",
-                suggestion: "重试；若持续失败请反馈日志.",
-                details: log + [error.localizedDescription])
+                message: "安装被系统拒绝：\(msg.isEmpty ? "installd 未返回原因" : msg)",
+                suggestion: "明文包走常规 Install（不涉及 sinf 解密），多为隧道/配对/包完整性或设备端故障："
+                    + "先确认 LocalDevVPN 已连接且配对文件正常，再重试；"
+                    + "若持续失败，请用「已修补」里的产物重装一次并反馈日志.",
+                details: log + ["installd 原文：" + (msg.isEmpty ? "（空）" : msg)])
         }
         // 不写下载台账：共享包在 `Imports/`，不在 `AppStoreDownloads/`，写进去会被下一次
         // `items()` 当场剔除（假成功）。状态由导入清单承载（见加密包分支同处注释）。
@@ -606,21 +629,49 @@ enum LaunchProbe {
         return .neverAppeared
     }
 
-    /// 目标进程是否在 `proc.list` 里（按可执行名 / bundleId 匹配 name 或 path）。
+    /// 目标进程是否在 `proc.list` 里（按可执行名 / bundleId / 可执行文件名 匹配）。
     ///
     /// - Returns: `true`/`false` = **确实读到了进程表**时的结论；
     ///   `nil` = `proc.list` 不可用（rc != 0 / JSON 解析失败 / 缺 `processes` 键）——
     ///   「没能观察」**不等于**「进程不存在」，调用方必须按「探针不可用」降级。
+    ///
+    /// v0.3.661：**匹配从严，不再用无锚子串**。
+    ///
+    /// 旧实现是 `name == needle || name.contains(needle) || path.contains(needle)`，
+    /// 问题在于 `needle` 既可能是 bundleId（`com.foo.bar`）也可能是可执行名（`Bar`）：
+    ///   · 可执行名很短时（`App` / `Lite` / `Pro`），`name.contains` 会命中**别的进程**
+    ///     （如系统的 `AppStore`、`AppStoreDaemon` 都以 `App` 开头）；
+    ///   · `path.contains` 更宽：目标 App 装在 `/var/containers/.../Bar.app/Bar`，
+    ///     而**另一个包目录名里恰好含 `Bar`** 的进程也会命中。
+    /// 一旦命中，就会把「目标压根没起来」判成 `.alive`，`.neverAppeared`（E10）**永远不触发**；
+    /// 反过来也可能把别的进程的退出当成目标崩溃（`.crashed`）。
+    ///
+    /// 现在改为三个**精确**锚点：name 全等 / bundleId 路径分量全等 / path 末段全等。
+    /// 仍然保留 `.app/` 前缀匹配（`.../Bar.app/Bar`），因为那是目标进程的真实形态。
     private static func processExists(_ needle: String) -> Bool? {
         let (rc, json) = HostCapabilityService.call(capability: "proc.list", jsonArgs: "{}")
         guard rc == 0,
               let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let procs = obj["processes"] as? [[String: Any]] else { return nil }
+        let target = needle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty else { return false }
         return procs.contains { p in
             let name = (p["name"] as? String) ?? ""
             let path = (p["path"] as? String) ?? ""
-            return name == needle || name.contains(needle) || path.contains(needle)
+            if name == target { return true }
+            if path.isEmpty { return false }
+            // 可执行文件末段全等：`.../Bar.app/Bar` → "Bar"
+            if (path as NSString).lastPathComponent == target { return true }
+            // bundleId 形态：`.../Bar.app/Bar` 的 .app 名就是 bundleId 末段
+            let appComponent = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+            if appComponent.hasSuffix(".app") {
+                let stem = String(appComponent.dropLast(4))
+                if stem == target { return true }
+                // bundleId 全等：`com.foo.Bar` 的末段 == 包名
+                if target.contains(".") && target.hasSuffix("." + stem) { return true }
+            }
+            return false
         }
     }
 }

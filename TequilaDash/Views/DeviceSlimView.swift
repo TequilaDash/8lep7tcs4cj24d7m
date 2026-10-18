@@ -549,7 +549,11 @@ struct DeviceSlimView: View {
                         Task { @MainActor in statusText = "正在删除 \(index)/\(total)…" }
                     }
                 }.value
+                // v0.3.661：把「未能统计大小」单独说出来。
+                // 这些条目已删成功但删前量不到字节数，若并进 freed 会显示成「已释放 0 字节」，
+                // 用户会以为没生效而反复清理 —— 必须与「0 字节」区分开。
                 resultText = "本次共释放空间 \(DeviceSlimService.formatBytes(result.freed))"
+                    + (result.unmeasured > 0 ? "（另有 \(result.unmeasured) 项已删除但未能统计大小）" : "")
                     + (result.failures.isEmpty ? "" : "（\(result.failures.count) 项失败）")
                 errorText = result.failures.isEmpty ? nil : result.failures.prefix(3).joined(separator: "\n")
                 phase = .finished

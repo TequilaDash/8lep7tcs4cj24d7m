@@ -193,8 +193,12 @@ struct DeviceInfoView: View {
             // （见 `I4WarrantyClient`）；未取到则 value 为 nil -> 显示「—」.
             // 行尾的「查询 ›」仍保留为 Apple 官方保修页兜底入口（爱思自己的 fallback，需过验证码）.
             .init(id: 13, label: "保修期限", value: warrantyTime, sensitive: false, link: warrantyURL(info)),
+            // v0.3.661：读不到时如实说明原因，不再与「0 次」共用同一个「—」.
+            // 「0 次」= 设备确实没有 panic；「读取失败」= 没配对文件 / VPN 没开 /
+            // 服务不可用 —— 两者自救动作完全不同，必须能区分。
             .init(id: 14, label: "崩溃日志",
-                  value: info.crashLogCount.map { "\($0) 次" },
+                  value: info.crashLogCount.map { "\($0) 次" }
+                      ?? (info.crashLogCountError.map { _ in "读取失败" }),
                   sensitive: false),
         ])
     }

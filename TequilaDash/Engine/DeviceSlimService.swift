@@ -105,6 +105,12 @@ enum DeviceSlimService {
         var freed: Int64 = 0
         var deleted: Int = 0
         var failures: [String] = []
+        /// 删除成功、但**删之前没能计量**的条目数.
+        ///
+        /// v0.3.661：这些条目的字节数既不是 0 也无法得知，不能并入 `freed`
+        /// （否则页面会显示「已释放 0 字节」而文件其实删掉了，用户会反复重试）。
+        /// 页面应单独说明「其中 N 项未能统计大小」。
+        var unmeasured: Int = 0
     }
 
     struct ReinstallResult {
@@ -280,6 +286,14 @@ enum DeviceSlimService {
         /// 背景：带属性 Lookup 已把大小字段移出请求（为解决它卡 ~25 秒的回归），
         /// 而 iOS 侧**没有 AFC 等价通道**能补应用大小（house_arrest 只到数据容器）.
         var sizeComplete = false
+        /// 快路径失败的真实原因（`usable == false` 时才有值）.
+        ///
+        /// v0.3.661：原来 `.failed(message)` 与 `.timedOut` 都是「usable=false」，
+        /// 页面统一显示「应用读取超时」+ 重试。但两者自救动作完全不同：
+        ///   · 超时 → 等一会儿重试**有意义**；
+        ///   · 没配对文件 / LocalDevVPN 没连 / house_arrest 未授权 → 重试 100 次也不会成功，
+        ///     用户得去修配对或连 VPN。折成同一句会把人的动作引错。
+        var failureReason: String? = nil
     }
 
     /// v0.3.378：设备瘦身页读取已装应用（空间占用的「应用」分片 / 「较大应用」分组）.
@@ -323,12 +337,23 @@ enum DeviceSlimService {
         switch FileSharingService.listAppsWithFileSharing(timeout: 20) {
         case .ok(let found):
             result.apps = found
-            result.usable = !found.isEmpty
+            // v0.3.666：`usable` 的判据是「**读到了**」，不是「读到非空」.
+            //
+            // `.ok` 只会在 `try work()` 真的成功时出现（见 FileSharingService
+            // :630-634 / :223-268，降级链全失败是抛错走 `.failed`），所以空数组
+            // 意味着设备上**确实一个应用都没有** —— 那是事实，不是失败.
+            // 旧判据 `usable = !found.isEmpty` 把它归进「不可用」，而 `.ok` 分支
+            // 又不设 failureReason，于是 :402-404 落到「原因未知」，等于把
+            // 「真的 0 条」折成「读失败，原因不明」，与本次修复的判据正好相反.
+            result.usable = true
             LoginLogger.shared.log("[设备瘦身] 快路径（带属性 Lookup → get_apps 降级）：\(found.count) 条")
         case .failed(let message):
             LoginLogger.shared.log("[设备瘦身] 快路径失败：\(message)")
+            // v0.3.661：**留住真实原因**，页面据此给不同的自救方向（见 AppReadResult.failureReason）.
+            result.failureReason = message.trimmingCharacters(in: .whitespacesAndNewlines)
         case .timedOut:
             LoginLogger.shared.log("[设备瘦身] 快路径超时（排队与执行分开计）")
+            result.failureReason = "超时"
         }
         // ①' v0.3.408：拿到列表就**立刻**发起「文档大小」（本机通道）——它要真的把每个应用
         //     的容器文件树走一遍，所以放在这里与后面（最长 15 秒的带属性 Lookup + 空间快照）
@@ -379,7 +404,31 @@ enum DeviceSlimService {
 
         appReadLock.lock()
         if !result.usable {
-            appReadIssueFlag = "应用读取超时"
+            // v0.3.661：按**真实原因**分文案，不再一律「应用读取超时」.
+            // 判据：只有真的是超时才说超时；其它（无配对文件 / VPN 未连 / house_arrest
+            // 未授权 / AFC 报错）都把原始信息透出，并明确「重试无效，需先修 X」。
+            let raw = (result.failureReason ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if raw.isEmpty {
+                appReadIssueFlag = "应用列表读取失败（原因未知）"
+            } else if raw == "超时" || raw.localizedCaseInsensitiveContains("timeout")
+                        || raw.localizedCaseInsensitiveContains("超时") {
+                appReadIssueFlag = "应用读取超时，请稍后重试"
+            } else if raw.localizedCaseInsensitiveContains("配对") {
+                appReadIssueFlag = "读不到应用列表：缺少配对文件（重试无效，请先导入配对文件）—— \(raw)"
+            } else if raw.localizedCaseInsensitiveContains("VPN")
+                        || raw.localizedCaseInsensitiveContains("隧道")
+                        || raw.localizedCaseInsensitiveContains("49152") {
+                appReadIssueFlag = "读不到应用列表：隧道未建立（重试无效，请先在「本地隧道」里连上 LocalDevVPN）—— \(raw)"
+            } else {
+                appReadIssueFlag = "读不到应用列表：\(raw)"
+            }
+        } else if result.apps.isEmpty {
+            // v0.3.666：**读到了，但确实是 0 条** —— 不能报「应用大小不可用」.
+            //
+            // 空列表时 sizeComplete 必然是 false（没东西可回填），若不加这一支，
+            // 页面会对着一台真的没装第三方应用的设备说「应用大小不可用」，
+            // 把「事实为空」又折成了一句故障提示.
+            appReadIssueFlag = nil
         } else if !result.sizeComplete {
             appReadIssueFlag = "应用大小不可用"
         } else {
@@ -735,7 +784,8 @@ enum DeviceSlimService {
                 // 返回 (0, 0) —— 于是 `max(0, before - after)` 变成 `max(0, before - 0)`。
                 // 当 before 也读失败（同样是 0）时，`freed` 恒为 0：
                 // 用户看到「已释放 0 字节」，但文件其实已经删掉了 —— 会以为功能失效并反复清理。
-                let before = measure(client: client, path: item.id).bytes
+                // v0.3.661：`measure` 现在可空 —— 量不到就是「不知道」，不是 0。
+                let before = measure(client: client, path: item.id)?.bytes
                 if let ffiError = item.id.withCString({ afc_remove_path_and_contents(client, $0) }) {
                     let message = ffiError.pointee.message.map { String(cString: $0) } ?? "rc=\(ffiError.pointee.code)"
                     idevice_error_free(ffiError)
@@ -743,7 +793,13 @@ enum DeviceSlimService {
                     continue
                 }
                 // 删成功即视为释放了 before 字节，不再二次测量（路径已不存在）。
-                result.freed += before
+                // 量不到时**不累加**（之前的写法会把「量不到」当 0 加进 freed，
+                // 结果是「已释放 0 字节」而文件已经没了），只记一个 unmeasured 计数。
+                if let before {
+                    result.freed += before
+                } else {
+                    result.unmeasured += 1
+                }
                 result.deleted += 1
             }
         }
@@ -829,10 +885,22 @@ enum DeviceSlimService {
 
     // MARK: - 辅助
 
-    static func measure(client: OpaquePointer, path: String) -> (bytes: Int64, files: Int) {
+    /// 量一个路径的字节数 / 文件数.
+    ///
+    /// v0.3.661：**改为可空**。原来 stat 失败直接 `return (0, 0)`，调用方无从分辨
+    /// 「真的是 0 字节」与「压根没量到」：`clean()` 里会把量失败当成 0 累加进
+    /// `result.freed`，用户看到「已释放 0 字节」而文件其实已被删掉 —— 与该方法上方
+    /// :760-765 已经修过的「删完再量」缺陷是同一个坑的另一半。
+    /// 现在失败返回 nil，由调用方决定「未计量」怎么呈现（不冒充 0）。
+    static func measure(client: OpaquePointer, path: String) -> (bytes: Int64, files: Int)? {
         var info = AfcFileInfo()
         let rc = path.withCString { afc_get_file_info(client, $0, &info) }
-        guard rc == nil else { return (0, 0) }
+        if let rc {
+            let code = Int(rc.pointee.code)
+            idevice_error_free(rc)
+            LoginLogger.shared.log("[设备瘦身] 计量失败（不按 0 字节计）：\(path) code=\(code)")
+            return nil
+        }
         defer { afc_file_info_free(&info) }
         let isDir = info.st_ifmt.map { String(cString: $0) == "S_IFDIR" } ?? false
         if !isDir { return (Int64(info.size), 1) }
@@ -841,7 +909,24 @@ enum DeviceSlimService {
         var files = 0
         var stack = [path]
         while let current = stack.popLast() {
-            guard let entries = try? AFCService.listDirectory(client: client, path: current) else { continue }
+            // v0.3.666：**任何一级子目录读失败都不能返回部分和**.
+            //
+            // 旧写法 `try? ... else { continue }` 会把「这一层没读成」悄悄跳过，
+            // 函数照样返回一个 (bytes, files) —— 但它只是**已遍历部分**的和，
+            // 调用方 `clean()`（:773-787）无法分辨，会原样加到 result.freed 上，
+            // 于是用户看到一个确定的「已释放 X 字节」，实际漏算了整棵子树.
+            // 这与本方法 :875-879 刚修掉的「stat 失败返回 0」是同一个判据：
+            // 量不到就说量不到（nil），不拿部分结果冒充完整结果.
+            let entries: [AFCService.Entry]
+            do {
+                entries = try AFCService.listDirectory(client: client, path: current)
+            } catch {
+                LoginLogger.shared.log(
+                    "[设备瘦身] 计量中断（子目录读不到，不返回部分和）：\(current)"
+                    + " code=\(error.localizedDescription)"
+                )
+                return nil
+            }
             for entry in entries {
                 if entry.isDirectory { stack.append(entry.path) }
                 else { bytes += entry.size; files += 1 }

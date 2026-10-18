@@ -128,6 +128,12 @@ struct DeviceInfoModel {
     var iCloudSignedIn: Bool?
     /// 崩溃日志条数（CrashReporter 根目录 `.ips`，排除磁盘写入/网络指标类诊断）
     var crashLogCount: Int?
+    /// 读崩溃日志失败的原因（nil = 读取成功，此时 `crashLogCount` 才可信）.
+    ///
+    /// v0.3.661：**「0 次」与「读不到」必须能区分** —— 前者是设备真的没有 panic，
+    /// 后者是没配对文件 / VPN 没开 / 服务不可用 / 列目录失败。原先两者都是 `nil`，
+    /// UI 一律显示「—」，用户无从判断该去修哪一步（这就是「错误折叠」）。
+    var crashLogCountError: String?
     var raw: [String: Any] = [:]
 }
 
@@ -232,8 +238,15 @@ enum DeviceInfoService {
             }
         }
         // v0.3.662：crashReportCount 改为 throws（原来 try? 把「读不到」折成 nil，
-        // 与「0 条」在界面上都是「—」）。这里保留可空语义：读不到就是 nil。
-        let crashCount = try? CrashLogService.shared.crashReportCount()
+        // 与「0 条」在界面上都是「—」）。
+        // v0.3.661：**同时保留失败原因**，让 UI 能说清「是没读到」还是「就是 0 次」。
+        var crashCount: Int? = nil
+        var crashCountError: String? = nil
+        do {
+            crashCount = try CrashLogService.shared.crashReportCount()
+        } catch {
+            crashCountError = error.localizedDescription
+        }
         func intOf(_ v: Any?) -> Int? {
             if let n = v as? Int { return n }
             if let n = v as? NSNumber { return n.intValue }
@@ -393,6 +406,7 @@ enum DeviceInfoService {
             activationLockEnabled: activationLock,
             iCloudSignedIn: iCloudSignedIn,
             crashLogCount: crashCount,
+            crashLogCountError: crashCountError,
             raw: lockdown.merging(itunes) { a, _ in a }
         )
     }
@@ -492,8 +506,21 @@ enum DeviceInfoService {
                     }
                 }
             }
-            if e != nil {
-                lastError = NSError(domain: "DeviceInfo", code: -5, userInfo: [NSLocalizedDescriptionKey: "创建隧道失败"])
+            if let e {
+                // v0.3.661：**不再吞掉 tunnel_create_rppairing 的错误对象**。
+                //
+                // 旧实现只判 `e != nil` 就丢：既读不到 `e->message`（连不上 49152 /
+                // 配对文件与设备不匹配 / 握手中断 三种原因全被压成同一句「创建隧道失败」），
+                // 也**不调用 idevice_error_free** ⇒ 每次失败泄漏一个 IdeviceFfiError，
+                // 而本函数一轮最多走 3 次、collectFull 里又会被多处调用。
+                // 与同文件上方「读配对文件」分支（v0.3.641 已修）保持同一写法.
+                let message = e.pointee.message.map { String(cString: $0) } ?? ""
+                let code = Int(e.pointee.code)
+                idevice_error_free(e)
+                lastError = NSError(domain: "DeviceInfo",
+                                    code: code == 0 ? -5 : code,
+                                    userInfo: [NSLocalizedDescriptionKey:
+                                        message.isEmpty ? "创建隧道失败" : "创建隧道失败：" + message])
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
                 return tunnel
             }

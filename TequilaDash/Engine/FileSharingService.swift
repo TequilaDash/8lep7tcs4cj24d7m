@@ -1004,7 +1004,16 @@ enum FileSharingService {
             if entry.isDirectory {
                 total += try documentsSizeRecursively(afc: afc, path: entry.path)
             } else {
-                total += fileSize(afc: afc, path: entry.path) ?? 0
+                // v0.3.666：**不把「量不到」当 0**.
+                //
+                // 本函数是 `throws` 的，同一个循环里 `listDirectory` 失败会往外抛，
+                // 唯独这里是 `?? 0` —— 同一种失败两种待遇。结果是容器总大小静默少算，
+                // 而调用方（「设备瘦身」的 docSize 通道）拿到的是一个看起来完整的数字.
+                // 拿不准就说拿不准：让失败照常抛出，由上层按「没量到」处理.
+                guard let one = fileSize(afc: afc, path: entry.path) else {
+                    throw makeError("读取文件大小失败：\(entry.path)")
+                }
+                total += one
             }
         }
         return total
@@ -1159,7 +1168,28 @@ enum FileSharingService {
                 }
                 afc_file_info_free(&info)
             } else {
-                isDir = isDirectory(afc: afc, path: childPath)
+                // v0.3.661：**读不出就不再猜**。
+                //
+                // 旧实现这里调一次 isDirectory() 重新 stat —— 同一个调用刚刚已经失败，
+                // 再发一次只会同样失败（白付一次 AFC round-trip，实测 ~7.5ms/条），
+                // 然后落回 isDir=false / size=0，把该条目**伪装成「0 字节普通文件」**。
+                // 目录被显示成文件、用户点进去打不开 —— 这正是「读不出被当成确定答案」。
+                //
+                // 与 AFCService.swift:253-260 已经修掉的缺陷同形（那里改为如实抛错）。
+                // 这里不整表抛错：AFC 的 stat 失败在受权限约束的条目上很常见，
+                // 整表抛错会让本来能看的目录直接空白（比降级更糟）。
+                // 折中：类型按「未知」处理，但**把失败原因记进日志并附在条目上**，
+                // 由 UI 显示为未知大小，而不是确定的 0 字节。
+                let message = rc?.pointee.message.map { String(cString: $0) } ?? ""
+                let code = Int(rc?.pointee.code ?? 0)
+                if let rc { idevice_error_free(rc) }
+                LoginLogger.shared.log(
+                    "[文件共享] 条目元数据读取失败（类型/大小未知，不按 0 字节处理）：\(childPath)"
+                    + " code=\(code) \(message.isEmpty ? "—" : message)"
+                )
+                isDir = false
+                size = -1          // 负值 = 大小未知（UI 显示「—」，不显示 0 B）
+                modified = nil
             }
             result.append(AfcEntry(name: name, path: childPath, isDirectory: isDir,
                                    size: size, modified: modified))
@@ -1192,7 +1222,14 @@ enum FileSharingService {
             afc_get_file_info(afc, cstr, &info)
         }
         defer { afc_file_info_free(&info) }
-        return rc == nil ? Int64(info.size) : nil
+        // v0.3.666：**错误对象要释放**，否则每量一个读不出的文件就泄漏一个
+        // IdeviceFfiError。`documentsSizeRecursively`（:1001-1011）会对容器里
+        // 每个文件调一次本函数，容器一大就是成百上千次.
+        guard rc == nil else {
+            if let rc { idevice_error_free(rc) }
+            return nil
+        }
+        return Int64(info.size)
     }
 
     // MARK: 隧道（拷贝自 DeviceInfoService 简化版）
