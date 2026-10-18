@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.660] - 2026-10-18
+
+> **一句话**：修 v0.3.658（D7 台账补锁）引入的 3 个编译错 —— CI `39119245273` 红。
+
+### 错在哪
+
+| 位置 | 错误 | 原因 |
+|---|---|---|
+| `IPADownloadLibrary.swift:230` | `cannot find type IPAPDownloadItemPlaceholder in scope` | `items()` 的返回类型被写成一个不存在的名字（应为 `[IPADownloadItem]`） |
+| `:503` / `:537` | `cannot convert value of type URL to expected argument type String` | 两处 `removeItem(at:)` 被误改成 `removeItem(atPath:)`，而那里的 `filePath` 是 `URL` |
+| `:530` | `cannot infer contextual base in reference to member rejectedReadOnly` | 三个返回 `RemoveResult` 的 `withLedger { }` 闭包是多语句闭包，Swift 不会从外层返回类型往里推，必须显式写 `() -> RemoveResult in` |
+
+### 为什么 `swiftc -parse` 没抓住
+
+提交前只跑了 `swiftc -parse`（语法树），它**不解析类型**：`IPAPDownloadItemPlaceholder` 对被解析器来说
+只是一个标识符，`removeItem(atPath:)` 也只是一个调用。三个错全是类型错，只有真正的 `-typecheck` / CI 能抓。
+而本机没有 40+ 个依赖模块，`-typecheck` 跑不起来 —— 这是本仓已知的验证边界。
+
+### 教训（已写进 workflow）
+
+D7 那次是把 11 个函数的函数体**整段搬进闭包**。凡是「整段搬移」，就必须逐行比对搬移前后的代码，
+因为搬移过程本身就是重新打字，打错一个词编译器只在**真正编译时**才会说话。
+
+### 验证
+
+- `normalize_eol.py --base HEAD --check`：与基线一致；
+- `swiftc -parse`：EXIT=0（同上，只保证语法）；
+- `swift_precommit_check.py`：guard 全绿（版本号三处 0.3.660 / 960）；
+- 真正的验证是这次 CI。
+
 ## [0.3.659] - 2026-10-18
 
 > **一句话**：把下载链路剩下的四个洞补上 —— 取消不再留下「后台还在跑」的传输（D2）、

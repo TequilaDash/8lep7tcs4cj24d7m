@@ -227,7 +227,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     /// 全部当新条目重建（丢直链 / sinf / 商品号 / 显示名），随后 `saveIndex` 覆盖原文件
     /// —— 好数据被残缺数据静默替换且不可恢复。现在只要 `loadIndex()` 报告有任何丢失
     /// （文件读不出、JSON 坏、或有记录解不出），就**不写盘**，只把能读到的那部分返回给界面。
-    func items() -> [IPAPDownloadItemPlaceholder] {
+    func items() -> [IPADownloadItem] {
         // v0.3.658（D7）：整段读-改-写进锁内 —— 下面可写时会 saveIndex，
         // 不锁就会与后台的 record / markInstalled / remove 互相覆盖。
         return withLedger { itemsLocked() }
@@ -459,7 +459,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(_ item: IPADownloadItem) -> RemoveResult {
         // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
         // 或反过来都会被下一次 items() 的磁盘对齐改回去。
-        withLedger {
+        withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
@@ -491,7 +491,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(fileName: String) -> RemoveResult {
         // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
         // 或反过来都会被下一次 items() 的磁盘对齐改回去。
-        withLedger {
+        withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
@@ -500,7 +500,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
             }
             let filePath = directory.appendingPathComponent(fileName)
             do {
-                try FileManager.default.removeItem(atPath: filePath)
+                try FileManager.default.removeItem(at: filePath)
             } catch {
                 if FileManager.default.fileExists(atPath: filePath.path) {
                     LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(fileName)）",
@@ -522,7 +522,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(fileNames: Set<String>) -> RemoveResult {
         guard !fileNames.isEmpty else { return .removed }
         // v0.3.658（D7）：同上 —— 一批删除也要原子。
-        withLedger {
+        withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
@@ -534,7 +534,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
             for name in fileNames {
                 let filePath = directory.appendingPathComponent(name)
                 do {
-                    try FileManager.default.removeItem(atPath: filePath)
+                    try FileManager.default.removeItem(at: filePath)
                 } catch {
                     if FileManager.default.fileExists(atPath: filePath.path) {
                         LoginLogger.shared.log("[下载库] 安装包删除失败：\(error)（\(name)）",
