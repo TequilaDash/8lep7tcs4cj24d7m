@@ -638,7 +638,9 @@ pub unsafe extern "C" fn idevice_usbmuxd_device_list_free(
     }
     // v0.3.662：外层指针数组是 get_devices 里 into_boxed_slice + mem::forget 交出去的缓冲，
     // 这里只解了每个元素，缓冲本身从不归还 ⇒ 每次设备列表刷新泄漏 count * size_of::<*mut _>() 字节。
-    // 用 from_raw_parts_mut 重建 Vec 后 drop，归还分配器（长度为 0 时指针可能是悬挂的，跳过）。
+    // 用 from_raw_parts_mut 重建 Vec 后 drop，归还分配器。
+    // 注意：count == 0 时 into_boxed_slice 给出的是悬挂但已对齐的指针，from_raw_parts_mut
+    // 要求非空，所以长度 0 时只做空操作（长度 0 的分配不占内存，不算泄漏）。
     if count > 0 {
         drop(unsafe { Vec::from_raw_parts_mut(devices, count as usize, count as usize) });
     }

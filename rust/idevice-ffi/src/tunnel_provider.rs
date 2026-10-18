@@ -30,7 +30,7 @@ use crate::core_device_proxy::AdapterHandle;
 use crate::rp_pairing_file::RpPairingFileHandle;
 use crate::rsd::RsdHandshakeHandle;
 use crate::util::{SockAddr, idevice_sockaddr, idevice_socklen_t};
-use crate::{IdeviceFfiError, ffi_err, provider::IdeviceProviderHandle, run_sync_local};
+use crate::{IdeviceFfiError, Residual, ffi_err, provider::IdeviceProviderHandle, run_sync_local};
 
 struct PinCtx(*mut c_void);
 unsafe impl Send for PinCtx {}
@@ -867,7 +867,13 @@ pub unsafe extern "C" fn tunnel_create_rppairing_multihost(
     let ctx = PinCtx(pin_context);
     let extras = unsafe { read_extra_hosts(extra_hosts, extra_host_count) };
 
+    // run_sync_local 的返回类型必须实现 PanicIntoResult（见 lib.rs）。本处错误类型是
+    // TunnelFailure（带 kind），不能直接满足 trait，于是：内层 async 照旧返回 TunnelFailure，
+    // 出界时 `.map_err(Residual)` 变成 Result<_, Residual> 参与流式 dispatch；万一任务 panic，
+    // run_sync_local 就地兑现 Err(Residual(FfiInvalidArg))；之后再把 Residual 还原成
+    // TunnelFailure::other，kind 记为 Other（panic 本来就无法归到具体的网络失败类型）。
     let res = run_sync_local(async {
+        let inner = async {
         // Connect directly and use raw RPPairing protocol
         info!("tunnel dial: opening the RPPairing connection to {socket_addr}");
         let stream = TcpStream::connect(socket_addr).await.map_err(|e| {
@@ -892,7 +898,10 @@ pub unsafe extern "C" fn tunnel_create_rppairing_multihost(
             })?;
 
         finish_tunnel(&mut rpc, socket_addr, &extras).await
-    });
+        };
+        inner.await.map_err(|f: TunnelFailure| Residual(f.error))
+    })
+    .map_err(|Residual(e)| TunnelFailure::other(e));
 
     match res {
         Ok((adapter, handshake)) => {

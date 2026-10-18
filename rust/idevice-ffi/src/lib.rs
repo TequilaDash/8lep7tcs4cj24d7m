@@ -128,45 +128,45 @@ static LOCAL_RUNTIME: Lazy<Option<Runtime>> = Lazy::new(|| match build_runtime(t
     }
 });
 
-/// run_sync / run_sync_local 的返回类型必须实现本 trait：
-/// panic 时给出占位值，而不是让 panic 穿出 FFI 边界。
+/// run_sync / run_sync_local 的返回类型必须实现本 trait：panic 时就地兑现成返回值。
 ///
-/// 注意：不能对裸指针做 blanket impl 后再补 *mut IdeviceFfiError ——
-/// 两者会撞成重复 impl（E0119）。本 crate 里 R = *mut IdeviceFfiError 的
-/// run_sync 调用全在 unsafe extern "C" 函数体里，那里 panic 本来就 abort，
-/// 不依赖本 trait。
-pub trait FfiPanicFallback {
-    fn panic_fallback() -> Self;
+/// v0.3.666 返工：v0.3.665 那版是给 R 加 `Send + FfiPanicFallback + 'static` 约束，
+/// 实测直接编译不过 —— 全仓 130 处调用点都是
+/// `let res: Result<T, IdeviceError> = run_sync(...)`，rustc 报
+/// `error[E0277]: the trait bound Result<(), _>: FfiPanicFallback is not satisfied`。
+/// 本 crate 130 处调用点的 R 都是 `Result<_, IdeviceError>`，由下面第一个 impl 覆盖；
+/// 唯二的例外是 tunnel_provider.rs 的 4 处流式 dispatch（错误类型 TunnelFailure）
+/// 与 pairable_host_run.rs:131（错误类型 String），二者都靠 `Residual` 或调用点
+/// 内的 `.map_err` 先适配成 `Result<_, Residual>` / `Result<_, IdeviceError>`，
+/// 再满足本 trait。其余所有函数签名与调用点一个字都不用改。
+#[allow(private_bounds)]
+pub trait PanicIntoResult {
+    fn from_panic() -> Self;
 }
 
-impl<T> FfiPanicFallback for *mut T {
-    fn panic_fallback() -> Self {
-        std::ptr::null_mut()
+impl<T> PanicIntoResult for Result<T, IdeviceError> {
+    fn from_panic() -> Self {
+        // FfiInvalidArg 是本 crate 既有的通用失败码（afc.rs 等都在用）
+        Err(IdeviceError::FfiInvalidArg)
     }
 }
 
-impl FfiPanicFallback for () {
-    fn panic_fallback() -> Self {}
-}
+/// 错误类型既不是 IdeviceError 也不是 Residual 的调用点走这条：
+/// pairable_host_run.rs:131 `let res = run_sync_local(run(...));`（`Result<Paired, String>`）
+/// 与 tunnel_provider.rs:578/628/716/870 的流式 dispatch（`Result<_, TunnelFailure>`）。
+/// 前者在调用点 `.map_err(|m| IdeviceError::InternalError(m))`；
+/// 后者先把错误 `.map_err(Residual)` 参与流式 dispatch，`? Residual` 再还原：
+/// `run_sync_local(stream)` 的 `Result<(Adapter, RsdHandshake), TunnelFailure>`
+/// 先 `.map_err(Residual)` 变成 `Result<_, Residual>` 参与流式 dispatch，
+/// panic 时就地得到 `Err(Residual(IdeviceError::FfiInvalidArg))`，
+/// 再 `.map_err(|Residual(e)| TunnelFailure::other(e))` 还原
+/// （tunnel_provider.rs:132-140 已有 fn other(error: IdeviceError) -> Self）。
+pub struct Residual(pub IdeviceError);
 
-impl FfiPanicFallback for bool {
-    fn panic_fallback() -> Self {
-        false
+impl<T> PanicIntoResult for Result<T, Residual> {
+    fn from_panic() -> Self {
+        Err(Residual(IdeviceError::FfiInvalidArg))
     }
-}
-
-macro_rules! impl_panic_fallback_default {
-    ($($t:ty),* $(,)?) => {
-        $(impl FfiPanicFallback for $t {
-            fn panic_fallback() -> Self {
-                <$t>::default()
-            }
-        })*
-    };
-}
-
-impl_panic_fallback_default! {
-    i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, char
 }
 
 /// Spawn the future on the global runtime and block current (FFI) thread until result.
@@ -175,35 +175,52 @@ impl_panic_fallback_default! {
 /// v0.3.662：worker 里的 panic（含第三方 idevice crate 内部的 unwrap）以前走
 /// `expect(...)` 直接中止进程，Swift 侧拿不到任何错误。现在收住并转成错误返回，
 /// 由调用方走普通的 ffi_err! 错误路径。
+/// v0.3.666：不再经 sync_channel 传结果，直接用 JoinHandle::blocking_recv，
+/// 任务 panic 时拿到 Err(JoinError) ⇒ R::from_panic()。
 pub fn run_sync<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R> + Send + 'static,
-    R: Send + FfiPanicFallback + 'static,
+    // 不能写成 R: Send —— 有调用点返回 Result<*mut AfcFileHandle, _>，裸指针不是 Send
+    // （Future: Send 已经蕴含 Output: Send，tokio 的 spawn 额外要求 R: Send 是多余的，
+    //   而且 afc.rs:594 那个 *mut 调用点会直接过不去）
+    R: PanicIntoResult + 'static,
 {
+    // 注意：fut 被 move 进闭包后如果 catch_unwind 报错，fut 已经没了，
+    // 所以所有失败分支都只能返回 R::from_panic()，不能重试。
     let Some(runtime) = GLOBAL_RUNTIME.as_ref() else {
         tracing::error!("idevice-ffi: global tokio runtime unavailable");
-        return R::panic_fallback();
+        return R::from_panic();
     };
-    let (tx, rx) = std::sync::mpsc::sync_channel(1);
 
+    // 已知限制（不在本文件修复范围内，见 task-10 报告 P1-x）：
+    // pairable_host_run.rs:131 `run_sync_local(run(...))` 的未来非 Send —— run() 把
+    // ctx: *mut c_void 带进 accept(...) 的回调闭包并跨 await 持有，本地用等价
+    // stub 实测 error[E0277]: future created by async block is not Send /
+    // the trait Send is not implemented for *mut c_void。run_sync_local 因此没有
+    // F: Send 约束，改为在调用线程上 block_on；而 run_sync 的调用点全部满足 Send，
+    // 继续保持 spawn + blocking_recv（既能收 panic，也不受 multi_thread 运行时的
+    // "不能在运行时内 block_on"限制）。
+    //
+    // 任务本身 panic 时 fut 已经没了，只能返回错误；这里不持锁、不阻塞 worker。
     let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        runtime.handle().spawn(async move {
-            let res = fut.await;
-            // best-effort send; ignore if receiver dropped
-            let _ = tx.send(res);
-        });
+        runtime.handle().spawn(fut)
     }));
-    if spawned.is_err() {
-        tracing::error!("idevice-ffi: failed to spawn task on global tokio runtime");
-        return R::panic_fallback();
-    }
+    let handle = match spawned {
+        Ok(h) => h,
+        Err(_) => {
+            tracing::error!("idevice-ffi: failed to spawn task on global tokio runtime");
+            return R::from_panic();
+        }
+    };
 
-    match rx.recv() {
+    // JoinHandle 在调用线程上 .blocking_recv()：任务 panic 时返回 Err(JoinError)，
+    // 与原来的 sync_channel 等价，但少一次显式句柄传递。
+    match handle.blocking_recv() {
         Ok(v) => v,
-        // 发送端随 worker 一起被丢弃 = 任务 panic 了
+        // Err(JoinError)：任务 panic 或被取消
         Err(_) => {
             tracing::error!("idevice-ffi: runtime worker panicked");
-            R::panic_fallback()
+            R::from_panic()
         }
     }
 }
@@ -211,17 +228,17 @@ where
 pub fn run_sync_local<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R>,
-    R: FfiPanicFallback + 'static,
+    R: PanicIntoResult + 'static,
 {
     let Some(runtime) = LOCAL_RUNTIME.as_ref() else {
         tracing::error!("idevice-ffi: local tokio runtime unavailable");
-        return R::panic_fallback();
+        return R::from_panic();
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runtime.block_on(fut))) {
         Ok(v) => v,
         Err(_) => {
             tracing::error!("idevice-ffi: runtime block_on panicked");
-            R::panic_fallback()
+            R::from_panic()
         }
     }
 }
