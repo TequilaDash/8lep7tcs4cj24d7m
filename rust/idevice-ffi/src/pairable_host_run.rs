@@ -27,7 +27,6 @@ use idevice::remote_pairing::{
 use tokio::net::TcpListener;
 
 use crate::run_sync_local;
-use idevice::IdeviceError;
 
 /// Emitted by `si_run_host` right after the listener is bound, so the caller
 /// can advertise the pairable-host service over Bonjour. The `txt_*` arrays and
@@ -129,26 +128,17 @@ pub unsafe extern "C" fn si_run_host(
     let ready_cb = ready_cb;
     let ctx = ctx;
 
-    // run() 返回 Result<Paired, String>，而 run_sync_local 只认 Result<_, IdeviceError>
-    // 或 Result<_, Residual>（见 lib.rs 的 PanicIntoResult）。这里把 String 错误就地折成
-    // IdeviceError::InternalError，既满足 trait，又保留了原来的错误文本。
-    // 必须包成 async block：ctx 是 *mut c_void，直接把它塞进 future 会让 future 非 Send，
-    // 而 run_sync_local 虽然不要求 R: Send，但把裸指针藏在 async block 里更稳妥（实测 t9）。
-    let res = run_sync_local(async move {
-        run(
-            bind_addr,
-            port,
-            name,
-            model,
-            out_path,
-            saved_alt_irk,
-            ready_cb,
-            pin_cb,
-            ctx,
-        )
-        .await
-        .map_err(|m| IdeviceError::InternalError(m))
-    });
+    let res = run_sync_local(run(
+        bind_addr,
+        port,
+        name,
+        model,
+        out_path,
+        saved_alt_irk,
+        ready_cb,
+        pin_cb,
+        ctx,
+    ));
     match res {
         Ok(p) => {
             (*out).device_name = cstr(p.name);

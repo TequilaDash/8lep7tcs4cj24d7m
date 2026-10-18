@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.3.673] - 2026-10-18
+
+> **一句话**：把 20 个并行审计员这一轮的全部修复一次落地 —— 隧道心跳静默死亡、安装包孤儿分片、
+> 备份静默丢文件、崩溃日志导出内存膨胀、AppStore 已购库查错区、GSAAuth hex 越界崩溃、
+> Airlift FFI 读泄漏，并把 Rust 的 panic 兜底退回 proven 形态（v0.3.670–672 三轮返工全部编译不过）。
+
+### 一、隧道（task-7，10 文件）
+
+| 位置 | 缺陷 | 改法 |
+|---|---|---|
+| `TunnelContext.m` | `_createClassicTunnel` 句柄交接不在锁内，心跳线程与建连线程可同时写 `_provider/_adapter/_handshake` | 整段进 `[_handleLock lock]` + `sameHandle` 判定，不再重复写/重复释放 |
+| `TunnelContext.m` | worker 的 `unlock` 在 `@try` 内，`_createTunnel` 一旦 `@throw` 就永久焊死锁 | `unlock` 移进 `@finally` |
+| `TunnelContext.m` | `_createRpTunnel` 一个 pairingFile 循环试多候选，`tunnel_create_rppairing` 会消费它 ⇒ 每失败一个泄漏一份 | 每个候选各自 `_loadPairingFile` |
+| `TunnelContext.m` | 成功路径调 `_freeTunnelHandles` 会 `globalHeartbeatToken++`，把上一轮心跳 worker 判成过期 | 只释放旧句柄，不推 token |
+| `TunnelContext.h` | `resetPairingFile` 无失败返回，删不掉也报成功 | 新增 `resetPairingFileWithError:`，Swift 侧导入为 `throws` |
+| `heartbeat.m` | `tequiladash_tunnel_target_ip()` 不 trim，用户存 `" 10.7.0.1\n"` 时 iOS 18 lockdown 路径永远建不起来 | 与 `TunnelContext._targetIP` 同口径 trim |
+| `applist.m` | 两处 `getAllAppsInfo*` 不释放 plist 树 | 补 `idevice_plist_array_free` |
+| `applist.m` | `CFBundleIdentifier` 为 nil 时直接插入字典 | 补 `isKindOfClass` + 空串判断 |
+| `applist.m` | `plist_to_objc_object` 不认 `PLIST_UID` | 按 8 字节大端转 `NSNumber` |
+| `applist.m` | 六处 `*error` 解引用不判空 | 补判空 |
+| `EscRoutePeers.c` | `esc_roundup` 按 4 字节推进 sockaddr，Darwin 实际是 8 字节槽位 ⇒ IPv4 掩码（`sa_len==19`）推进 20 而非 24，之后每个 sockaddr 错位、`RTAX_IFP` 读不到接口名、函数**恒定返回 NULL** | 改 8 字节对齐并补 `RTAX_IFA` 兜底（标注需真机实测） |
+| `EscRoutePeers.c` | `esc_peer_from_dl` 无 `sdl_nlen+sdl_alen<=sdl_len` 边界，截断样本越界读 | 补边界判断 |
+
+`AppDiscovery.resetPairing()` 随之改 `throws`，三个调用方（`AppListView` / `RootView` / `VirtualLocationSettingsView`）全改 try/catch —— 失败时 `AppListView` 不再先清空列表再 reload。
+
+### 二、安装链路（task-8 / task-9）
+
+- `AppStoreInstallService.swift`：`ipa-<UUID>.part` 在四条失败路径无人删（拒绝跨域重定向、`moveItem` 失败、`abort()`、搬好后断网），UUID 命名之后无引用 ⇒ 每次失败留一份 GB 级孤儿包。新增 `stagedPartial` + 锁内 `takeStagedPartial()`，六处接线。
+- `I4MobileInstallService.swift`：`let confirmed = after.error != nil ? nil : (after.existingVersion != nil)` 只看安装后 —— 设备本来装着同名 App 时 installd 拒了也判成功。改成比较 before/after + `installFailed` 入参 + 被拒后睡 1.5s 复探 + verdict 三态。
+- `I4MobileInstallService.swift`：`importIPA` 拷大文件前补 `Task.isCancelled`；`downloadAllMissingCloudIPAs` 包间循环补取消检查。
+
+### 三、备份 / 崩溃日志 / 设备瘦身 / 文件共享 / 修补（engine-misc，5 文件）
+
+- `BackupService.swift`：`walk` 用 `catch ZipWriterError.cannotReadSource { continue }` 静默丢文件 —— manifest 是恢复契约（`RestoreService` 拒绝不在 manifest 里的条目），丢一个就永久丢。新增 `BackupResult.skippedFiles` 计数上报；manifest/metadata/finish 从「清理守卫之外」收进 `do/catch`，失败即删档（旧写法会留一个无中央目录的半截 zip，Backups 列表照样扫出来）。
+- `CrashLogService.swift`：`defer` 写在 for 体内且位于 `throw` 之后 ⇒ 失败路径不释放、每块压 1MB 直到函数返回，导出几十 MB 日志时内存线性膨胀。改为「每块读完立即 `afc_file_read_data_free`」+ 失败分支先释放再抛。`exportDirectory` 由 `static var`（内部 `try? createDirectory`）改 `static func ... throws`。导出改 `.atomic` 写 + 批失败回滚已导出文件。
+- `DeviceSlimService.swift`：`try? listDirectory` 让整棵子树凭空消失还被缓存 10 分钟 ⇒ 新增 `Snapshot.unreadablePaths`；`try? … ?? [:]` 把容量读失败折成 `total/free = 0`（256G 手机显示成空机）⇒ 改抛错让页面按读取失败呈现；快照作废 `try?` 吞掉导致「删了还在」⇒ 新增 `invalidateSnapshot(reason:)` 留痕；应用大小与未量到路径按 0 累加当全量 ⇒ 新增 `SpaceUsage.incompleteReason` 分开计。
+- `FileSharingService.swift`：8 处 FFI 错误对象被丢（instproxy / house_arrest / afc_file_open / afc_list_directory / afc_get_file_info / rp_pairing_file_read / tunnel_create_rppairing 三次重试），每次失败泄漏一个且真实原因被压成固定文案 ⇒ 统一走 `error(from:fallback:)`。两条 profile 通道 `try? … ?? []` 把读失败折成空上下文 ⇒ 新增 `AppTypeContext.issues` 留痕。下载大小未知不再冒充 0，流式下载失败 `defer` 删 dest。
+- `RepairService.swift`：`copyItem` / `injectAllPaths` 失败后把截断或「复制完整但 sinf 只写一半」的 `repaired.ipa` 留在 `Imports/`，而 `ImportedPackageList` 是纯磁盘扫描无台账，会把坏包当「已修补」列出来 ⇒ 三处 catch 先删产物再报 E6。用户取消 `.skipped` 与 E8/E9/E10 的产物照旧保留。
+
+### 四、AppStore / 已购库（task-6）
+
+- `AppStoreService.swift`：`.urlQueryAllowed` **不转义** `& = + #`，搜「A&B」会被拆成 `term=A` + 孤立 `B=` ⇒ 新增 `makeURL(_:query:)` 用 `URLComponents` + `URLQueryItem`。
+- `AppStoreService.swift`：成功 HTML（0.6–1.6MB）与负缓存空壳（几十字节）共用 3 槽 LRU，大陆出口 IP 下连看几个非国区应用就把槽位占满、真取到的页面反被逐出 ⇒ 拆成 `htmlCacheLimit = 3` / `htmlNegativeCacheLimit = 8`。
+- `AppStoreService.swift`：负缓存记的是**请求**区域而非**实际服务**区域（`/us` 被重定向、只有 cn 回首页时负缓存写着 `served=us`，用户按该区排障白费）⇒ 新增 `carriedRegion` 跟随每次 200 记录。
+- `AppStoreService.swift`：`contains("/app/") + contains("id\(appId)")` 子串判定会把别的应用页当目标页 ⇒ 改路径分段 + 末段严格等于 `id<appId>` + host 必须是 `apps.apple.com`。
+- `AppStoreService.swift`：文案说「稍后自动重试」而代码里没有任何自动重试 ⇒ `catalogCoolingDown` 带出剩余秒数，改「约 N 秒后可再试」。
+- `PurchaseHistoryService.swift`：`stride(from: 0, to: 12, by: 2)` 假设 GUID ≥ 12 位，而 `isDeviceGUID` 放行 12...32 位、默认长度恰为 12 ⇒ `guid.index(offsetBy: 12)` 落在 `endIndex` 越界 trap。改 `prefix(12)` + 双位步进 + `bytes.count == 6` guard。
+- `PurchaseHistoryService.swift`：从不读 `X-Set-Apple-Store-Front` ⇒ 账号换区后已购库永远查错区。新增读响应头（形如 `143441-1,34`）回写 `account.fullStoreFront`。
+- `PurchaseHistoryService.swift`：同一份 `mtco/mrco` 计数日志按可缺（`?? "missing"`）、返回按硬失败 ⇒ 统一到 `recordCounts(_:)`。
+
+### 五、GSAAuth 越界崩溃（gsa-hex-fix）
+
+`hexToBytes` 无 `count % 2 == 0` 守卫，奇数长度时 `hex.index(i, offsetBy: 2)` 越界 trap（WSL Swift 6.1.3 实测 `Fatal error: String index is out of bounds`，真机即「点登录闪退」）。补守卫 + `pair.allSatisfy({ $0.isHexDigit })`。**顺带订正一条审计错误结论**：`UInt8("", radix: 16)` 实测返回 nil 而非 `Optional(0)`，真正会静默解错的是 `UInt8(_:radix:16)` 接受前导正号（`"aa+1bb"` 被解成 `aa01bb`）。
+
+### 六、Airlift FFI 读泄漏（airlift-verify）
+
+`AirliftToneTransport.readSync` 把释放放在 `defer`，而 `guard result == 0 else { throw }` 在 `defer` 注册之前 ⇒ `result != 0` 且 `out_data` 非空时，整份文件大小的 Rust Box（`into_boxed_slice` + `mem::forget`）永久泄漏；且 `defer` 释放晚于 `Data` 拷贝，任何一次重排就是 use-after-free。改为「先拷字节并释放 `out_data`、先取文案并无条件 `al_string_free`，再判返回码」，并在开头成对校验读/释放两个符号（只拿到读就抛 `unavailable`）。三个 `dlsym` 改 `private static let` 惰性缓存（`AirliftFFI` 是静态库、全仓无 `dlclose`，地址进程内恒定）；但目标值**不能**缓存 —— `al_set_target_host` 写的是 Rust 进程级全局，而 `LocalDevVPN.targetIP` 运行期读 UserDefaults，缓存会导致用户改完隧道地址仍连旧地址。另补 `removeStaleStagingDirectories()` 清理强杀/崩溃后残留的 `TequilaDash-Airlift-<UUID>` 暂存目录。
+
+### 七、Rust：panic 兜底退回 proven 形态（v0.3.670–672 三轮返工）
+
+v0.3.670 给 `run_sync` 加 `R: FfiPanicFallback`，CI 报 946 行 E0277；改成作用在返回值上的 `PanicIntoResult` 后，全仓 **179 处**调用点的 R 有 7 种形态（`Result<_, std::io::Error>`、`Option<Result<_, IdeviceError>>`、`AdapterHandle`、`Option<(TcpStream, TcpStream)>`、`*mut IdeviceFfiError`、`Option<Result<UsbmuxdListenEvent, _>>`、`Result<TcpStream, std::io::Error>`），CI 报 26 条 E0277。**本轮彻底撤掉自定义 trait**，回到 v0.3.669 的 `sync_channel` 形态：泛型只要 `F: Future<Output=R> + Send + 'static, R: Send + 'static`，179 处调用点一个字都不用改。
+
+明确接受的退化（写进注释）：worker panic 时 tx 随栈展开 drop，`rx.recv()` 得 `Err` ⇒ 在**调用线程**上 panic；调用线程是 `#[unsafe(no_mangle)] pub unsafe extern "C" fn`，默认策略下 abort —— 与 v0.3.669 及更早完全一致，不是本轮新引入。
+
+另修 `usbmuxd.rs` 的 `Vec::from_raw_parts_mut` → `Vec::from_raw_parts`（Vec 没有 `from_raw_parts_mut`，这是 v0.3.670 引入的真编译错）。
+
+### 八、下载中心注释订正
+
+`IPADownloadCenter.swift` 类头「队列串行执行」与速度采样窗口注释已过时（v0.3.413 起并发上限 3，v0.3.659 起采样器已按任务各一套）—— 只订正文字，无逻辑改动。**D1（AppleID 通道取消删不到文件）本轮未修**：`abort()` 首行 `guard !finished`，而 `finished` 在 `finish(.success(keep))` 时就置位，真修需要让「本次调用算出的 dest」可被取消路径拿到，而 dest 文件名由 Apple 回的 `bundleShortVersionString` 拼成，需改 `AppStoreInstallService.swift` / `AppStoreLocalInstallService.swift`，留给下一轮。
+
+### 验证
+
+- `normalize_eol.py`：27 个改动文件换行符与基线一致；
+- `swift_precommit_check.py .`：15 个 guard 全绿（含版本号三处 0.3.673/962、UI 文案 G1/G2/G3 扫 293 个 .swift）；
+- `swiftc -parse`：17 个 Swift 文件 EXIT=0（只保证语法，类型错靠 CI）；
+- `clang -fsyntax-only`（iOS 16.5 SDK）：5 个 `.m` / `.c` EXIT=0；
+- Rust 本机无 cargo，只能由 CI 判决。
+
+
+
 ## [0.3.672] - 2026-10-18
 
 > **一句话**：修「禁用通话录音」在只读到一半提示音时误判为「已经是静音」——界面报成功、

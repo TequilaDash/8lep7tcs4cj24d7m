@@ -42,6 +42,10 @@ enum DeviceSlimService {
         var capacityText: String = ""
         var slices: [UsageSlice] = []
         var scannedAt: Date?
+        /// v0.3.673：本组数字**不完整**的原因（nil = 完整）.
+        /// 旧实现把「应用大小只量到一部分」「扫描时有目录读不出」全部折叠成
+        /// 与完整结果完全相同的形状，界面无从区分「真的就这么小」与「没量到」.
+        var incompleteReason: String?
 
         var used: Int64 { max(0, total - free) }
     }
@@ -193,6 +197,13 @@ enum DeviceSlimService {
         var fileCounts: [String: Int] = [:]
         var logs: [LogHit] = []
         var takenAt: Date = .distantPast
+        /// v0.3.673：**读不出来的子树**. 旧实现在 DFS 里 `try? listDirectory` 失败
+        /// 就 `continue`，被跳过的整棵子树既不计入 totals、也不留任何痕迹 ——
+        /// 快照随后被缓存 10 分钟，于是「空间占用」各分片与可清理项列表都按
+        /// 「这就是全部」呈现，用户看到的是一个偏小却毫无标注的数字.
+        /// 现在把读不出的目录记下来：扫描结果可以被明确标成「不完整」.
+        /// 用 Optional 是为了让旧版本写下的缓存文件仍能解码（缺键 = nil）.
+        var unreadablePaths: [String]? = nil
     }
 
     struct LogHit: Codable { var path: String; var bytes: Int64 }
@@ -202,12 +213,37 @@ enum DeviceSlimService {
             .appendingPathComponent("Documents/device_slim_snapshot.json")
     }
 
+    /// v0.3.673：作废磁盘快照（删除失败不再静默吞掉）.
+    ///
+    /// 为什么要单独一个函数：旧实现两处都写 `try? FileManager.default.removeItem`，
+    /// 删不掉时缓存文件仍然有效，下一次 `cachedSnapshot()` 会把刚刚被清理掉的项
+    /// 原样再列一遍 —— 「删了还在这里」. 现在失败要写日志，至少可回溯.
+    private static func invalidateSnapshot(reason: String) {
+        do {
+            try FileManager.default.removeItem(at: snapshotURL)
+        } catch {
+            // 文件本来就不存在 = 正常（没有缓存可作废），不算失败.
+            let ns = error as NSError
+            if ns.domain == NSCocoaErrorDomain, ns.code == NSFileNoSuchFileError { return }
+            LoginLogger.shared.log(
+                "[设备瘦身] \(reason)：作废快照缓存失败（下次进页面可能仍显示旧数据）："
+                + "\(error.localizedDescription)"
+            )
+        }
+    }
+
     /// 读缓存快照；`maxAge` 秒内视为新鲜（默认 10 分钟）
     static func cachedSnapshot(maxAge: TimeInterval = 600) -> Snapshot? {
         guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let snap = try? decoder.decode(Snapshot.self, from: data) else { return nil }
+        guard let snap = try? decoder.decode(Snapshot.self, from: data) else {
+            // v0.3.673：**坏缓存要清掉**. 旧写法 `try?` 解不开就返回 nil，
+            // 文件却永远留在原地 —— 每次进页面都重试同一份坏 JSON，白付一次读盘，
+            // 且没有任何线索. 删掉它，让下一次 buildSnapshot 写一份新的.
+            invalidateSnapshot(reason: "缓存解码失败")
+            return nil
+        }
         guard Date().timeIntervalSince(snap.takenAt) <= maxAge else { return nil }
         return snap
     }
@@ -219,13 +255,30 @@ enum DeviceSlimService {
         let firstLevels = Set(photoDirs + mediaDirs + [usbDir])
         var logs: [LogHit] = []
         var budget = 0
+        // v0.3.673：读不出的子树（见 Snapshot.unreadablePaths）.
+        var unreadable: [String] = []
 
         progress?("正在扫描设备文件…")
         try AFCService.shared.batch { client in
             // 迭代式 DFS（显式栈，避免深递归）
             var stack: [(path: String, depth: Int)] = [("/", 0)]
             while let node = stack.popLast() {
-                guard let entries = try? AFCService.listDirectory(client: client, path: node.path) else { continue }
+                // v0.3.673：**读不出就记下来**，不再静默跳过.
+                // 旧写法 `try? … else { continue }` 让整棵子树凭空消失，
+                // 而本函数的结果会被缓存 10 分钟并驱动所有分片数字.
+                let entries: [AFCService.Entry]
+                do {
+                    entries = try AFCService.listDirectory(client: client, path: node.path)
+                } catch {
+                    unreadable.append(node.path)
+                    if unreadable.count <= 5 {
+                        LoginLogger.shared.log(
+                            "[设备瘦身] 目录读不出（该子树未计入，统计会偏小）：\(node.path)"
+                            + " — \(error.localizedDescription)"
+                        )
+                    }
+                    continue
+                }
                 budget += entries.count
                 for entry in entries {
                     let p = entry.path
@@ -263,12 +316,20 @@ enum DeviceSlimService {
         }
         logs.sort { $0.bytes > $1.bytes }
         snap.logs = Array(logs.prefix(40))
+        snap.unreadablePaths = unreadable.isEmpty ? nil : unreadable
         snap.takenAt = Date()
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(snap) {
-            try? data.write(to: snapshotURL)
+        // v0.3.673：**缓存写失败不再静默**. 旧写法 `if let data = try? encode { try? write }`
+        // 把编码/写盘两处失败都吞掉 —— 页面照常显示数字，用户以为快照是最新的，
+        // 下一次进页面又读到上一次的旧快照. 现在写不进去就留日志（不中断扫描，
+        // 本轮数字仍然可用，只是没有缓存）.
+        do {
+            let data = try encoder.encode(snap)
+            try data.write(to: snapshotURL)
+        } catch {
+            LoginLogger.shared.log("[设备瘦身] 快照缓存写入失败（本轮数字仍可用，下次需重扫）：\(error.localizedDescription)")
         }
         return snap
     }
@@ -457,6 +518,21 @@ enum DeviceSlimService {
         return value
     }
 
+    /// v0.3.673：取走「空间占用数字不完整」的原因（页面在 usage 落地后调用一次）.
+    ///
+    /// 为什么单独一条通道：`SpaceUsage.incompleteReason` 是**数据自带的**说明，
+    /// 页面即使不读它也不会错；但「扫描时有目录读不出」属于**本轮扫描**的事实，
+    /// 与 usage 一起给出最直观. 取走即清零，避免跨轮残留.
+    nonisolated(unsafe) private static var usageIssueFlag: String?
+    private static let usageIssueLock = NSLock()
+
+    static func consumeUsageIssue() -> String? {
+        usageIssueLock.lock(); defer { usageIssueLock.unlock() }
+        let value = usageIssueFlag
+        usageIssueFlag = nil
+        return value
+    }
+
     /// 用户点「重试」时先丢掉缓存，否则 30 秒内会直接拿到上一次的失败结果.
     static func invalidateAppReadCache() {
         appReadLock.lock(); defer { appReadLock.unlock() }
@@ -614,17 +690,48 @@ enum DeviceSlimService {
     static func loadUsage(snapshot: Snapshot? = nil,
                           progress: ((String) -> Void)? = nil) throws -> SpaceUsage {
         var usage = SpaceUsage()
+        // v0.3.673：「剩余容量」是否真的读到了（false = 按 0 呈现，需在界面上说明）.
+        var freeUnknown = false
         let snap = try snapshot ?? buildSnapshot(progress: progress)
 
-        let du = (try? DeviceInfoService.lockdownDomainDict("com.apple.disk_usage")) ?? [:]
+        // v0.3.673：**读不到容量就报错，不要报 0**. 旧写法 `try? … ?? [:]` 把
+        // lockdown 读取失败折成空字典，于是 total/free 全落 0：环形图空、图例全 0、
+        // 标题写着「已用 0 B / 总量 0 B」—— 一台 256GB 的手机会被显示成一台空手机，
+        // 而用户没有任何线索知道这是"没读到". 现在把失败原文抛出去，页面按读取失败
+        // 呈现并给「重试」（DeviceSlimView 的 catch 已就绪）.
+        let du: [String: Any]
+        do {
+            du = try DeviceInfoService.lockdownDomainDict("com.apple.disk_usage")
+        } catch {
+            throw NSError(domain: "DeviceSlim", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "读取设备容量失败：\(error.localizedDescription)",
+            ])
+        }
         func num(_ key: String) -> Int64? {
             if let n = du[key] as? Int { return Int64(n) }
             if let n = du[key] as? NSNumber { return n.int64Value }
             return nil
         }
-        usage.total = num("TotalDiskCapacity") ?? num("TotalDataCapacity") ?? 0
+        guard let total = num("TotalDiskCapacity") ?? num("TotalDataCapacity"), total > 0 else {
+            // 域字典读到了但没有容量键 —— 同样是「没读到」，不能当 0 用.
+            throw NSError(domain: "DeviceSlim", code: -2, userInfo: [
+                NSLocalizedDescriptionKey: "读取设备容量失败：disk_usage 未返回 TotalDiskCapacity",
+            ])
+        }
+        usage.total = total
         let system = num("TotalSystemCapacity") ?? 0
-        usage.free = num("AmountRestoreAvailable") ?? num("AmountDataAvailable") ?? num("TotalDataAvailable") ?? 0
+        // v0.3.673：**剩余容量没读到也不能按 0 报**. 三个键全缺时 free = 0，
+        // 差额会被 other = total - ... - 0 全部吞掉 ——「剩余 0 B、其他巨大」是纯假象.
+        let free = num("AmountRestoreAvailable") ?? num("AmountDataAvailable") ?? num("TotalDataAvailable")
+        usage.free = free ?? 0
+        if free == nil {
+            freeUnknown = true
+            LoginLogger.shared.log("[设备瘦身] disk_usage 缺 AmountRestoreAvailable / AmountDataAvailable / TotalDataAvailable：「剩余」按 0 呈现，差额落在「其他」")
+        }
+        if num("TotalSystemCapacity") == nil {
+            // 「系统」分片会偏小、差额被算进「其他」—— 留痕，别让 0 冒充测得值.
+            LoginLogger.shared.log("[设备瘦身] disk_usage 缺 TotalSystemCapacity：「系统」分片按 0 呈现，差额落在「其他」")
+        }
 
         var apps: Int64 = 0
         // v0.3.378：快路径（get_apps）保底出数据，不再「超时按空处理」；
@@ -632,6 +739,20 @@ enum DeviceSlimService {
         let appRead = readAppsForSlim()
         for app in appRead.apps where app.applicationType != "System" {
             apps += app.appSize ?? 0
+        }
+        // v0.3.673：**部分和不能当全量**. 没有 appSize 的应用被按 0 累加，
+        // 于是「应用」分片是一个下界，差额全部被下面的 other 兜走 ——
+        // 图上看起来"应用很小、其他很大"，其实是没量到. 现在把这种状态标出来.
+        var partial = false
+        if !appRead.usable {
+            partial = true
+        } else if !appRead.sizeComplete, !appRead.apps.isEmpty {
+            partial = true
+            LoginLogger.shared.log(
+                "[设备瘦身] 应用大小不完整：\(appRead.apps.count) 条里只有 "
+                + "\(appRead.apps.filter { $0.appSize != nil }.count) 条带大小，"
+                + "「应用」分片是下界，差额计入「其他」"
+            )
         }
 
         let photos = photoDirs.reduce(Int64(0)) { $0 + (snap.totals[$1] ?? 0) }
@@ -649,6 +770,17 @@ enum DeviceSlimService {
             UsageSlice(id: "free", label: "剩余", bytes: usage.free, colorHex: 0xBDBDBD),
         ]
         usage.scannedAt = snap.takenAt
+        // v0.3.673：把「这个数字不完整」带到界面上，而不是只在日志里.
+        // 两个来源：① 应用大小只量到一部分（partial）；② 扫描时有目录读不出.
+        let unreadable = snap.unreadablePaths ?? []
+        var notes: [String] = []
+        if partial { notes.append("应用大小不完整") }
+        if freeUnknown { notes.append("剩余容量未读到") }
+        if !unreadable.isEmpty { notes.append("\(unreadable.count) 个目录读不出") }
+        usage.incompleteReason = notes.isEmpty ? nil : notes.joined(separator: " / ")
+        usageIssueLock.lock()
+        usageIssueFlag = usage.incompleteReason
+        usageIssueLock.unlock()
 
         let machine = sysctlString("hw.machine") ?? "iPhone"
         usage.deviceName = DeviceCatalog.name(machine)
@@ -672,9 +804,17 @@ enum DeviceSlimService {
         let snap = try snapshot ?? buildSnapshot(progress: progress)
         var groups: [Group] = []
 
+        // v0.3.673：**「没量到」与「量到 0」分开**. 旧实现 `?? 0` + `guard bytes > 0`
+        // 把两种完全不同的情况并成"这一项不显示"：目录读不出（或本轮被跳过）时，
+        // 可清理项会静默消失，用户看到的是"这台设备没缓存"，而不是"这次没扫到".
+        let unreadable = snap.unreadablePaths ?? []
+        var skippedUnmeasured = 0
         var systemItems: [Item] = []
         for (path, why) in systemCachePaths {
-            let bytes = snap.totals[path] ?? 0
+            guard let bytes = snap.totals[path] else {
+                skippedUnmeasured += 1
+                continue
+            }
             guard bytes > 0 else { continue }
             systemItems.append(Item(id: path, name: why,
                                     detail: cacheDetail(path, snap),
@@ -690,7 +830,11 @@ enum DeviceSlimService {
 
         var tempItems: [Item] = []
         for (path, why) in tempPaths {
-            let bytes = snap.totals[path] ?? 0
+            // v0.3.673：同「系统缓存」—— 没量到 ≠ 0 字节.
+            guard let bytes = snap.totals[path] else {
+                skippedUnmeasured += 1
+                continue
+            }
             guard bytes > 0 else { continue }
             tempItems.append(Item(id: path, name: why,
                                   detail: cacheDetail(path, snap),
@@ -699,6 +843,12 @@ enum DeviceSlimService {
         groups.append(Group(kind: .tempFiles, items: tempItems))
 
         groups.append(Group(kind: .bigApps, items: bigApps()))
+        if skippedUnmeasured > 0 || !unreadable.isEmpty {
+            LoginLogger.shared.log(
+                "[设备瘦身] 扫描不完整：\(skippedUnmeasured) 个候选路径没量到，"
+                + "\(unreadable.count) 个目录读不出（可清理项列表可能偏少）"
+            )
+        }
         return groups
     }
 
@@ -714,6 +864,8 @@ enum DeviceSlimService {
         }
 
         var out: [Item] = []
+        // v0.3.673：文档大小未知的应用条数（见循环内说明）.
+        var unmeasuredDocCount = 0
         // v0.3.378：快路径（get_apps）保底出数据；没有精确大小时（增强未成功）
         // 该分组判不出「> 500MB」，页面以「应用大小不可用」明确说明，而不是静默变空.
         let appRead = readAppsForSlim()
@@ -722,7 +874,13 @@ enum DeviceSlimService {
             let appSize = app.appSize ?? 0
             // v0.3.408：文档大小取**本机通道**量到的结果（`DynamicDiskUsage` 不在请求里，
             // 见 `startDocSizePass`）。还没量到的按 0 算 —— 与从前一字不差，不是回退.
-            let docSize = app.docSize ?? cachedDocSize(app.bundleId) ?? 0
+            // v0.3.673：**但"没量到"必须可分辨**. `cachedDocSize` 返回 nil 有两种含义
+            // （还没量 / 量失败），旧写法一律 `?? 0`，于是「较大应用」的判定
+            // `total > bigAppThreshold` 会把文档很重的应用漏掉，界面也不说为什么.
+            // 现在把"文档大小未知"的应用条数写进日志，让漏判可被看见.
+            let measuredDoc = app.docSize ?? cachedDocSize(app.bundleId)
+            let docSize = measuredDoc ?? 0
+            if measuredDoc == nil { unmeasuredDocCount += 1 }
             let total = appSize + docSize
             guard total > bigAppThreshold else { continue }
             var available: Bool? = nil
@@ -737,6 +895,12 @@ enum DeviceSlimService {
                             ipaFileName: byBundle[app.bundleId]?.fileName,
                             sourceAvailable: available,
                             isRisky: riskyBundleIds.contains(app.bundleId)))
+        }
+        if unmeasuredDocCount > 0 {
+            LoginLogger.shared.log(
+                "[设备瘦身] 较大应用判定：\(unmeasuredDocCount) 个应用的文档大小尚未量到（按 0 计），"
+                + "这部分应用若文档很重会被漏判"
+            )
         }
         return out.sorted { $0.bytes > $1.bytes }
     }
@@ -803,9 +967,10 @@ enum DeviceSlimService {
                 result.deleted += 1
             }
         }
-        // 数值已变，作废缓存
-        try? FileManager.default.removeItem(at: snapshotURL)
-        return result
+        // 数值已变，作废缓存.
+        // v0.3.673：**作废失败要留痕**. 旧写法 `try?` 吞掉失败，缓存文件仍在，
+        // 下次进页面（10 分钟内）又把刚删掉的项原样列出来 —— 用户以为删除没生效.
+        invalidateSnapshot(reason: "清理完成")
     }
 
     // MARK: - 重装（较大应用）
@@ -879,7 +1044,7 @@ enum DeviceSlimService {
                 result.failures.append("\(item.name)：\(error.localizedDescription)")
             }
         }
-        try? FileManager.default.removeItem(at: snapshotURL)
+        invalidateSnapshot(reason: "重装完成")
         return result
     }
 

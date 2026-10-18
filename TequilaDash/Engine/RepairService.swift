@@ -259,6 +259,10 @@ enum RepairService {
             }
             try FileManager.default.copyItem(atPath: req.ipaPath, toPath: outputPath)
         } catch {
+            // v0.3.673：**复制失败也清场**. copyItem 在空间不足时会留下一个
+            // 截断的 repaired.ipa（旧产物已在上一步删掉），磁盘扫描同样会把它
+            // 当成「已修补」包列出来.
+            try? FileManager.default.removeItem(atPath: outputPath)
             return .failure(.injectSinf, code: "E6",
                 message: "生成修补产物时失败.",
                 suggestion: "确认存储空间充足后重试；持续失败请反馈.",
@@ -272,6 +276,12 @@ enum RepairService {
         do {
             written = try PackageSINFWriter.injectAllPaths(sinf: sinfData, ipaPath: outputPath)
         } catch {
+            // v0.3.673：**注入失败即删产物**. `injectAllPaths` 是"整包重写 + 逐条复读"，
+            // 中途抛错时 outputPath 已经是一个「复制完整、sinf 只写了一部分」的半成品；
+            // 而 `ImportedPackageList` 是纯磁盘扫描（无台账），会把这份半成品当成
+            // 一枚正常的「已修补」包列出来，用户点安装得到的是装不上的坏包。
+            // 失败必须什么都不留：原件未动，重试从原件再来一次即可。
+            try? FileManager.default.removeItem(atPath: outputPath)
             return .failure(.injectSinf, code: "E6",
                 message: "把解密授权写进安装包时失败.",
                 suggestion: "确认存储空间充足后重试；持续失败请反馈.",
@@ -414,6 +424,9 @@ enum RepairService {
             }
             try FileManager.default.copyItem(atPath: req.ipaPath, toPath: outputPath)
         } catch {
+            // v0.3.673：同加密包分支 —— 复制失败的半截产物必须删掉，
+            // 否则磁盘扫描会把它当成可安装的「已修补」包.
+            try? FileManager.default.removeItem(atPath: outputPath)
             return .failure(.injectSinf, code: "E6",
                 message: "生成安装产物时失败.",
                 suggestion: "确认存储空间充足后重试；持续失败请反馈.",

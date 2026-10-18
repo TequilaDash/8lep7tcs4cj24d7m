@@ -43,6 +43,13 @@ NSNotificationName const WirelessPairingDidFailBroadcastNotification = @"Wireles
                             hostName.UTF8String, model.UTF8String,
                             outPath.UTF8String,
                             hostAltIrkC && *hostAltIrkC ? hostAltIrkC : "",
+                            // v0.3.673（task-7 发现18，**需实测**）：
+                            // 这里是 `__bridge`（不转移所有权），回调期间靠上面
+                            // `__strong typeof(self) strongSelf = weakSelf;` 把对象钉住，
+                            // 所以 si_run_host 返回前 ctx 一定有效 —— 依赖的是 strongSelf 的
+                            // 生命周期覆盖整次同步调用，而不是桥接方式本身。
+                            // 若将来把 si_run_host 改成异步/提前返回，这里必须换 __bridge_retained
+                            // + 在 :49 的完成块里 __bridge_transfer 归还，否则是悬垂指针。
                             si_ready_cb, si_pin_cb, (__bridge void *)strongSelf,
                             &result);
 
@@ -176,6 +183,9 @@ static void si_pin_cb(const char *pin, void *ctx) {
 
 #pragma mark - NSNetServiceDelegate
 
+// v0.3.673：只 publish（不 resolve），所以 B 侧的 didNotResolve 不会到这个对象——
+// 本类没有必要实现它；若将来改成 resolve 模式，必须同时补 didNotResolve，
+// 否则超时后 UI 永远停在“等待设备”。
 - (void)netServiceDidPublish:(NSNetService *)sender {
     NSLog(@"[WirelessPairing] netServiceDidPublish name=%@ port=%u",
           sender.name, (unsigned)sender.port);

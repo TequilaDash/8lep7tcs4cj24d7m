@@ -319,6 +319,11 @@ enum I4MobileInstallService {
     }
 
     /// 该包的 IPA 是否已缓存（文件存在且非空）.
+    ///
+    /// 注意：这里只说「文件在且有字节」，**不说「这份 IPA 是好的」**.
+    /// 下载中断留下的半截文件、手动导入放错的文件、扩展名对但内容不是 IPA 的，
+    /// 在这里都会被判成「已缓存」，直到真正安装时才在检测/取 sinf 那一步失败.
+    /// 因此 `packStatuses().cached == true` 不等于「能装上」（v0.3.660 审计 C 项）.
     static func isCached(_ pack: Pack) -> Bool {
         fileSize(at: cachedIPAURL(for: pack).path) > 0
     }
@@ -546,6 +551,7 @@ enum I4MobileInstallService {
                                             onLog: (@Sendable (String) -> Void)? = nil) async throws {
         let missing = allPacks.filter { !isCached($0) }
         for (idx, pack) in missing.enumerated() {
+            if Task.isCancelled { throw CancellationError() } // M-3：包间可中断（已下的包不回滚）.
             onLog?("[i4移动端] (\(idx + 1)/\(missing.count)) 下载 \(pack.fileName)")
             try await downloadCloudIPA(pack: pack, from: source,
                                        progress: progress, onLog: onLog)
@@ -573,6 +579,8 @@ enum I4MobileInstallService {
             let known = packs.map(\.expectedBundleId).joined(separator: ", ")
             throw I4MobileError.importUnrecognized("包内 bundle id=\(bundleId) 不在爱思移动端这组（\(known)）")
         }
+        // M-3：认领成功、真要拷大文件之前再看一眼取消.
+        if Task.isCancelled { throw CancellationError() }
         let dst = cachedIPAURL(for: pack)
         do {
             try FileManager.default.createDirectory(at: cacheDirectory(),
@@ -660,12 +668,13 @@ enum I4MobileInstallService {
         do {
             injected = try PackageSINFWriter.injectAllPaths(sinf: resolved.sinf, ipaPath: workURL.path)
         } catch {
+            // 致命：这条链到此为止，绝不把「sinf 没写进去」的包递给 installd.
             throw I4MobileError.sinfInjectFailed(error.localizedDescription)
         }
         onLog?("[i4移动端] 已把 sinf 写进副本 \(injected.count) 条路径：\(injected.joined(separator: ", "))")
 
         // ⑥ 安装前探测（best-effort，失败不阻断）.
-        let before = await probeDevice(bundleId: bundleId)
+        var before = await probeDevice(bundleId: bundleId)
         logProbe(before, phase: "安装前", onLog: onLog)
 
         // ⑦ 安装副本（同一份 sinf 作 ApplicationSINF；阻塞调用放后台）.
@@ -675,16 +684,40 @@ enum I4MobileInstallService {
         let svc = IPAInstallService.shared
         let workPath = workURL.path
         let sinf = resolved.sinf
-        try await Task.detached(priority: .userInitiated) {
-            try svc.installWithSINF(workPath,
-                                    sinf: sinf,
-                                    iTunesMetadata: meta,
-                                    upgrade: allowUpgrade,
-                                    progress: { p in progress?(p) })
-        }.value
-        onLog?("[i4移动端] installd 已受理安装")
+        // A 项：本轮是否存在「该装却没装成」的那一次.
+        //   · 设备上本来没有该 App => 装之前先记一次失败，装成功再清掉（默认不算成功，
+        //     万一中途抛错，报告也不会把「本来就没有」的 App 说成「已安装」）；
+        //   · 设备上本来就有该 App => 这一次没装成的话，回读看到的仍是旧版本，
+        //     不能被当成「本轮装上了」.
+        var installFailed = true
+        if before.error == nil, before.existingVersion != nil {
+            installFailed = false
+        }
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try svc.installWithSINF(workPath,
+                                        sinf: sinf,
+                                        iTunesMetadata: meta,
+                                        upgrade: allowUpgrade,
+                                        progress: { p in progress?(p) })
+            }.value
+            installFailed = false
+            onLog?("[i4移动端] installd 已受理安装")
+        } catch {
+            installFailed = true
+            // 被拒（例如同 bundle id 已存在但没走 upgrade）时，设备上可能还留着旧版本.
+            // 不把这种情况说成「装上了」：记下来，交给下面重新探测一次 + buildReport 判读.
+            onLog?("[i4移动端] installd 拒绝了本次安装：\(error.localizedDescription)")
+        }
 
         // ⑧ 安装后回读.
+        // 被拒时先拉一次载体（installd 拒绝/回滚的时机不固定），让回读看到的是最终状态，
+        // 而不是「刚被拒、旧版本还在」的中间态 —— 否则会稳定地误判成「已安装」.
+        if installFailed {
+            _ = try? await Task.sleep(nanoseconds: 1_500_000_000)
+            before = await probeDevice(bundleId: bundleId)
+            logProbe(before, phase: "被拒后复探", onLog: onLog)
+        }
         let after = await probeDevice(bundleId: bundleId)
         logProbe(after, phase: "安装后", onLog: onLog)
 
@@ -693,7 +726,8 @@ enum I4MobileInstallService {
                                  workIPAPath: workPath, resolution: resolved,
                                  injectedPaths: injected, hasITunesMetadata: meta != nil,
                                  upgrade: allowUpgrade, bundleId: bundleId, bundleVersion: bundleVersion,
-                                 before: before, after: after)
+                                 before: before, after: after,
+                                 installFailed: installFailed)
         onLog?("[i4移动端] 结论：\(report.verdict)")
         return report
     }
@@ -1091,9 +1125,35 @@ enum I4MobileInstallService {
                                     workIPAPath: String, resolution: SinfResolution,
                                     injectedPaths: [String], hasITunesMetadata: Bool, upgrade: Bool,
                                     bundleId: String, bundleVersion: String,
-                                    before: DeviceProbe, after: DeviceProbe) -> Report {
+                                    before: DeviceProbe, after: DeviceProbe,
+                                    installFailed: Bool) -> Report {
         // 安装后回读确认（探测失败 = nil，不当成「没装上」）.
-        let confirmed: Bool? = after.error != nil ? nil : (after.existingVersion != nil)
+        // A 项（v0.3.660 审计补）：只看 `after` 是不够的.
+        //   · 覆盖安装（upgrade）时，`after` 里那个版本可能就是**旧的**那个 —— 装没装成看不出来；
+        //   · 更糟：设备上本来就装着同名 App、而本次安装其实失败了（例如根本没走 upgrade 分支
+        //     就被 installd 拒了），`after` 仍然「有版本」=> 报「已安装」，把失败记成成功.
+        // 改为比较 before/after：
+        //   before 无该 App & after 有           => true （本轮装上）
+        //   before 有该 App & after 版本变了      => true （本轮覆盖成功）
+        //   before 有该 App & after 版本没变 & 一次都没装成功 => false（本轮没装成，见 installFailed）
+        //   其余                                   => nil （判不出，如实给 nil）
+        let confirmed: Bool?
+        if after.error != nil {
+            confirmed = nil
+        } else if before.error == nil {
+            if before.existingVersion == nil {
+                confirmed = (after.existingVersion != nil)
+            } else if let a = after.existingVersion, a != before.existingVersion {
+                confirmed = true
+            } else if installFailed {
+                confirmed = false
+            } else {
+                confirmed = nil
+            }
+        } else {
+            // 安装前没探到（探测失败）=> 只剩「现在有没有」这一个信号，照旧.
+            confirmed = (after.existingVersion != nil)
+        }
 
         var notes: [String] = []
         notes.append("sinf 来源：包内自带并覆盖回包内（本服务只有这一条路）.")
@@ -1109,14 +1169,21 @@ enum I4MobileInstallService {
         if confirmed == false {
             notes.append("安装后未在设备上回读到该 bundle id（\(bundleId)），"
                          + "可能安装未落盘，或探测不可靠（隧道 / 权限）.")
+        } else if confirmed == nil {
+            notes.append("安装后回读判不出结果：设备上已存在同名 App 且版本未变，"
+                         + "或者安装前后有一次探测失败 —— 本次安装是否生效无法确认.")
         }
 
         // M-4：恒 true —— 本服务只装不验，任何「装上了」都不等于「能启动」.
         let mayCrash = true
         let verdict: String
-        if confirmed == false {
+        switch confirmed {
+        case false:
             verdict = "已向 installd 递交安装，但未回读到该 App，安装结果存疑."
-        } else {
+        case nil:
+            verdict = "已向 installd 递交安装（\(bundleId) \(bundleVersion)），"
+                      + "回读判不出是否生效；启动未验证."
+        case true:
             verdict = "已安装 \(bundleId) \(bundleVersion)，sinf 来自包内自带；启动未验证."
         }
 

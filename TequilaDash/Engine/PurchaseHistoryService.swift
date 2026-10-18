@@ -180,10 +180,13 @@ enum PurchaseHistoryService {
             let data = try await send(path: "/databases/\(revision)/items",
                 body: PurchaseHistoryService.itemsBody(sessionID: sessionID, revision: revision),
                 contentType: "application/x-dmap-tagged", signed: true)
+            // v0.3.674：mtco/mrco 的口径统一交给 parseItems —— 原来这里用 `try firstUInt(...) ?? "missing"`
+            // 把「计数缺失」当成可以忽略，而 parseItems 里同两个 tag 缺失却整轮硬抛（:407）。
+            // 同一份响应的判定只应有一处：这里也改成硬失败，日志只打印已经过校验的计数。
             let apps = try PurchaseHistoryService.parseItems(data)
-            let total = (try firstUInt(data, tag: "mtco")).map { String($0) } ?? "missing"
-            let returned = (try firstUInt(data, tag: "mrco")).map { String($0) } ?? "missing"
-            LoginLogger.shared.log("[已购] total=\(total) returned=\(returned) apps=\(apps.count)", category: .appStore)
+            let counts = try PurchaseHistoryService.recordCounts(data)
+            LoginLogger.shared.log("[已购] total=\(counts.total) returned=\(counts.returned) apps=\(apps.count)",
+                                   category: .appStore)
             return apps
         }
 
@@ -205,6 +208,15 @@ enum PurchaseHistoryService {
             }
             let (data, response) = try await perform(request)
             LoginLogger.shared.log("[已购] \(path) → HTTP \(response.statusCode)，\(data.count) 字节", category: .appStore)
+            // v0.3.674：Apple 会在响应头里**校正**当前账号的 storefront（形如 `143441-1,34`），
+            // 与 vendor/ApplePackage/Commands/Purchase.swift 的处理一致：拿到就回写 fullStoreFront。
+            // 原来从不读这个头，`list` 每次都从**旧**的 requestStoreFront 推前缀（见 list 的 prefix），
+            // 于是账号换区 / 首次登录给的 storefront 永远不生效，已购库一直查错区。
+            if let updated = Self.storeFrontHeader(in: response), updated != account.fullStoreFront {
+                LoginLogger.shared.log("[已购] 账号 storefront 由 \(account.requestStoreFront) 校正为 \(updated)",
+                                       category: .appStore)
+                account.fullStoreFront = updated
+            }
             if response.statusCode == 401 || response.statusCode == 403 { throw PurchaseHistoryError.tokenExpired }
             guard response.statusCode == 200 else {
                 throw PurchaseHistoryError.badResponse("\(path) HTTP \(response.statusCode)")
@@ -238,9 +250,24 @@ enum PurchaseHistoryService {
                   StoreAuthenticationProtocol.isDeviceGUID(guid) else {
                 throw PurchaseHistoryError.signerUnavailable
             }
-            let bytes = stride(from: 0, to: 12, by: 2).compactMap { offset -> UInt8? in
-                let index = guid.index(guid.startIndex, offsetBy: offset)
-                return UInt8(guid[index ..< guid.index(index, offsetBy: 2)], radix: 16)
+            // v0.3.674：`isDeviceGUID` 放行 **12...32** 位偶数长度十六进制 GUID，而 SAP 的
+            // hardwareID 只要**前 12 位 = 6 字节**。原来固定 `stride(from: 0, to: 12, by: 2)`
+            // 再按 `offsetBy:` 取下标 —— GUID 恰好 12 位（DeviceIdentifier.random() 的默认长度）
+            // 时最后一个下标正好落在 endIndex，`guid[index ..< guid.index(index, offsetBy: 2)]`
+            // 越界 trap，整个进程崩溃，且崩在已购列表这种基础路径上。
+            // 改成「先截前 12 位，再按 2 位步进」：下标永远在 prefix 范围内；不足 12 位时
+            // 得到的字节数 < 6，由下一行 guard 兜住（不再 trap）。
+            let guidHead = guid.prefix(12)
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(6)
+            var cursor = guidHead.startIndex
+            while guidHead.distance(from: cursor, to: guidHead.endIndex) >= 2 {
+                let pairEnd = guidHead.index(cursor, offsetBy: 2)
+                guard let byte = UInt8(guidHead[cursor ..< pairEnd], radix: 16) else {
+                    throw PurchaseHistoryError.signerUnavailable
+                }
+                bytes.append(byte)
+                cursor = pairEnd
             }
             guard bytes.count == 6 else { throw PurchaseHistoryError.signerUnavailable }
             let signer = try SAPContext(assetsURL: assets, hardwareID: Data(bytes))
@@ -303,6 +330,18 @@ enum PurchaseHistoryService {
             }
             account.cookie.mergeCookies(HTTPClientCookie.parseResponse(http.allHeaderFields, for: url))
             return (data, http)
+        }
+
+        /// 响应头 `X-Set-Apple-Store-Front`（形如 `143441-1,34`）—— Apple 用它校正账号所在区。
+        /// 只接受「数字区号(-1)?,(数字)」这一种形态，避免把异常头写进账号快照。
+        static func storeFrontHeader(in response: HTTPURLResponse) -> String? {
+            guard let raw = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front")?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty,
+                  raw.range(of: "^[0-9]+(-[0-9]+)?,[0-9]+$", options: .regularExpression) != nil else {
+                return nil
+            }
+            return raw
         }
 
         /// v0.3.359：与登录侧同款 —— https + Apple 自有域（不再 pin 具体主机名）
@@ -372,6 +411,17 @@ enum PurchaseHistoryService {
         }
     }
 
+    /// DAAP 记录计数：`mtco` = 服务端声称的总数，`mrco` = 本次实际返回数。
+    /// v0.3.674：两个 tag 的**缺失即失败**只在 `recordCounts` 一处判定 —— 原来 `items()` 的日志用
+    /// `?? "missing"` 静默容忍、`parseItems` 却硬抛，同一份响应有两套口径。
+    static func recordCounts(_ data: Data) throws -> (total: UInt64, returned: UInt64) {
+        guard let returned = try firstUInt(data, tag: "mrco"),
+              let total = try firstUInt(data, tag: "mtco") else {
+            throw PurchaseHistoryError.badResponse("items 缺少记录计数")
+        }
+        return (total, returned)
+    }
+
     static func parseItems(_ data: Data) throws -> [OwnedApp] {
         guard String(decoding: data.prefix(4), as: UTF8.self) == "adbs" else {
             throw PurchaseHistoryError.badResponse("items 缺少 adbs")
@@ -404,12 +454,15 @@ enum PurchaseHistoryService {
             guard app.id > 0 else { throw PurchaseHistoryError.badResponse("已购条目缺少有效 aeSI") }
             if seen.insert(app.id).inserted { apps.append(app) }
         }
-        guard let returned = try firstUInt(data, tag: "mrco"), let total = try firstUInt(data, tag: "mtco") else {
-            throw PurchaseHistoryError.badResponse("items 缺少记录计数")
-        }
-        guard returned == UInt64(recordCount), total >= returned else {
+        let counts = try recordCounts(data)
+        guard counts.returned == UInt64(recordCount) else {
             throw PurchaseHistoryError.badResponse("条目数与 DAAP 计数不一致")
         }
+        guard counts.total >= counts.returned else {
+            throw PurchaseHistoryError.badResponse("条目数与 DAAP 计数不一致")
+        }
+        let returned = counts.returned
+        let total = counts.total
         // DAAP 已购库**不做服务端分页**（对齐 ipatool：`ownedAppsPage` 只是对已取回数组做本地切片，
         // `fetchOwnedAppsForStorefront` 一次性取全量，且完全不校验 mtco/mrco）。
         // 这里若 Apple 只回了一部分（returned < total），按已返回的条目继续，不再硬失败 ——

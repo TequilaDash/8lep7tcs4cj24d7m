@@ -172,12 +172,36 @@ final class GSAAuth {
         return lines.joined(separator: " | ")
     }
 
+    /// hex 字符串 -> 字节串。空串 / 奇数长度 / 非 hex 字符一律返回 nil，绝不产出垃圾。
+    ///
+    /// v0.3.673 修的两处历史缺陷（都在 WSL 里用 Swift 6.1.3 实测复现过）：
+    /// 1. 原先没有 `count % 2` 守卫 —— 奇数长度时 `hex.index(i, offsetBy: 2)` 越过 endIndex，
+    ///    String.Index 越界是 **trap** 而不是返回 nil：实测 `"abc"` / `"_"` 直接
+    ///    `Fatal error: String index is out of bounds`，进程 SIGILL 退出 132。
+    ///    真机上表现就是「点登录闪退」。
+    /// 2. 原先只靠 `UInt8(_:radix:16)` 判非法 —— 它**接受前导正号**：
+    ///    `UInt8("+1", radix: 16) == Some(1)`，于是 `"aa+1bb"` 被静默解成 `aa 01 bb`，
+    ///    产出一份「非 nil 的垃圾」（实测旧实现 old=aa01bb）。
+    ///    另注：项目里流传的「`UInt8("", radix: 16)` 返回 Optional(0)」在 Swift 6.1.3 上
+    ///    实测为 nil、未复现；但字符集守卫照样把 `_` 这类占位串挡在门外，不留死角。
+    ///
+    /// 口径对齐 IPADownloadCenter.swift:1745 `hexDecoded` 与 NBStoreClient.swift:1799 `hexByte`
+    /// （同一个 bug 的另外两个副本）：先查长度与字符集，再交给 `UInt8(_:radix:16)`。
+    ///
+    /// 容忍空格/换行：服务端偶尔分行发 hex，与 `IPADownloadCenter.hexDecoded` 口径一致。
     private static func hexToBytes(_ hex: String) -> [UInt8]? {
+        let cleaned = hex.filter { !$0.isWhitespace }
+        // 奇数长度必须先挡掉：否则下面的 `index(_:offsetBy:)` 会跨过 endIndex 直接 trap（实测 SIGILL）
+        guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
         var out = [UInt8]()
-        var i = hex.startIndex
-        while i < hex.endIndex {
-            let next = hex.index(i, offsetBy: 2)
-            guard let b = UInt8(hex[i..<next], radix: 16) else { return nil }
+        out.reserveCapacity(cleaned.count / 2)
+        var i = cleaned.startIndex
+        while i < cleaned.endIndex {
+            let next = cleaned.index(i, offsetBy: 2)
+            // 不能只靠 `UInt8(_:radix:16)` 判非法（它接受 "+1" 这类前导正号），先查长度与字符集
+            let pair = cleaned[i..<next]
+            guard pair.count == 2, pair.allSatisfy({ $0.isHexDigit }),
+                  let b = UInt8(pair, radix: 16) else { return nil }
             out.append(b)
             i = next
         }

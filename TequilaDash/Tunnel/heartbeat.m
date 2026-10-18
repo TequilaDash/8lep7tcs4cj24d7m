@@ -30,7 +30,14 @@ NSDate* lastHeartbeatDate = nil;
 /// 设备上多 VPN 并存时取错隧道。SideStore 那边（`Minimuxer`）是把 `10.7.0.1` 写死的，
 /// 没有这种推导；本仓不该自己发明。
 static NSString* tequiladash_tunnel_target_ip(void) {
-    NSString* stored = [[NSUserDefaults standardUserDefaults] stringForKey:@"TunnelDeviceIP"];
+    // v0.3.673（task-7 发现9）：必须与 `TunnelContext._targetIP` **同口径**。
+    // 那边（TunnelContext.m 的 `_targetIP`）先 trim 空白再判空；这里原先直接取原值 ——
+    // 用户存了 " 10.7.0.1\n" 这种带空白的值（从别处粘贴很常见）时，
+    // TunnelContext 侧能 trim 成合法地址建好 RPPairing 隧道，
+    // 而这里 `inet_pton` 直接失败并报 "invalid TunnelDeviceIP"，
+    // 于是 iOS 18 的 lockdown 路径永远建不起来、诊断页也只看到这条误导性错误。
+    NSString *stored = [[[NSUserDefaults standardUserDefaults] stringForKey:@"TunnelDeviceIP"]
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     if (stored.length > 0) {
         return stored;
     }
@@ -88,6 +95,10 @@ void startHeartbeat(IdevicePairingFile* pairing_file, IdeviceProviderHandle** pr
     }
         
 
+    // v0.3.673：这一句必须留在 `heartbeat_connect` 成功之后。
+    // 更早的位置（创建 provider 之后立刻写）会让调用方拿到一个「心跳还没连上」的句柄，
+    // 而 heartbeat_connect 失败时本函数会自己 idevice_provider_free(newProvider)，
+    // 调用方手里就成了悬垂指针。
         *provider = newProvider;
     
 
@@ -123,6 +134,12 @@ void startHeartbeat(IdevicePairingFile* pairing_file, IdeviceProviderHandle** pr
             return;
         }
         
+        // v0.3.673（task-7 发现12，**需实测**）：
+        // `new_interval` 来自设备回包（heartbeat_get_marco），单位未在协议里固化。
+        // 下面 :162 的超时判定是 `timeIntervalSinceDate`（秒）与 current_interval 比较，
+        // 亦即本文件**假定** new_interval 是秒。若设备给的是毫秒，:162 会恒成立、
+        // 心跳线程每轮直接退出（隧道看似连着但不再保活）。
+        // 本机没有真机抓包证据，故不改数值，只把假设写在这里。
         current_interval = new_interval + 5;
         
         // Reply

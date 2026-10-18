@@ -127,6 +127,10 @@ enum AppStoreInstallService {
                             cont.resume(throwing: error)
                         }
                     case .failure(let err):
+                        // v0.3.673（task-8 发现4b）：dest 在上面的 :91 被清过，此刻若它在，只可能是
+                        // 本下载器 abort() 删掉之后又被搬回来的残物 —— 失败时由这里统一兜底删干净.
+                        // 只删本函数自己算出来的 dest，不碰其它文件.
+                        try? FileManager.default.removeItem(at: dest)
                         cont.resume(throwing: err)
                     }
                 })
@@ -385,6 +389,23 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
     /// 旧实现删了行、文件与传输都还在，是**假成功**。
     private let destination: URL?
 
+    /// v0.3.673（task-8 发现4b）：本次下载从系统临时目录搬出来的稳定副本（`ipa-<UUID>.part`）.
+    ///
+    /// `completion(.success(keep))` 之后，这个文件的所有权转移给调用方（`moveItem` 到
+    /// `dest`）；但**在转移之前**任何一条失败路径（拒绝的跨域重定向、非 2xx、abort）
+    /// 都必须在 `finish` 之前把它删掉，否则这份 UUID 命名的 GB 级包永远不会再被引用。
+    /// 由 delegate 队列与主线程两条线碰，读写都在 `lock` 内.
+    private var stagedPartial: URL?
+
+    /// 在锁内「取走」已登记的分片文件 —— 返回非 nil 表示该文件由调用方负责删除或转移.
+    private func takeStagedPartial() -> URL? {
+        lock.lock()
+        defer { lock.unlock() }
+        let s = stagedPartial
+        stagedPartial = nil
+        return s
+    }
+
     private var request: URLRequest?
     private var session: URLSession?
     /// v0.3.583：**持有 task 句柄** —— 这是能暂停 / 取消的前提（旧实现 `s.downloadTask(...)`
@@ -490,6 +511,8 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
         t?.cancel()
         s?.finishTasksAndInvalidate()
         if let destination { try? FileManager.default.removeItem(at: destination) }
+        // v0.3.673（task-8 发现4b）：取消时可能已经搬出了 `ipa-<UUID>.part`，一并清掉.
+        if let staged = takeStagedPartial() { try? FileManager.default.removeItem(at: staged) }
         // 让 `downloadIPA` 的 continuation 以取消错误收尾 —— 否则 detached 任务会一直挂在
         // 那个 continuation 上。取消**不是**失败：中心已先把 job 从 `jobs` 移除，
         // `startWithAppleID` 的 catch 会因「job 已不存在」而跳过失败处理。
@@ -544,6 +567,12 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
         // 先看有没有「被拒绝跟随的重定向」——那种情况下这个回调拿到的只是 3xx 响应体，
         // 不是 IPA。给出明确错误，别让它落到下面的状态码分支里报成笼统的「HTTP 302」。
         if let bad = rejectedRedirectHost {
+            // v0.3.673（task-8 发现4b）：这条分支在 `keep` 搬出来**之前**就 return，必须把体删掉.
+            //
+            // 旧代码直接 `finish(.failure)` 就走了 —— 被拒绝跟随的重定向照样把 3xx 的
+            // 响应体落成 `ipa-<UUID>.part`，那份体可能就是一个几百 MB 的错误页/登录页.
+            // 它没有登记到 `stagedPartial`，所以只有这里能删.
+            try? FileManager.default.removeItem(at: location)
             finish(.failure(AppStoreInstallService.InstallError.untrustedHost(bad)))
             return
         }
@@ -554,9 +583,16 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
             try? FileManager.default.removeItem(at: keep)
             try FileManager.default.moveItem(at: location, to: keep)
         } catch {
+            // v0.3.673：搬失败时 `location` 仍是我们的责任，系统此刻还没删它 —— 主动删，
+            // 否则又回到「每次失败留一份完整包」.
+            try? FileManager.default.removeItem(at: location)
             finish(.failure(error))
             return
         }
+        // v0.3.673（task-8 发现4b）：登记所有权，让 abort() 也能清掉这份已搬好的文件.
+        lock.lock()
+        stagedPartial = keep
+        lock.unlock()
         if let http = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(http.statusCode) {
             // v0.3.662（task-8 发现4）：**失败分支必须把刚搬出来的 keep 删掉**.
@@ -565,11 +601,14 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
             // 这个 UUID 命名的文件永远不会再被任何代码引用（下次下载会用新 UUID），
             // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**。重定向到登录页/错误页时
             // 这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满.
+            _ = takeStagedPartial()
             try? FileManager.default.removeItem(at: keep)
             finish(.failure(AppStoreInstallService.InstallError
                 .requestFailed("下载 HTTP \(http.statusCode)")))
             return
         }
+        // 所有权转移给调用方（downloadIPA 会把它 moveItem 到 dest）.
+        _ = takeStagedPartial()
         finish(.success(keep))
     }
 
@@ -609,6 +648,10 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
         // 那是暂停的一部分（`resume` 会用 resumeData 接着下），**不是**失败，直接丢弃。
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if isPaused { return }
+        // v0.3.673（task-8 发现4b）：搬好之后、交给调用方之前传输就断了（网络中断 / 连接被
+        // 重置），文件已经完整躺在 `ipa-<UUID>.part` 里，而调用方永远拿不到这个 URL —— 必须
+        // 在这里自己清掉，否则残留一份没人引用的整包.
+        if let staged = takeStagedPartial() { try? FileManager.default.removeItem(at: staged) }
         if let error { finish(.failure(error)) }
     }
 }

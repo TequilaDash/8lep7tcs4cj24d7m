@@ -142,15 +142,30 @@
     return [contents writeToURL:self._pairingFileURL atomically:YES encoding:NSUTF8StringEncoding error:error];
 }
 
-- (void)resetPairingFile {
-    [NSFileManager.defaultManager removeItemAtURL:self._pairingFileURL error:nil];
-    // 注意：**不要写 `[self _handleLock lock]`** —— clang 会把 `_handleLock` 当成
-    // 选择器首段、再要求 `lock` 带 `:`，报 `error: expected ':'`。
+- (BOOL)resetPairingFileWithError:(NSError **)error {
+    // v0.3.673（task-7 发现4）：这里原先无条件拆句柄，**绕过了 `_tunnelConnecting` 闸门**。
+    // 建连 worker 正在跑（可能已经建好 adapter/handshake，也可能刚把 pairing file 交给
+    // Rust 侧）时被删文件 + 拆句柄，worker 会把「已拆掉/已删文件」当成成功写回，
+    // 之后所有业务 FFI 必然失败，而 `_provider`/`_adapter` 仍非 NULL ⇒ ensureHeartbeat 不重建。
+    // 与「建连中就别抢句柄锁」同一纪律：建连中直接拒绝，让用户稍后重试。
+    if ([self _rejectIfConnectingWithError:error]) {
+        return NO;
+    }
+    // 不写 `[self _handleLock lock]`：clang 会把 `_handleLock` 当成选择器首段、
+    // 再要求 `lock` 带 `:`，报 `error: expected ':'`。
     // 直接用 ivar（`[_handleLock lock]`）或显式 `self->_handleLock`。
     [_handleLock lock];
-    globalHeartbeatToken++;          // 让进行中的 worker（如有）写回时能被识别为过期
+    // token 只由 `_freeTunnelHandles` 自增一次 —— 原先这里再 ++ 一次是重复推进，
+    // 会让「本条 worker 是否过期」的判定多发一次代际，属于无意义的副作用。
     [self _freeTunnelHandles];
     [_handleLock unlock];
+    [NSFileManager.defaultManager removeItemAtURL:self._pairingFileURL error:nil];
+    return YES;
+}
+
+/// 兼容旧调用点（见头文件）：忽略失败原因。
+- (void)resetPairingFile {
+    [self resetPairingFileWithError:NULL];
 }
 
 /// 心跳线程报告隧道已死：清掉句柄，让下一次 ensureHeartbeat 真的重建.
@@ -263,10 +278,13 @@
 }
 
 - (BOOL)_createRpTunnel:(NSError **)error {
-    struct RpPairingFileHandle *pairingFile = [self _loadPairingFile:error];
-    if (!pairingFile) {
-        return NO;
-    }
+    // v0.3.673（task-7 新增 P1）：`tunnel_create_rppairing` **消费**传入的 pairing file
+    // （Rust 侧把它 `Box::from_raw` 收进 provider，见 rust/idevice-ffi/src/provider.rs）。
+    // 所以「一个 pairingFile 循环试多个候选」是不成立的：首个候选无论成功失败，
+    // 句柄都已经被消费或需要由我们释放。原先只有成功分支 rp_pairing_file_free，
+    // 失败分支直接 continue ⇒ 每个失败候选泄漏一个 pairing file。
+    // 现在每个候选**各自**加载、成功时交给 Rust 消费、失败时由我们释放。
+    struct RpPairingFileHandle *pairingFile = NULL;
 
     // v0.3.636：**多候选尝试**。
     //
@@ -281,7 +299,6 @@
     // 第一个成功的即采用。
     NSArray<NSString *> *candidates = [self _candidateTunnelPeers];
     if (candidates.count == 0) {
-        rp_pairing_file_free(pairingFile);
         if (error) *error = [self _error:@"No tunnel peer candidates (LocalDevVPN may not be connected)." code:-19];
         return NO;
     }
@@ -290,12 +307,21 @@
     NSUInteger candidateIndex = 0;
     for (NSString *peer in candidates) {
         candidateIndex++;
+        // 每个候选一份 pairing file（Rust 侧会消费它，不能跨候选复用）。
+        // 加载失败就直接结束：那是配对文件本身的问题，换候选也修不好。
+        pairingFile = [self _loadPairingFile:error];
+        if (!pairingFile) {
+            return NO;
+        }
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_port = htons(RPPPAIRING_PORT);
         if (inet_pton(AF_INET, peer.UTF8String, &addr.sin_addr) != 1) {
-            continue;   // 非法 IP 直接跳过（不静默连 0.0.0.0）
+            // 非法 IP 直接跳过（不静默连 0.0.0.0）。本轮已加载的 pairing file 必须释放。
+            rp_pairing_file_free(pairingFile);
+            pairingFile = NULL;
+            continue;
         }
         NSLog(@"[TequilaDash] RPPairing tunnel trying %@:%d (%lu/%lu)",
               peer, RPPPAIRING_PORT,
@@ -321,12 +347,18 @@
             idevice_error_free(err);
             if (handshake) rsd_handshake_free(handshake);
             if (adapter) adapter_free(adapter);
+            // 失败时 Rust 侧没有接管 pairing file，必须在这里释放，否则每失败一个候选泄漏一份。
+            // 置 NULL 是为了让下面 `inet_pton` 跳过分支也不会 double free。
+            rp_pairing_file_free(pairingFile);
+            pairingFile = NULL;
             continue;
         }
 
         if (!adapter || !handshake) {
             if (handshake) rsd_handshake_free(handshake);
             if (adapter) adapter_free(adapter);
+            // 调用成功（err == NULL）时 Rust 侧已消费 pairing file，这里只清指针不再 free。
+            pairingFile = NULL;
             lastError = [self _error:@"Tunnel was created without valid handles." code:-1];
             continue;
         }
@@ -334,14 +366,21 @@
         // 成功：记住这个候选，后续建连优先用它
         [self _rememberWorkingPeer:peer];
         rp_pairing_file_free(pairingFile);
-        [self _freeTunnelHandles];
+        // v0.3.673（task-7 发现2）：这里**不能**调 `_freeTunnelHandles`。
+        // 它会 `globalHeartbeatToken++`，把上一轮 lockdown 心跳 worker 判成过期 ——
+        // 与下面 `_createClassicTunnel` 里 v0.3.635 修过的是同一条回归：
+        // 「建好新句柄」不等于「该停旧心跳」，停旧心跳已由 startHeartbeat 的 ++ 完成。
+        // 这里只释放**旧**句柄，不动 token。
+        if (_handshake) { rsd_handshake_free(_handshake); _handshake = NULL; }
+        if (_adapter) { adapter_free(_adapter); _adapter = NULL; }
+        if (_provider) { idevice_provider_free(_provider); _provider = NULL; }
         _adapter = adapter;
         _handshake = handshake;
         NSLog(@"[TequilaDash] RPPairing tunnel established on %@", peer);
         return YES;
     }
 
-    rp_pairing_file_free(pairingFile);
+    // 循环内每个候选的 pairing file 都已各自释放/移交，这里没有待释放的句柄。
     if (error) {
         *error = lastError ?: [self _error:@"All tunnel peer candidates failed." code:-1];
     }
@@ -476,14 +515,27 @@
     //
     // 正确做法：这里只释放**旧**句柄，**不动 token**。
     // 「停掉旧心跳线程」已由本函数入口处的 `int token = ++globalHeartbeatToken;` 完成。
-    if (_provider == provider) {
-        // 同一句柄重入：既不释放，也不停心跳。
-        return YES;
+    //
+    // v0.3.673（task-7 发现3）：上面整段注释只在「没人并发用句柄」时才成立 ——
+    // 而恰恰在这次交接前后有两条并发路径：
+    //   A. 心跳线程：`startHeartbeat` 在本函数返回**之前**就把 provider 交出去并开始
+    //      marco/polo 的 FFI（TunnelContext.m 里 startHeartbeat 的 completion 回调）；
+    //   B. 业务线程：worker 在 @try 里持有的 `_handleLock` 会在 `_createTunnel` 返回时释放，
+    //      紧接着 `_tunnelConnecting` 才被复位 —— 这段窗口里业务路径可以拿到旧的
+    //      `_provider`（rp 路径留下的）并发出第二份 FFI，与心跳线程并发借用同一句柄。
+    // 修法：句柄交接必须在 `_handleLock` 下完成。本函数总是从
+    // `startHeartbeat` 的 worker 内调用，那里已经持有 `_handleLock`；
+    // 它是 NSRecursiveLock，重入安全，这里再 lock 一次即可覆盖「非 worker 调用」的情形。
+    [_handleLock lock];
+    BOOL sameHandle = (_provider == provider);
+    if (!sameHandle) {
+        if (_handshake) { rsd_handshake_free(_handshake); _handshake = NULL; }
+        if (_adapter) { adapter_free(_adapter); _adapter = NULL; }
+        if (_provider && _provider != provider) { idevice_provider_free(_provider); }
+        _provider = provider;
     }
-    if (_handshake) { rsd_handshake_free(_handshake); _handshake = NULL; }
-    if (_adapter) { adapter_free(_adapter); _adapter = NULL; }
-    if (_provider && _provider != provider) { idevice_provider_free(_provider); }
-    _provider = provider;
+    [_handleLock unlock];
+    // 同一句柄重入：既不释放，也不停心跳。
     return YES;
 }
 
@@ -531,19 +583,22 @@
             @autoreleasepool {
                 NSError *createErr = nil;
                 BOOL ok = NO;
-                // 必须 @try/@finally：_createTunnel 内部任何一处 @throw 跳出时，
-                // 若跳过下面的 _tunnelConnecting = NO，闸门就永久卡在 YES ——
-                // 此后所有调用都走 -8（建连中，快速失败），只能重启 App 才能恢复。
+                // v0.3.673（task-7 发现1）：锁必须在 @finally 里释放。
+                // 原先 `[_handleLock unlock]` 写在 @try 内部 —— `_createTunnel` 一旦 @throw
+                // （如 applist 里插入 nil key 触发的 NSInvalidArgumentException），
+                // unlock 被跳过，`_handleLock` 永不释放 ⇒ 之后所有隧道操作（主界面刷新、
+                // 心跳回调里的 _freeTunnelHandles、诊断页）全部永久阻塞，只能重启 App。
+                // 现在 lock 放在 @try 之前、unlock 放在 @finally，lock/unlock 次数严格 1:1。
+                [self->_handleLock lock];
                 @try {
-                    [self->_handleLock lock];
                     ok = [self _createTunnel:&createErr];
-                    [self->_handleLock unlock];
                 } @catch (NSException *ex) {
                     ok = NO;
                     createErr = [self _error:[NSString stringWithFormat:@"建连时抛出异常：%@（%@）",
                         ex.reason ?: @"", ex.name ?: @""]
                                         code:-1];
                 } @finally {
+                    [self->_handleLock unlock];
                     os_unfair_lock_lock(&self->_tunnelLock);
                     self->_lastTunnelError = ok ? nil :
                         (createErr ?: [self _error:@"Failed to connect over LocalDevVPN." code:-1]);
@@ -563,7 +618,11 @@
         if (error) *error = [self _error:@"Tunnel connection is still in progress (35s); no duplicate handshake was started." code:-9];
         return NO;
     }
-    // Pass the completion signal to other callers waiting on this attempt.
+    // v0.3.673（task-7 发现8）：这里**没有**「把完成信号转交给别的等待者」这回事。
+    // `_tunnelConnecting` 闸门保证同一时刻只有一个 worker，其它调用方在闸门处就拿到 -8
+    // 快速失败了（见上面 `if (!launch)` 分支），不存在第二个在 completionSem 上 wait 的线程。
+    // 这一句的真实作用是：worker 可能在 35s 后才 signal，此时本线程已超时返回，
+    // 这句 signal 只是把多出的计数回收，保证下次建连是全新的信号量（:567 处重建）。
     dispatch_semaphore_signal(completionSem);
     os_unfair_lock_lock(&_tunnelLock);
     NSError *resultError = _lastTunnelError;
@@ -674,12 +733,6 @@
     } @finally {
         [_handleLock unlock];
     }
-}
-
-- (void)dealloc {
-    [_handleLock lock];
-    [self _freeTunnelHandles];
-    [_handleLock unlock];
 }
 
 @end

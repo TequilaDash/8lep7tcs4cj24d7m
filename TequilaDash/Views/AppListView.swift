@@ -333,7 +333,15 @@ final class AppListViewModel: ObservableObject {
     }
 
     func resetPairing() {
-        discovery.resetPairing()
+        // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 会拒绝删除（-8），
+        // 旧代码把它当成功 —— 清空列表再 reload，用户看到「已重置」但配对文件仍在、
+        // 隧道仍是旧身份。这里改为：失败就**不动 UI 状态**并把错误交给界面。
+        do {
+            try discovery.resetPairing()
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
         apps = []
         icons = [:]
         reload()

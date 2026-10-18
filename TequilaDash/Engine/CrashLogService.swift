@@ -221,14 +221,23 @@ final class CrashLogService {
             var buffer: UnsafeMutablePointer<UInt8>?
             var got = 0
             if let ffiError = afc_file_read(handle, &buffer, chunkSize, &got) {
+                // v0.3.673：**先释放已读缓冲再抛**. Rust 侧 afc_file_read 在错误路径
+                // 不写 *data（buffer 仍为 nil），所以这里只需把上一轮残留清掉；
+                // 旧实现在 throw 之后才注册 defer，失败路径直接跳过释放.
+                if let buffer, got > 0 { afc_file_read_data_free(buffer, got) }
                 throw error(from: ffiError,
                             fallback: "读取日志失败（已读 \(result.count) 字节）：\(path)")
             }
-            defer {
-                if let buffer { afc_file_read_data_free(buffer, got) }
+            guard let buffer, got > 0 else {
+                // 0 字节：读完（或空文件），无缓冲可放.
+                if let buffer { afc_file_read_data_free(buffer, 0) }
+                break
             }
-            guard let buffer, got > 0 else { break }
+            // v0.3.673：**每块读完立即释放**. 旧写法把 defer 写在循环体内 ——
+            // defer 到函数返回才执行，于是每读一块就多压 1MB 不释放，
+            // 导出大日志（几十 MB）时内存线性膨胀.
             result.append(Data(bytes: buffer, count: got))
+            afc_file_read_data_free(buffer, got)
             if got < Int(chunkSize) { break }
         }
         return result
@@ -261,10 +270,21 @@ final class CrashLogService {
     // MARK: - 导出
 
     /// 导出目录（TequilaDash 自己 Documents 下的 CrashLogs 文件夹，文件 App 可见）.
-    static var exportDirectory: String {
+    ///
+    /// v0.3.673：**建目录失败不再被折成成功**. 旧实现 `try? createDirectory` 之后
+    /// 照样把路径返回，于是"目录建不出来"要等到写第一个文件才炸，
+    /// 而且错误信息变成一句与原因无关的写文件失败. 现在直接抛，原因留在调用方.
+    static func exportDirectory() throws -> String {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = docs.appendingPathComponent("CrashLogs", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            // static 上下文里没有实例方法 makeError，这里直接构同域错误.
+            throw NSError(domain: "CrashLog", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "创建导出目录失败：\(error.localizedDescription)",
+            ])
+        }
         return dir.path
     }
 
@@ -273,15 +293,25 @@ final class CrashLogService {
     func export(entries: [Entry], progress: ((Int, Int) -> Void)? = nil) throws -> [String] {
         try syncOnQueue {
             try withAfcClient { afc in
+                // v0.3.673：**目录先建、失败即报**（旧实现把建目录失败吞掉，见 exportDirectory）.
+                let dir = try Self.exportDirectory()
                 var exported: [String] = []
-                for (index, entry) in entries.enumerated() {
-                    let data = try pullInternal(client: afc, path: entry.path)
-                    let safeName = entry.path.replacingOccurrences(of: "/", with: "_")
-                    let target = URL(fileURLWithPath: Self.exportDirectory)
-                        .appendingPathComponent(safeName)
-                    try data.write(to: target)
-                    exported.append(target.path)
-                    progress?(index + 1, entries.count)
+                do {
+                    for (index, entry) in entries.enumerated() {
+                        let data = try pullInternal(client: afc, path: entry.path)
+                        let safeName = entry.path.replacingOccurrences(of: "/", with: "_")
+                        let target = URL(fileURLWithPath: dir).appendingPathComponent(safeName)
+                        // v0.3.673：**原子写**. 旧的非原子写在空间不足/中途失败时
+                        // 会留下一个截断的 .ips，看起来像"导出成功的日志".
+                        try data.write(to: target, options: .atomic)
+                        exported.append(target.path)
+                        progress?(index + 1, entries.count)
+                    }
+                } catch {
+                    // v0.3.673：**批失败即清场**. 旧实现抛错时已导出的文件留在
+                    // CrashLogs 目录里，界面只报"导出失败"，用户无法分辨哪些是完整的.
+                    for path in exported { try? FileManager.default.removeItem(atPath: path) }
+                    throw error
                 }
                 return exported
             }
@@ -293,13 +323,26 @@ final class CrashLogService {
         try syncOnQueue {
             try withAfcClient { afc in
                 var failed = 0
+                // v0.3.673：**失败原因不再丢**. 旧实现只数个数，真实原因
+                // （Afc(PermDenied) / ObjectNotFound / 连接已断）被直接丢弃，
+                // 用户看到"失败 N 个"却没有任何可反馈的线索.
+                var failureReasons: [String] = []
                 for (index, entry) in entries.enumerated() {
                     do {
                         try removeInternal(client: afc, path: entry.path)
                     } catch {
                         failed += 1
+                        if failureReasons.count < 5 {
+                            failureReasons.append("\(entry.name)：\(error.localizedDescription)")
+                        }
                     }
                     progress?(index + 1, entries.count)
+                }
+                if failed > 0 {
+                    LoginLogger.shared.log(
+                        "[崩溃日志] 删除 \(entries.count) 个，失败 \(failed) 个："
+                        + failureReasons.joined(separator: " / ")
+                    )
                 }
                 return failed
             }

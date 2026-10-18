@@ -62,7 +62,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// Save a user-imported pairing file (contents of a .mobiledevicepairing plist).
 - (BOOL)savePairingFile:(NSString *)contents error:(NSError **)error;
 
-/// Remove the stored pairing file.
+/// Remove the stored pairing file and drop the cached tunnel handles.
+///
+/// v0.3.673（task-7 发现4）：改名为带 error 的版本。
+/// 原 `- (void)resetPairingFile` 无返回值，调用方无法得知「实际没删」——
+/// 建连进行中时本方法会拒绝执行（否则会把正在建立的句柄/已交给 Rust 的配对文件拆掉），
+/// 静默失败会让用户以为已重置，实际配对文件仍在、隧道仍连着旧身份。
+/// - Returns: YES 表示已删除并拆掉句柄；NO 表示正在建连（error 为 -8）或删除失败。
+- (BOOL)resetPairingFileWithError:(NSError **)error;
+
+/// Swift 侧按 ARC 的 NSError 自动导入规则，把上面这个带 `WithError:` 的 BOOL 方法
+/// 导入为 `func resetPairingFile() throws`；调用方必须处理失败（见 AppDiscovery.swift）.
+/// 下面这个无返回值版本只留给「确实不关心结果」的 ObjC 计时器/通知路径。
+
+/// 兼容旧调用点：无返回值版本，等价于 `resetPairingFileWithError:NULL`。
 - (void)resetPairingFile;
 
 /// Connect over LocalDevVPN. Tries Remote Pairing (iOS 26.4+), then lockdown (iOS 18).

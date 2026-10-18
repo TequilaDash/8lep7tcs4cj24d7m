@@ -133,6 +133,14 @@ enum AppStoreService {
         return URLSession(configuration: cfg)
     }()
 
+    /// 用 `URLComponents` 拼带 query 的地址（v0.3.674）。`URLQueryItem` 会按 RFC 3986 转义
+    /// `& = + # ?` 这些分隔符；调用方再也不用担心搜索词里的标点把请求拆散。
+    private static func makeURL(_ base: String, query: [URLQueryItem]) -> URL? {
+        guard var components = URLComponents(string: base) else { return nil }
+        components.queryItems = query
+        return components.url
+    }
+
     private static func getJSON(_ url: URL) async throws -> [String: Any] {
         var req = URLRequest(url: url)
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
@@ -152,8 +160,15 @@ enum AppStoreService {
         let t = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return [] }
         let cc = resolved(country)
-        guard let enc = t.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://itunes.apple.com/search?term=\(enc)&country=\(cc)&entity=software&limit=\(limit)") else {
+        // v0.3.674：原来用 `.urlQueryAllowed` 编码搜索词 —— 这个字符集**不转义 `&` `=` `+` `#`**，
+        // 搜「A&B」「a=b」时 `term=` 会被 Apple 在这几个字符处拆成两段参数（`term=A` + 孤立 `B=`），
+        // 结果是搜索词被截断或整个请求被判非法。改成 URLComponents + URLQueryItem，由系统按
+        // RFC 3986 做 query 编码（`+` 也会被编成 `%2B`，不会被当成空格）。
+        guard let url = Self.makeURL("https://itunes.apple.com/search",
+                                     query: [URLQueryItem(name: "term", value: t),
+                                             URLQueryItem(name: "country", value: cc),
+                                             URLQueryItem(name: "entity", value: "software"),
+                                             URLQueryItem(name: "limit", value: "\(limit)")]) else {
             throw AppStoreError.badURL
         }
         let obj = try await getJSON(url)
@@ -191,9 +206,12 @@ enum AppStoreService {
     /// 按 BundleID 查（`/lookup?bundleId=`）—— 搜 BundleID / 补全字段用
     static func lookup(bundleId: String, country: String? = nil) async throws -> AppStoreItem? {
         let bid = bundleId.trimmingCharacters(in: .whitespacesAndNewlines)
+        // v0.3.674：与 search 同一处修正 —— bundleId 也可能含 `+`（少数团队用），
+        // `.urlQueryAllowed` 不转义它，Apple 端会把它解成空格，查不到该应用。
         guard !bid.isEmpty,
-              let enc = bid.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(enc)&country=\(resolved(country))") else {
+              let url = Self.makeURL("https://itunes.apple.com/lookup",
+                                     query: [URLQueryItem(name: "bundleId", value: bid),
+                                             URLQueryItem(name: "country", value: resolved(country))]) else {
             throw AppStoreError.badURL
         }
         let obj = try await getJSON(url)
@@ -303,7 +321,11 @@ enum AppStoreService {
     ///   · 又足够短 —— 用户换网络 / 挂代理 / 换账号后最多 5 分钟自愈，不会长期误判；
     ///   · 另有 `clearProductPageCache()` 供下拉刷新即时清空。
     private static let htmlNegativeCacheTTL: TimeInterval = 5 * 60
+    /// 成功条目上限（每份是全量 HTML，0.6-1.6MB，所以给得小）。
     private static let htmlCacheLimit = 3
+    /// 负缓存空壳上限（v0.3.674）。空壳只有几十字节，与成功条目分开计数 —— 否则
+    /// 连续浏览非国区应用时，一串空壳会把 3 个槽位占满、把真取到的 HTML 挤出去。
+    private static let htmlNegativeCacheLimit = 8
 
     /// 被出口 IP 地理重定向时的回落区域（v0.3.369）。
     ///
@@ -407,16 +429,35 @@ enum AppStoreService {
                 htmlLock.withLock {
                     let now = Date()
                     htmlCache = htmlCache.filter { isFresh($0.value, now: now) }
-                    if htmlCache.count >= htmlCacheLimit,
-                       let oldest = htmlCache.min(by: { $0.value.at < $1.value.at })?.key {
-                        htmlCache[oldest] = nil
+                    // v0.3.674：容量只按**成功条目**算，负缓存空壳不占名额。
+                    // 原来两者共用一个 3 槽 LRU：在大陆出口 IP 下连续浏览几个非国区应用，
+                    // 全是「拿到 cn 首页 ⇒ 负缓存」，空壳把 3 个槽位占满，之后**真的取到的**
+                    // 1MB 级 HTML 反而被逐出（或每次写入都先挤掉一条真实数据），
+                    // 详情页 / 版本历史来回切时反复重抓。空壳本身只有几十字节，单独按上限计数即可。
+                    let isAppPage = page.isAppPage
+                    if isAppPage {
+                        let successful = htmlCache.filter { $0.value.isAppPage }.count
+                        if successful >= htmlCacheLimit,
+                           let oldest = htmlCache.filter({ $0.value.isAppPage })
+                                .min(by: { $0.value.at < $1.value.at })?.key {
+                            htmlCache[oldest] = nil
+                        }
+                        // 同一 key 若原本是负缓存空壳，写入成功页时先删掉再写（覆盖语义一致，这里显式）。
+                        htmlCache[key] = nil
+                    } else {
+                        let negatives = htmlCache.filter { !$0.value.isAppPage }.count
+                        if negatives >= htmlNegativeCacheLimit,
+                           let oldest = htmlCache.filter({ !$0.value.isAppPage })
+                                .min(by: { $0.value.at < $1.value.at })?.key {
+                            htmlCache[oldest] = nil
+                        }
                     }
                     // 详情页存整段 HTML（供隐私 / 版本历史解析）；平台限制类失败存**负缓存空壳**
                     // （html 留空省内存，`isFresh` 用更短的 TTL）。抛错（传输层失败）不进这里 —— 见 catch。
-                    htmlCache[key] = CachedProductPage(html: page.isAppPage ? page.html : "",
+                    htmlCache[key] = CachedProductPage(html: isAppPage ? page.html : "",
                                                        served: page.served,
                                                        at: now,
-                                                       isAppPage: page.isAppPage)
+                                                       isAppPage: isAppPage)
                     htmlInflight[key] = nil
                 }
                 if !page.isAppPage {
@@ -450,6 +491,11 @@ enum AppStoreService {
         if let account = accountStorefrontCode(), !regions.contains(account) { regions.append(account) }
         if !regions.contains(productFallbackRegion) { regions.append(productFallbackRegion) }
         var carriedHTML: String?
+        // v0.3.674：负缓存要记**实际服务这张页面的区域**，不能记请求区域。
+        // 原来尾部用 `served: requested` 硬写请求区，于是 /us 被重定向、最后只有 cn 回了一张
+        // 首页时，负缓存里写着 served=us —— 缓存命中后日志和 UI 都会指向一个根本没被服务过的区，
+        // 用户按这个区去排障是白费。这里跟随每一次成功的 200 记下它真正落到的区域。
+        var carriedRegion = requested
         var carriedError: Error?
         var reasons: [String] = []
 
@@ -457,6 +503,7 @@ enum AppStoreService {
             do {
                 let attempt = try await loadProductHTML(appId: appId, country: region)
                 carriedHTML = attempt.html
+                carriedRegion = region
                 if let served = appPageRegion(finalURL: attempt.finalURL, html: attempt.html, appId: appId) {
                     if served != requested {
                         LoginLogger.shared.log("商品页 HTML：请求 \(requested)/\(appId) 被地理重定向到 \(served)，已按 \(served) 页面解析",
@@ -477,7 +524,8 @@ enum AppStoreService {
         LoginLogger.shared.log("商品页 HTML：\(requested)/\(appId) 取不到应用页 —— \(reasons.joined(separator: "；"))",
                                category: .appStore)
         if let html = carriedHTML {
-            return ProductPage(html: html, served: requested, isAppPage: false)
+            // 降级页：`served` 如实写**最后拿到这张 200 页面的区域**（多为 cn），不再是请求区。
+            return ProductPage(html: html, served: carriedRegion, isAppPage: false)
         }
         throw carriedError ?? AppStoreError.badURL
     }
@@ -519,13 +567,28 @@ enum AppStoreService {
     }
 
     /// 从 `/cn/app/…/id414478124` 这类链接里取出区域码；不是该应用的详情页则 nil。
+    ///
+    /// v0.3.674：原来是 `contains("/app/")` + `contains("id\(appId)")` 的**子串包含**判定，
+    /// 两处都会误判：
+    ///   · appId=`414478124` 时，`/app/id4144781249`（另一个应用）也含 `id414478124`；
+    ///   · 只要 URL 任何位置出现 `/app/`（含 query 参数值、`/iphone/app/...` 这类路径）就过闸。
+    /// 于是被地理重定向到不相干页面时，可能把它当成「该应用详情页」交给解析器，
+    /// 隐私 / 版本历史拿到空数据却不再走 cn 回落。现在按**路径分段**解析：
+    /// 取 path 里 `/app/` 之后的第一段区域码，要求末段恰好是 `id<appId>`（带 appId 前缀）。
     private static func appPageRegion(in urlString: String, appId: String) -> String? {
-        guard urlString.contains("/app/"), urlString.contains("id\(appId)"),
-              let app = urlString.range(of: "/app/") else { return nil }
-        let before = urlString[urlString.startIndex..<app.lowerBound]
-        guard let slash = before.lastIndex(of: "/") else { return nil }
-        let code = before[before.index(after: slash)...].lowercased()
-        return code.isEmpty ? nil : code
+        guard let url = URL(string: urlString) else { return nil }
+        // 只认 Apple 商店域，避免 canonical 里指向别的站点时被当成应用页。
+        let host = (url.host ?? "").lowercased()
+        guard host == "apps.apple.com" || host.hasSuffix(".apps.apple.com") else { return nil }
+        // 末段必须是 `id<appId>`：`.../app/微信/id414478124` 的最后一段。
+        let segments = url.path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard let last = segments.last, last == "id\(appId)" else { return nil }
+        // 区域码 = 路径里 `/app/` 段之后的第一段（`cn` / `us` …），必须像国家码。
+        guard let appIndex = segments.firstIndex(of: "app"),
+              segments.index(after: appIndex) < segments.endIndex else { return nil }
+        let code = segments[segments.index(after: appIndex)].lowercased()
+        guard code.count == 2, code.allSatisfy({ $0.isASCII && $0.isLetter }) else { return nil }
+        return code
     }
 
     /// `<link rel="canonical" href="…">` —— 商品页自指链接，用来兜底确认页面归属。
@@ -688,9 +751,10 @@ enum AppStoreService {
         if let data = catalogCache(appId: appId), let versions = parseCatalogHistory(data), !versions.isEmpty {
             return versions
         }
-        if catalogRecentlyFailed(appId: appId) {
-            LoginLogger.shared.log("三方 API：负缓存窗口内，跳过请求", category: .appStore)
-            throw AppStoreError.catalogCoolingDown
+        if let remaining = catalogCooldownRemaining(appId: appId) {
+            LoginLogger.shared.log("三方 API：负缓存窗口内（还剩 \(Int(remaining.rounded(.up)))s），跳过请求",
+                                   category: .appStore)
+            throw AppStoreError.catalogCoolingDown(retryAfter: Int(remaining.rounded(.up)))
         }
         guard let url = URL(string: "https://apis.bilin.eu.org/history/\(appId)") else {
             throw AppStoreError.badURL
@@ -797,8 +861,16 @@ enum AppStoreService {
 
     /// 距上次失败是否还在负缓存窗口内
     private static func catalogRecentlyFailed(appId: String) -> Bool {
+        catalogCooldownRemaining(appId: appId) != nil
+    }
+
+    /// 负缓存窗口还剩几秒；不在窗口内则 nil（v0.3.674：文案要显示剩余等待时间）。
+    private static func catalogCooldownRemaining(appId: String) -> TimeInterval? {
         let at = UserDefaults.standard.double(forKey: catalogFailureKey(appId))
-        return at > 0 && Date().timeIntervalSince1970 - at < catalogFailureTTL
+        guard at > 0 else { return nil }
+        let elapsed = Date().timeIntervalSince1970 - at
+        guard elapsed < catalogFailureTTL else { return nil }
+        return max(0, catalogFailureTTL - elapsed)
     }
 
     /// 只记「失败时刻」，**不写成功缓存** —— 窗口内跳过网络，窗口外自动重试
@@ -1135,7 +1207,9 @@ enum AppStoreError: Error, LocalizedError {
     case decode
     case noAccount
     /// v0.3.365：三方版本目录刚失败过，负缓存窗口内不再重打（窗口一过自动恢复）
-    case catalogCoolingDown
+    /// v0.3.674：带出**剩余秒数** —— 文案要让用户看到还要等多久，而不是一句含糊的
+    /// 「稍后自动重试」（旧文案暗示后台会自己重发，实际没有任何定时重试，见 errorDescription）。
+    case catalogCoolingDown(retryAfter: Int)
 
     var errorDescription: String? {
         switch self {
@@ -1143,7 +1217,14 @@ enum AppStoreError: Error, LocalizedError {
         case .http(let code): return "网络请求失败（HTTP \(code)）"
         case .decode: return "数据解析失败"
         case .noAccount: return "需要先登录 Apple ID"
-        case .catalogCoolingDown: return "三方 API 暂时不可用，稍后自动重试"
+        // v0.3.674：旧文案是「三方 API 暂时不可用，稍后自动重试」，但代码里**没有**任何定时重试：
+        // 负缓存只在下次有人再请求时自然过期（catalogFailureTTL = 3 分钟）。
+        // 说「自动重试」会让用户停在原页面干等，实际上不会自己好。改成如实说明：还需等待多少秒、
+        // 以及用户能做什么（下拉刷新会清缓存 / 账户通道有别的来源）。
+        case .catalogCoolingDown(let retryAfter):
+            return retryAfter > 0
+                ? "三方版本目录刚请求失败，约 \(retryAfter) 秒后可再试（下拉刷新可立即重试）"
+                : "三方版本目录刚刚不可用，可下拉刷新立即重试"
         }
     }
 }

@@ -678,6 +678,11 @@ enum FileSharingService {
         var entitlements: [String: [String: Any]] = [:]
         var provisionsAllDevices: [String: Bool] = [:]
         var currentAppleID: String?
+        /// v0.3.673：**失败留痕**. 旧实现把两条 profile 通道的读取失败
+        /// `try? … ?? []` 折成「空上下文」，于是「读失败」与「设备上确实没有侧载应用」
+        /// 在判定时完全等价 —— 所有应用被安静地判成「未识别」，界面不报任何错.
+        /// 现在把每次失败的原文记在这里，调用方可提示，日志也可回溯.
+        var issues: [String] = []
     }
 
     /// v0.3.364：拉取类型判定数据（**唯一**会开 profile 隧道的入口，与 AppListView.loadAppTypes 同源）.
@@ -698,15 +703,26 @@ enum FileSharingService {
         var context = AppTypeContext()
         LoginLogger.shared.log("[文件共享] 类型上下文开始（profile/misagent 两条隧道串行，无超时）")
         context.currentAppleID = MemoryLimitSettings.currentAppleIDDirect()
-        let (sideloaded, allProfiles): (
-            [ProvisioningProfileStore.SideloadedAppInfo],
-            [ProvisioningProfileStore.ProfileInfo]
-        ) = autoreleasepool(invoking: {
-            (
-                (try? ProvisioningProfileStore.fetchSideloadedApps()) ?? [],
-                (try? ProvisioningProfileStore.fetchAllProfiles()) ?? []
-            )
-        })
+        // v0.3.673：**不再把读失败折成空数组**. 两条通道各自 do/catch，
+        // 失败原文进 context.issues 并写日志；成功与「确实为空」从此可区分.
+        var sideloaded: [ProvisioningProfileStore.SideloadedAppInfo] = []
+        var allProfiles: [ProvisioningProfileStore.ProfileInfo] = []
+        autoreleasepool {
+            do {
+                sideloaded = try ProvisioningProfileStore.fetchSideloadedApps()
+            } catch {
+                let message = "侧载 profile 读取失败：\(error.localizedDescription)"
+                context.issues.append(message)
+                LoginLogger.shared.log("[文件共享] \(message)（entitlements 判定将不可用）")
+            }
+            do {
+                allProfiles = try ProvisioningProfileStore.fetchAllProfiles()
+            } catch {
+                let message = "已装 profile 读取失败：\(error.localizedDescription)"
+                context.issues.append(message)
+                LoginLogger.shared.log("[文件共享] \(message)（企业签名判定将不可用）")
+            }
+        }
         var entMap: [String: [String: Any]] = [:]
         for item in sideloaded {
             entMap[item.bundleID] = item.entitlements
@@ -728,6 +744,7 @@ enum FileSharingService {
             "[文件共享] 类型上下文完成：entitlements \(entMap.count) 条 / "
             + "provisionsAllDevices \(provisionsAllDevicesMap.count) 条 / "
             + "已登录账号 \(context.currentAppleID == nil ? "否" : "是")"
+            + (context.issues.isEmpty ? "" : " / 降级 \(context.issues.count) 项（判定会偏保守）")
         )
         return context
     }
@@ -770,9 +787,13 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ip: OpaquePointer?
-        guard installation_proxy_connect_rsd(adapter, handshake, &ip) == nil, let ip else {
-            throw makeError("连接 instproxy 失败")
+        // v0.3.673：**错误对象必须释放**。旧写法「只判非 nil 就丢固定文案」，
+        // 既丢掉真实原因（配对失效 / 端口不通 全变成「连接 instproxy 失败」），
+        // 也把 FFI 返回的 IdeviceFfiError 直接丢弃 —— 每次失败泄漏一个.
+        if let ffiError = installation_proxy_connect_rsd(adapter, handshake, &ip) {
+            throw error(from: ffiError, fallback: "连接 instproxy 失败")
         }
+        guard let ip else { throw makeError("连接 instproxy 失败（客户端为空）") }
         defer { installation_proxy_client_free(ip) }
 
         var rawPtr: UnsafeMutableRawPointer?
@@ -879,16 +900,19 @@ enum FileSharingService {
 
         // 1. instproxy connect
         var ip: OpaquePointer?
-        guard installation_proxy_connect_rsd(adapter, handshake, &ip) == nil, let ip else {
-            throw makeError("连接 instproxy 失败")
+        // v0.3.673：同上 —— 释放 FFI 错误对象并保留真实原因.
+        if let ffiError = installation_proxy_connect_rsd(adapter, handshake, &ip) {
+            throw error(from: ffiError, fallback: "连接 instproxy 失败")
         }
+        guard let ip else { throw makeError("连接 instproxy 失败（客户端为空）") }
         defer { installation_proxy_client_free(ip) }
 
         // 2. get_apps（Lookup）—— 与 AppDiscovery / JITEnableService 同一范式
         var rawApps: UnsafeMutableRawPointer?
         var count = 0
+        // v0.3.673：**释放错误对象并保留 installd 原文**（旧写法丢弃指针 + 只报固定文案）.
         if let ffiError = installation_proxy_get_apps(ip, nil, nil, 0, &rawApps, &count) {
-            throw makeError("获取应用列表失败")
+            throw error(from: ffiError, fallback: "获取应用列表失败")
         }
         guard let rawApps, count > 0 else { return [] }
 
@@ -902,16 +926,32 @@ enum FileSharingService {
         }
 
         var result: [FileSharingApp] = []
+        // v0.3.673：**读不出的条目要留痕**. 旧实现在 plist_to_bin 失败与
+        // PropertyListSerialization 失败两处直接 continue，返回的数组被上层
+        // 当成「设备上就这么多应用」—— 部分和当全量，界面少几个应用却毫无线索.
+        var skipped = 0
         for index in 0..<count {
             var binaryPlist: UnsafeMutablePointer<CChar>?
             var binaryLength: UInt32 = 0
             guard plist_to_bin(apps[index], &binaryPlist, &binaryLength) == PLIST_ERR_SUCCESS,
-                  let binaryPlist, binaryLength > 0 else { continue }
+                  let binaryPlist, binaryLength > 0 else {
+                skipped += 1
+                continue
+            }
             let data = Data(bytes: binaryPlist, count: Int(binaryLength))
             plist_mem_free(binaryPlist)
             guard let dict = (try? PropertyListSerialization.propertyList(from: data, format: nil))
-                    as? [String: Any] else { continue }
-            if let app = parseAppDict(dict) { result.append(app) }
+                    as? [String: Any] else {
+                skipped += 1
+                continue
+            }
+            if let app = parseAppDict(dict) { result.append(app) } else { skipped += 1 }
+        }
+        if skipped > 0 {
+            LoginLogger.shared.log(
+                "[文件共享] get_apps 返回 \(count) 条，其中 \(skipped) 条解析失败被跳过"
+                + "（本次列表不完整，勿当成设备上全部应用）"
+            )
         }
         return result
     }
@@ -940,15 +980,24 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ha: OpaquePointer?
-        guard house_arrest_client_connect_rsd(adapter, handshake, &ha) == nil, let ha else {
-            throw makeError("连接 house_arrest 失败")
+        // v0.3.673：**两处错误对象都要释放**. 旧写法 "`== nil, let ha`" 把
+        // connect 的 IdeviceFfiError 丢掉；"`guard rc == nil`" 把 vend 的错误也丢掉，
+        // 于是「未开启文档共享 / 载体 App 没启动 / 未配对」全变成同一句固定文案，
+        // 且每失败一次泄漏一个错误对象.
+        if let ffiError = house_arrest_client_connect_rsd(adapter, handshake, &ha) {
+            throw error(from: ffiError, fallback: "连接 house_arrest 失败")
         }
+        guard let ha else { throw makeError("连接 house_arrest 失败（客户端为空）") }
         // vend_documents 会消费 ha（Rust 端 Box::from_raw → drop handle）
         var afc: OpaquePointer?
         let rc = bundleId.withCString { bid in
             house_arrest_vend_documents(ha, bid, &afc)
         }
-        guard rc == nil, let afc else {
+        if let rc {
+            throw error(from: rc,
+                        fallback: "无法为 \(bundleId) 取得 Documents AFC（可能未开启文档共享或未配对）")
+        }
+        guard let afc else {
             throw makeError("无法为 \(bundleId) 取得 Documents AFC（可能未开启文档共享或未配对）")
         }
         return try verifiedSession(afc: afc, bundleId: bundleId)
@@ -976,14 +1025,19 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ha: OpaquePointer?
-        guard house_arrest_client_connect_rsd(adapter, handshake, &ha) == nil, let ha else {
-            throw makeError("连接 house_arrest 失败")
+        // v0.3.673：同 openAppDocuments —— connect / vend 的错误对象都必须释放.
+        if let ffiError = house_arrest_client_connect_rsd(adapter, handshake, &ha) {
+            throw error(from: ffiError, fallback: "连接 house_arrest 失败")
         }
+        guard let ha else { throw makeError("连接 house_arrest 失败（客户端为空）") }
         var afc: OpaquePointer?
         let rc = bundleId.withCString { bid in
             house_arrest_vend_container(ha, bid, &afc)
         }
-        guard rc == nil, let afc else {
+        if let rc {
+            throw error(from: rc, fallback: "该应用不允许访问完整容器（无权限）")
+        }
+        guard let afc else {
             throw makeError("该应用不允许访问完整容器（无权限）")
         }
         return try verifiedSession(afc: afc, bundleId: bundleId)
@@ -1058,8 +1112,14 @@ enum FileSharingService {
     /// 下载整个文件到内存（afc_file_read_entire 一次读，AFCService 同款范式）
     /// v0.3.226：0 字节空文件合法（新建空文件可编辑）；>200MB 才拒
     static func downloadFile(afc: OpaquePointer, path: String) throws -> Data {
-        guard let size = fileSize(afc: afc, path: path), size <= 200 * 1024 * 1024 else {
-            throw makeError("文件不存在或超过 200MB")
+        // v0.3.673：**「量不到」不等于「超过 200MB」**. 旧写法把两者并进同一句
+        // 文案，目录 / 权限受限 / 设备断连都会被说成「文件不存在或超过 200MB」，
+        // 用户按这句去删文件、换文件都无效. 现在先分诊，再谈大小.
+        guard let size = fileSize(afc: afc, path: path) else {
+            throw makeError("读取文件大小失败（可能不存在、是目录或权限受限）：\(path)")
+        }
+        guard size <= 200 * 1024 * 1024 else {
+            throw makeError("文件超过 200MB（\(formatMB(size))），请改用流式下载：\(path)")
         }
         var handle: OpaquePointer?
         let rc = path.withCString { afc_file_open(afc, $0, AfcRdOnly, &handle) }
@@ -1078,11 +1138,23 @@ enum FileSharingService {
     /// v0.3.227：流式下载到本地文件（1MB 分块读+写盘，不占内存，任意大小）+ 字节进度
     static func downloadFileStreaming(afc: OpaquePointer, path: String, to dest: URL,
                                       progress: @escaping (Int64, Int64) -> Void) throws {
-        let total = fileSize(afc: afc, path: path) ?? 0
+        // v0.3.673：**「大小未知」不再冒充 0**. 旧写法 fileSize 失败即 total = 0，
+        // 调用方（AppFileBrowserView 的导出进度条）按 total 渲染，于是进度条恒为空、
+        // 文本恒为「0 B/0 B」—— 用户以为卡住了. 现在未知就走 -1（界面显示「—」），
+        // 只有真正拿到大小才报字节总数.
+        let total = fileSize(afc: afc, path: path) ?? -1
         var handle: OpaquePointer?
         let rc = path.withCString { afc_file_open(afc, $0, AfcRdOnly, &handle) }
         guard rc == nil, let handle else { throw error(from: rc, fallback: "打开文件失败：\(path)") }
         defer { afc_file_close(handle) }
+        // v0.3.673：**失败即清场**. 本函数先建本地文件再逐块写，任何一步抛错
+        // （建文件 / 读设备 / 写盘）旧写法都把半截文件留在目标目录里：
+        // 分享路径落在 tmp（永不回收）、导出路径落在用户可见目录（半个文件冒充完整文件）.
+        // 打开设备句柄之后的所有失败都走 cleanUp，成功路径不删.
+        var succeeded = false
+        defer {
+            if !succeeded { try? FileManager.default.removeItem(at: dest) }
+        }
         FileManager.default.createFile(atPath: dest.path, contents: nil)
         guard let fh = try? FileHandle(forWritingTo: dest) else {
             throw makeError("创建本地文件失败：\(dest.lastPathComponent)")
@@ -1093,6 +1165,8 @@ enum FileSharingService {
             var dataPtr: UnsafeMutablePointer<UInt8>? = nil
             var readLen: Int = 0
             let r = afc_file_read(handle, &dataPtr, 1_048_576, &readLen)
+            // v0.3.673：先释放缓冲区再抛 —— 旧顺序（throw 在 free 之前）每失败一次
+            // 泄漏一个 1MB 的 FFI 缓冲区.
             if let dataPtr, readLen > 0 {
                 fh.write(Data(bytes: dataPtr, count: readLen))
                 afc_file_read_data_free(dataPtr, readLen)
@@ -1102,13 +1176,16 @@ enum FileSharingService {
             if let r { throw error(from: r, fallback: "读取失败：\(path)") }
             if readLen <= 0 { break }
         }
+        succeeded = true
     }
 
     /// 上传文件到 AFC（1MB 分块写，AFCService writeFile 同款）.父目录须已存在.
     static func uploadFile(afc: OpaquePointer, data: Data, to path: String) throws {
         var handle: OpaquePointer?
         let rc = path.withCString { afc_file_open(afc, $0, AfcWrOnly, &handle) }
-        guard rc == nil, let handle else { throw makeError("创建文件失败：\(path)") }
+        // v0.3.673：**释放错误对象并保留 AFC 原文**（旧写法丢指针 + 固定文案）.
+        guard rc == nil else { throw error(from: rc, fallback: "创建文件失败：\(path)") }
+        guard let handle else { throw makeError("创建文件失败（句柄为空）：\(path)") }
         defer { afc_file_close(handle) }
         let chunkSize = 1_048_576
         try data.withUnsafeBytes { buffer in
@@ -1132,8 +1209,11 @@ enum FileSharingService {
         let rc = path.withCString { cstr in
             afc_list_directory(afc, cstr, &entriesPtr, &count)
         }
+        // v0.3.673：**释放错误对象并保留 AFC 原文**. 旧写法把 IdeviceFfiError 丢掉、
+        // 只报一句固定文案 —— 权限不足 / 路径不存在 / 连接已断 全长得一样，
+        // 且本函数是文档浏览的每次进目录必走路径，失败一次泄漏一个.
         guard rc == nil else {
-            throw makeError("列目录失败：\(path)")
+            throw error(from: rc, fallback: "列目录失败：\(path)")
         }
         defer {
             if let entriesPtr {
@@ -1206,7 +1286,12 @@ enum FileSharingService {
         let rc = path.withCString { cstr in
             afc_get_file_info(afc, cstr, &info)
         }
-        guard rc == nil else { return false }
+        // v0.3.673：**错误对象要释放**. 旧写法 `guard rc == nil else { return false }`
+        // 直接把 IdeviceFfiError 丢掉，每探测一个读不出的路径泄漏一个.
+        guard rc == nil else {
+            if let rc { idevice_error_free(rc) }
+            return false
+        }
         defer { afc_file_info_free(&info) }
         if let p = info.st_ifmt {
             let s = String(cString: p)
@@ -1271,8 +1356,9 @@ enum FileSharingService {
             throw makeError("无配对文件")
         }
         var pairingFile: OpaquePointer?
+        // v0.3.673：**释放错误对象并保留原文**（旧写法丢指针 + 固定文案）.
         if let e = pairingPath().withCString({ rp_pairing_file_read($0, &pairingFile) }) {
-            throw makeError("读取配对文件失败")
+            throw error(from: e, fallback: "读取配对文件失败")
         }
         guard let pairingFile else { throw makeError("配对解析失败") }
         defer { rp_pairing_file_free(pairingFile) }
@@ -1304,8 +1390,12 @@ enum FileSharingService {
                     }
                 }
             }
-            if e != nil {
-                lastError = makeError("建隧道失败")
+            if let e {
+                // v0.3.673：**错误对象必须释放，且原因必须留下**.
+                // 旧写法 `if e != nil { lastError = makeError("建隧道失败") }` 既丢弃
+                // IdeviceFfiError（每次重试泄漏一个），又把真实原因（配对文件过期 /
+                // 端口不通 / 隧道未就绪）压成同一句话，重试 3 次后用户拿到的还是它.
+                lastError = error(from: e, fallback: "建隧道失败")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
                 return tunnel
             }

@@ -154,7 +154,11 @@ static NSDictionary<NSString*, NSString*> *performAppQuery(struct AdapterHandle 
     InstallationProxyClientHandle *client = NULL;
     IdeviceFfiError* err = installation_proxy_connect_rsd(adapter, handshake, &client);
     if (err) {
-        *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
+        // v0.3.673（task-7 发现16）：`*error` 必须判空。三个公开入口
+        // list_installed_apps / list_all_apps / list_hidden_system_apps 把调用方的
+        // error 指针原样透传下来，而 TunnelContext 侧存在传 NULL 的调用点
+        // （只要返回值不看错因）。传 NULL 时这一句就是写地址 0 = 段错误。
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
         idevice_error_free(err);
         return nil;
     }
@@ -163,7 +167,7 @@ static NSDictionary<NSString*, NSString*> *performAppQuery(struct AdapterHandle 
     size_t count = 0;
     err = installation_proxy_get_apps(client, NULL, NULL, 0, (void*)&apps, &count);
     if (err) {
-        *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
         idevice_error_free(err);
         installation_proxy_client_free(client);
         return nil;
@@ -195,7 +199,7 @@ NSDictionary<NSString*, NSString*>* list_hidden_system_apps(struct AdapterHandle
 UIImage* getAppIcon(struct AdapterHandle *adapter, struct RsdHandshakeHandle *handshake, NSString* bundleID, NSString** error) {
     SpringBoardServicesClientHandle *client = NULL;
     if (springboard_services_connect_rsd(adapter, handshake, &client)) {
-        *error = @"Failed to connect to SpringBoard Services";
+        if (error) *error = @"Failed to connect to SpringBoard Services";
         return nil;
     }
 
@@ -203,7 +207,7 @@ UIImage* getAppIcon(struct AdapterHandle *adapter, struct RsdHandshakeHandle *ha
     size_t dataLen = 0;
     if (springboard_services_get_icon(client, [bundleID UTF8String], &pngData, &dataLen)) {
         springboard_services_free(client);
-        *error = @"Failed to get app icon";
+        if (error) *error = @"Failed to get app icon";
         return nil;
     }
 
@@ -218,7 +222,7 @@ UIImage* getAppIcon(struct AdapterHandle *adapter, struct RsdHandshakeHandle *ha
 NSDictionary *getAllAppsInfo(struct AdapterHandle *adapter, struct RsdHandshakeHandle *handshake, NSString **error) {
     InstallationProxyClientHandle *client = NULL;
     if (installation_proxy_connect_rsd(adapter, handshake, &client)) {
-        *error = @"Failed to connect to installation proxy";
+        if (error) *error = @"Failed to connect to installation proxy";
         return nil;
     }
 
@@ -226,18 +230,34 @@ NSDictionary *getAllAppsInfo(struct AdapterHandle *adapter, struct RsdHandshakeH
     size_t count = 0;
     if (installation_proxy_get_apps(client, NULL, NULL, 0, &apps, &count)) {
         installation_proxy_client_free(client);
-        *error = @"Failed to get apps";
+        if (error) *error = @"Failed to get apps";
         return nil;
     }
 
     NSMutableDictionary *result = [NSMutableDictionary dictionaryWithCapacity:count];
     for (size_t i = 0; i < count; i++) {
         plist_t app = ((plist_t *)apps)[i];
-        NSDictionary *appInfo = plist_to_objc_object(app);
-        result[appInfo[@"CFBundleIdentifier"]] = appInfo;
+        // v0.3.673（task-7 发现14/15）：plist_to_objc_object 对无法映射的节点
+        // （PLIST_UID / PLIST_NULL / NONE 之外的类型）返回 nil；直接用
+        // `result[appInfo[@"CFBundleIdentifier"]]` 会变成「用 nil 作 key」，
+        // 触发 NSInvalidArgumentException —— 而调用链上游 TunnelContext.m 的 @try 只有
+        // @finally 没有 @catch，异常会一路冒到 worker 的 @catch，整次建连被判失败。
+        // 这里必须逐层兜底：非字典跳过、无 CFBundleIdentifier 跳过。
+        id appInfo = plist_to_objc_object(app);
+        if (![appInfo isKindOfClass:[NSDictionary class]]) continue;
+        id bundleID = ((NSDictionary *)appInfo)[@"CFBundleIdentifier"];
+        if (![bundleID isKindOfClass:[NSString class]] || ((NSString *)bundleID).length == 0) continue;
+        result[bundleID] = appInfo;
     }
-    
+
     installation_proxy_client_free(client);
+    // v0.3.673（task-7 发现13）：安装代理返回的是 Rust 侧 into_boxed_slice 出来的
+    // Vec<plist_t>（见 rust/idevice-ffi/src/installation_proxy.rs 的
+    // `let mut r = r.into_boxed_slice(); std::mem::forget(r);`），元素是 PlistWrapper。
+    // 原先这里既不 plist_free 元素、也不回收外层数组 ⇒ 每次主界面刷新泄漏整棵 app plist 树。
+    // 正确释放函数是 idevice_plist_array_free（rust/idevice-ffi/src/lib.rs）：
+    // 它逐个 plist_free 元素、再按 Vec 布局回收外层切片。
+    idevice_plist_array_free((plist_t *)apps, count);
     return result;
 }
 
@@ -245,7 +265,7 @@ NSDictionary *getAllAppsInfoFromProvider(struct IdeviceProviderHandle *provider,
     InstallationProxyClientHandle *client = NULL;
     struct IdeviceFfiError *err = installation_proxy_connect(provider, &client);
     if (err) {
-        *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
         idevice_error_free(err);
         return nil;
     }
@@ -255,7 +275,7 @@ NSDictionary *getAllAppsInfoFromProvider(struct IdeviceProviderHandle *provider,
     err = installation_proxy_get_apps(client, NULL, NULL, 0, &apps, &count);
     if (err) {
         installation_proxy_client_free(client);
-        *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
         idevice_error_free(err);
         return nil;
     }
@@ -263,11 +283,17 @@ NSDictionary *getAllAppsInfoFromProvider(struct IdeviceProviderHandle *provider,
     NSMutableDictionary *result = [NSMutableDictionary dictionaryWithCapacity:count];
     for (size_t i = 0; i < count; i++) {
         plist_t app = ((plist_t *)apps)[i];
-        NSDictionary *appInfo = plist_to_objc_object(app);
-        result[appInfo[@"CFBundleIdentifier"]] = appInfo;
+        // v0.3.673（task-7 发现14/15）：与 getAllAppsInfo 同款兜底，见该函数内注释。
+        id appInfo = plist_to_objc_object(app);
+        if (![appInfo isKindOfClass:[NSDictionary class]]) continue;
+        id bundleID = ((NSDictionary *)appInfo)[@"CFBundleIdentifier"];
+        if (![bundleID isKindOfClass:[NSString class]] || ((NSString *)bundleID).length == 0) continue;
+        result[bundleID] = appInfo;
     }
 
     installation_proxy_client_free(client);
+    // v0.3.673（task-7 发现13）：同 getAllAppsInfo —— 元素与外壳都必须交还 Rust 侧释放。
+    idevice_plist_array_free((plist_t *)apps, count);
     return result;
 }
 
@@ -275,7 +301,7 @@ UIImage *getAppIconFromProvider(struct IdeviceProviderHandle *provider, NSString
     SpringBoardServicesClientHandle *client = NULL;
     struct IdeviceFfiError *err = springboard_services_connect(provider, &client);
     if (err) {
-        *error = [NSString stringWithFormat:@"Failed to connect to SpringBoard Services: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to SpringBoard Services: %s", err->message];
         idevice_error_free(err);
         return nil;
     }
@@ -285,7 +311,7 @@ UIImage *getAppIconFromProvider(struct IdeviceProviderHandle *provider, NSString
     err = springboard_services_get_icon(client, [bundleID UTF8String], &pngData, &dataLen);
     if (err) {
         springboard_services_free(client);
-        *error = [NSString stringWithFormat:@"Failed to get app icon: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get app icon: %s", err->message];
         idevice_error_free(err);
         return nil;
     }
@@ -406,7 +432,24 @@ id plist_to_objc_object(plist_t plist) {
             free(str);
             return result;
         }
-        case PLIST_UID: // FIXME?
+        case PLIST_UID: {
+            // v0.3.673（task-7 发现15）：PLIST_UID 在协议里就是一个带类型的整数
+            // （NSKeyedArchiver 的 $objects/$class 里到处都是），原来落到 default 返回 nil，
+            // 让任何含 UID 的节点整体变 nil —— 上层若直接用它当字典 key 会抛异常
+            // （见 getAllAppsInfo 的注释），这里是 nil 的**源头**，就地修掉。
+            // 注意：本函数无 plist_get_uid_val 的包装，改用通用取值 + 释放。
+            char *val = NULL;
+            uint64_t length = 0;
+            plist_get_data_val(plist, &val, &length);
+            // plist_get_data_val 对 UID 节点取出来的是 8 字节大端 u64，这里按长度判断。
+            if (val == NULL) return nil;
+            uint64_t uid = 0;
+            for (uint64_t i = 0; i < length && i < sizeof(uid); i++) {
+                uid = (uid << 8) | (uint8_t)val[i];
+            }
+            free(val);
+            return @(uid);
+        }
         case PLIST_NULL:
         default:
             return nil;

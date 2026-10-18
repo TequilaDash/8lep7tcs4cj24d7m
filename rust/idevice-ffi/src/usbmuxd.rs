@@ -642,7 +642,7 @@ pub unsafe extern "C" fn idevice_usbmuxd_device_list_free(
     // 注意：count == 0 时 into_boxed_slice 给出的是悬挂但已对齐的指针，from_raw_parts_mut
     // 要求非空，所以长度 0 时只做空操作（长度 0 的分配不占内存，不算泄漏）。
     if count > 0 {
-        drop(unsafe { Vec::from_raw_parts_mut(devices, count as usize, count as usize) });
+        drop(unsafe { Vec::from_raw_parts(devices, count as usize, count as usize) });
     }
 }
 

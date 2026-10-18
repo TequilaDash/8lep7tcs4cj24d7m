@@ -177,8 +177,13 @@ final class AppDiscovery {
     }
 
     /// Remove the stored pairing file.
-    func resetPairing() {
-        tunnel.resetPairingFile()
+    ///
+    /// v0.3.673（task-7 发现4）：改成 throwing，把「没删掉」暴露出来。
+    /// 建连进行中时 TunnelContext 会拒绝删除（返回 NO / -8），旧代码一律静默成功：
+    /// 界面显示已重置、实际配对文件还在、隧道还连着旧身份。
+    /// - Throws: 隧道正在建连时的 -8 错误，由调用方决定怎么提示。
+    func resetPairing() throws {
+        try tunnel.resetPairingFile()
     }
 
     /// Whether the user has granted single-app install permissions via the

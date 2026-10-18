@@ -659,6 +659,13 @@ enum I4PairingService {
                 "隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
+        // 超时（v0.3.660 审计 T 项）：整条配对链是同步 FFI，进不了 Task 取消的语义，
+        // 而 tunnel_create_rppairing / lockdownd_* 对端的超时由 FFI 决定（仓内 Rust 侧
+        // 没有可以按调用传入的 deadline）。这里能做的、且不改 FFI 签名的事是：
+        //   · 每次尝试失败前都不阻塞太久：下面 3 次重试的间隔是 0.3s / 0.6s，合计不到 1s；
+        //   · 「卡住」的真正表现为整个 await 不返回 —— 由调用方（performPairOnQueue）观察
+        //     的 pairQueue 是否还活着来暴露，本函数不假装能中断 FFI.
+        // 需要实测确认：真机上 LocalDevVPN 未连时 tunnel_create_rppairing 是立即失败还是挂住.
         var lastError: String?
         for attempt in 0..<3 {
             var adapter: OpaquePointer?

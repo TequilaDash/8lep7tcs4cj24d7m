@@ -42,8 +42,15 @@ struct RootView: View {
 
             NavigationStack {
                 MoreView(appList: viewModel, onResetPairing: {
-                    viewModel.resetPairing()
-                    selectedTab = .home
+                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除）。
+                    // 设置页里的“重置配对文件”按钮已经接住错误并弹窗；这条入口只做跳转，
+                    // 失败时保持页面不动，避免「跳到主页但什么都没重置」。
+                    do {
+                        try viewModel.resetPairing()
+                        selectedTab = .home
+                    } catch {
+                        resetPairingError = error.localizedDescription
+                    }
                 })
             }
             .tabItem {
@@ -219,6 +226,8 @@ struct SettingsForm: View {
     @AppStorage(OnlineInstallConfig.endpointKey) private var onlineInstallEndpoint: String = ""
     @State private var shareTarget: ShareTarget?
     @State private var showNoPairingAlert = false
+    /// v0.3.673：重置配对文件失败的原因（建连进行中时 TunnelContext 返回 -8）.
+    @State private var resetPairingError: String?
     @State private var showLoginSheet = false
     @State private var showAccountDetails = false
     /// v0.2.112：左上角登录日志入口（排查Apple 登录 / Anisette 失败用）.
@@ -367,7 +376,14 @@ struct SettingsForm: View {
                 }
 
                 Button("重置配对文件", role: .destructive) {
-                    onResetPairing()
+                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（-8）。
+                    // 旧代码不看结果，用户以为已重置而配对文件仍在、隧道仍是旧身份。
+                    // AppListViewModel.resetPairing 已是 throwing，这里把失败原因弹出来。
+                    do {
+                        try appList.resetPairing()
+                    } catch {
+                        resetPairingError = error.localizedDescription
+                    }
                 }
             }
 
@@ -472,6 +488,14 @@ struct SettingsForm: View {
         }
         .sheet(item: $shareTarget) { target in
             ShareSheet(items: [target.url])
+        }
+        .alert("重置配对文件失败", isPresented: Binding(
+            get: { resetPairingError != nil },
+            set: { if !$0 { resetPairingError = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(resetPairingError ?? "")
         }
         .alert("没有配对文件", isPresented: $showNoPairingAlert) {
             Button("好", role: .cancel) {}

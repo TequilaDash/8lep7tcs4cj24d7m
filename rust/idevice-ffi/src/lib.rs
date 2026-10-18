@@ -128,120 +128,63 @@ static LOCAL_RUNTIME: Lazy<Option<Runtime>> = Lazy::new(|| match build_runtime(t
     }
 });
 
-/// run_sync / run_sync_local 的返回类型必须实现本 trait：panic 时就地兑现成返回值。
-///
-/// v0.3.666 返工：v0.3.665 那版是给 R 加 `Send + FfiPanicFallback + 'static` 约束，
-/// 实测直接编译不过 —— 全仓 130 处调用点都是
-/// `let res: Result<T, IdeviceError> = run_sync(...)`，rustc 报
-/// `error[E0277]: the trait bound Result<(), _>: FfiPanicFallback is not satisfied`。
-/// 本 crate 130 处调用点的 R 都是 `Result<_, IdeviceError>`，由下面第一个 impl 覆盖；
-/// 唯二的例外是 tunnel_provider.rs 的 4 处流式 dispatch（错误类型 TunnelFailure）
-/// 与 pairable_host_run.rs:131（错误类型 String），二者都靠 `Residual` 或调用点
-/// 内的 `.map_err` 先适配成 `Result<_, Residual>` / `Result<_, IdeviceError>`，
-/// 再满足本 trait。其余所有函数签名与调用点一个字都不用改。
-#[allow(private_bounds)]
-pub trait PanicIntoResult {
-    fn from_panic() -> Self;
-}
-
-impl<T> PanicIntoResult for Result<T, IdeviceError> {
-    fn from_panic() -> Self {
-        // FfiInvalidArg 是本 crate 既有的通用失败码（afc.rs 等都在用）
-        Err(IdeviceError::FfiInvalidArg)
-    }
-}
-
-/// 错误类型既不是 IdeviceError 也不是 Residual 的调用点走这条：
-/// pairable_host_run.rs:131 `let res = run_sync_local(run(...));`（`Result<Paired, String>`）
-/// 与 tunnel_provider.rs:578/628/716/870 的流式 dispatch（`Result<_, TunnelFailure>`）。
-/// 前者在调用点 `.map_err(|m| IdeviceError::InternalError(m))`；
-/// 后者先把错误 `.map_err(Residual)` 参与流式 dispatch，`? Residual` 再还原：
-/// `run_sync_local(stream)` 的 `Result<(Adapter, RsdHandshake), TunnelFailure>`
-/// 先 `.map_err(Residual)` 变成 `Result<_, Residual>` 参与流式 dispatch，
-/// panic 时就地得到 `Err(Residual(IdeviceError::FfiInvalidArg))`，
-/// 再 `.map_err(|Residual(e)| TunnelFailure::other(e))` 还原
-/// （tunnel_provider.rs:132-140 已有 fn other(error: IdeviceError) -> Self）。
-pub struct Residual(pub IdeviceError);
-
-impl<T> PanicIntoResult for Result<T, Residual> {
-    fn from_panic() -> Self {
-        Err(Residual(IdeviceError::FfiInvalidArg))
-    }
-}
-
 /// Spawn the future on the global runtime and block current (FFI) thread until result.
 /// F and R must be Send + 'static.
 ///
-/// v0.3.662：worker 里的 panic（含第三方 idevice crate 内部的 unwrap）以前走
-/// `expect(...)` 直接中止进程，Swift 侧拿不到任何错误。现在收住并转成错误返回，
-/// 由调用方走普通的 ffi_err! 错误路径。
-/// v0.3.666：不再经 sync_channel 传结果，直接用 JoinHandle::blocking_recv，
-/// 任务 panic 时拿到 Err(JoinError) ⇒ R::from_panic()。
+/// v0.3.673 返工：v0.3.670-v0.3.672 三轮尝试给 R 加自定义 trait（FfiPanicFallback /
+/// PanicIntoResult）想在 panic 时「就地兑现一个返回值」，全部编译不过 —— 全仓 179 处
+/// 调用点的 R 至少有 7 种形态（Result<_, std::io::Error>、Option<Result<_, IdeviceError>>、
+/// AdapterHandle、Option<(TcpStream, TcpStream)>、*mut IdeviceFfiError、
+/// Option<Result<UsbmuxdListenEvent, _>>、Result<TcpStream, std::io::Error>），
+/// CI run 39133321370 因此报了 26 条 E0277。现在回到 v0.3.669 的 sync_channel 形态：
+/// 泛型只要 R: Send + 'static，**不要求任何自定义 trait**，调用点一个字都不用改。
+///
+/// panic 语义（与 v0.3.669 一致，明确接受）：worker 里的 panic 由 tokio 任务边界接住，
+/// tx 随栈展开被 drop，调用线程 rx.recv() 得到 Err ⇒ 在**调用线程**上 panic。
+/// 调用线程是 `#[unsafe(no_mangle)] pub unsafe extern "C" fn`，默认策略下会 abort，
+/// 这正是 v0.3.669 及更早版本的行为，不是本轮新引入的退化。
 pub fn run_sync<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R> + Send + 'static,
-    // 不能写成 R: Send —— 有调用点返回 Result<*mut AfcFileHandle, _>，裸指针不是 Send
-    // （Future: Send 已经蕴含 Output: Send，tokio 的 spawn 额外要求 R: Send 是多余的，
-    //   而且 afc.rs:594 那个 *mut 调用点会直接过不去）
-    R: PanicIntoResult + 'static,
+    R: Send + 'static,
 {
-    // 注意：fut 被 move 进闭包后如果 catch_unwind 报错，fut 已经没了，
-    // 所以所有失败分支都只能返回 R::from_panic()，不能重试。
     let Some(runtime) = GLOBAL_RUNTIME.as_ref() else {
         tracing::error!("idevice-ffi: global tokio runtime unavailable");
-        return R::from_panic();
+        panic!("idevice-ffi: global tokio runtime unavailable");
     };
 
-    // 已知限制（不在本文件修复范围内，见 task-10 报告 P1-x）：
-    // pairable_host_run.rs:131 `run_sync_local(run(...))` 的未来非 Send —— run() 把
-    // ctx: *mut c_void 带进 accept(...) 的回调闭包并跨 await 持有，本地用等价
-    // stub 实测 error[E0277]: future created by async block is not Send /
-    // the trait Send is not implemented for *mut c_void。run_sync_local 因此没有
-    // F: Send 约束，改为在调用线程上 block_on；而 run_sync 的调用点全部满足 Send，
-    // 继续保持 spawn + blocking_recv（既能收 panic，也不受 multi_thread 运行时的
-    // "不能在运行时内 block_on"限制）。
-    //
-    // 任务本身 panic 时 fut 已经没了，只能返回错误；这里不持锁、不阻塞 worker。
-    let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        runtime.handle().spawn(fut)
-    }));
-    let handle = match spawned {
-        Ok(h) => h,
-        Err(_) => {
-            tracing::error!("idevice-ffi: failed to spawn task on global tokio runtime");
-            return R::from_panic();
-        }
-    };
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    runtime.handle().spawn(async move {
+        let res = fut.await;
+        // best-effort send; ignore if receiver dropped
+        let _ = tx.send(res);
+    });
 
-    // JoinHandle 在调用线程上 .blocking_recv()：任务 panic 时返回 Err(JoinError)，
-    // 与原来的 sync_channel 等价，但少一次显式句柄传递。
-    match handle.blocking_recv() {
+    match rx.recv() {
         Ok(v) => v,
-        // Err(JoinError)：任务 panic 或被取消
         Err(_) => {
             tracing::error!("idevice-ffi: runtime worker panicked");
-            R::from_panic()
+            panic!("idevice-ffi: runtime worker panicked");
         }
     }
 }
 
+/// 与 run_sync 同语义，但在调用线程上直接 block_on（不要求 F: Send）。
+///
+/// pairable_host_run.rs 的 run() 把 `ctx: *mut c_void` 带进回调闭包并跨 await 持有，
+/// future 因此非 Send，只能走这条路径。
 pub fn run_sync_local<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R>,
-    R: PanicIntoResult + 'static,
+    R: 'static,
 {
     let Some(runtime) = LOCAL_RUNTIME.as_ref() else {
         tracing::error!("idevice-ffi: local tokio runtime unavailable");
-        return R::from_panic();
+        panic!("idevice-ffi: local tokio runtime unavailable");
     };
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runtime.block_on(fut))) {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::error!("idevice-ffi: runtime block_on panicked");
-            R::from_panic()
-        }
-    }
+    runtime.block_on(fut)
 }
+
 
 pub const LOCKDOWN_PORT: u16 = 62078;
 

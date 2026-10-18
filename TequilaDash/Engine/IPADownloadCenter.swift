@@ -3,7 +3,7 @@ import Foundation
 /// **统一下载 / 安装中心** —— AppStore 商店的「免登录下载」与（预留的）「Apple ID 下载」
 /// 共用同一条下载管理接口，并支持**中途暂停 / 继续 / 删除安装包**。
 ///
-/// · 队列串行执行（一次只下一个），避免多隧道并发抢占；
+/// · 队列**并发**执行（v0.3.413 起，上限 `maxConcurrentDownloads = 3`），超出的排队等槽位；
 /// · 下载落地 `Documents/AppStoreDownloads/<bundleId>-<version>.ipa`，完成后自动登记
 ///   `IPADownloadLibrary`（下载管理页看到的就是它），可选自动安装（RSD 隧道）；
 /// · 暂停用 `URLSessionDownloadTask.cancel(byProducingResumeData:)`，恢复用 resumeData
@@ -381,14 +381,23 @@ final class IPADownloadCenter: ObservableObject {
     /// 否则之后**真**的网络错误会被误判成暂停而永远显示「已暂停」）。
     private var pausingIDs: Set<UUID> = []
 
-    // MARK: v0.3.394：瞬时速度的采样窗口（v0.3.659 改为按任务各一套）
+    // MARK: v0.3.394：瞬时速度的采样窗口（v0.3.659 起按任务各一套，v0.3.674 复核）
     //
-    // v0.3.394 写下这段时下载是**串行**的（一次只下一个），一套窗口变量够用。
-    // v0.3.413 把并发开到 `maxConcurrentDownloads = 3` 之后就不成立了：三个任务共用
-    // 同一对（上次时刻, 上次字节），A 的字节数去减 B 的，差值为负被丢弃，
-    // 于是速度在三个任务之间乱跳、并且会长期停在 0。现在按 job id 各一套。
+    // 历史：v0.3.394 写下这段时下载是串行的（一次只下一个），一套窗口变量够用；
+    // v0.3.413 把并发开到 `maxConcurrentDownloads = 3` 之后，一套全局窗口就不成立了 ——
+    // 三个任务共用同一对（上次时刻, 上次字节），A 的字节数去减 B 的，差值为负被丢弃，
+    // 于是速度在三个任务之间乱跳、并且会长期停在 0。
+    //
+    // v0.3.659（提交 e302d9d）已经把这件事改对了：`speedSamples` 是 `[UUID: SpeedSample]`，
+    // `SpeedSample` 的三个字段都是**实例存储属性**（不是 `static var`），每个任务各存一份 ——
+    // 三路并发各算各的，互不干扰。本轮（v0.3.674 / D5）复核后**没有再改这段逻辑**，
+    // 只订正了类头那句过时的「队列串行执行」注释（见文件开头）。
     // 窗口长度 0.8s：太短数字乱跳，太长反应迟钝。
 
+    /// 一个任务的**独立**速度采样器：窗口起点 / 窗口起点时的字节数 / 平滑后的速度。
+    ///
+    /// 三个字段都是实例存储属性，由 `speedSamples` 按任务 id 各存一份 —— 这是「按任务采样」
+    /// 能成立的前提：只要有一项退化成 `static var`，三路并发就会互相覆盖成全局单套。
     private struct SpeedSample {
         var windowStart: Date
         var bytes: Int64

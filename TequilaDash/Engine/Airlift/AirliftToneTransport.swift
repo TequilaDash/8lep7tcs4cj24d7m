@@ -78,6 +78,40 @@ actor AirliftToneTransport {
     private typealias BytesFreeFn = @convention(c) (UnsafeMutablePointer<UInt8>?, Int) -> Void
     private typealias SetTargetFn = @convention(c) (UnsafePointer<CChar>?) -> Int32
 
+    // MARK: - FFI 符号（进程内只解析一次）
+
+    /// `al_exploit_read_file` 的函数指针；解析不到为 nil.
+    ///
+    /// **能缓存**：`AirliftFFI.xcframework` 是**静态库**（`project.yml` 里 `link: true` /
+    /// `embed: false`），符号被链进主可执行文件，`RTLD_DEFAULT` 必然解析到主二进制；
+    /// 进程内没有任何 `dlclose` 路径，函数地址恒定.
+    /// **要缓存**：`dlsym` 每次都要遍历已加载镜像的符号表，而这条路径每次读都会走到.
+    private static let readFileFn: ExploitReadFileFn? = {
+        guard let symbol = dlsym(rtlDefaultHandle(), "al_exploit_read_file") else { return nil }
+        return unsafeBitCast(symbol, to: ExploitReadFileFn.self)
+    }()
+
+    /// `al_bytes_free` 的函数指针；解析不到为 nil.
+    ///
+    /// 与 `readFileFn` **必须成对可用**：只拿到读、拿不到释放，等于每次读都漏一份
+    /// 文件大小的内存（成对校验见 `readSync` 开头）.
+    private static let bytesFreeFn: BytesFreeFn? = {
+        guard let symbol = dlsym(rtlDefaultHandle(), "al_bytes_free") else { return nil }
+        return unsafeBitCast(symbol, to: BytesFreeFn.self)
+    }()
+
+    /// `al_set_target_host` 的函数指针；解析不到为 nil.
+    ///
+    /// 缺符号时**只留痕不抛错**：库内默认目标与本仓出厂目标一致，拒绝运行反而会把
+    /// 本来能用的默认路径一起弄坏；但绝不静默 —— 记一行日志，随导出一起给出去.
+    private static let setTargetFn: SetTargetFn? = {
+        guard let symbol = dlsym(rtlDefaultHandle(), "al_set_target_host") else {
+            AirliftLog.shared.append("airlift: 未解析到 al_set_target_host，目标主机退回库内默认值")
+            return nil
+        }
+        return unsafeBitCast(symbol, to: SetTargetFn.self)
+    }()
+
     /// 读一个设备上的绝对路径.
     func read(path: String, pairingPath: String) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
@@ -109,12 +143,13 @@ actor AirliftToneTransport {
     // MARK: - 同步实现（在后台队列上执行）
 
     private static func readSync(path: String, pairingPath: String) throws -> Data {
-        configureTargets()
-
-        guard let symbol = dlsym(rtlDefaultHandle(), "al_exploit_read_file") else {
+        // 读 / 释放必须成对可用：只拿到读、拿不到 al_bytes_free 时，每次读都会把
+        // 一整份文件大小的堆内存漏在进程里（Rust 侧是 mem::forget 出来的 Box）.
+        guard let readFile = readFileFn, let freeBytes = bytesFreeFn else {
             throw AirliftTransportError.unavailable
         }
-        let readFile = unsafeBitCast(symbol, to: ExploitReadFileFn.self)
+
+        configureTargets()
 
         var output: UnsafeMutablePointer<UInt8>?
         var outputLength = 0
@@ -133,30 +168,55 @@ actor AirliftToneTransport {
             }
         }
 
+        // 先把两块所有权都接过来，再判返回码：
+        // · out_error 只要非空就必须 al_string_free（成功路径也可能带回告警字符串）.
+        // · out_data 只在 result == 0 时由 Rust 填入；这里仍按「非空即拥有」释放 ——
+        //   不依赖「非 0 必为 null」这条隐含约定，将来 Rust 改成「部分结果 + 非 0」
+        //   也不会漏. 长度取返回后立刻快照的 outputLength，必须与分配长度逐字节相等，
+        //   因为 al_bytes_free 走的是 Box::from_raw(slice)，长度错了就是未定义行为.
         let message = outputError.map { String(cString: $0) }
         if let outputError {
             al_string_free(outputError)
+        }
+        // 先拷字节、再释放原生缓冲 —— 顺序反了就是 use-after-free.
+        var data: Data?
+        if let output {
+            data = Data(bytes: output, count: outputLength)
+            freeBytes(output, outputLength)
         }
 
         guard result == 0 else {
             throw AirliftTransportError.failed(message ?? "AirLift 读取失败（\(result)）")
         }
-        guard let output else {
+        guard let data else {
             throw AirliftTransportError.failed("AirLift 未返回 \(path) 的数据")
         }
-        defer { freeBytes(output, length: outputLength) }
-        return Data(bytes: output, count: outputLength)
+        return data
     }
 
     private static func writeSync(files: [AirliftToneFile], directory: String, pairingPath: String) throws {
         configureTargets()
+        removeStaleStagingDirectories()
 
+        // 暂存目录用唯一名字，由下面这一条 defer 统一兜底删除：
+        // · createDirectory 失败 ⇒ 磁盘上什么都没建，无需清理.
+        // · 单个文件写失败（磁盘满 / 文件名非法）⇒ 直接 throw 出本函数，defer 已挂上，暂存目录照删.
+        // · airlift 写失败 ⇒ 同样走 defer.
+        // 清理刻意用 try?：删除失败不得顶掉真正的错误原因（调用方要看到 airlift 的报错）.
         let stagingDirectory = FileManager.default.temporaryDirectory
             .appending(path: "TequilaDash-Airlift-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: stagingDirectory) }
 
         for file in files {
+            // 文件名是入参：带路径分隔符会写到暂存目录之外（.atomic 还会先在同目录建临时文件）.
+            // 本仓调用方只传提示音文件名，这里按契约拒绝，不做静默改写.
+            guard !file.name.isEmpty,
+                  !file.name.contains("/"),
+                  file.name != ".",
+                  file.name != ".." else {
+                throw AirliftTransportError.failed("非法的暂存文件名：\(file.name)")
+            }
             try file.data.write(
                 to: stagingDirectory.appending(path: file.name),
                 options: .atomic
@@ -179,6 +239,7 @@ actor AirliftToneTransport {
             }
         }
 
+        // 先取文案、再无条件释放：无论返回码是几，out_error 非空就归调用方释放.
         let message = outputError.map { String(cString: $0) }
         if let outputError {
             al_string_free(outputError)
@@ -189,16 +250,44 @@ actor AirliftToneTransport {
         }
     }
 
-    /// 把 airlift 的目标主机设为**本仓当前隧道对端**（不再是 AirBeep 写死的 10.7.0.1）.
-    private static func configureTargets() {
-        guard let symbol = dlsym(rtlDefaultHandle(), "al_set_target_host") else { return }
-        let setTarget = unsafeBitCast(symbol, to: SetTargetFn.self)
-        _ = LocalDevVPN.targetIP.withCString { setTarget($0) }
+    /// 清掉**上一个进程**残留的暂存目录.
+    ///
+    /// `writeSync` 里的 `defer` 只能覆盖「进程还活着」的失败路径. 被用户强杀 / 崩溃 /
+    /// 看门狗终止时，已经建好的 `TequilaDash-Airlift-<UUID>` 目录会留在 tmp 里；
+    /// 系统虽会不定期清理 tmp，但不保证时机，而一个目录就是一整套提示音的体积.
+    /// 调用点在本函数自己建目录**之前**，且所有调用都在同一条串行队列上，
+    /// 因此此刻看到的同名目录必定是遗留物；再加「10 分钟没动过」的门槛兜底.
+    private static func removeStaleStagingDirectories() {
+        let prefix = "TequilaDash-Airlift-"
+        let cutoff = Date().addingTimeInterval(-600)
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(
+            at: manager.temporaryDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for entry in entries where entry.lastPathComponent.hasPrefix(prefix) {
+            // 读不到类型或时间就跳过：宁可留一个目录，也不误删正在用的.
+            guard let values = try? entry.resourceValues(
+                forKeys: [.isDirectoryKey, .contentModificationDateKey]
+            ), values.isDirectory == true,
+               let modified = values.contentModificationDate,
+               modified <= cutoff else { continue }
+            try? manager.removeItem(at: entry)
+        }
     }
 
-    private static func freeBytes(_ pointer: UnsafeMutablePointer<UInt8>, length: Int) {
-        guard let symbol = dlsym(rtlDefaultHandle(), "al_bytes_free") else { return }
-        let freeBytes = unsafeBitCast(symbol, to: BytesFreeFn.self)
-        freeBytes(pointer, length)
+    /// 把 airlift 的目标主机设为**本仓当前隧道对端**（不再是 AirBeep 写死的 10.7.0.1）.
+    ///
+    /// ## 为什么符号缓存了、目标值仍要每次重写
+    /// `al_set_target_host` 写的是 **Rust 侧进程级全局**，全 App 只有这一份；而
+    /// `LocalDevVPN.targetIP` 在运行期会变（用户在「设置 → 本地隧道」改 `TunnelDeviceIP`，
+    /// 见 LocalDevVPN.swift:29-34）. 所以能缓存的是**符号地址**（`setTargetFn`，进程内恒定），
+    /// 不能缓存的是**目标值**：每次操作都要把当前目标重新写进去，否则用户改完隧道地址后，
+    /// 后续操作仍会连旧地址.
+    private static func configureTargets() {
+        guard let setTarget = setTargetFn else { return }
+        _ = LocalDevVPN.targetIP.withCString { setTarget($0) }
     }
 }

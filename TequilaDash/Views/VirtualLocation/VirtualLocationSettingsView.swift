@@ -64,8 +64,15 @@ struct VirtualLocationSettingsView: View {
 
                     if session.hasPairing {
                         Button("重置配对文件", role: .destructive) {
-                            TunnelContext.shared.resetPairingFile()
-                            session.lastError = nil
+                            // v0.3.673（task-7 发现4）：建连进行中会被拒绝（-8）。
+                            // 旧代码无条件把 lastError 清空 —— 用户看到“已重置”，
+                            // 实际配对文件仍在、隧道仍连着旧身份。
+                            do {
+                                try TunnelContext.shared.resetPairingFile()
+                                session.lastError = nil
+                            } catch {
+                                session.lastError = error.localizedDescription
+                            }
                         }
                     }
                 } header: {

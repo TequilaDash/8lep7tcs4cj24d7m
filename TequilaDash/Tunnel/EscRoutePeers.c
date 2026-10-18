@@ -81,9 +81,23 @@ typedef char esc_rt_msghdr_size_check[(sizeof(esc_rt_msghdr) == 96) ? 1 : -1];
 #define ESC_MAX_PEERS 16
 #define ESC_MAX_IFNAME 32
 
-/// 4 字节对齐（BSD 路由消息里 sockaddr 之间的推进口径）.
-static size_t esc_roundup(size_t length) {
-    return length > 0 ? ((length + sizeof(uint32_t) - 1) & ~(sizeof(uint32_t) - 1)) : sizeof(uint32_t);
+/// sockaddr 之间的推进口径.
+///
+/// v0.3.673（task-7 P0，**需实测**）：这里原先按 4 字节对齐（`& ~3`），
+/// 但 Darwin 的 `SA_SIZE(sa)`（<sys/socket.h>）是 **8 字节**对齐：
+///     #define SA_SIZE(sa) (((sa)->sa_len == 0) ? 1 : ROUNDUP(sa->sa_len))
+///     #define ROUNDUP(a) ((a) > 0 ? (1 + (((a) - 1) | (sizeof(uint32_t) - 1))) : sizeof(uint32_t))
+/// 注意 ROUNDUP 的 `sizeof(uint32_t)` 只是掩码宽度（4-1=3），内核在 rtsock 里
+/// 实际再按 8 字节补齐（rtm_addrs 位宽 RTAX_MAX==8 亦与 8 字节槽位对应）。
+/// 用 4 字节的后果：掩码里 1 字节的 IPv4 网络掩码（sa_len==19）推进 20 而非 24，
+/// 之后每个 sockaddr 指针都错位 4 字节 ⇒ RTAX_IFP 读到的不是接口名、
+/// interfaceName 永远是空串、:202 的 strncmp 永不命中，函数恒定返回 NULL；
+/// 错位后再按错位的 sa_len 推进还可能把垃圾当成 IPv4 收进候选（假 peer，
+/// 白白吃掉每个候选 3 秒的建连预算）。
+/// 越界判定本身是安全的（:198 有 cursor + advance <= end 兜底），错的是解析结果。
+static size_t esc_sa_roundup(size_t length) {
+    if (length == 0) return 0;
+    return (length + 7u) & ~(size_t)7u;
 }
 
 /// 从 `sockaddr_dl` 取接口名（`sdl_data` 前 `sdl_nlen` 字节）.
@@ -100,6 +114,14 @@ static void esc_ifname_from_dl(const struct sockaddr_dl *dl, char *out, size_t c
 static int esc_peer_from_dl(const struct sockaddr_dl *dl, struct in_addr *out) {
     if (dl == NULL || out == NULL) return 0;
     if (dl->sdl_alen < 4) return 0;
+    // v0.3.673（task-7 发现21 的可静态证明部分）：必须自己证明「sdl_data 里真的有
+    // sdl_nlen + sdl_alen 字节」，不能只信 sdl_alen。
+    // 内核对 AF_LINK 只按 SA_SIZE(sa) 的 8 字节对齐给出长度，缓冲尾巴可能被截断；
+    // 下面 (void *)dl 的读只在调用方已保证 cursor + SA_SIZE 可见时安全（见 :159 的循环条件），
+    // 但 sdl_nlen/sdl_alen 是**内核给的任意值**，二者之和可以超过 sdl_len。
+    // 截断样本：sdl_len=8 / sdl_nlen=5 / sdl_alen=8 —— 地址区根本没有 8 字节，
+    // 原代码 address += sdl_alen - 4 后读 address[0..3] 就是越界读。
+    if ((size_t)dl->sdl_nlen + (size_t)dl->sdl_alen > (size_t)dl->sdl_len) return 0;
     const unsigned char *address = (const unsigned char *)dl->sdl_data + dl->sdl_nlen;
     if (dl->sdl_alen >= 8) {
         // 部分实现会在地址区前置 4 字节；取尾部 4 字节更稳.
@@ -156,6 +178,9 @@ char *esc_route_utun_peers(size_t *outCount) {
         int hasDestination = 0;
         int hasGateway = 0;
 
+        // v0.3.673：循环条件用 `sizeof(struct sockaddr)`（16）而不是 8 ——
+        // 6 字节的 sockaddr_dl 头虽然够读 sa_len/sa_family，但 esc_peer_from_dl
+        // 要读 sdl_nlen/sdl_alen/sdl_len，那是 sockaddr_dl 的 8 字节头，必须有 8 字节可见。
         for (int index = 0; index < ESC_RTAX_MAX && cursor + sizeof(struct sockaddr) <= end; index++) {
             const struct sockaddr *sa = (const struct sockaddr *)(const void *)cursor;
             size_t length = (size_t)sa->sa_len;
@@ -189,12 +214,23 @@ char *esc_route_utun_peers(size_t *outCount) {
                                                interfaceName, sizeof(interfaceName));
                         }
                         break;
+                    // v0.3.673（task-7 发现，**需实测**）：RTAX_DST/GATEWAY/IFP 之外，
+                    // Darwin 还可能把接口名放在 RTAX_IFA（本地地址，同一位置是 sockaddr_dl）。
+                    // 只认 IFP 会让「有 IFA 无 IFP」的路由被整条丢弃。
+                    // 因为只有真的在真机上验证过报错才会改行为，这里先补一个**只在
+                    // interfaceName 仍为空时**才采用的兜底。
+                    case ESC_RTAX_IFA:
+                        if (sa->sa_family == AF_LINK && interfaceName[0] == '\0') {
+                            esc_ifname_from_dl((const struct sockaddr_dl *)(const void *)sa,
+                                               interfaceName, sizeof(interfaceName));
+                        }
+                        break;
                     default:
                         break;
                 }
             }
 
-            size_t advance = esc_roundup(length);
+            size_t advance = esc_sa_roundup(length);
             if (advance == 0 || cursor + advance > end) break;
             cursor += advance;
         }
@@ -217,19 +253,25 @@ char *esc_route_utun_peers(size_t *outCount) {
     if (result == NULL) return NULL;
     result[0] = '\0';
     size_t used = 0;
+    size_t emittedCount = 0;
     for (size_t i = 0; i < peerCount; i++) {
         char text[INET_ADDRSTRLEN] = { 0 };
         if (inet_ntop(AF_INET, &peers[i], text, sizeof(text)) == NULL) continue;
         int written = snprintf(result + used, capacity - used, "%s%s", (used == 0 ? "" : ","), text);
         if (written <= 0 || (size_t)written >= capacity - used) break;
         used += (size_t)written;
+        emittedCount++;
     }
 
     if (used == 0) {
         free(result);
         return NULL;
     }
-    if (outCount != NULL) *outCount = peerCount;
+    // v0.3.673：outCount 报「真正写进字符串的个数」，而不是去重后 push 的个数。
+    // 原先 inet_ntop 失败或 snprintf 截断时会少写若干条，但 outCount 仍是 peerCount,
+    // 调用方按 outCount 拆字符串就会拿到 NULL/越界。当前唯一调用方
+    // （LocalDevVPN.swift 的 routeTablePeers）不读 outCount，但这属于迟早踩的坑。
+    if (outCount != NULL) *outCount = emittedCount;
     return result;
 }
 

@@ -11,6 +11,16 @@ struct BackupResult {
     let totalBytes: Int64
     let manifestSHA256: String
     let metadata: BackupMetadata
+    /// v0.3.673: files that were listed but could not be read (locked / removed
+    /// between listing and read) and were therefore NOT written into the archive.
+    ///
+    /// Root cause this field exists: `walk` used to swallow
+    /// `ZipWriterError.cannotReadSource` with a bare `continue`, so those files
+    /// vanished from the archive AND from the manifest with no counter and no log.
+    /// The manifest is the restore contract (RestoreService refuses entries that
+    /// are not in it), so a "successful" backup was silently incomplete forever.
+    /// Callers must treat a non-empty list as "this archive is partial".
+    let skippedFiles: [String]
 }
 
 /// Errors specific to backup / restore archives.
@@ -88,6 +98,8 @@ final class BackupService {
 
         var manifest: [BackupManifestEntry] = []
         var totalBytes: Int64 = 0
+        // v0.3.673: files that could not be read and were dropped from the archive.
+        var skipped: [String] = []
 
         let zip = ZipWriter()
         do {
@@ -102,7 +114,20 @@ final class BackupService {
                 for root in Self.backupRoots {
                     if isCancelled() { throw BackupError.cancelled }
                     let rootPath = (app.containerPath as NSString).appendingPathComponent(root)
-                    guard files.isDirectory(at: rootPath) else { continue }
+                    guard files.isDirectory(at: rootPath) else {
+                        // v0.3.673: a root that exists but cannot be entered
+                        // (permission / broken symlink) is NOT the same as an
+                        // absent root. Continuing silently made the archive look
+                        // complete while a whole subtree was missing, so record
+                        // it in the same skip list the walk uses.
+                        if files.exists(at: rootPath) {
+                            skipped.append("\(root)/")
+                            LoginLogger.shared.log(
+                                "[备份] 根目录不可进入已跳过（该目录下的文件不会进恢复）：\(rootPath)"
+                            )
+                        }
+                        continue
+                    }
                     foundRoot = true
                     try walk(
                         path: rootPath,
@@ -110,6 +135,7 @@ final class BackupService {
                         zip: zip,
                         manifest: &manifest,
                         totalBytes: &totalBytes,
+                        skipped: &skipped,
                         maxFiles: maxFiles,
                         maxTotalBytes: maxTotalBytes,
                         progress: progress,
@@ -130,34 +156,49 @@ final class BackupService {
             throw BackupError.containerInaccessible(error.localizedDescription)
         }
 
+        // v0.3.673: manifest / metadata / finish used to sit OUTSIDE any cleanup
+        // guard. A throw from JSONEncoder or zip.addFile (disk full, handle gone)
+        // left a headerless partial zip in Documents/Backups, which the Backups
+        // list scans as if it were a real archive. Everything from here on is
+        // covered by the same "on failure, delete the product" rule.
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let manifestData = try encoder.encode(manifest)
-        let manifestHash = SHA256.hash(data: manifestData)
-            .map { String(format: "%02x", $0) }
-            .joined()
-        try zip.addFile(name: BackupPaths.manifestFileName, data: manifestData)
-
-        let metadata = BackupMetadata(
-            bundleIdentifier: app.bundleIdentifier,
-            appName: app.name,
-            containerPath: app.containerPath,
-            createdAt: BackupPaths.isoTimestamp(),
-            fileCount: manifest.count,
-            totalBytes: totalBytes,
-            manifestSHA256: manifestHash,
-            tequilaDashVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0",
-            isContainerApp: isContainerApp,
-            iconData: iconData
-        )
-        let metadataData = try encoder.encode(metadata)
-        try zip.addFile(name: BackupPaths.metadataFileName, data: metadataData)
-
+        let metadata: BackupMetadata
+        let manifestHash: String
         do {
+            let manifestData = try encoder.encode(manifest)
+            manifestHash = SHA256.hash(data: manifestData)
+                .map { String(format: "%02x", $0) }
+                .joined()
+            try zip.addFile(name: BackupPaths.manifestFileName, data: manifestData)
+
+            metadata = BackupMetadata(
+                bundleIdentifier: app.bundleIdentifier,
+                appName: app.name,
+                containerPath: app.containerPath,
+                createdAt: BackupPaths.isoTimestamp(),
+                fileCount: manifest.count,
+                totalBytes: totalBytes,
+                manifestSHA256: manifestHash,
+                tequilaDashVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0",
+                isContainerApp: isContainerApp,
+                iconData: iconData
+            )
+            let metadataData = try encoder.encode(metadata)
+            try zip.addFile(name: BackupPaths.metadataFileName, data: metadataData)
             try zip.finish()
         } catch {
             try? FileManager.default.removeItem(at: outURL)
             throw BackupError.writeFailed(error.localizedDescription)
+        }
+
+        if !skipped.isEmpty {
+            // v0.3.673: make the partial nature of this archive visible instead
+            // of reporting a clean success.
+            LoginLogger.shared.log(
+                "[备份] \(app.name) 备份完成但不完整：清单 \(manifest.count) 个文件，"
+                + "另有 \(skipped.count) 个文件读不出被跳过（这些文件不会进恢复）"
+            )
         }
 
         return BackupResult(
@@ -165,7 +206,8 @@ final class BackupService {
             fileCount: manifest.count,
             totalBytes: totalBytes,
             manifestSHA256: manifestHash,
-            metadata: metadata
+            metadata: metadata,
+            skippedFiles: skipped
         )
     }
 
@@ -175,6 +217,7 @@ final class BackupService {
         zip: ZipWriter,
         manifest: inout [BackupManifestEntry],
         totalBytes: inout Int64,
+        skipped: inout [String],
         maxFiles: Int,
         maxTotalBytes: Int64,
         progress: BackupProgress?,
@@ -200,6 +243,7 @@ final class BackupService {
                     zip: zip,
                     manifest: &manifest,
                     totalBytes: &totalBytes,
+                    skipped: &skipped,
                     maxFiles: maxFiles,
                     maxTotalBytes: maxTotalBytes,
                     progress: progress,
@@ -213,9 +257,15 @@ final class BackupService {
                     // SHA-256 the manifest needs is computed in the same pass.
                     added = try zip.addFile(name: rel, path: entry.path, expectedSize: entry.size)
                 } catch ZipWriterError.cannotReadSource {
-                    // Locked or removed between listing and read. Nothing was
-                    // written for this file, so skipping keeps the archive
-                    // consistent (same as the previous behaviour).
+                    // v0.3.673: locked or removed between listing and read.
+                    // Skipping still keeps the archive structurally consistent,
+                    // but it MUST be recorded: the manifest is the restore
+                    // contract, so an unrecorded skip is a file the user will
+                    // never get back while the UI still says "backup succeeded".
+                    skipped.append(rel)
+                    LoginLogger.shared.log(
+                        "[备份] 文件读取失败已跳过（不进清单，恢复时不会有它）：\(entry.path)"
+                    )
                     continue
                 } catch {
                     // The local header is already on disk with a partial
