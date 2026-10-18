@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.680] - 2026-10-19
+
+### 第三个超大视图文件拆分（GestaltView 1086 → 629）
+
+- `TequilaDash/Views/GestaltView.swift` 1086 行 → **629 行**，12 个顶层声明按职责拆成三个新文件：
+  `GestaltModels.swift`（84 行：`PlistSection` / `PlistKey` / `FieldEditorRoute` / `AddFieldError` /
+  `GestaltValueType` / `PlistValueInfo`）、`GestaltEditors.swift`（348 行：`AdvancedGestaltEditor` /
+  `ValueEditor` / `AddCacheExtraFieldEditor`）、`GestaltComponents.swift`（71 行：`MGToggle` / `KeySection`）.
+  主文件只留 `struct GestaltView: View` 本体（body / editPane / backupPane / shareBackup /
+  mhaStatusSection / loadedSections / warningRow），行号 1:1 未变.
+- 保真口径比 v0.3.679 更强：**修饰符改动 0 个**。12 个顶层声明原本就无 `private` 前缀，
+  44 处 `private` 全在 struct 内部、类型整体搬迁后作用域不变；`fileprivate` 拆分前后都是 0 处.
+  以 `git show HEAD:` 取原文按七块逐行 `===` 比对，全部 byte-exact；未归属行只有块间分隔空行
+  `[630,651,720,852,886,1007]`，重复归属 0.
+- 逐行覆盖复核：把 HEAD 的 1086 行全部与四个文件做子串归属，**未被任何文件覆盖的行数 = 0**.
+- `import UIKit` 刻意不加：`MGToggle.currentVersion()` 用 `UIDevice`，原文件只靠 `import SwiftUI`
+  传递可见；同 target 的 `ConfigurationsView.swift` / `Supervised/RestrictionTweaksView.swift` /
+  `Wallpaper/WallpaperView.swift` 也都是 SwiftUI-only 直接用 `UIDevice`，三处均无 `import UIKit`
+  却编译通过 ⇒ 保持 import 与原文件完全一致.
+- 文件头 `//  bad_query` 这一行是工程模板的 target 名（全仓 31 个文件都有），三个新文件同样保留.
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` → EXIT 0.
+- `python Resources/Scripts/swift_precommit_check.py .` → EXIT 0，15 组守卫全过（扫 300 个 .swift）.
+- WSL `/usr/bin/swiftc -parse` → 四个文件 PASS，`FAIL_TOTAL=0`.
+- 本机 `-parse` 只查语法：类型错 / 实参标签顺序 / 缺 `return` / Swift 6 `@MainActor` 隔离 /
+  跨类型引用不存在的成员一律查不出，只有 CI 真编译能抓 —— 故本次提交后以 CI 判决为准.
+
 ## [0.3.679] - 2026-10-19
 
 ### 视图文件拆分（纯搬迁，零逻辑改动）
