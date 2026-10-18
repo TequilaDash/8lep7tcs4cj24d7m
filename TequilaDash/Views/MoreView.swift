@@ -159,6 +159,10 @@ struct MoreView: View {
                 MoreItem("crash-logs", "chart.bar.doc.horizontal", "崩溃分析",
                          "崩溃日志分析",
                          CrashLogView()),
+                // 独立板块：只读「隧道蜂窝」一类日志，不与崩溃分析 / 业务日志混在一起
+                MoreItem("tunnel-log", "dot.radiowaves.left.and.right", "隧道日志",
+                         "建连 / 心跳 / 蜂窝快捷指令",
+                         TunnelLogView()),
                 MoreItem("configurations", "checklist", "配置管理",
                          "系统配置管理",
                          ConfigurationsView()),
