@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.3.675] - 2026-10-18
+
+> **一句话**：修 v0.3.673 引入的第 4 处编译错（`DeviceSlimService.clean` 少一个 `return`）。
+> 这一版只动一行代码，引擎、隧道、界面行为零变化。
+
+### 一、CI run 39139842642 红（v0.3.674 之后仍红）
+
+`xcode-build` 在 step 26 `Build (compile/link, no Apple signing)` 报：
+
+```
+TequilaDash/Engine/DeviceSlimService.swift:974:5: error: missing return in static method
+    expected to return 'DeviceSlimService.CleanResult'
+```
+
+v0.3.673 给 `clean(items:progress:)` 加「作废缓存要留痕」时，把
+`invalidateSnapshot(reason: "清理完成")` 追加在函数末尾，**漏掉了本该在它前面的 `return result`**。
+Swift 允许函数体最后一条是表达式（隐式返回），但 `invalidateSnapshot` 返回 `Void`，
+于是整个函数被判成「没有返回值」而不是「返回了 Void」。
+
+### 二、改法
+
+`TequilaDash/Engine/DeviceSlimService.swift:974-976`：
+
+```swift
+        invalidateSnapshot(reason: "清理完成")
+        // v0.3.675：`clean` 返回 `CleanResult`，上面两行只是副作用调用 —— 少 `return` 时
+        // swiftc 报 missing return ...（CI run 39139842642 实测）.
+        return result
+```
+
+### 三、为什么本机没查出来
+
+`swiftc -parse` 只做语法分析，**不做函数体返回值完备性检查**（那属于语义分析）。
+这条错误只有真编译能抓。同类风险面：本次 `bf9fa1b` 改了 17 个 Swift 文件，
+已用启发式扫过全部非 Void 返回的函数尾部，其余 28 处末句都是隐式返回的表达式，
+只有这一处是真缺 `return`。
+
+### 四、验证
+
+- `swiftc -parse TequilaDash/Engine/DeviceSlimService.swift` EXIT=0
+- 全文件括号平衡 depth=0
+- `python Resources/Scripts/normalize_eol.py` EXIT=0
+- `python Resources/Scripts/swift_precommit_check.py .` EXIT=0（15 个 guard 全过）
+- CI：待本轮 dispatch 判决
+
 ## [0.3.674] - 2026-10-18
 
 > **一句话**：修 v0.3.673 引入的 3 处编译错（全部在 RootView.swift）。这一版只动界面层的

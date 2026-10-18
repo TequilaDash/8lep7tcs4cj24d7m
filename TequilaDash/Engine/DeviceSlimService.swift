@@ -971,6 +971,9 @@ enum DeviceSlimService {
         // v0.3.673：**作废失败要留痕**. 旧写法 `try?` 吞掉失败，缓存文件仍在，
         // 下次进页面（10 分钟内）又把刚删掉的项原样列出来 —— 用户以为删除没生效.
         invalidateSnapshot(reason: "清理完成")
+        // v0.3.675：`clean` 返回 `CleanResult`，上面两行只是副作用调用 —— 少 `return` 时
+        // swiftc 报 `missing return in static method expected to return 'DeviceSlimService.CleanResult'`（CI run 39139842642 实测）.
+        return result
     }
 
     // MARK: - 重装（较大应用）
