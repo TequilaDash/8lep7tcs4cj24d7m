@@ -117,7 +117,7 @@ private enum NiuwaCrypto {
         let ciphertext = Data(blob.prefix(blob.count - 16))
         let tag = Data(blob.suffix(16))
         let tailN = n                       // 响应尾部那串数字
-        let t = requestT                     // **本次请求**发出去的 T（由调用方传入）
+        // v0.3.665：形参内部名就是 `t`，这里原来写 `let t = requestT` 会报 cannot find 'requestT' in scope
         // ▸▸ 候选 N，按证据强度排序：
         // ① `尾部 + T` —— 反汇编证据 `add x21, x0, x24`（x0=尾部、x24=timeSlide 参数=我们发的 T）；
         // ② `尾部`     —— T=0 的老路径（早期那个 92 字样本就是这种，所以它能解开）；
@@ -836,8 +836,20 @@ enum NiuwaStoreClient {
         // 之前这里和搜索**共用「找数组」的解析** → 永远命中不了 → 用户看到「获取不了」。
         if let body = obj["body"] as? [String: Any],
            let ipa = string(body["ba_ipaURL"]), !ipa.isEmpty {
-            let sinfB64 = string(body["ba_sinfs"])
-            log.log("\(logTag) [完成] 下载接口返回直链（sinf \(sinfB64?.count ?? 0) 字符）（region=\(shape)）",
+            // v0.3.664：**校验后再往下传**。
+            //
+            // 原来这里 `string(body["ba_sinfs"])` 原样透传，等于把「服务端说了什么」直接
+            // 当成「我们能用的 sinf」交给下一条安装链。牛蛙这一路的历史样本是真 sinf
+            // （1032 字节、头 `00 00 04 08`，见上面 `sinfBase64` 字段的注释），但代码从未验证过；
+            // 服务端改个字段语义、或换了一种包装，我们会毫无察觉地把它写进包里，
+            // 症状要到 installd 报解密失败才看得见。
+            //
+            // 判据复用 `PackageSINFWriter.sinfStructure` 那**唯一一套**三态结构判定，
+            // 不在这里另立一套魔数（见 `validatedSinfBase64`）。
+            let sinfB64 = validatedSinfBase64(string(body["ba_sinfs"]),
+                                                 appID: string(body["bundleid"]) ?? "-")
+            log.log("\(logTag) [完成] 下载接口返回直链（sinf \(sinfB64?.count ?? 0) 字符，已过形态校验）"
+                    + "（region=\(shape)）",
                     category: .appStore)
             return [NiuwaApp(appId: string(body["app_id"]),
                              bundleId: string(body["bundleid"]) ?? "",
@@ -980,5 +992,56 @@ enum NiuwaStoreClient {
         }
         if let n = v as? NSNumber { return n.stringValue }
         return nil
+    }
+
+    /// 校验牛蛙给的 `ba_sinfs` 真的是**sinf 容器**，通过则原样返回 base64，否则返回 nil 并明确报错。
+    ///
+    /// ## 为什么这里不自己写魔数判断
+    ///
+    /// 判据只有**一处**：`PackageSINFWriter.sinfStructure(_:)`（定义在 `IPADownloadCenter.swift`）。
+    /// 它认两种合法形态，而且三态（valid / invalid / unrecognized）——
+    /// v0.3.565 曾因为「只认一种格式」误杀过合法的 SuperBlob 形态，v0.3.570 才改成三态。
+    /// 如果这里再抄一份魔数，两处判据迟早分叉：一边放行、另一边拒绝，症状极难定位。
+    ///
+    /// ## 为什么必须在这里拦，而不是只靠写包时拦
+    ///
+    /// `IPADownloadCenter.writeIfNeeded` 失败时**只记日志、静默跳过写入**（包内原有 sinf 保留）。
+    /// 对牛蛙这一路来说，那意味着「用户拿到一个装不上的包，但界面上什么异常都没有」。
+    /// 在产出侧拦一刀，至少能让日志里出现「哪一层、哪个 app、为什么不合格」。
+    private static func validatedSinfBase64(_ raw: String?, appID: String) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        guard let data = Data(base64Encoded: raw, options: [.ignoreUnknownCharacters]) else {
+            LoginLogger.shared.log("\(logTag) [失败] sinf 形态校验未通过｜层=\(downloadPath).body.ba_sinfs"
+                             + "｜appID=\(appID)：**不是合法 base64**（\(raw.count) 字符，开头 \(String(raw.prefix(24)))）",
+                    category: .appStore)
+            return nil
+        }
+        // `PackageSINFWriter` 是**顶层** enum（IPADownloadCenter.swift:1323 缩进为 0），
+        // 不是 `IPADownloadCenter` 的嵌套类型 —— 加前缀会编译失败。
+        switch PackageSINFWriter.sinfStructure(data) {
+        case .valid:
+            return raw
+        case .invalid:
+            // 头 4 字节是**大端长度**，打出来最能说明「长度字段与实际长度对不上」。
+            let declared = data.count >= 4
+                ? data.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
+                : -1
+            LoginLogger.shared.log("\(logTag) [失败] sinf 形态校验未通过｜层=\(downloadPath).body.ba_sinfs"
+                             + "｜appID=\(appID)：**结构不合法**（\(data.count) 字节，"
+                    + "头声明长度 \(declared)，开头 \(data.prefix(8).map { String(format: "%02x", $0) }.joined())）"
+                    + " —— 这份 sinf 不会写进包内",
+                    category: .appStore)
+            return nil
+        case .unrecognized:
+            // ⚠️「不认识」≠「坏」。放行风险是写出坏包，拒绝风险是丢掉一份可能合法的 sinf ——
+            // 这里选择**放行**并大声记日志：包内原有的 sinf 仍在，写入了坏字节也比用户
+            // 完全拿不到包强；而日志能让人回头补判据。
+            LoginLogger.shared.log("\(logTag) [注意] sinf **格式不认识**｜层=\(downloadPath).body.ba_sinfs"
+                             + "｜appID=\(appID)（\(data.count) 字节，"
+                    + "开头 \(data.prefix(8).map { String(format: "%02x", $0) }.joined())）"
+                    + " —— 未知形态不等于坏，本次**放行**，但需人工取一份样本补判据",
+                    category: .appStore)
+            return raw
+        }
     }
 }

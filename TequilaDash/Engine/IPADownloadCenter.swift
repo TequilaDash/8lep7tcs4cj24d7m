@@ -1345,7 +1345,7 @@ enum PackageSINFWriter {
             // 以前这句写成「包内不会带 sinf」，会让人以为包被写坏了，真机上就出现过这个误读。
             let head = raw.count >= 16 ? String(raw.prefix(16)) : raw
             log("sinf 载荷解不出合法结构（\(raw.count) 字符，开头 \(head)）——"
-                + " base64 与 hex 两种解法的结果都不像 sinf（既非「长度+sinf+TLV」也非 SuperBlob）。"
+                + " base64 与 hex 两种解法的结果都不像 sinf（既非「长度+sinf+TLV」也非 SuperBlob)."
                 + "本次跳过写入，包内原有的 sinf 会保留")
             return
         }
@@ -1738,7 +1738,12 @@ enum PackageSINFWriter {
         var i = cleaned.startIndex
         while i < cleaned.endIndex {
             let j = cleaned.index(i, offsetBy: 2)
-            guard let v = UInt8(cleaned[i..<j], radix: 16) else { return nil }
+            // v0.3.664：不能只靠 `UInt8(_:radix:16)` 判非法 —— 它对**空串**返回 `Optional(0)`
+            // 而不是 nil，所以 `"_"` / `"__"` 这类占位符会被静默解成 0x00，产出一份「非 nil 的垃圾」。
+            // 与 `NBStoreClient.hexByte` 同一处修正（那边修的是同一个 bug 的另一个副本）。
+            let pair = cleaned[i..<j]
+            guard pair.count == 2, pair.allSatisfy({ $0.isHexDigit }),
+                  let v = UInt8(pair, radix: 16) else { return nil }
             bytes.append(v)
             i = j
         }

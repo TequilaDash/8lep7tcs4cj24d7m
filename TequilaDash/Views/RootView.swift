@@ -328,7 +328,7 @@ struct SettingsForm: View {
             // 而 v0.3.647 起蜂窝下**确实**会去跑快捷指令（照 SideStore），
             // 只是没建指令时会先拦下来引导创建，不再硬跳。
             Section(header: Text("Cellular隧道支持"),
-                    footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复）。iOS 不允许第三方代建快捷指令，故需你手动创建一次；创建后会记住，不再提示。")) {
+                    footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复).iOS 不允许第三方代建快捷指令，故需你手动创建一次；创建后会记住，不再提示.")) {
                 Toggle("Cellular隧道支持", isOn: $cellularTunnelSupport)
 
                 // 已开开关但快捷指令未建 ⇒ 给出创建入口

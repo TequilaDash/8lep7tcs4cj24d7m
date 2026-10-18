@@ -33,9 +33,9 @@ struct CellularShortcutGuideView: View {
                 InfoActionCard(
                     icon: "bolt.badge.plus",
                     title: "创建两个快捷指令",
-                    message: "蜂窝网络下，iOS 会限制回环 VPN 访问本机服务，所以要先临时关掉蜂窝数据。"
+                    message: "蜂窝网络下，iOS 会限制回环 VPN 访问本机服务，所以要先临时关掉蜂窝数据."
                         + "用快捷指令 App 里的「设定蜂窝数据」动作（开关蜂窝号码同效），"
-                        + "Apple 不允许第三方代建，所以下面两步要你手动做一次，之后永久生效。"
+                        + "Apple 不允许第三方代建，所以下面两步要你手动做一次，之后永久生效."
                 )
             }
 
@@ -51,8 +51,8 @@ struct CellularShortcutGuideView: View {
             } header: {
                 Text("需要创建")
             } footer: {
-                Text("名称必须完全一致（区分大小写）—— 引擎按名字调用，写错就会提示「未找到快捷指令」。"
-                     + "iOS 不允许第三方代建快捷指令，所以这一步必须你手动做；建好后点下面的「我已创建」记住，不会再提示。")
+                Text("名称必须完全一致（区分大小写）—— 引擎按名字调用，写错就会提示「未找到快捷指令」."
+                     + "iOS 不允许第三方代建快捷指令，所以这一步必须你手动做；建好后点下面的「我已创建」记住，不会再提示.")
             }
 
             Section {
@@ -65,8 +65,8 @@ struct CellularShortcutGuideView: View {
             } header: {
                 Text("一键跳转")
             } footer: {
-                Text("会跳到系统「快捷指令」App 的新建页（Apple 不允许静默创建）。"
-                     + "新建时添加「设定蜂窝数据」动作，再把指令命名为上面给出的名字。")
+                Text("会跳到系统「快捷指令」App 的新建页（Apple 不允许静默创建)."
+                     + "新建时添加「设定蜂窝数据」动作，再把指令命名为上面给出的名字.")
             }
 
             Section {
@@ -82,8 +82,8 @@ struct CellularShortcutGuideView: View {
             } header: {
                 Text("完成后")
             } footer: {
-                Text("点过后引擎就不再拦截跳转；若其实没建，建隧道时仍会跳过关蜂窝并如实记录日志。"
-                     + "如需重置提示，到「设置 → Cellular隧道支持」关掉再打开即可。")
+                Text("点过后引擎就不再拦截跳转；若其实没建，建隧道时仍会跳过关蜂窝并如实记录日志."
+                     + "如需重置提示，到「设置 → Cellular隧道支持」关掉再打开即可.")
             }
         }
         .listStyle(.insetGrouped)

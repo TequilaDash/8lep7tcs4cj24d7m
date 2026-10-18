@@ -446,7 +446,18 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 签名 IPA，返回签名后的 .app 包路径.
     func signIPA(ipaPath: String) throws -> String {
         guard let session else { throw makeError("尚未登录 Apple ID") }
-        let udid = deviceUDID ?? ""
+        // v0.3.662（task-8 发现7）：**配对文件缺 UDID 时直接报错，不再静默传空串**.
+        //
+        // 旧写法 `deviceUDID ?? ""` 把一个本地可判定的前置条件失败降级成「参数为空」，
+        // 交给 Rust 侧 sign_app 处理 —— 它拿到空 udid 会**跳过设备注册**，然后在签名/校验
+        // 阶段以 Apple 的 8220（no devices 相关）报错。用户看到的是一个无法理解的
+        // 服务端码，而不是「你的配对文件里没有 UDID」.
+        //
+        // createTunnel 已经有「配对文件不存在」的检查，但那是另一条路径；signIPA 自己也要拦.
+        guard let udid = deviceUDID, !udid.isEmpty else {
+            throw makeError("配对文件里没有设备 UDID（identifier 为空）."
+                + "请到「更多 → 配对文件导入」重新导入与当前设备匹配的配对文件.")
+        }
         var signed: UnsafeMutablePointer<CChar>?
         var error: UnsafeMutablePointer<CChar>?
         let rc = ipaPath.withCString { ipa in
@@ -475,6 +486,22 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 通过 AFC 上传签名后的 .app 到 /PublicStaging 并用 installation_proxy 安装.
     /// `progress` 在主线程回调（0~1）.
     func install(signedAppPath: String, progress: ((Double) -> Void)? = nil) throws {
+        // v0.3.662（task-8 发现6）：**安装前先校验内嵌描述文件与 App 是否匹配**.
+        //
+        // 旧实现在这里只有一句注释说"没有 PackageType 会报 0xe8008015"，但对
+        // `.app/embedded.mobileprovision` 的 entitlements 与 `.app` 的 bundleId
+        // **零校验**。描述文件与 App 不匹配（换了签名证书 / 描述文件过期 / AppID 对不上）时，
+        // 错误要等到 installd 的 VerifyingApplication 阶段才以 0xe8008015 冒出来，
+        // 用户完全不知道是描述文件的问题，只会反复重试.
+        //
+        // 仓库里早就有解析能力：`ProvisioningProfileStore.parseProfile(_:)`（:302）能把
+        // CMS 签名的 .mobileprovision 取成 plist，`ProfileInfo` 带 appId 与 entitlements
+        // （:18/:20），之前一直没接进安装链。这里做**只读校验**，不改包内容：
+        //   · 描述文件缺失 → 提示（不阻断：某些已签名包把描述文件放在别处，
+        //     Developer 类型也可能靠 installd 自己找）
+        //   · 描述文件存在但 application-identifier 与 bundleId 不匹配 → **阻断并说清原因**
+        try Self.preflightProfileCheck(appPath: signedAppPath)
+
         var tunnel = try createTunnel()
         defer { tunnel.free() }
         guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
@@ -490,7 +517,30 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
         let name = (signedAppPath as NSString).lastPathComponent
         let remoteRoot = "/PublicStaging/\(name)"
-        try uploadDirectory(afc, localDir: signedAppPath, remoteDir: remoteRoot)
+        // v0.3.662（task-8 发现2）：**上传前先清同名残留**.
+        //
+        // 本文件 installSignedIPA(:626) / installWithSINF(:698) / upgradeSignedIPA(:780) 三处
+        // 都做了「remove 再 copy」，唯独这条（签名后 .app 目录上传）没做。后果不是幂等性差而已：
+        // `uploadDirectory` 是**按文件逐个覆盖写**的，旧残留目录里若存在新包**没有**的文件
+        // （上一次签名产物多出来的资源、旧的 _CodeSignature 条目），它们会被原样保留，
+        // installd 校验时就可能报签名不匹配 —— 用一个「看起来完全一样」的新包装出旧错误.
+        _ = remoteRoot.withCString { afc_remove_path_and_contents(afc, $0) }
+        // v0.3.662（task-8 发现1）：上传段也回报进度，并按 75/25 加权.
+        //
+        // 旧代码把上传当成完全静默的一段：`uploadDirectory` 根本不接受 progress，
+        // 界面在动辄几百 MB 的上传期一直停在 0%，然后安装段一开始就跳到 75%+ ——
+        // 用户会以为「进度条坏了 / 卡住了」.
+        //
+        // `uploadDirectory` 内部是逐文件的，没有全局字节预算，所以这里只能给出
+        // 「已完成文件数 / 总文件数」这一层级的上报（比 0 强，且不撒谎：它确实在涨）.
+        let totalEntries = Self.countEntries(atPath: signedAppPath)
+        var uploadedEntries = 0
+        try uploadDirectory(afc, localDir: signedAppPath, remoteDir: remoteRoot) { _ in
+            uploadedEntries += 1
+            guard totalEntries > 0 else { return }
+            let frac = Double(uploadedEntries) / Double(totalEntries)
+            progress?(Self.uploadWeight * min(1, max(0, frac)))
+        }
 
         var ip: OpaquePointer?
         if let ffiError = installation_proxy_connect_rsd(adapter, handshake, &ip) {
@@ -515,7 +565,14 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 IPAInstallService.shared.installProgressHandler?(progress)
             }
         }
-        installProgressHandler = progress
+        // v0.3.662（task-8 发现1）：**安装段也要加权**.
+        // 旧写法 `installProgressHandler = progress` 把调用方闭包直接塞进槽位，
+        // installd 第一次回报 1% 时进度条就显示 1%，而不是 75% + 25%×1% —— 与同文件
+        // installSignedIPA(:646-648) / installWithSINF(:724-726) 的口径不一致，
+        // 表现为「上传走完 0% → 安装开始突然从头再数」.
+        installProgressHandler = { p in
+            progress?(Self.uploadWeight + (1 - Self.uploadWeight) * min(1, max(0, p)))
+        }
 
         let installErr = remoteRoot.withCString { p in
             installation_proxy_install_with_callback(ip, p, options, progressCallback, nil)
@@ -588,6 +645,18 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 IPAInstallService.shared.installProgressHandler?(current)
             }
         }
+
+        // v0.3.662（task-8 发现9）：**装完（无论成败）都把上传物从设备上删掉**.
+        //
+        // 旧实现把 .ipcc 传到 `/PublicStaging/` 之后再不清理，成功失败都不删 —— 每次
+        // 更新运营商包都在设备上留一份。同一个目录里其他安装入口（installSignedIPA /
+        // installWithSINF / upgradeSignedIPA）也都只清「下一次的同名残留」，靠下次同名
+        // 覆盖来回收，文件名一变（带版本号的 .ipcc 很常见）就永久留下。
+        //
+        // 用 defer 而不是在成功路径删：失败时同样要清，否则失败重试几次会攒出多份.
+        // 删除必须发生在 installd 读完包之后，所以放在 install 调用结束（defer 在本函数
+        // 返回时执行，安装调用是同步的，此时 boost 已完成读取/已受理）.
+        defer { _ = remotePath.withCString { afc_remove_path_and_contents(afc, $0) } }
 
         step("发送 Install 命令（PackagePath=\(remotePath)）…")
         let installErr = remotePath.withCString { p in
@@ -828,8 +897,89 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     private static let uploadWeight = 0.75
 
     /// 递归上传目录（映射读，避免大二进制撑爆内存）.
-    private func uploadDirectory(_ afc: OpaquePointer, localDir: String, remoteDir: String) throws {
-        _ = remoteDir.withCString { afc_make_directory(afc, $0) }
+    /// v0.3.662（task-8 发现6）：安装前校验 `.app/embedded.mobileprovision` 与 App 的 bundleId 是否匹配.
+    ///
+    /// 只读，不改包。返回规则：
+    /// - 没有 Info.plist / 读不到 bundleId → 无法判断，放行（交给 installd 报真实错误）；
+    /// - 没有 embedded.mobileprovision → 放行（部分已签名包不带，installd 另有路径）；
+    /// - 有描述文件但解析不出 plist → 放行（解析失败不等于不匹配，不能误杀）；
+    /// - 有描述文件且 application-identifier 与 bundleId 明显不匹配 → **抛出**，并说明原因。
+    ///
+    /// 为什么"明显不匹配"要谨慎判定：`application-identifier` 形如
+    /// `TEAMID.com.example.app`，先去掉第一个点前的 TeamID，再与 bundleId 比后缀，
+    /// 允许通配（`TEAMID.com.example.*`）与 `*`（企业证书的通用 AppID）.
+    private static func preflightProfileCheck(appPath: String) throws {
+        let fm = FileManager.default
+        let infoPath = (appPath as NSString).appendingPathComponent("Info.plist")
+        guard let infoData = fm.contents(atPath: infoPath),
+              let infoPlist = try? PropertyListSerialization.propertyList(
+                  from: infoData, options: [], format: nil) as? [String: Any],
+              let bundleID = infoPlist["CFBundleIdentifier"] as? String,
+              !bundleID.isEmpty else { return }
+
+        let profilePath = (appPath as NSString).appendingPathComponent("embedded.mobileprovision")
+        guard let profileData = fm.contents(atPath: profilePath) else { return }
+
+        guard let profile = ProvisioningProfileStore.parseProfile(profileData) else { return }
+        let appID = profile.appId
+        guard !appID.isEmpty, appID != "未知" else { return }
+
+        // 去掉 TeamID 前缀（第一个点之前）
+        var suffix = appID
+        if let dot = appID.firstIndex(of: ".") { suffix = String(appID[appID.index(after: dot)...]) }
+        if suffix == "*" || appID == "*" { return }   // 企业通用证书，任何 bundleId 都合法
+        if suffix.hasSuffix(".*") {
+            let prefix = String(suffix.dropLast(2))
+            if bundleID == prefix || bundleID.hasPrefix(prefix + ".") { return }
+        } else if bundleID == suffix {
+            return
+        }
+
+        // 再看过期：过期是更常见的真实原因，优先报它
+        if let exp = profile.expirationDate, exp < Date() {
+            throw NSError(domain: "IPAInstall", code: -1, userInfo: [NSLocalizedDescriptionKey:
+                "签名用的描述文件已过期（\(profile.formattedDate))."
+                + "请重新签名后再安装；直接安装会以 0xe8008015 失败."])
+        }
+        throw NSError(domain: "IPAInstall", code: -1, userInfo: [NSLocalizedDescriptionKey:
+            "内嵌描述文件与 App 不匹配：描述文件的 application-identifier 是 \(appID)，"
+            + "而 App 的 CFBundleIdentifier 是 \(bundleID)."
+            + "通常是换用了别的账号/别的 AppID 的描述文件 —— 请用与该 bundleId 匹配的描述文件重新签名."])
+    }
+
+    /// 统计目录树下的**文件**数（不含目录本身）—— 用于把逐文件上传折算成 0~1 进度.
+    private static func countEntries(atPath path: String) -> Int {
+        let fm = FileManager.default
+        guard let it = fm.enumerator(atPath: path) else { return 0 }
+        var files = 0
+        for case let item as String in it {
+            var isDir: ObjCBool = false
+            let full = (path as NSString).appendingPathComponent(item)
+            if fm.fileExists(atPath: full, isDirectory: &isDir), !isDir.boolValue { files += 1 }
+        }
+        return files
+    }
+
+    private func uploadDirectory(_ afc: OpaquePointer, localDir: String, remoteDir: String,
+                                 onFileUploaded: ((String) -> Void)? = nil) throws {
+        // v0.3.662（task-8 发现2）：**afc_make_directory 的返回值不能再丢**.
+        //
+        // 旧写法 `_ = ...` 把 FFI 错误吞掉。目录没建成时返回值非 nil，随后
+        // `uploadFile` 以 `AfcWrOnly` 打开 `remoteDir/xxx` 会报「打开 … 失败」——
+        // 用户看到的是一条与真实原因（AFC 建目录失败）无关的错误，而且失败点在
+        // 目录树深处，日志里也看不出是哪一层没建成.
+        //
+        // 注意：`Already Exists` 类的错误**必须忽略**，否则递归上传第二层时必然失败；
+        // 这里只对「不是已存在」的错误上抛.
+        if let dirErr = remoteDir.withCString({ afc_make_directory(afc, $0) }) {
+            // `error(from:` 内部已经 idevice_error_free，这里直接复用它取 message.
+            let desc = error(from: dirErr, fallback: "afc_make_directory 失败").localizedDescription
+            // AFC 对已存在目录会回 "Already Exists" / "Object already exists" 一类 —— 递归上传
+            // 第二层必然走到这里，忽略这类错误；其余（权限、路径非法、连接断）必须上抛.
+            if !desc.lowercased().contains("exist") {
+                throw makeError("在设备上创建目录 \(remoteDir) 失败：\(desc)")
+            }
+        }
         let fm = FileManager.default
         let entries = try fm.contentsOfDirectory(atPath: localDir)
         for entry in entries {
@@ -838,9 +988,12 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             var isDir: ObjCBool = false
             fm.fileExists(atPath: localPath, isDirectory: &isDir)
             if isDir.boolValue {
-                try uploadDirectory(afc, localDir: localPath, remoteDir: remotePath)
+                try uploadDirectory(afc, localDir: localPath, remoteDir: remotePath,
+                                    onFileUploaded: onFileUploaded)
             } else {
                 try uploadFile(afc, localPath: localPath, remotePath: remotePath)
+                // v0.3.662：一个文件真正传完才报一次，避免「报进度比实际传得快」.
+                onFileUploaded?(localPath)
             }
         }
     }

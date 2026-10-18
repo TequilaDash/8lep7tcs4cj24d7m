@@ -231,7 +231,7 @@ struct I4AdvancedView: View {
             .disabled(isBusy || probe?.carrier == nil)
 
             Text("把授权标记（8es1421dg.be，内容 = i4tool2.acc 的 auth plist）写进载体 App 的 Documents，"
-                 + "并读回校验。pair.config 需另走「尝试现场配对」一步，RTD.cfg 无法构造，"
+                 + "并读回校验.pair.config 需另走「尝试现场配对」一步，RTD.cfg 无法构造，"
                  + "会在结果里逐条说明.")
                 .font(AppFont.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
