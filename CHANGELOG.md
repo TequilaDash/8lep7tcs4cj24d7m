@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.3.672] - 2026-10-18
+
+> **一句话**：修「禁用通话录音」在只读到一半提示音时误判为「已经是静音」——界面报成功、
+> 设备上 stop 那份其实没被替换；同时把「检查写入通道」做成界面按钮，补上写入期间不锁屏，
+> 并修 v0.3.671 的 Rust 导入错（CI `39132402750` 红）。
+
+### 一、通话录音：读不全就不能断言「已静音」
+
+`CallRecordingToneService.swift:221` 原来是：
+
+```swift
+let alreadySilent = readable > 0 && tonesEqual(current, silent, requireAll: false)
+```
+
+`requireAll: false` 的含义是「比得上的那几份相等就算相等」。于是只读到 start、stop 读不到时，
+判定为「设备已经是静音」，走补标记分支直接 `return`，`wroteTones: false`，而 `summary`（`:106-116`）
+只判 `backupComplete`，照样输出「已把通话录音提示音替换为静音，原始提示音已备份到本机.」——
+完全没提 stop 那份没被替换。这正是 v0.3.646 记的那类「界面全对、设备不对」，只是换了入口。
+
+改为 `readable == allTones.count && tonesEqual(current, silent, requireAll: true)`：读不全就往下走正常写入流程。
+
+### 二、并发读提示音是错的（撤回 v0.3.652 的改法）
+
+v0.3.652 把 `readTones()` 改成 `async let` 并发读，注释写「省掉握手」。审计核对后确认这个理由不成立：
+下游 `AirliftToneTransport` 是**专用串行队列**（`AirliftToneTransport.swift:63-66`），`al_set_target_host`
+是进程级全局，两个读只会在队列里排队，握手一次不少，收益为零，反而让失败时的错误归属变模糊。
+改回顺序 `for tone in allTones`，并在注释里写明「不要改成并发」及理由。
+
+### 三、`probeReachable()` 的结果要能被界面看到
+
+`probeReachable()` 是 v0.3.650 加的，但 `lastReadFailure` / `lastReadFailureReason()` 全仓零消费，
+等于探测失败也没人知道。现在失败时写 `lastReadFailure = <文件名>：<错误描述>`、成功时置 nil，
+由新增的「检查写入通道」按钮读出来展示。
+
+### 四、写入期间不锁屏
+
+对齐 AirBeep v2.5.1 的 `withBusyScreen`：`UIApplication.shared.isIdleTimerDisabled = true`，
+用 `defer` 复位，覆盖成功 / 失败 / 等二次确认三条出口。整段流程可能数十秒，默认锁屏足够触发；
+锁屏后写到一半的提示音会停住，而「已静音」标记要到后面才置位。
+
+### 五、界面新增「检查写入通道」
+
+`CallRecordingToneView.swift` 操作区加一个 `antenna.radiowaves.left.and.right` 按钮，
+只做读取探测、不写任何文件，结果用弹窗给出：可用 / 不可用 + 前置条件 + 具体失败原因。
+
+### 六、Rust 导入错（CI `39132402750` 红）
+
+| 位置 | 错误 | 原因 |
+|---|---|---|
+| `rust/idevice-ffi/src/pairable_host_run.rs:29` | `error[E0432]: unresolved import crate::IdeviceError` | `IdeviceError` 属于外部 crate `idevice`，不是本 crate 根项 |
+| `rust/idevice-ffi/src/lib.rs:147` / `:150` / `:164` / `:168` | `E0425` / `E0433`：`cannot find type IdeviceError in this scope` | 同上，`lib.rs` 漏了 `use idevice::IdeviceError;` |
+
+本仓既有写法一律是 `use idevice::IdeviceError;`（`adapter.rs:12`、`errors.rs:33`、`util.rs:5`、`pairable_host.rs:17` 等 10 个文件），
+只有这次新写的两处用了 `crate::IdeviceError`。已改为 `lib.rs` 的 `use idevice::{Idevice, IdeviceError, IdeviceSocket, ReadWrite};`
+与 `pairable_host_run.rs` 的 `use crate::run_sync_local;` + `use idevice::IdeviceError;`。
+
+### 验证
+
+- `normalize_eol.py --check`：4 个改动文件与基线一致；
+- `swiftc -parse`：两个 Swift 文件 EXIT=0（只保证语法）；
+- `swift_precommit_check.py .`：15 个 guard 全绿；
+- Rust 部分本机无 cargo，只能由 CI 判决。
+
+
 ## [0.3.660] - 2026-10-18
 
 > **一句话**：修 v0.3.658（D7 台账补锁）引入的 3 个编译错 —— CI `39119245273` 红。

@@ -88,7 +88,7 @@ pub mod sideload_auth;
 pub use errors::*;
 pub use pairing_file::*;
 
-use idevice::{Idevice, IdeviceSocket, ReadWrite};
+use idevice::{Idevice, IdeviceError, IdeviceSocket, ReadWrite};
 use once_cell::sync::Lazy;
 use plist_ffi::PlistWrapper;
 use std::{

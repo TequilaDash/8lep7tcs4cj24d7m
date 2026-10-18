@@ -196,8 +196,11 @@ enum CallRecordingToneService {
     static func probeReachable() async -> Bool {
         do {
             _ = try await AirLiftService.readFile(at: startTone.path)
+            lastReadFailure = nil
             return true
         } catch {
+            // 与 readOne 一致地留痕：界面上「检查写入通道」失败时要能说出为什么。
+            lastReadFailure = startTone.name + "：" + error.localizedDescription
             return false
         }
     }
@@ -216,9 +219,14 @@ enum CallRecordingToneService {
         let silent = try silentTones()
         let current = await readTones()
 
-        // 「设备上已经是静音」只能用**读得到的项**判断；一项都读不到时不能猜。
+        // 「设备上已经是静音」必须**全部读得到**才能断言。
+        //
+        // v0.3.672：原来用 requireAll: false —— 只读到 start、stop 读不到时也算「已是静音」，
+        // 于是走「补标记直接返回成功」分支，界面说「已替换为静音」，而 stop 其实还是原始音。
+        // 这正是 v0.3.646 记的那类「界面全对、设备不对」，只是换了个入口。
+        // 读不全 ⇒ 不能断言已静音 ⇒ 走下面的备份/确认分支，由用户决定。
         let readable = current.compactMap { $0 }.count
-        let alreadySilent = readable > 0 && tonesEqual(current, silent, requireAll: false)
+        let alreadySilent = readable == allTones.count && tonesEqual(current, silent, requireAll: true)
 
         var backupComplete = hasBackup()
         var unreadable: [String] = []
@@ -324,11 +332,15 @@ enum CallRecordingToneService {
     /// 返回数组与 allTones 一一对应，读不出的位置是 nil。
     /// 读通道在部分 iOS 版本上不可用是上游已知现象，因此这里**从不抛错**。
     private static func readTones() async -> [Data?] {
-        // 并发读：每次 airlift 操作都要重建一次隧道（无连接复用），
-        // 串行读 N 个文件 = N 次握手，用户观感就是「一直转圈」。
-        async let first = readOne(allTones[0])
-        async let second = readOne(allTones[1])
-        return await [first, second]
+        // 顺序读。**不要**改成 async let 并发：
+        // AirliftToneTransport 内部是一条专用串行队列（见 AirliftToneTransport.swift:63-66），
+        // 且 al_set_target_host 是进程级全局状态，并发调只会排队，
+        // 省不下任何一次握手，反而让人误以为「已经并发了」。
+        var result: [Data?] = []
+        for tone in allTones {
+            result.append(await readOne(tone))
+        }
+        return result
     }
 
     /// 读一个提示音；失败返回 nil（只留痕，不抛错）。
@@ -361,6 +373,10 @@ enum CallRecordingToneService {
             guard let data else { return nil }
             return AirliftToneFile(name: tone.name, data: data)
         }
+        // 全部为 nil（一个都没读到 / 没有备份）⇒ 没有可写的内容。
+        // 这不是「吞错」：调用方本来就要写「读到的东西」，读到 0 个就无事可做，
+        // 随后由调用方按自己的语义决定报错（disable 会抛 backupIncomplete 或原错误，
+        // restore 在 readBackups 阶段就已经因为缺备份抛了 noBackup）。
         guard !payload.isEmpty else { return }
         try await AirLiftService.placeFiles(payload, in: directory)
 

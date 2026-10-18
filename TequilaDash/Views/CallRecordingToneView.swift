@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 「禁用通话录音」控制台 —— 「更多 → 禁用通话录音」的二级页。
 ///
@@ -16,6 +17,8 @@ struct CallRecordingToneView: View {
     @State private var phase: String?
     /// v0.3.661：读不到原始提示音时的「继续即不可恢复」确认。
     @State private var risk: RiskPrompt?
+    /// v0.3.672：正在做「检查写入通道」的探测。
+    @State private var checking = false
 
     var body: some View {
         List {
@@ -73,6 +76,25 @@ struct CallRecordingToneView: View {
                 // （AirBeep 的探测在某些 iOS 版本上必然失败，会常年卡在这个状态）。
                 // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试。
                 .disabled(busy || state == .original)
+
+                // v0.3.672：动手之前先能确认「配对文件 + LocalDevVPN + 系统版本」这一串前置真的通.
+                // 它接到 Service.probeReachable() 与 lastReadFailureReason() —— 这两个原来是死符号.
+                Button {
+                    checkChannel()
+                } label: {
+                    Label("检查写入通道", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .disabled(busy || checking)
+
+                if checking {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("正在读取系统提示音文件…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
             } header: {
                 Label("操作", systemImage: "slider.horizontal.3")
             } footer: {
@@ -165,6 +187,12 @@ struct CallRecordingToneView: View {
         phase = action.startPhase
         AppHaptics.tap()
         Task {
+            // v0.3.672：全程可能数十秒，默认锁屏时间（最短 30 秒）足够在中途锁屏.
+            // 锁屏会让写到一半的提示音停在中间态，而持久化标记要到写完才置位 ⇒
+            // 界面显示「原始提示音」、设备上却是半新半旧. 所以操作期间不自动锁屏.
+            // defer 覆盖成功 / 失败 / 等用户确认三条出口：这三条之后都没有写入在飞.
+            UIApplication.shared.isIdleTimerDisabled = true
+            defer { UIApplication.shared.isIdleTimerDisabled = false }
             do {
                 let summary = try await Task.detached(priority: .userInitiated) { () -> String in
                     switch action {
@@ -196,6 +224,35 @@ struct CallRecordingToneView: View {
                 busy = false
                 phase = nil
                 alert = ToneAlert(title: "失败", message: error.localizedDescription)
+            }
+        }
+    }
+
+    /// v0.3.672：把 probeReachable 接到界面上.
+    ///
+    /// 它原来是死符号（定义在 Service、全仓零调用），.unreachable 也就永远走不到.
+    /// 现在用户可以在动手之前先确认前置是否真的通，失败时把 lastReadFailureReason()
+    /// 一并显示出来 —— 那个诊断字段同样曾是死符号.
+    private func checkChannel() {
+        guard !checking else { return }
+        checking = true
+        AppHaptics.tap()
+        Task {
+            let ok = await CallRecordingToneService.probeReachable()
+            checking = false
+            if ok {
+                alert = ToneAlert(
+                    title: "通道可用",
+                    message: "已成功读取系统提示音文件，可以执行禁用或恢复."
+                )
+            } else {
+                let reason = CallRecordingToneService.lastReadFailureReason() ?? "原因未知"
+                alert = ToneAlert(
+                    title: "通道不可用",
+                    message: "读不到系统提示音文件.请确认已导入配对文件、已连接 LocalDevVPN，"
+                        + "且系统版本在支持范围内（iOS/iPadOS 18.0–27.2 B2）."
+                        + "\n\n" + reason
+                )
             }
         }
     }

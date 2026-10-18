@@ -26,7 +26,8 @@ use idevice::remote_pairing::{
 };
 use tokio::net::TcpListener;
 
-use crate::{IdeviceError, run_sync_local};
+use crate::run_sync_local;
+use idevice::IdeviceError;
 
 /// Emitted by `si_run_host` right after the listener is bound, so the caller
 /// can advertise the pairable-host service over Bonjour. The `txt_*` arrays and
