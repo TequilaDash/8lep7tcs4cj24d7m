@@ -240,8 +240,13 @@ enum NBStoreClient {
         /// `CommonCrypto` 的状态码是**负数**（`kCCDecodeError = -4304`），日志里带原始值，
         /// 便于与 Apple 官方头文件的定义逐一对照；`长度 % 16` 用来一眼看出「不是整块」。
         static func describe(_ status: CCCryptorStatus, cipherLength: Int) -> String {
+            // v0.3.664（CI run 39128137548）：`kCCSuccess` 等 CommonCrypto 常量在 Swift 里
+            // 导入成 `Int`，不是 `CCCryptorStatus`（Int32）—— 直接写 `case kCCSuccess:` 会报
+            // "expression pattern of type 'Int' cannot match values of type 'CCCryptorStatus'"。
+            // 统一转成 Int 再比较，状态码原值照旧打印（status 本身仍是 Int32，日志无变化）.
+            let code = Int(status)
             let name: String
-            switch status {
+            switch code {
             case kCCSuccess: name = "kCCSuccess"
             case kCCParamError: name = "kCCParamError"
             case kCCBufferTooSmall: name = "kCCBufferTooSmall"
@@ -257,9 +262,9 @@ enum NBStoreClient {
             var text = "status=\(status)（\(name)），密文 \(cipherLength) 字节，长度%\(kCCBlockSizeAES128)=\(blockRemainder)"
             if blockRemainder != 0 {
                 text += " —— 密文长度不是块大小整数倍，CBC 必然解不出明文"
-            } else if status == kCCDecodeError {
+            } else if code == kCCDecodeError {
                 text += " —— 长度合法但填充校验失败，说明字节内容不是 AES 密文（可能是明文 / 换了密钥 / 解错了层次）"
-            } else if status == kCCBufferTooSmall {
+            } else if code == kCCBufferTooSmall {
                 text += " —— 我们自己的输出缓冲区算小了（代码问题，不是数据问题）"
             }
             return text
@@ -824,20 +829,27 @@ enum NBStoreClient {
         var sinf: String?
         if let arr = d["sinfs"] as? [[String: Any]], let first = arr.first {
             if let hex = string(first["dataHex"]) {
-                sinf = hexToBase64(hex)
-                if sinf == nil {
-                    LoginLogger.shared.log("\(logTag) [失败] sinf 的 dataHex 不是合法 hex（\(hex.count) 字符）"
-                                           + " —— 这份 sinf 不可用，不会写进包内",
-                                           category: .appStore)
-                }
+                // v0.3.664：转完必须做**形态校验**，不能只看「hexToBase64 有没有返回 nil」。
+                // 见 `validatedSinf` 的注释 —— 编码对 ≠ 内容是 sinf。
+                sinf = validatedSinf(hex: hex, where: "getAppHistoryList.dataHex", appID: appID)
             } else if let b64 = string(first["data"]) {
-                sinf = b64   // 该字段本来就是 base64，**不要**再跑 hexToBase64（会二次解坏）
+                // 该字段本来就是 base64，**不要**再跑 hexToBase64（会二次解坏）；
+                // 但同样要校验形态（服务端回了别的 base64 也会堂而皇之进 ^）。
+                sinf = validatedSinf(base64: b64, where: "getAppHistoryList.data", appID: appID)
             }
         }
         // v0.3.545：拿不到 sinf 不许静默 —— 加密包缺 sinf 装不上，这条日志是唯一的线索
-        if sinf == nil {
+        //
+        // v0.3.664：这里的措辞原来是「服务端没回 sinf」，但 `sinf == nil` 也可能是
+        // **回了、但内容不是 sinf**（被 `validatedSinf` 挡下）。两种情况要分开说 ——
+        // 前者该找服务端，后者该查我们的解析/编码，把方向弄反等于白排查。
+        if sinf == nil, hasSinfField(d) == false {
             LoginLogger.shared.log("\(logTag) [提示] 直链已取到，但服务端没回 sinf（udid=\(cachedRealUDID() ?? "?")）"
                                    + " —— 若包是加密的，安装会报「缺少 SC_Info/*.sinf」",
+                                   category: .appStore)
+        } else if sinf == nil {
+            LoginLogger.shared.log("\(logTag) [失败] 服务端**有** sinf 字段，但解出来不是合法 sinf 容器"
+                                   + "（详见上一行的形态校验日志）—— 直链可用，这份 sinf 不会写进包内",
                                    category: .appStore)
         }
         // v0.3.592：把服务端回的真实版本号也带出去（`data.metadata.bundleShortVersionString`），
@@ -1181,8 +1193,14 @@ enum NBStoreClient {
         var packageURL: String?
         /// 服务端算好的包 MD5（`appStoreData.hashMD5`）.
         var packageMD5: String?
-        /// 包对应的 sinf（`appStoreData.sinfs[0].dataHex`，十六进制字符串）.
+        /// 包对应的 sinf（`appStoreData.sinfs[0].dataHex` 或 `.data`，**两种编码**）.
+        ///
+        /// v0.3.664：原先注释只写「十六进制字符串」，而取值处却用了 `dataHex ?? data` ——
+        /// 注释与代码自相矛盾，正是 hex 被当 base64 解的那类事故的温床。
+        /// 现在连同 `packageSinfIsHex` 一起保存**编码来源**，由 `validatedSinf` 按来源解码。
         var packageSinf: String?
+        /// `packageSinf` 的编码：`true` = hex（`dataHex` 字段），`false` = base64（`data` 字段）.
+        var packageSinfIsHex: Bool = true
         /// 内嵌包信息的原始 JSON 字符串，原样留着备查.
         var appStoreDataRaw: String?
 
@@ -1288,6 +1306,8 @@ enum NBStoreClient {
             var pkgMD5: String?
             var rawStoreData: String?
             var pkgSinf: String?
+            /// v0.3.664：`pkgSinf` 是 hex 还是 base64 —— 决定交给校验器哪一条分支。
+            var pkgSinfIsHex = true
             var versionIDs: [String] = []
             if let raw = item["appStoreData"] as? String, !raw.isEmpty {
                 rawStoreData = raw
@@ -1296,7 +1316,17 @@ enum NBStoreClient {
                     pkgURL = string(o["url"])
                     pkgMD5 = string(o["hashMD5"])
                     if let arr2 = o["sinfs"] as? [[String: Any]], let first = arr2.first {
-                        pkgSinf = string(first["dataHex"]) ?? string(first["data"])
+                        // v0.3.664：**不能**写成 `dataHex ?? data` —— 两个字段编码不同
+                        // （dataHex 是 hex、data 是 base64），混在一句 `??` 里正是历史那个
+                        // 「hex 被当 base64 解出 1.5 倍垃圾」的写法。这里保留来源标记，
+                        // 解码与校验都交给 `validatedSinf`（`embeddedOffSalePackage` 里调用）。
+                        if let hex = string(first["dataHex"]) {
+                            pkgSinf = hex
+                            pkgSinfIsHex = true
+                        } else if let b64 = string(first["data"]) {
+                            pkgSinf = b64
+                            pkgSinfIsHex = false
+                        }
                     }
                     // 版本号也以内嵌 metadata 为准（实测 top-level `version` 有时比它新一档）
                     if let md = o["metadata"] as? [String: Any] {
@@ -1312,7 +1342,14 @@ enum NBStoreClient {
                 pkgURL = string(inline["url"])
                 pkgMD5 = string(inline["hashMD5"])
                 if let arr2 = inline["sinfs"] as? [[String: Any]], let first = arr2.first {
-                    pkgSinf = string(first["dataHex"]) ?? string(first["data"])
+                    // 同上：分开取，保留编码来源。
+                    if let hex = string(first["dataHex"]) {
+                        pkgSinf = hex
+                        pkgSinfIsHex = true
+                    } else if let b64 = string(first["data"]) {
+                        pkgSinf = b64
+                        pkgSinfIsHex = false
+                    }
                 }
                 if versionIDs.isEmpty, let md = inline["metadata"] as? [String: Any] {
                     versionIDs = stringArray(md["softwareVersionExternalIdentifiers"])
@@ -1337,6 +1374,7 @@ enum NBStoreClient {
                 packageURL: pkgURL,
                 packageMD5: pkgMD5,
                 packageSinf: pkgSinf,
+                packageSinfIsHex: pkgSinfIsHex,
                 appStoreDataRaw: rawStoreData,
                 versionIDs: versionIDs)
         }
@@ -1618,14 +1656,137 @@ enum NBStoreClient {
     /// 包内写不进 sinf → 安装报「缺少 SC_Info/*.sinf」。
     private static func embeddedOffSalePackage(from app: OffSaleApp) -> NBPackage? {
         guard let url = app.packageURL, !url.isEmpty else { return nil }
-        let sinfB64 = app.packageSinf.flatMap { hexToBase64($0) }
-        if sinfB64 == nil, (app.packageSinf ?? "").isEmpty == false {
-            LoginLogger.shared.log("\(logTag) [失败] sinf hex 转 base64 失败（\(app.name)）",
-                                   category: .appStore)
+        // v0.3.664：这条路径与 `package()` 走**同一个**校验器，不各写一套。
+        // 原来这里只判「hexToBase64 返回了 nil 没有」，等于只校验了编码；编码对但内容不是 sinf
+        // 依然会被当成「有 sinf」交给下游。`where:` 标明是哪一条产出路径（下架搜索的内嵌快照）。
+        let sinfB64 = app.packageSinf.flatMap { raw in
+            app.packageSinfIsHex
+                ? validatedSinf(hex: raw, where: "searchOffSaleApp.appStoreData.sinfs.dataHex",
+                                appID: app.name)
+                : validatedSinf(base64: raw, where: "searchOffSaleApp.appStoreData.sinfs.data",
+                                appID: app.name)
         }
         return NBPackage(ipaURL: normalizeAsset(url),
                          sinfBase64: sinfB64,
                          version: app.displayVersion)
+    }
+
+    // MARK: - sinf 形态校验（v0.3.664）
+
+    /// 服务端响应里到底**有没有** sinf 字段（区分「没回」与「回了但坏」）.
+    private static func hasSinfField(_ d: [String: Any]) -> Bool {
+        guard let arr = d["sinfs"] as? [[String: Any]], let first = arr.first else { return false }
+        return string(first["dataHex"]) != nil || string(first["data"]) != nil
+    }
+
+    /// 把服务端给的 sinf 编码成 base64，并**校验它真的是一份 sinf 容器**；不合格返回 nil 并明确报错。
+    ///
+    /// ## 为什么光「编码解对了」不够（v0.3.664）
+    ///
+    /// v0.3.563 修的是**编码层**（hex 被当 base64 ⇒ 1.5 倍垃圾）。但编码正确**不等于**内容是 sinf：
+    /// 服务端回一段任意 2144 字符的合法 hex，`hexToBase64` 照样返回一个非 nil 的 base64，
+    /// 全链路只判 `!= nil` ⇒ 界面上就打「已取到直链 + sinf」，写包时才发现不对。
+    /// 把它挡在**产出处**，是唯一能让错误在最早的、还能说清是哪一层的地方暴露的做法。
+    ///
+    /// ## 判据不在这里定义 —— 复用 `PackageSINFWriter.sinfStructure`
+    ///
+    /// **不能**用「前 4 字节 == `00 00 04 30`」当魔数：那 4 字节是**长度字段**，
+    /// 1056 字节的合法 sinf 头是 `00 00 04 20 73 69 6e 66`（`IPADownloadCenter.swift:1717-1719`
+    /// 有实测记录）。写侧早就用「头 4 字节大端 == 实际长度 且 第 5-8 字节 == "sinf"」或
+    /// SuperBlob（`0xFADE0CC0`）做三态判定；这里直接调它，**保证同一份判据**，不另立第二套。
+    ///
+    /// ## 三态处理
+    /// - `.valid` → 返回 base64；
+    /// - `.invalid` → 认定为坏，返回 nil 并报「**结构坏了**」（格式认识，长度对不上）；
+    /// - `.unrecognized` → 认定为未知形态，返回 nil 并报「**格式不认识**」。
+    ///   注意与写侧的区别：写侧对 `.unrecognized` 也只跳过写入，但**未知不等于坏** ——
+    ///   日志措辞必须让排查的人看出来这是「我们不认识的第三种格式」，而不是「服务端坏了」。
+    ///
+    /// - Parameters:
+    ///   - hex: 服务端给的 hex 串（NB 的 `dataHex`）。
+    ///   - base64: 服务端给的 base64 串（NB 的 `data`）。
+    ///   - layer: 出错时告诉排查者**是哪一层**出的问题（哪个接口的哪个字段）。
+    ///   - appID: 只用于日志定位。
+    private static func validatedSinf(hex: String? = nil,
+                                      base64: String? = nil,
+                                      where layer: String,
+                                      appID: String) -> String? {
+        var bytes: Data?
+        var origin = ""
+        if let hex {
+            bytes = hexDecoded(hex)
+            origin = "hex (\(hex.count) 字符)"
+            guard bytes != nil else {
+                LoginLogger.shared.log("\(logTag) [失败] sinf 形态校验未通过｜层=\(layer)｜来源=hex 解码"
+                                       + "｜appID=\(appID)：\(hex.count) 字符不是合法 hex"
+                                       + "（长度需为偶数且只含 0-9a-f）—— 这份 sinf 不会写进包内",
+                                       category: .appStore)
+                return nil
+            }
+        } else if let base64 {
+            bytes = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters])
+            origin = "base64 (\(base64.count) 字符)"
+            guard bytes != nil else {
+                LoginLogger.shared.log("\(logTag) [失败] sinf 形态校验未通过｜层=\(layer)｜来源=base64 解码"
+                                       + "｜appID=\(appID)：\(base64.count) 字符解不出 base64"
+                                       + " —— 这份 sinf 不会写进包内",
+                                       category: .appStore)
+                return nil
+            }
+        } else {
+            return nil
+        }
+        guard let data = bytes, !data.isEmpty else { return nil }
+
+        switch PackageSINFWriter.sinfStructure(data) {
+        case .valid:
+            return data.base64EncodedString()
+        case .invalid:
+            // 格式认识、结构坏了 —— 典型就是历史那次 1584 字节垃圾（头声明的长度对不上）。
+            let declared = data.count >= 4
+                ? (Int(data[data.startIndex]) << 24) | (Int(data[data.startIndex + 1]) << 16)
+                  | (Int(data[data.startIndex + 2]) << 8) | Int(data[data.startIndex + 3])
+                : -1
+            LoginLogger.shared.log("\(logTag) [失败] sinf 形态校验未通过｜层=\(layer)｜来源=\(origin)"
+                                   + "｜appID=\(appID)：解出 \(data.count) 字节，"
+                                   + "**格式认识但结构坏了**（头声明长度 \(declared)，对不上实际长度）"
+                                   + " —— 这份 sinf 不会写进包内",
+                                   category: .appStore)
+            return nil
+        case .unrecognized:
+            // ⚠️ 这里**放行**，与「不认识 ≠ 坏」保持一致（枚举做成三态就是为这件事）。
+            //
+            // 拒绝的代价：丢掉一份可能合法的 sinf ⇒ 用户拿到一个装不上的包
+            // （症状是「缺少 SC_Info/*.sinf」），而且是我们主动造成的。
+            // 放行的代价：写出未知形态的字节 —— 但写包侧 PackageSINFWriter.writeIfNeeded
+            // 会**再**按同一判据过一遍，且包内已有的 sinf 不会被它覆盖。
+            // 前提是必须有日志留下线索，否则放行就等于静默。
+            LoginLogger.shared.log("\(logTag) [注意] sinf **格式不认识**｜层=\(layer)｜来源=\(origin)"
+                                   + "｜appID=\(appID)：解出 \(data.count) 字节，"
+                                   + "既非「长度+sinf+TLV」也非 SuperBlob 0xFADE0CC0"
+                                   + " —— 未知形态不等于坏，本次**放行**，但需人工取一份样本补判据",
+                                   category: .appStore)
+            return data.base64EncodedString()
+        }
+    }
+
+    /// hex 串 → Data（容忍空格/换行）。
+    ///
+    /// 与 `hexToBase64` 共用同一套严格判定（`hexByte`），**不另写一份** ——
+    /// 两份 hex 解析器是「一处修好、另一处还是旧 bug」的经典来源。
+    private static func hexDecoded(_ hex: String) -> Data? {
+        let cleaned = hex.filter { !$0.isWhitespace }
+        guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(cleaned.count / 2)
+        var idx = cleaned.startIndex
+        while idx < cleaned.endIndex {
+            let next = cleaned.index(idx, offsetBy: 2)
+            guard let b = hexByte(cleaned, idx, next) else { return nil }
+            bytes.append(b)
+            idx = next
+        }
+        return Data(bytes)
     }
 
     /// 严格解一个 hex 字节（ND-02）.
@@ -1643,23 +1804,9 @@ enum NBStoreClient {
     ///
     /// 输入可能带空格/换行（服务端偶尔分行发），先清掉再解。
     /// 非 hex 字符一律返回 nil（ND-02：不再把占位串解成 0x00）。
+    /// v0.3.664：hex→Data 的部分抽到 `hexDecoded`，与形态校验共用**同一份**解析。
     private static func hexToBase64(_ hex: String) -> String? {
-        let cleaned = hex.filter { !$0.isWhitespace }
-        guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(cleaned.count / 2)
-        var idx = cleaned.startIndex
-        while idx < cleaned.endIndex {
-            let next = cleaned.index(idx, offsetBy: 2)
-            // ND-02：原来只靠 `UInt8(_:radix:16)` 判非法，而它对**空串**返回 `Optional(0)` 而不是 nil
-            // —— `_` 这类占位符会被静默解成 1 字节 0x00，再 base64 成一个「非 nil」的垃圾值，
-            // 全链路又只用 nil 判「有没有 sinf」⇒ 垃圾值显示成「已取到 sinf」。
-            // 先显式校验这两个字符是不是 hex 数字，再交给 UInt8 解码。
-            guard let b = hexByte(cleaned, idx, next) else { return nil }
-            bytes.append(b)
-            idx = next
-        }
-        return Data(bytes).base64EncodedString()
+        hexDecoded(hex)?.base64EncodedString()
     }
 
     /// ATS：明文 http 一律升 https（爱思侧踩过同一个坑，见 `I4PCStoreClient.normalizeAssetURL`）

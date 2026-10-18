@@ -46,18 +46,30 @@ final class AnisetteProvider {
         private let lock = NSLock()
         private var busy = false
         /// 单次等锁上限：比单次取数硬超时（35s）更长，确保等待者不会比取数本身先放弃.
+        ///
+        /// v0.3.664（CI run 39128137548）：`NSLock.lock()` / `unlock()` 被 Foundation 标成
+        /// `@available(*, noasync)` —— 在 async 函数里**直接调用**会编译失败
+        /// （"instance method 'lock' is unavailable from asynchronous contexts"）。
+        /// 所以把加解锁收进同步 helper，async 侧只调用同步函数，语义不变.
+        private func acquireIfFree() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if busy { return false }
+            busy = true
+            return true
+        }
         func tryAcquire(timeout: TimeInterval) async -> Bool {
             let deadline = Date().addingTimeInterval(timeout)
             while true {
-                lock.lock()
-                if !busy { busy = true; lock.unlock(); return true }
-                lock.unlock()
+                if acquireIfFree() { return true }
                 if Date() >= deadline { return false }
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
         func release() {
-            lock.lock(); busy = false; lock.unlock()
+            lock.lock()
+            defer { lock.unlock() }
+            busy = false
         }
     }
 
