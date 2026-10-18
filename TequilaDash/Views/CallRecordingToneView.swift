@@ -2,10 +2,10 @@ import SwiftUI
 
 /// 「禁用通话录音」控制台 —— 「更多 → 禁用通话录音」的二级页。
 ///
-/// 参考项目 AirBeep（原名 Placard，仓库 `LinkPass888/AirBeep`）：把通话录音的开始 /
-/// 结束**披露提示音**替换成等长静音，录音本身不受影响。替换写入经 `AirLiftService`
+/// 参考项目 AirBeep（原名 Placard，仓库 LinkPass888/AirBeep）：把通话录音的开始 /
+/// 结束**披露提示音**替换成等长静音，录音本身不受影响。替换写入经 AirLiftService
 /// —— 真 airlift：配对文件 + LocalDevVPN 隧道在设备上直接驱动 AirTraffic
-/// （Rust `libairlift_ffi.a`，见 `Engine/Airlift/`）。
+/// （Rust libairlift_ffi.a，见 Engine/Airlift/）。
 ///
 /// 界面只保留必要信息：原理说明卡片 + 当前状态 + 两个动作（禁用 / 恢复）。
 struct CallRecordingToneView: View {
@@ -14,6 +14,8 @@ struct CallRecordingToneView: View {
     @State private var alert: ToneAlert?
     /// v0.3.652：当前进行到哪一步（airlift 每次操作都要重建隧道，全程可能数十秒）。
     @State private var phase: String?
+    /// v0.3.661：读不到原始提示音时的「继续即不可恢复」确认。
+    @State private var risk: RiskPrompt?
 
     var body: some View {
         List {
@@ -66,8 +68,8 @@ struct CallRecordingToneView: View {
                 } label: {
                     Label("恢复原始提示音", systemImage: "arrow.uturn.backward")
                 }
-                // v0.3.650：`.disabled(busy || state != .silenced)` 会把 `.unreachable`
-                // 也一起禁掉 —— 而 `.unreachable` 恰恰是最该允许用户尝试恢复的时候
+                // v0.3.650：.disabled(busy || state != .silenced) 会把 .unreachable
+                // 也一起禁掉 —— 而 .unreachable 恰恰是最该允许用户尝试恢复的时候
                 // （AirBeep 的探测在某些 iOS 版本上必然失败，会常年卡在这个状态）。
                 // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试。
                 .disabled(busy || state == .original)
@@ -90,6 +92,29 @@ struct CallRecordingToneView: View {
                 dismissButton: .default(Text("好"))
             )
         }
+        // 读不到原始音 ⇒ 无法备份。这种情况下「禁用」依然可做（写入通道是好的），
+        // 但原始提示音会永久丢失，所以必须让用户明确确认，不能替他决定。
+        .confirmationDialog(
+            "无法备份原始提示音",
+            isPresented: Binding(
+                get: { risk != nil },
+                set: { if !$0 { risk = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("仍然禁用（原始提示音将无法恢复）", role: .destructive) {
+                let names = risk?.unreadable ?? []
+                risk = nil
+                perform(.disable, acknowledgingRisk: true, unreadable: names)
+            }
+            Button("取消", role: .cancel) {
+                risk = nil
+                busy = false
+                phase = nil
+            }
+        } message: {
+            Text(risk?.message ?? "")
+        }
     }
 
     // MARK: - 展示
@@ -104,15 +129,15 @@ struct CallRecordingToneView: View {
 
     // MARK: - 动作
 
-    /// 一个可发送到后台执行的动作（枚举而非闭包：天然 `Sendable`，跨并发边界无需额外标注）.
+    /// 一个可发送到后台执行的动作（枚举而非闭包：天然 Sendable，跨并发边界无需额外标注）.
     private enum ToneAction: Sendable, Equatable {
         case disable
         case restore
 
-        func perform() async throws {
+        var startPhase: String {
             switch self {
-            case .disable: try await CallRecordingToneService.disable()
-            case .restore: try await CallRecordingToneService.restore()
+            case .disable: return "正在读取当前提示音…"
+            case .restore: return "正在读取备份…"
             }
         }
 
@@ -126,27 +151,47 @@ struct CallRecordingToneView: View {
 
     /// 在后台线程执行 airlift 传输（含建隧道与文件 IO，会阻塞），完成后回主线程刷新状态.
     ///
-    /// v0.3.652：加阶段提示。airlift 全程要做 5 次独立操作（每次重建隧道），
+    /// v0.3.652：加阶段提示。airlift 全程要多次独立操作（每次重建隧道），
     /// 不告诉用户「在等什么」，界面就像死了一样。
+    /// v0.3.661：读通道失败不再让整个动作失败（见 CallRecordingToneService 文件头），
+    /// 但「无法备份」必须先经用户确认。
     private func run(_ action: ToneAction) {
+        perform(action, acknowledgingRisk: false, unreadable: [])
+    }
+
+    private func perform(_ action: ToneAction, acknowledgingRisk: Bool, unreadable: [String]) {
         guard !busy else { return }
         busy = true
-        phase = action == .disable ? "正在读取当前提示音…" : "正在读取备份…"
+        phase = action.startPhase
         AppHaptics.tap()
         Task {
             do {
-                // 阶段 1：读当前状态（这一步就要建一次隧道）
-                phase = action == .disable ? "正在读取当前提示音…" : "正在读取备份…"
-                try await Task.detached(priority: .userInitiated) {
-                    try await action.perform()
+                let summary = try await Task.detached(priority: .userInitiated) { () -> String in
+                    switch action {
+                    case .disable:
+                        let report = try await CallRecordingToneService.disable(
+                            acknowledgingRisk: acknowledgingRisk
+                        )
+                        return report.summary
+                    case .restore:
+                        try await CallRecordingToneService.restore()
+                        return action.doneMessage
+                    }
                 }.value
-                // 阶段 2：写（建隧道）+ 读回校验
-                phase = "正在写入并校验…"
                 state = loadState()
                 busy = false
                 phase = nil
                 AppHaptics.success()
-                alert = ToneAlert(title: "完成", message: action.doneMessage)
+                alert = ToneAlert(title: "完成", message: summary)
+            } catch let error as CallRecordingToneService.ToneError {
+                busy = false
+                phase = nil
+                if case .backupIncomplete(let names) = error {
+                    // 不是失败，是需要用户决定：写入本身没问题，丢的是「能恢复」这个后路。
+                    risk = RiskPrompt(unreadable: names)
+                    return
+                }
+                alert = ToneAlert(title: "失败", message: error.localizedDescription)
             } catch {
                 busy = false
                 phase = nil
@@ -158,6 +203,18 @@ struct CallRecordingToneView: View {
     /// 读状态。v0.3.650 起**不做 airlift 探测**（照 AirBeep），同步即可。
     private func loadState() -> CallRecordingToneService.ToneState {
         CallRecordingToneService.currentState()
+    }
+}
+
+/// 「读不到原始音、无法备份」的风险确认内容.
+private struct RiskPrompt: Identifiable {
+    let id = UUID()
+    let unreadable: [String]
+
+    var message: String {
+        "读不到 " + unreadable.joined(separator: "、") + "，因此无法备份原始提示音."
+            + "这是 airlift 读通道在该 iOS 版本上的已知限制，与写入无关."
+            + "继续禁用后，本 App 无法帮你恢复原始提示音（需切换系统语言让系统重新生成，或用 iTunes/iOS 还原）."
     }
 }
 
