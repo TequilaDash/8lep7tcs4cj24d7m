@@ -186,14 +186,14 @@ final class CrashLogService {
     /// `*.diskwrites_resource-*` 磁盘写入诊断、`WiFiLQMMetrics-*` 网络指标、
     /// `JetsamEvent-*` 内存事件与若干 App 崩溃报告）——按"所有 .ips"数会得到 30+，
     /// 与爱思对不上。若以后要单独展示 App 崩溃，用 `appCrashReportCount()`。
-    func crashReportCount() -> Int? {
-        guard let entries = try? list() else { return nil }
+    func crashReportCount() throws -> Int {
+        let entries = try list()
         return entries.filter { !$0.isDirectory && $0.name.lowercased().hasPrefix("panic-full") }.count
     }
 
     /// App / 系统守护进程的崩溃报告条数（不含 panic、不含资源与网络诊断）
-    func appCrashReportCount() -> Int? {
-        guard let entries = try? list() else { return nil }
+    func appCrashReportCount() throws -> Int {
+        let entries = try list()
         let excluded = ["diskwrites_resource", "wifilqmmetrics", "metric", "shutterbug", "jetsamevent"]
         return entries.filter { entry in
             guard !entry.isDirectory else { return false }

@@ -730,7 +730,13 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let dir = ModuleService.shared.dataURL(for: id)
             let target = dir.appendingPathComponent(rel)
             // 防路径越界：标准化后必须仍在模块数据目录内
-            guard target.standardizedFileURL.path.hasPrefix(dir.standardizedFileURL.path) else {
+            // v0.3.662（task-13 发现2）：hasPrefix 缺分隔符 —— 模块目录 `/x/com.foo` 与
+            // 兄弟目录 `/x/com.foo-evil` 前缀相同，`../com.foo-evil/secret.txt` 标准化后仍
+            // 满足旧判断，能读出模块目录之外的文件。同文件 :514/:542 与 SSHFileProvider:265
+            // 都是 `== dir || hasPrefix(dir + "/")` 的正确写法，这里是孤立疏漏。
+            let dirPath = dir.standardizedFileURL.path
+            let targetPath = target.standardizedFileURL.path
+            guard targetPath == dirPath || targetPath.hasPrefix(dirPath + "/") else {
                 return "拒绝：路径越出模块数据目录"
             }
             guard let text = try? String(contentsOf: target, encoding: .utf8) else {

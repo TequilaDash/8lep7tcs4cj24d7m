@@ -231,7 +231,9 @@ enum DeviceInfoService {
                 }
             }
         }
-        let crashCount = CrashLogService.shared.crashReportCount()
+        // v0.3.662：crashReportCount 改为 throws（原来 try? 把「读不到」折成 nil，
+        // 与「0 条」在界面上都是「—」）。这里保留可空语义：读不到就是 nil。
+        let crashCount = try? CrashLogService.shared.crashReportCount()
         func intOf(_ v: Any?) -> Int? {
             if let n = v as? Int { return n }
             if let n = v as? NSNumber { return n.intValue }

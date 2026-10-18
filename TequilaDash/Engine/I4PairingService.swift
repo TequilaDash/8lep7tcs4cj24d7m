@@ -487,7 +487,12 @@ enum I4PairingService {
                 wroteToCarrier: nil,
                 verified: false,
                 detail: "设备拒绝了 lockdown Pair 请求（服务 \(service)，原始错误：\(deviceError)）。"
-                    + "路径 A 在此设备 / 系统上不通；\(pairConfigUnavailableReason)"
+                    + "注意：本记录是在**未授权的 RSD 会话**上发出的（未先做 lockdown StartSession）——"
+                    + "本应用只有 RSD 远程配对文件（Ed25519 RpPairingFile），"
+                    + "而 lockdownd_start_session 需要 lockdown 版 IdevicePairingFile（含 HostCertificate），"
+                    + "两者类型不同、仓内无转换路径 ⇒ 无法在此建立已授权会话。"
+                    + "故本条只能说明「未授权会话上 Pair 被拒」，**不能**据此断定路径 A 在本设备 / 系统上不通；"
+                    + "\(pairConfigUnavailableReason)"
             )
 
         case .paired(let pairConfig, let service):

@@ -459,7 +459,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(_ item: IPADownloadItem) -> RemoveResult {
         // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
         // 或反过来都会被下一次 items() 的磁盘对齐改回去。
-        withLedger { () -> RemoveResult in
+        return withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
@@ -491,7 +491,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(fileName: String) -> RemoveResult {
         // v0.3.658（D7）：删文件 + 改台账必须原子 —— 否则「删了文件、台账没改」
         // 或反过来都会被下一次 items() 的磁盘对齐改回去。
-        withLedger { () -> RemoveResult in
+        return withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
@@ -522,7 +522,7 @@ final class IPADownloadLibrary: @unchecked Sendable {
     func remove(fileNames: Set<String>) -> RemoveResult {
         guard !fileNames.isEmpty else { return .removed }
         // v0.3.658（D7）：同上 —— 一批删除也要原子。
-        withLedger { () -> RemoveResult in
+        return withLedger { () -> RemoveResult in
             let load = loadIndex()
             guard load.writable else {
                 logReadOnly(load.note)
