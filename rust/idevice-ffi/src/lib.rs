@@ -100,45 +100,130 @@ use tokio::runtime::{self, Runtime};
 #[cfg(unix)]
 use crate::util::{idevice_sockaddr, idevice_socklen_t};
 
-static GLOBAL_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_io()
-        .enable_time()
-        .build()
-        .unwrap()
+// v0.3.662：build() 失败会 unwrap panic 在 Lazy 初始化里，直接中止进程（panic = abort 时）
+// 或让 panic 穿出 FFI。build_runtime 收回失败并打印原因，调用点再按情况降级/报错。
+fn build_runtime(enable_all: bool) -> std::io::Result<Runtime> {
+    let mut builder = runtime::Builder::new_multi_thread();
+    if enable_all {
+        builder.enable_all();
+    } else {
+        builder.enable_io().enable_time();
+    }
+    builder.build()
+}
+
+static GLOBAL_RUNTIME: Lazy<Option<Runtime>> = Lazy::new(|| match build_runtime(false) {
+    Ok(rt) => Some(rt),
+    Err(e) => {
+        tracing::error!("idevice-ffi: failed to build global tokio runtime: {e}");
+        None
+    }
 });
 
-static LOCAL_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
+static LOCAL_RUNTIME: Lazy<Option<Runtime>> = Lazy::new(|| match build_runtime(true) {
+    Ok(rt) => Some(rt),
+    Err(e) => {
+        tracing::error!("idevice-ffi: failed to build local tokio runtime: {e}");
+        None
+    }
 });
+
+/// run_sync / run_sync_local 的返回类型必须实现本 trait：
+/// panic 时给出占位值，而不是让 panic 穿出 FFI 边界。
+///
+/// 注意：不能对裸指针做 blanket impl 后再补 *mut IdeviceFfiError ——
+/// 两者会撞成重复 impl（E0119）。本 crate 里 R = *mut IdeviceFfiError 的
+/// run_sync 调用全在 unsafe extern "C" 函数体里，那里 panic 本来就 abort，
+/// 不依赖本 trait。
+pub trait FfiPanicFallback {
+    fn panic_fallback() -> Self;
+}
+
+impl<T> FfiPanicFallback for *mut T {
+    fn panic_fallback() -> Self {
+        std::ptr::null_mut()
+    }
+}
+
+impl FfiPanicFallback for () {
+    fn panic_fallback() -> Self {}
+}
+
+impl FfiPanicFallback for bool {
+    fn panic_fallback() -> Self {
+        false
+    }
+}
+
+macro_rules! impl_panic_fallback_default {
+    ($($t:ty),* $(,)?) => {
+        $(impl FfiPanicFallback for $t {
+            fn panic_fallback() -> Self {
+                <$t>::default()
+            }
+        })*
+    };
+}
+
+impl_panic_fallback_default! {
+    i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, char
+}
 
 /// Spawn the future on the global runtime and block current (FFI) thread until result.
 /// F and R must be Send + 'static.
+///
+/// v0.3.662：worker 里的 panic（含第三方 idevice crate 内部的 unwrap）以前走
+/// `expect(...)` 直接中止进程，Swift 侧拿不到任何错误。现在收住并转成错误返回，
+/// 由调用方走普通的 ffi_err! 错误路径。
 pub fn run_sync<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R> + Send + 'static,
-    R: Send + 'static,
+    R: Send + FfiPanicFallback + 'static,
 {
+    let Some(runtime) = GLOBAL_RUNTIME.as_ref() else {
+        tracing::error!("idevice-ffi: global tokio runtime unavailable");
+        return R::panic_fallback();
+    };
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
 
-    GLOBAL_RUNTIME.handle().spawn(async move {
-        let res = fut.await;
-        // best-effort send; ignore if receiver dropped
-        let _ = tx.send(res);
-    });
+    let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.handle().spawn(async move {
+            let res = fut.await;
+            // best-effort send; ignore if receiver dropped
+            let _ = tx.send(res);
+        });
+    }));
+    if spawned.is_err() {
+        tracing::error!("idevice-ffi: failed to spawn task on global tokio runtime");
+        return R::panic_fallback();
+    }
 
-    rx.recv().expect("runtime worker panicked")
+    match rx.recv() {
+        Ok(v) => v,
+        // 发送端随 worker 一起被丢弃 = 任务 panic 了
+        Err(_) => {
+            tracing::error!("idevice-ffi: runtime worker panicked");
+            R::panic_fallback()
+        }
+    }
 }
 
 pub fn run_sync_local<F, R>(fut: F) -> R
 where
     F: std::future::Future<Output = R>,
-    R: 'static,
+    R: FfiPanicFallback + 'static,
 {
-    LOCAL_RUNTIME.block_on(fut)
+    let Some(runtime) = LOCAL_RUNTIME.as_ref() else {
+        tracing::error!("idevice-ffi: local tokio runtime unavailable");
+        return R::panic_fallback();
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runtime.block_on(fut))) {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::error!("idevice-ffi: runtime block_on panicked");
+            R::panic_fallback()
+        }
+    }
 }
 
 pub const LOCKDOWN_PORT: u16 = 62078;

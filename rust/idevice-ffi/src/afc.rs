@@ -587,7 +587,11 @@ pub unsafe extern "C" fn afc_file_open(
 
     let mode = mode.into();
 
-    let res: Result<*mut AfcFileHandle, IdeviceError> = LOCAL_RUNTIME.block_on(async move {
+    // v0.3.662：LOCAL_RUNTIME 现在是 Option，build 失败时直接返回 FFI 错误而不是 panic。
+    let Some(local_runtime) = LOCAL_RUNTIME.as_ref() else {
+        return ffi_err!(IdeviceError::FfiInvalidArg);
+    };
+    let res: Result<*mut AfcFileHandle, IdeviceError> = local_runtime.block_on(async move {
         let client_ref = unsafe { &mut (*client).0 };
         let result = client_ref.open(path, mode).await;
         match result {
