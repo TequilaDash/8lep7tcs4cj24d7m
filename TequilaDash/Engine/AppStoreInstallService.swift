@@ -116,6 +116,14 @@ enum AppStoreInstallService {
                             try FileManager.default.moveItem(at: tmp, to: dest)
                             cont.resume()
                         } catch {
+                            // v0.3.662（task-8 发现5）：**搬运失败时 tmp 也要删**.
+                            //
+                            // moveItem 抛出（磁盘满 / 跨卷 / dest 被占用）时，tmp 是
+                            // IPAFileDownloader 已经写好的**完整包**，而且它在
+                            // `FileManager.default.temporaryDirectory` 下用的是 UUID 名字 ——
+                            // 除了这里没有任何代码还能找到它。旧实现直接 resume(throwing)，
+                            // 这个包就永久留在 tmp 里，直到系统自己清理.
+                            try? FileManager.default.removeItem(at: tmp)
                             cont.resume(throwing: error)
                         }
                     case .failure(let err):
@@ -551,6 +559,13 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
         }
         if let http = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(http.statusCode) {
+            // v0.3.662（task-8 发现4）：**失败分支必须把刚搬出来的 keep 删掉**.
+            //
+            // 上面 :543-547 已经把系统临时文件搬到了 `ipa-<UUID>.part` —— 不删的话，
+            // 这个 UUID 命名的文件永远不会再被任何代码引用（下次下载会用新 UUID），
+            // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**。重定向到登录页/错误页时
+            // 这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满.
+            try? FileManager.default.removeItem(at: keep)
             finish(.failure(AppStoreInstallService.InstallError
                 .requestFailed("下载 HTTP \(http.statusCode)")))
             return

@@ -47,6 +47,8 @@ struct IPAInstallView: View {
     @State private var successMessage: String?
     @State private var step: Step = .idle
     @State private var installProgress: Double = 0
+    /// v0.3.662（task-8 发现10）：本次安装的签名产物 .app 路径，装完/失败后删除.
+    @State private var lastSignedAppPath: String?
 
     /// 一个已下载/导入的 IPA 文件.
     private struct SavedIPA: Identifiable {
@@ -673,6 +675,25 @@ struct IPAInstallView: View {
 
     // MARK: - 安装流程
 
+    /// v0.3.662（task-8 发现10）：**签名产物 .app 目录用完必须删**.
+    ///
+    /// `IPAInstallService.signIPA`（Engine/IPAInstallService.swift:447）返回的是 Rust 侧
+    /// 在沙盒里新建的**已签名 .app 目录**，本 View 之前只把它当路径用、安装完 / 失败后
+    /// 都不删 —— 每次安装都在设备上多留一份与 IPA 同等体积的解包产物（几百 MB 的
+    /// 游戏包尤其明显），长期累积会撑爆应用沙盒.
+    ///
+    /// 只删本次 `signIPA` 真正返回的那个目录（`lastSignedAppPath`），不扫目录、不删别人
+    /// 的产物；删失败也不影响安装结果（签名产物本来就是一次性的）.
+    private func cleanupSignedProduct() {
+        guard let path = lastSignedAppPath else { return }
+        lastSignedAppPath = nil
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: path) else { return }
+        // 防御：只删 .app 目录，绝不删到用户选中的原始 .ipa/解包目录.
+        guard path.hasSuffix(".app") else { return }
+        try? fm.removeItem(atPath: path)
+    }
+
     private func startInstall() {
         guard !isRunning, let ipa = ipaURL else { return }
         isRunning = true
@@ -708,6 +729,8 @@ struct IPAInstallView: View {
                 let signedPath = try await Task.detached(priority: .userInitiated) {
                     try IPAInstallService.shared.signIPA(ipaPath: ipa.path)
                 }.value
+                // v0.3.662（task-8 发现10）：先记下，成功/失败后由 cleanupSignedProduct() 删.
+                lastSignedAppPath = signedPath
                 // 3. 安装
                 step = .installing
                 try await Task.detached(priority: .userInitiated) {
@@ -725,5 +748,7 @@ struct IPAInstallView: View {
             }
             isRunning = false
         }
+        // v0.3.662（task-8 发现10）：无论成功失败都清掉本次签名产物.
+        cleanupSignedProduct()
     }
 }

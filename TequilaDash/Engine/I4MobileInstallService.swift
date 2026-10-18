@@ -243,7 +243,12 @@ enum I4MobileInstallService {
         let installedConfirmed: Bool?
         /// **恒为 `false`**：本服务不验证包能否在本机启动.
         let launchVerified: Bool
-        /// 启动风险提示：安装后未在设备上回读到时为 `true`.
+        /// 启动风险提示：**恒为 `true`** —— 本服务从不验证启动，安装成功也不等于能启动
+        /// （sinf 与包体不匹配、设备未授权等情况都会「装上了但一点就闪退」）.
+        /// v0.3.660 审计 M-4：原实现是 `mayCrashAtLaunch = (confirmed == false)`，
+        /// 把「没回读到 App」当成了「会闪退」，方向反了 ——
+        /// 真装上了（`confirmed == true`）时反而给 `false`，等于给出**虚假的安心信号**；
+        /// 「安装存疑」应由 `installedConfirmed == false` 独立表达，不要塞进这个字段.
         let mayCrashAtLaunch: Bool
         /// 如实的补充说明（逐条事实 + 边界）.
         let notes: [String]
@@ -616,16 +621,23 @@ enum I4MobileInstallService {
         guard let url = resolveURL(for: pack) else {
             throw I4MobileError.packResourceMissing(pack.fileName)
         }
+        if Task.isCancelled { throw CancellationError() } // M-3
         let ipaPath = url.path
         let ipaBytes = fileSize(at: ipaPath)
         onLog?("[i4移动端] 定位 \(pack.fileName)：cache · \(ipaBytes / 1024 / 1024) MB")
 
         // ② 检测包 + 取 metadata（metadata 作安装选项；sinf 取包内自带）.
+        // M-5：`?? pack.expectedBundleId` 是**顶替**而非读到的真实值：包信息读不出时，
+        // 内置包会用期望值填进 Report.bundleId/bundleVersion，自定义包（expectedBundleId 恒为 ""）
+        // 则得到空串 —— 后续 probeDevice("") 与 Report.bundleId="" 都无意义.
+        // 这里不改签名（全仓有调用方），只在日志里把「读到的」与「期望的」分开说清楚.
         let inspection = IPAPackageInspector.inspect(ipaPath: ipaPath)
         let bundleId = inspection?.bundleIdentifier ?? pack.expectedBundleId
         let bundleVersion = inspection?.bundleVersion ?? pack.expectedVersion
         if let inspection {
             onLog?("[i4移动端] 包信息：\(bundleId) \(bundleVersion) · \(inspection.summary)")
+        } else if pack.expectedBundleId.isEmpty {
+            onLog?("[i4移动端] 包信息读不出（主二进制 / Info.plist 解析失败），本包无期望 bundle id，安装后无法按 bundle id 回读")
         } else {
             onLog?("[i4移动端] 包信息读不出（主二进制 / Info.plist 解析失败），按文件名 \(pack.fileName) 继续")
         }
@@ -638,6 +650,7 @@ enum I4MobileInstallService {
                + accountLogSuffix(resolved.account))
 
         // ④ 复制到临时目录（原件只读，绝不被改写）.
+        if Task.isCancelled { throw CancellationError() } // M-3：大包复制前先看一眼，别白拷几百 MB.
         let workURL = try makeWorkCopy(of: url, fileName: pack.fileName)
         defer { try? FileManager.default.removeItem(at: workURL.deletingLastPathComponent()) }
         onLog?("[i4移动端] 已复制工作副本：\(workURL.lastPathComponent)")
@@ -658,6 +671,7 @@ enum I4MobileInstallService {
         // ⑦ 安装副本（同一份 sinf 作 ApplicationSINF；阻塞调用放后台）.
         onLog?("[i4移动端] 经 ApplicationSINF 通道安装副本"
                + "（PackageType=Customer, upgrade=\(allowUpgrade)）…")
+        if Task.isCancelled { throw CancellationError() } // M-3：上传+安装是整条链最长的一段.
         let svc = IPAInstallService.shared
         let workPath = workURL.path
         let sinf = resolved.sinf
@@ -694,6 +708,7 @@ enum I4MobileInstallService {
                            onLog: (@Sendable (String) -> Void)? = nil) async throws -> [Report] {
         var reports: [Report] = []
         for (idx, pack) in packs.enumerated() {
+            if Task.isCancelled { throw CancellationError() } // M-3：包间可中断（已装成功的包不回滚）.
             onLog?("[i4移动端] (\(idx + 1)/\(packs.count)) 安装 \(pack.fileName)")
             let report = try await install(pack: pack, allowUpgrade: allowUpgrade,
                                            progress: progress, onLog: onLog)
@@ -721,6 +736,7 @@ enum I4MobileInstallService {
         }
         var reports: [Report] = []
         for (idx, pack) in cached.enumerated() {
+            if Task.isCancelled { throw CancellationError() } // M-3：包间可中断（已装成功的包不回滚）.
             onLog?("[i4移动端] (\(idx + 1)/\(cached.count)) 安装已缓存 \(pack.fileName)")
             let report = try await install(pack: pack, allowUpgrade: allowUpgrade,
                                            progress: progress, onLog: onLog)
@@ -930,6 +946,15 @@ enum I4MobileInstallService {
 
     /// 读设备已装 App 的 bundle id 集合（best-effort；读不到返回空集合，不抛错）.
     ///
+    /// ⚠️ 返回**空集合**有两种含义，调用方无法区分（v0.3.660 审计 M-7）：
+    ///   ① 设备上真没装任何 App；
+    ///   ② 读失败（instproxy 不可用 / 隧道断）。
+    /// 二者被折叠成同一个 `Set<String>()`。当前唯一消费方 `autoPick` 只用它判
+    ///   `contains("com.ownbook.notes")`，而 ① 档（305）在本仓无包体、必然回落，
+    ///   所以**选包结果不受影响**，只有 `trace` 文案可能多一句「按爱思做法跳过」.
+    ///   若将来 ① 档补了包体，这里必须改成返回 `Set<String>?` 以区分「读失败」，
+    ///   否则读失败会被当成「未装」而选出错误档位.
+    ///
     /// 阻塞调用（建 RSD 隧道 + instproxy 枚举），放后台；只把 Sendable 的 `Set<String>` 带回边界
     /// （与 `probeDevice` 同一模式）.
     static func installedBundleIds() async -> Set<String> {
@@ -1086,7 +1111,8 @@ enum I4MobileInstallService {
                          + "可能安装未落盘，或探测不可靠（隧道 / 权限）.")
         }
 
-        let mayCrash = (confirmed == false)
+        // M-4：恒 true —— 本服务只装不验，任何「装上了」都不等于「能启动」.
+        let mayCrash = true
         let verdict: String
         if confirmed == false {
             verdict = "已向 installd 递交安装，但未回读到该 App，安装结果存疑."
