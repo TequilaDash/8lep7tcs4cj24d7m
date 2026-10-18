@@ -100,8 +100,9 @@ enum AppStoreLocalInstallService {
         // 商店 API 响应里的 `downloadURL` 逐字进入下载，若被引到第三方域，包内的
         // `SC_Info/Manifest.plist` 就不可信（vendor 侧有意不做路径校验，正是以此为前提）。
         let dest = try await AppStoreInstallService.downloadIPA(urlString: output.downloadURL,
-            suggestedName: name, progress: downloadProgress, byteProgress: byteProgress,
-            hostPolicy: StoreAuthenticationProtocol.isAppleHost, control: control, onLog: onLog)
+            suggestedName: name, progress: downloadProgress,
+            hostPolicy: StoreAuthenticationProtocol.isAppleHost, control: control,
+            byteProgress: byteProgress, onLog: onLog)
         try Task.checkCancellation()
         // v0.3.578：注入 sinf 保留 —— 它是「**安装前的准备**」，与「是否自动装」无关
         // （与 v0.3.412 保留牛蛙源 sinf 写回同理）。注入后包才具备被 `installLocalIPA` 安装的条件，

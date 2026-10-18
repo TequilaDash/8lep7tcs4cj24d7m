@@ -22,6 +22,7 @@ struct MoreView: View {
     @ObservedObject var appList: AppListViewModel
     var onResetPairing: () -> Void
     @State private var showSettings = false
+    @State private var showTunnelLog = false
     @State private var showDeviceControl = false
 
     // MARK: - 分组数据
@@ -200,6 +201,16 @@ struct MoreView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     AppHaptics.tap()
+                    showTunnelLog = true
+                } label: {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .imageScale(.large)
+                }
+                .accessibilityLabel("隧道日志")
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    AppHaptics.tap()
                     showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
@@ -225,6 +236,9 @@ struct MoreView: View {
                         }
                     }
             }
+        }
+        .navigationDestination(isPresented: $showTunnelLog) {
+            NavigationLazyView(TunnelLogView())
         }
     }
 
