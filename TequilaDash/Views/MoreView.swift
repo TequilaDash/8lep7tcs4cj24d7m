@@ -20,7 +20,8 @@ import SwiftUI
 struct MoreView: View {
     @ObservedObject private var hotfix = HotfixService.shared
     @ObservedObject var appList: AppListViewModel
-    var onResetPairing: () -> Void
+    /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）.
+    var onResetPairing: () throws -> Void
     @State private var showSettings = false
     @State private var showTunnelLog = false
     @State private var showDeviceControl = false

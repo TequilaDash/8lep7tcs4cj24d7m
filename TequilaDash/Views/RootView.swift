@@ -42,15 +42,11 @@ struct RootView: View {
 
             NavigationStack {
                 MoreView(appList: viewModel, onResetPairing: {
-                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除）。
-                    // 设置页里的“重置配对文件”按钮已经接住错误并弹窗；这条入口只做跳转，
-                    // 失败时保持页面不动，避免「跳到主页但什么都没重置」。
-                    do {
-                        try viewModel.resetPairing()
-                        selectedTab = .home
-                    } catch {
-                        resetPairingError = error.localizedDescription
-                    }
+                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除，返回 -8）。
+                    // 这个闭包是 throwing 的：失败原因由设置页（SettingsForm）接住并弹窗，
+                    // 这里只负责「成功之后跳到主页」，避免「跳到主页但什么都没重置」。
+                    try viewModel.resetPairing()
+                    selectedTab = .home
                 })
             }
             .tabItem {
@@ -214,7 +210,8 @@ struct EmptyStateView: View {
 
 /// Settings form embedded in the Settings tab.
 struct SettingsForm: View {
-    var onResetPairing: () -> Void
+    /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）。
+    var onResetPairing: () throws -> Void
     @StateObject private var memorySettings = MemoryLimitSettings.shared
     /// v0.3.122：开发证书状态观察（创建成功/失败即时刷新 UI）
     @StateObject private var certStore = DeveloperCertStore.shared
@@ -376,12 +373,15 @@ struct SettingsForm: View {
                 }
 
                 Button("重置配对文件", role: .destructive) {
-                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（-8）。
+                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（返回 -8）。
                     // 旧代码不看结果，用户以为已重置而配对文件仍在、隧道仍是旧身份。
-                    // AppListViewModel.resetPairing 已是 throwing，这里把失败原因弹出来。
+                    // onResetPairing 现在是 throwing 的，失败原因在这里接住交给下方 alert 展示；
+                    // 成功后的界面跳转由 RootView 的闭包负责（本结构体没有 appList 引用）。
                     do {
-                        try appList.resetPairing()
+                        try onResetPairing()
                     } catch {
+                        // 失败原因交给下方 .alert("重置配对文件失败") 展示；
+                        // 成功路径由 RootView 闭包负责跳回主页。
                         resetPairingError = error.localizedDescription
                     }
                 }
@@ -489,10 +489,7 @@ struct SettingsForm: View {
         .sheet(item: $shareTarget) { target in
             ShareSheet(items: [target.url])
         }
-        .alert("重置配对文件失败", isPresented: Binding(
-            get: { resetPairingError != nil },
-            set: { if !$0 { resetPairingError = nil } }
-        )) {
+        .alert("重置配对文件失败", isPresented: resetPairingAlert) {
             Button("好", role: .cancel) {}
         } message: {
             Text(resetPairingError ?? "")
@@ -525,6 +522,17 @@ struct SettingsForm: View {
                 certError = desc
             }
         }
+    }
+
+    /// 重置配对文件失败弹窗的绑定。
+    /// v0.3.674：原先内联写成 `.alert(_:isPresented: Binding(get:set:))`，
+    /// 叠在整条 SettingsForm 修饰链上会把类型检查推到超时（CI: "the compiler is unable to
+    /// type-check this expression in reasonable time"）。抽成计算属性后每段表达式独立求解。
+    private var resetPairingAlert: Binding<Bool> {
+        Binding(
+            get: { resetPairingError != nil },
+            set: { if !$0 { resetPairingError = nil } }
+        )
     }
 
     private static var aboutLine: String {

@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.3.674] - 2026-10-18
+
+> **一句话**：修 v0.3.673 引入的 3 处编译错（全部在 RootView.swift）。这一版只动界面层的
+> 「重置配对文件」链路，引擎与隧道行为零变化。
+
+### 一、v0.3.673 的编译错（CI run 39138054691 红）
+
+v0.3.673 把 `AppListViewModel.resetPairing()` 改成 throwing 时，改动被写进了错误的类型作用域，
+`xcode-build` 在 step 26 `Build (compile/link, no Apple signing)` 报三条错：
+
+| 位置 | 报错 | 根因 |
+|---|---|---|
+| `RootView.swift:52` | `cannot find 'resetPairingError' in scope` | `resetPairingError` 是 `SettingsForm` 的 `@State`（:225），却被写进 `RootView.body` 的闭包 |
+| `RootView.swift:383` | `cannot find 'appList' in scope` | `try appList.resetPairing()` 被写进 `SettingsForm`，该结构体只有 `onResetPairing` 闭包、没有 `appList` |
+| `RootView.swift:498` | `the compiler is unable to type-check this expression in reasonable time` | `.alert(_:isPresented: Binding(get:set:))` 内联叠在整条 `SettingsForm` 修饰链上 |
+
+三条都不是 `swiftc -parse` 能查出来的（只查语法，不查成员存在性与类型求解耗时），只有真编译能抓。
+
+### 二、改法
+
+- **`onResetPairing` 改成 throwing 契约**（`TequilaDash/Views/MoreView.swift:24`、`TequilaDash/Views/RootView.swift:213`）：
+  原先「失败原因写进 `AppListViewModel.errorMessage`」的做法在设置页 sheet 里根本看不见（错误落在主页列表区，
+  而用户此刻在 sheet 里）。现在失败由设置页自己弹窗，成功才跳主页。
+- **`AppListView.swift:340`**：`func resetPairing() throws`，函数体只留 `try discovery.resetPairing()` + 清空列表 + `reload()`。
+  失败时**不动 UI 状态**（旧代码先清空再 reload，用户会看到「已重置」但配对文件仍在）。
+- **`RootView.swift:44-50`**（`MoreView` 的闭包）：`try viewModel.resetPairing()` + `selectedTab = .home`，
+  失败时异常往上抛给设置页，页面不跳转 —— 避免「跳到主页但什么都没重置」。
+- **`RootView.swift:379-385`**（设置页按钮）：`do { try onResetPairing() } catch { resetPairingError = error.localizedDescription }`，
+  错误落到既有的 `.alert("重置配对文件失败")`。
+- **`RootView.swift:530-535`**：把 `Binding(get:set:)` 抽成计算属性 `private var resetPairingAlert: Binding<Bool>`，
+  让每段表达式独立求解，绕开类型检查超时。
+
+### 三、验证
+
+- `python Resources/Scripts/normalize_eol.py`：EXIT=0。
+- `python Resources/Scripts/swift_precommit_check.py .`：EXIT=0，15 个 guard 全过（含版本号三处、UI 文案 G1/G2/G3）。
+- `swiftc -parse` 三个改动文件全 OK（但如上所述，-parse 通过不代表能编译）。
+- 真判决：CI run 见本版提交后的 xcode-build。
+
 ## [0.3.673] - 2026-10-18
 
 > **一句话**：把 20 个并行审计员这一轮的全部修复一次落地 —— 隧道心跳静默死亡、安装包孤儿分片、

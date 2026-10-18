@@ -332,16 +332,13 @@ final class AppListViewModel: ObservableObject {
         try importPairingFile(contents)
     }
 
-    func resetPairing() {
-        // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 会拒绝删除（-8），
-        // 旧代码把它当成功 —— 清空列表再 reload，用户看到「已重置」但配对文件仍在、
-        // 隧道仍是旧身份。这里改为：失败就**不动 UI 状态**并把错误交给界面。
-        do {
-            try discovery.resetPairing()
-        } catch {
-            errorMessage = error.localizedDescription
-            return
-        }
+    /// 重置配对文件（删除 Documents/pairingFile.plist 并清空应用列表）。
+    ///
+    /// v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 会拒绝删除（返回 NO / -8）。
+    /// 旧代码把它当成功 —— 清空列表再 reload，用户看到「已重置」但配对文件仍在、隧道仍是旧身份。
+    /// 现在改成 throwing：失败时**不动 UI 状态**，由调用方决定怎么提示。
+    func resetPairing() throws {
+        try discovery.resetPairing()
         apps = []
         icons = [:]
         reload()
