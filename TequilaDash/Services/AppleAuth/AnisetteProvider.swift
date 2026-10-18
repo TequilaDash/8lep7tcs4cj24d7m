@@ -26,6 +26,41 @@ final class AnisetteProvider {
         return URLSession(configuration: config)
     }()
 
+    /// v0.3.662（task-13 发现9）：**把取数入口串行化**.
+    ///
+    /// 上面 :12-16 的注释原本断言「现有调用方均以 await 串行发起，不存在并发进入」——
+    /// 该前提并不成立：`AppleDeveloperAPI` 的每个公开方法（fetchTeams / fetchAppIDs /
+    /// fetchCertificates / submitSigningCertificate / revokeCertificate …）各自调用
+    /// `makeHeaders` → `getAnisetteDataWithFallback`，而 AppleIDLoginSheet 也会并发发起。
+    /// 这些调用共享同一份**无锁**可变状态（clientInfo / userAgent / mdLu / deviceId），
+    /// 失败路径上的 `reset()` / `resetProvisioning()` 还会把它们清空 ——
+    /// 交错时一方会读到另一方刚清掉的字段，`makeAppleRequest` 随即抛「缺少 client_info 字段」.
+    ///
+    /// 这里用一把异步信号量把**整个取数流程**串起来，使「串行」由代码保证而不是靠调用方自觉。
+    /// 不改任何公开签名；等待上限与取数自身的超时预算对齐（避免自己也变成永久阻塞）。
+    private let fetchGate = AsyncGate()
+
+    /// 极简异步互斥（FIFO 不在语义要求内，够用即可）.
+    /// 用 actor 持有状态 + 轮询等待，避免引入 AsyncSemaphore 之类的新依赖.
+    private final class AsyncGate {
+        private let lock = NSLock()
+        private var busy = false
+        /// 单次等锁上限：比单次取数硬超时（35s）更长，确保等待者不会比取数本身先放弃.
+        func tryAcquire(timeout: TimeInterval) async -> Bool {
+            let deadline = Date().addingTimeInterval(timeout)
+            while true {
+                lock.lock()
+                if !busy { busy = true; lock.unlock(); return true }
+                lock.unlock()
+                if Date() >= deadline { return false }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+        func release() {
+            lock.lock(); busy = false; lock.unlock()
+        }
+    }
+
     private var url: URL? { URL(string: UserDefaults.standard.string(forKey: "AnisetteServer") ?? "https://ani.stikstore.app") }
 
 
@@ -291,7 +326,48 @@ final class AnisetteProvider {
     ///
     /// 每次重试前会 `reset()`：清掉内存缓存与 keychain 里的 identifier/adiPb，
     /// 强制重新生成 identifier 并对新服务器走完整 provision，避免拿旧会话重试.
+    /// 单次取数的硬超时（秒）——**小于**整体预算 75s，留出换服务器重试的余量.
+    ///
+    /// 取值依据：下面三条请求各自的显式 timeout 是 10s（client_info）/ 15s（get_headers）/
+    /// 30s（WebSocket 与 gsa），最坏一次完整 provision ≈ 3~4 次串联，故 35s 是
+    /// 「正常流程一定跑得完、卡死一定抓得住」的折中。它**不改变**任何成功路径的语义.
+    private static let attemptTimeout: TimeInterval = 35
+
+    /// 单次尝试的硬超时包装：超时会抛 `AppleAPIError`，由调用方走既有的换服务器重试.
+    ///
+    /// 为什么必须这样做：`getAnisetteData` 内部有 WebSocket 的
+    /// `withCheckedThrowingContinuation`，它只在收到消息 / 出错时 resume；
+    /// 服务器在握手后不再发消息时该 continuation 永不 resume，`await` 也就永不返回 ——
+    /// 只靠「await 之后检查 elapsed」的外部预算是抓不住这种卡死的.
+    private nonisolated static func withAttemptTimeout(
+        _ seconds: TimeInterval,
+        _ operation: @escaping @Sendable () async throws -> AnisetteData
+    ) async throws -> AnisetteData {
+        try await withThrowingTaskGroup(of: AnisetteData.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw AppleAPIError.customError(
+                    code: -22421,
+                    message: "Anisette 单次取数超过 \(Int(seconds)) 秒未返回（疑似服务器无响应）")
+            }
+            guard let first = try await group.next() else {
+                throw AppleAPIError.customError(code: -22421, message: "Anisette 取数未返回")
+            }
+            group.cancelAll()
+            return first
+        }
+    }
+
     func getAnisetteDataWithFallback(refresh: Bool = false, maxAttempts: Int = 3) async throws -> AnisetteData {
+        // v0.3.662（task-13 发现9）：进入即抢占取数闸门，保证本流程专用的可变状态
+        // (clientInfo / userAgent / mdLu / deviceId / lastFailureStage) 同一时刻只有一个写者.
+        // 上限 60s：比最长一次流程（3 次尝试 × 35s 硬超时，实际受 75s 总预算约束）留出余量，
+        // 但又给了「死等」一个确定终点，不会把新调用者永久挂在锁上.
+        guard await fetchGate.tryAcquire(timeout: 60) else {
+            throw AppleAPIError.customError(code: -22422, message: "等待上一个 Anisette 取数流程超时（60s），请稍后重试.")
+        }
+        defer { fetchGate.release() }
         let originalServer = currentServer
         let started = Date()
         // v0.2.116：整体时间预算.就算某个请求没被单条 timeout 拦住（例如 WebSocket
@@ -301,7 +377,20 @@ final class AnisetteProvider {
         var attempt = 0
         while attempt < maxAttempts {
             do {
-                let data = try await getAnisetteData(refresh: refresh)
+                // v0.3.662（task-13 发现12）：**给单次取数加真正的硬超时**.
+                //
+                // 旧实现只在 `await` **返回之后**才检查 budget（见下方 `elapsed < budget`），
+                // 于是「某一次 getAnisetteData 永不返回」时预算永远检查不到 ——
+                // 最典型的是 `startProvisioningSession` 的 `withCheckedThrowingContinuation`
+                // 只在 `receiveProvisioningMessages` 的 4 个分支里 resume，WebSocket 在握手后
+                // 不再发消息时那个 continuation 会**永久挂住**。而本函数上方注释承诺
+                // 「绝不把 UI 永久留在 loading」，旧代码做不到.
+                //
+                // 现在每次尝试都被一个独立的超时任务竞赛：超时即本任务抛错、
+                // 交给下面的 catch 走「换服务器重试」与「还原服务器」逻辑.
+                let data = try await Self.withAttemptTimeout(Self.attemptTimeout) {
+                    try await Self.shared.getAnisetteData(refresh: refresh)
+                }
                 lastFailureStage = nil
                 return data
             } catch {

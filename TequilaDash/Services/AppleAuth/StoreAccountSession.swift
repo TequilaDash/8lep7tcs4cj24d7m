@@ -19,7 +19,12 @@ private actor StoreAccountRequestGate {
     /// 于是**一次超时之后链路自行恢复**。
     static let acquireTimeout: TimeInterval = 25
 
-    /// 因超时被强制接管的次数（诊断用）
+    /// 因超时被强制接管的次数（诊断用）.
+    ///
+    /// v0.3.662（task-13 发现13）：此前该计数器**只写不读**（全仓无消费者）,
+    /// 而它恰好是排查「下载卡在准备中 0%」时最关键的一项指标 —— 每次强制接管
+    /// 都意味着有并发操作在共享同一账号会话。现在在接管发生的那条日志里带上它,
+    /// 让它不再是一条死代码。
     private(set) var forcedAcquires = 0
 
     /// 取锁。返回 `true` 表示「是超时夺来的」（调用方应记日志）。
@@ -40,6 +45,9 @@ private actor StoreAccountRequestGate {
     func release(_ email: String) {
         owners.remove(email)
     }
+
+    /// 供诊断日志读取的强制接管次数（actor 的隔离属性不能跨隔离域直读）.
+    func forcedAcquireCount() -> Int { forcedAcquires }
 }
 
 enum StoreAccountSession {
@@ -53,8 +61,10 @@ enum StoreAccountSession {
         if forcedByTimeout {
             // 强制接管：上一个持有者很可能因 App 进后台被挂起/回收而未释放租约；
             // 本次结束时 release 会把它清掉，所以一次超时之后链路自行恢复。
+            let forcedCount = await gate.forcedAcquireCount()
             LoginLogger.shared.log(
-                "[会话] 账号租约等待超过 \(Int(StoreAccountRequestGate.acquireTimeout))s，已强制接管继续.",
+                "[会话] 账号租约等待超过 \(Int(StoreAccountRequestGate.acquireTimeout))s，已强制接管继续"
+                + "（本进程累计强制接管 \(forcedCount) 次）.可能原因：上一个持有者被系统挂起/回收.",
                 category: .appleID)
         }
         do {

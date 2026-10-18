@@ -456,6 +456,17 @@ final class BinaryModuleRunner: ObservableObject {
         if cachedBinaryModuleHandle == nil { cachedBinaryModuleHandle = h }
         handleLock.unlock()
     }
+    /// v0.3.662（task-13 发现5）：**加锁**取已缓存句柄的快照.
+    ///
+    /// 为什么单独抽一个：`resolveBinaryModuleSymbol` 跑在 SSH/NIO 线程，
+    /// 而 `cacheBinaryModuleHandle` 由后台建连线程写入；裸读 `cachedBinaryModuleHandle`
+    /// 与写入不在同一把锁下 —— 与 :448-452 注释承诺的「访问全部经由 handleLock」矛盾.
+    nonisolated private static func cachedHandleSnapshot() -> UnsafeMutableRawPointer? {
+        handleLock.lock()
+        defer { handleLock.unlock() }
+        return cachedBinaryModuleHandle
+    }
+
     /// v0.3.158：解析进程内模块的桥接导出符号（停止/重置密码等）
     /// 优先已加载 dylib 句柄 → 内置静态（RTLD_DEFAULT）.
     nonisolated static func resolveBridgeSymbol(_ name: String) -> UnsafeMutableRawPointer? {
@@ -477,7 +488,7 @@ final class BinaryModuleRunner: ObservableObject {
                 try? text.data(using: .utf8)?.write(to: logFile)
             }
         }
-        if let h = cachedBinaryModuleHandle, let s = dlsym(h, name) { return s }
+        if let h = Self.cachedHandleSnapshot(), let s = dlsym(h, name) { return s }
         if let dylib = findDylib(moduleDir: moduleDir) {
             if let h = dlopen(dylib.path, RTLD_NOW | RTLD_GLOBAL) {
                 cacheBinaryModuleHandle(h)

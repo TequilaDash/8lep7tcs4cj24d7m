@@ -141,7 +141,12 @@ enum NBStoreClient {
         /// `aE`="E"→"-"、`aFf`="FF"→"."（顺序不可颠倒）。
         static func encrypt(_ plain: Data) -> String? {
             let (key, iv) = deriveKeyIV()
-            guard let ct = aesCBC(plain, key: key, iv: iv, encrypt: true) else { return nil }
+            let (maybeCT, status) = aesCBC(plain, key: key, iv: iv, encrypt: true)
+            guard let ct = maybeCT else {
+                LoginLogger.shared.log("\(logTag) [失败] 请求体加密失败：\(describe(status, cipherLength: plain.count))",
+                                       category: .appStore)
+                return nil
+            }
             return ct.map { String(format: "%02x", $0) }.joined()
                 .uppercased()
                 .replacingOccurrences(of: "E", with: "-")
@@ -159,7 +164,14 @@ enum NBStoreClient {
             guard let raw = Data(base64Encoded: trimmed,
                                  options: [.ignoreUnknownCharacters]) else { return nil }
             let (key, iv) = deriveKeyIV()
-            return aesCBC(raw, key: key, iv: iv, encrypt: false)
+            let (plain, status) = aesCBC(raw, key: key, iv: iv, encrypt: false)
+            if plain == nil {
+                // 密文长度与状态码一起打 —— 只看「解密失败」根本分不清是数据坏了还是我们算错了。
+                LoginLogger.shared.log("\(logTag) [失败] 响应解密失败：\(describe(status, cipherLength: raw.count))"
+                                       + "（base64 解出 \(raw.count) 字节）",
+                                       category: .appStore)
+            }
+            return plain
         }
 
         /// 原始响应字节 → 明文。自行处理 gzip 外壳（不依赖 URLSession 的自动解压）。
@@ -223,8 +235,51 @@ enum NBStoreClient {
             return out
         }
 
-        /// AES-128-CBC + PKCS7（走 CommonCrypto，与客户端同款）
-        private static func aesCBC(_ data: Data, key: Data, iv: Data, encrypt: Bool) -> Data? {
+        /// 把 `CCCryptorStatus` + 密文长度翻成一行可排查的人话（ND-03）.
+        ///
+        /// `CommonCrypto` 的状态码是**负数**（`kCCDecodeError = -4304`），日志里带原始值，
+        /// 便于与 Apple 官方头文件的定义逐一对照；`长度 % 16` 用来一眼看出「不是整块」。
+        static func describe(_ status: CCCryptorStatus, cipherLength: Int) -> String {
+            let name: String
+            switch status {
+            case kCCSuccess: name = "kCCSuccess"
+            case kCCParamError: name = "kCCParamError"
+            case kCCBufferTooSmall: name = "kCCBufferTooSmall"
+            case kCCMemoryFailure: name = "kCCMemoryFailure"
+            case kCCAlignmentError: name = "kCCAlignmentError"
+            case kCCDecodeError: name = "kCCDecodeError"
+            case kCCOverflow: name = "kCCOverflow"
+            case kCCRNGFailure: name = "kCCRNGFailure"
+            case kCCUnimplemented: name = "kCCUnimplemented"
+            default: name = "未知状态"
+            }
+            let blockRemainder = cipherLength % kCCBlockSizeAES128
+            var text = "status=\(status)（\(name)），密文 \(cipherLength) 字节，长度%\(kCCBlockSizeAES128)=\(blockRemainder)"
+            if blockRemainder != 0 {
+                text += " —— 密文长度不是块大小整数倍，CBC 必然解不出明文"
+            } else if status == kCCDecodeError {
+                text += " —— 长度合法但填充校验失败，说明字节内容不是 AES 密文（可能是明文 / 换了密钥 / 解错了层次）"
+            } else if status == kCCBufferTooSmall {
+                text += " —— 我们自己的输出缓冲区算小了（代码问题，不是数据问题）"
+            }
+            return text
+        }
+
+        /// AES-128-CBC + PKCS7（走 CommonCrypto，与客户端同款）。
+        ///
+        /// ## v0.3.663（ND-03）：失败时**必须把 `CCCryptorStatus` 带出去**
+        ///
+        /// 原实现 `guard status == kCCSuccess else { return nil }` 把状态码吞掉，
+        /// 上层只剩一个「解密失败」。真机上最常见的两种失败恰恰**原因相反**：
+        /// · `kCCDecodeError` = 密文没解出来（PKCS7 填充非法 / base64 解成了别的东西）；
+        /// · `kCCBufferTooSmall` = 我们自己的缓冲区算小了（是代码 bug，不是数据问题）。
+        /// 只有一个「解密失败」时，排查方向会被带到数据上 —— 与「data 打出来是正常 base64」
+        /// 自相矛盾。现在把 status 原样返回，由 `describe` 翻成人话并写进日志。
+        ///
+        /// 另：CBC 解密的输入长度必须是**块大小的整数倍**，不是 16 的倍数的密文
+        /// CCCrypt 无论如何都解不出明文 —— 单独报这个，比笼统的 `kCCAlignmentError` 有用。
+        private static func aesCBC(_ data: Data, key: Data, iv: Data,
+                                   encrypt: Bool) -> (Data?, CCCryptorStatus) {
             let outCap = data.count + kCCBlockSizeAES128
             var out = Data(count: outCap)
             var moved = 0
@@ -244,9 +299,9 @@ enum NBStoreClient {
                     }
                 }
             }
-            guard status == kCCSuccess else { return nil }
+            guard status == kCCSuccess else { return (nil, status) }
             out.removeSubrange(moved..<out.count)
-            return out
+            return (out, status)
         }
     }
 
@@ -622,6 +677,7 @@ enum NBStoreClient {
         // 这里按 `hosts` 顺序逐条试：失败就换下一条，全部失败才抛最后一个错误。
         var data: Data?
         var lastError: Error?
+        var hitHost: String?
         let order = hostOrder()
         for base in order {
             guard let attemptURL = URL(string: path.isEmpty ? (base + "/nb/app") : (base + path)) else {
@@ -639,6 +695,7 @@ enum NBStoreClient {
                     throw StoreError.http(http.statusCode)
                 }
                 data = d
+                hitHost = base
                 noteHostSuccess(base)
                 break
             } catch {
@@ -664,10 +721,22 @@ enum NBStoreClient {
 
         let code = String(describing: obj["code"] ?? "-")
         let msg = (obj["msg"] as? String) ?? ""
-        LoginLogger.shared.log("\(logTag) ← code=\(code) msg=\(truncate(msg))", category: .appStore)
+        // ND-13：把**实际命中的 host** 打在响应行上 —— 只打请求行看不出中途换过 host，
+        // 排查「这条响应到底来自哪台服务器」时全靠它。
+        LoginLogger.shared.log("\(logTag) ← code=\(code) msg=\(truncate(msg))"
+                               + "（实际命中 \(hitHost ?? "?")，本轮共试 \(order.count) 条）",
+                               category: .appStore)
 
         // code=0 才是成功；其余把服务端原话带出去（用户截图一次即可定案）
-        if let n = obj["code"] as? NSNumber, n.intValue != 0 {
+        //
+        // v0.3.663（ND-16）：原来只有 `as? NSNumber` 命中**且非 0** 才抛错 ——
+        // 服务端要是把 `code` 回成字符串 `"7"`，`as? NSNumber` 失败、判定直接跳过，
+        // 一个**失败响应**会被当成成功返回给上层（随后表现为「取到了包但没有 url」）。
+        // 现在反过来判：只要「不是 0」就失败，不管它是数字还是字符串。
+        let numericCode = (obj["code"] as? NSNumber)?.intValue
+        if let numericCode {
+            if numericCode != 0 { throw StoreError.server(code: code, message: msg) }
+        } else if code != "0" {
             throw StoreError.server(code: code, message: msg)
         }
         return obj
@@ -949,7 +1018,10 @@ enum NBStoreClient {
         }
         // 全试完：遇到过稳定 code=7 ⇒ 库里没包（回 nil）；否则把最后一次错误抛出去（提示重试）。
         if sawStable7 || lastOtherError == nil { return nil }
-        throw lastOtherError!
+        // ND-04：原来是 `throw lastOtherError!` —— 靠上一行的 `lastOtherError == nil` 兜住，
+        // 当前不可达；但这是**状态耦合**（改一下上面的 return 条件就变成崩溃面），换成显式解包零成本。
+        guard let error = lastOtherError else { return nil }
+        throw error
     }
 
     /// **按 `appID` + `appVerId` 取指定版本的包**（语义化入口，v0.3.586）。
@@ -1130,7 +1202,9 @@ enum NBStoreClient {
         }
 
         /// 界面显示用的名字.
-        var displayName: String { (lookupName?.isEmpty == false) ? lookupName! : name }
+        // ND-05：原来是 `(lookupName?.isEmpty == false) ? lookupName! : name`，当前受条件保护；
+        // 换成 `??` 后语义完全相同且没有裸 `!`。
+        var displayName: String { (lookupName?.isEmpty == false) ? (lookupName ?? name) : name }
         /// 界面显示用的版本.
         var displayVersion: String? { (version?.isEmpty == false) ? version : lookupVersion }
         /// 界面显示用的图标.
@@ -1554,9 +1628,21 @@ enum NBStoreClient {
                          version: app.displayVersion)
     }
 
+    /// 严格解一个 hex 字节（ND-02）.
+    ///
+    /// `UInt8("", radix: 16)` 在 Swift 里返回 `Optional(0)` 而不是 nil，所以
+    /// 只依赖它会把 `"_"` / `"__"` 这类占位串解成 0x00 —— 先做字符集校验。
+    private static func hexByte(_ s: String, _ from: String.Index, _ to: String.Index) -> UInt8? {
+        let chars = s[from..<to]
+        guard chars.count == 2 else { return nil }
+        for c in chars where !c.isHexDigit { return nil }
+        return UInt8(chars, radix: 16)
+    }
+
     /// 十六进制字符串 → base64 字符串（NB 的 sinf 是 hex，下游要 base64）。
     ///
     /// 输入可能带空格/换行（服务端偶尔分行发），先清掉再解。
+    /// 非 hex 字符一律返回 nil（ND-02：不再把占位串解成 0x00）。
     private static func hexToBase64(_ hex: String) -> String? {
         let cleaned = hex.filter { !$0.isWhitespace }
         guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
@@ -1565,7 +1651,11 @@ enum NBStoreClient {
         var idx = cleaned.startIndex
         while idx < cleaned.endIndex {
             let next = cleaned.index(idx, offsetBy: 2)
-            guard let b = UInt8(cleaned[idx..<next], radix: 16) else { return nil }
+            // ND-02：原来只靠 `UInt8(_:radix:16)` 判非法，而它对**空串**返回 `Optional(0)` 而不是 nil
+            // —— `_` 这类占位符会被静默解成 1 字节 0x00，再 base64 成一个「非 nil」的垃圾值，
+            // 全链路又只用 nil 判「有没有 sinf」⇒ 垃圾值显示成「已取到 sinf」。
+            // 先显式校验这两个字符是不是 hex 数字，再交给 UInt8 解码。
+            guard let b = hexByte(cleaned, idx, next) else { return nil }
             bytes.append(b)
             idx = next
         }

@@ -63,49 +63,77 @@ final class HotfixService: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: 聚合（app 启动 / 模块变更时调用）
 
+    /// 热补丁聚合（v0.3.662 / task-13 发现6）.
+    ///
+    /// 旧实现两个问题：
+    ///  1. 在**主队列**上同步遍历模块目录并逐条读 hotfix 脚本 —— 主线程做文件 IO；
+    ///  2. 声明式结果用 DispatchQueue.main.async 整体覆盖 featureFlags，
+    ///     而 JS 桥的 applyFlag 直接写同一个 @Published；两者先后不可保证，
+    ///     JS 先跑完就会被这次整体赋值抹掉.
+    ///
+    /// 现在：收集在 Task.detached（不占主线程），应用与 JS 执行在**同一个**
+    /// @MainActor 任务内按固定顺序串行 —— 先落地声明式快照再跑 JS，
+    /// 于是 JS 的 setFlag / setOverride 一定叠加在声明式结果之上，不会再被抹掉.
     func reload() {
-        var flags: [String: Bool] = [:]
-        var texts: [String: String] = [:]
-        var loaded: [String] = []
-        var log: [String] = []
+        // 主线程取快照：只把**纯值**带进后台任务（EscapeModule 不保证 Sendable）.
+        let inputs: [HotfixInput] = ModuleService.shared.listModules().compactMap { module in
+            guard ModuleService.shared.isEnabled(id: module.id), let hotfix = module.hotfix else { return nil }
+            return HotfixInput(
+                id: module.id,
+                version: module.version,
+                patches: hotfix.patches ?? [],
+                scriptURL: hotfix.hasScript
+                    ? module.installURL.appendingPathComponent(hotfix.scriptName)
+                    : nil)
+        }
 
-        for module in ModuleService.shared.listModules() {
-            guard ModuleService.shared.isEnabled(id: module.id),
-                  let hotfix = module.hotfix else { continue }
-
-            // 声明式补丁
-            for patch in hotfix.patches ?? [] {
-                switch patch.type {
-                case "feature_flag":
-                    if let b = patch.valueBool { flags[patch.key] = b }
-                case "text":
-                    if let t = patch.valueText { texts[patch.key] = t }
-                default:
-                    break
-                }
-            }
-
-            // JS 补丁（二期）
-            if hotfix.hasScript {
-                let scriptURL = module.installURL.appendingPathComponent(hotfix.scriptName)
-                if let source = try? String(contentsOf: scriptURL, encoding: .utf8) {
-                    // Swift 6：runScript（含桥创建）须主线程；reload 的调用点本就在
-                    // 主队列，这里改为主 actor 异步执行（JS 的副作用本来就经主队列
-                    // 异步转发，时序语义不变）.
-                    Task { @MainActor [weak self] in
-                        self?.runScript(source, module: module)
+        Task.detached(priority: .userInitiated) { [inputs] in
+            // 后台：纯计算 + 读脚本文本（磁盘 IO 离开主线程）.
+            var flags: [String: Bool] = [:]
+            var texts: [String: String] = [:]
+            var scripts: [HotfixScript] = []
+            var loaded: [String] = []
+            for input in inputs {
+                for patch in input.patches {
+                    switch patch.type {
+                    case "feature_flag":
+                        if let b = patch.valueBool { flags[patch.key] = b }
+                    case "text":
+                        if let t = patch.valueText { texts[patch.key] = t }
+                    default:
+                        break
                     }
-                    loaded.append(module.id)
+                }
+                if let url = input.scriptURL,
+                   let source = try? String(contentsOf: url, encoding: .utf8) {
+                    scripts.append(HotfixScript(id: input.id, version: input.version, source: source))
+                    loaded.append(input.id)
+                }
+            }
+            await MainActor.run { [flags, texts, loaded, scripts] in
+                // 顺序固定：先落地声明式快照，再跑 JS（JS 的写入必然叠加在其上）.
+                self.featureFlags = flags
+                self.textOverrides = texts
+                self.jsModulesLoaded = loaded
+                for script in scripts {
+                    self.runScript(script.source, moduleId: script.id, moduleVersion: script.version)
                 }
             }
         }
+    }
 
-        DispatchQueue.main.async {
-            self.featureFlags = flags
-            self.textOverrides = texts
-            self.jsModulesLoaded = loaded
-        }
-        _ = log
+    /// reload() 跨隔离域搬运的纯值载荷.
+    private struct HotfixInput: Sendable {
+        let id: String
+        let version: String
+        let patches: [HotfixPatch]
+        let scriptURL: URL?
+    }
+
+    private struct HotfixScript: Sendable {
+        let id: String
+        let version: String
+        let source: String
     }
 
     /// JS 桥写日志（EscapeJSBridge 调用）
@@ -132,17 +160,19 @@ final class HotfixService: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: JS 引擎（二期，JavaScriptCore）
 
     /// @MainActor：EscapeJSBridge 已收敛主线程，JS 的执行与桥创建都须在主线程.
+    /// v0.3.662（task-13 发现6）：形参由 `EscapeModule` 改为 `(id, version)` ——
+    /// reload 现在只在后台带纯值、在主 actor 内重新组装，不再跨隔离域搬运整份模块模型。
     @MainActor
-    private func runScript(_ source: String, module: EscapeModule) {
+    private func runScript(_ source: String, moduleId: String, moduleVersion: String) {
         let ctx = JSContext()!
-        ctx.name = "hotfix:\(module.id)"
+        ctx.name = "hotfix:\(moduleId)"
         ctx.exceptionHandler = { _, exception in
             let msg = exception?.toString() ?? "未知异常"
-            print("[Hotfix][JS][\(module.id)] 异常: \(msg)")
+            print("[Hotfix][JS][\(moduleId)] 异常: \(msg)")
         }
 
         // JSExport 协议桥（类型安全；闭包桥在当前 SDK 有签名解析问题）
-        let bridge = EscapeJSBridge(moduleId: module.id, moduleVersion: module.version)
+        let bridge = EscapeJSBridge(moduleId: moduleId, moduleVersion: moduleVersion)
         bridge.owner = self
         ctx.setObject(bridge, forKeyedSubscript: "escape" as NSString)
         ctx.evaluateScript(source)

@@ -34,16 +34,17 @@ private enum NiuwaCrypto {
     /// 于是 `N = 尾部 + 0` 与我们当时的算法恰好一致；而请求侧加密打通后 `T ≠ 0`，
     /// 服务端按 `尾部 + T` 派生，我们仍用「尾部」→ **GCM tag 必然校验失败**。
     ///
-    /// Swift 6 并发检查：它原来是裸的静态可变存储，却在 async 请求链路上被读写
-    /// （`encrypt` 写、`decrypt` 读）。改为**加锁访问器 + 私有后备存储**：
-    /// 后备存储的全部读写都在 `tLock` 内，`nonisolated(unsafe)` 因此有明确论证。
-    /// （本改动只消除数据竞争，不改变「T 与本次请求绑定」的既有逻辑。）
-    private static let tLock = NSLock()
-    private nonisolated(unsafe) static var storedRequestT: String?
-    private(set) static var lastRequestT: String? {
-        get { tLock.withLock { storedRequestT } }
-        set { tLock.withLock { storedRequestT = newValue } }
-    }
+    /// **v0.3.661 修正：T 改为「按请求传值」，不再用进程级单槽。**
+    ///
+    /// 旧实现把它存成 `static var`（后加 `NSLock` 收口）。加锁只解决「读写撕裂」，
+    /// **解决不了语义错配**：`NiuwaStoreClient` 是 enum + 全 static func，没有 actor、
+    /// 没有串行队列，而调用方 `I4StoreFreeView` 每次点「获取」都起一个独立 `Task`
+    /// ⇒ 请求 A 发出去后 B 又发一次，B 写入 T，A 的响应回来时读到的是 **B 的 T**，
+    /// 按 `尾部 + B_T` 派生密钥 ⇒ GCM tag 校验失败 ⇒ 被报成「响应解密失败」。
+    /// 现在 `encrypt` 把本次的 T 随报文一起返回，`decrypt` 由调用方显式传入 ——
+    /// 每个请求的 T 只活在它自己的调用栈上，并发下天然正确，也不再需要锁。
+    ///
+    /// （原 `static var lastRequestT` 与配套 `NSLock` 已随本次改造删除 —— 没有静态状态就没有撕裂。）
 
     /// 前缀 A（**32 字节**）：`~!@#$%^&*()_+` + **3 个空格** + `+_)(*&^%$#@!~` + **3 个空格**
     ///
@@ -74,21 +75,24 @@ private enum NiuwaCrypto {
             .joined()
     }
 
-    /// 明文 → 可发送的报文串
-    static func encrypt(_ plain: Data) -> String? {
+    /// 明文 → （可发送的报文串, 本次的 T）
+    ///
+    /// T 必须由调用方带走、解密时再传回来（v0.3.661）。返回元组而不是写静态变量，
+    /// 是为了让「哪个 T 对应哪个响应」由调用栈决定，而不是由进程级状态决定。
+    static func encrypt(_ plain: Data) -> (body: String, t: String)? {
         let n = newN()
-        // ▸ 记住本次发出去的 T —— 解密时要用 `尾部 + T` 派生密钥（见 `lastRequestT` 注释）
-        lastRequestT = n
         let (key, iv) = deriveKeyIV(n: n)
         guard let nonce = try? AES.GCM.Nonce(data: iv),
               let sealed = try? AES.GCM.seal(plain, using: SymmetricKey(data: key), nonce: nonce) else {
             return nil
         }
-        return b64(sealed.ciphertext + sealed.tag) + b64(Data(n.utf8))
+        return (b64(sealed.ciphertext + sealed.tag) + b64(Data(n.utf8)), n)
     }
 
     /// 报文串 → 明文
-    static func decrypt(_ s: String) -> Data? {
+    /// - Parameter requestT: **本次请求**实际发出去的那个 T（`encrypt` 的第二个返回值）。
+    ///   nil 表示「本轮没有可用的 T」（例如旧诊断入口），此时只试 `尾部` 与 `T` 之外的候选。
+    static func decrypt(_ s: String, requestT t: String?) -> Data? {
         // ▸ 关键（v0.3.395）：**先去掉整段的 base64 padding 再切分**。
         // 服务端可能带 `=` 返回：小响应恰好是 4 的倍数（92 字）看不出问题，
         // 而大响应真机实测 9106 字、`9106 % 4 == 2` → 一定以 `==` 结尾。
@@ -113,7 +117,7 @@ private enum NiuwaCrypto {
         let ciphertext = Data(blob.prefix(blob.count - 16))
         let tag = Data(blob.suffix(16))
         let tailN = n                       // 响应尾部那串数字
-        let t = lastRequestT                 // 本次请求发出去的 T
+        let t = requestT                     // **本次请求**发出去的 T（由调用方传入）
         // ▸▸ 候选 N，按证据强度排序：
         // ① `尾部 + T` —— 反汇编证据 `add x21, x0, x24`（x0=尾部、x24=timeSlide 参数=我们发的 T）；
         // ② `尾部`     —— T=0 的老路径（早期那个 92 字样本就是这种，所以它能解开）；
@@ -553,7 +557,8 @@ enum NiuwaStoreClient {
         ]
     }
 
-    private static func postJSON(_ path: String, body: [String: Any]) async throws -> Data {
+    /// - Returns: 响应字节 + **本次请求发出去的 T**（解密要用它派生密钥，见 `NiuwaCrypto.decrypt`）。
+    private static func postJSON(_ path: String, body: [String: Any]) async throws -> (data: Data, t: String) {
         guard let url = URL(string: host + path) else { throw StoreError.badURL }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -564,15 +569,16 @@ enum NiuwaStoreClient {
         // （HTTP 状态还是 200）—— 这就是「HTTP 200 但不是 JSON」的真正原因。
         // 报文格式与响应一致：`base64NoPad(密文‖tag) + base64NoPad(str(N))`。
         let plain = try JSONSerialization.data(withJSONObject: body)
-        guard let sealedBody = NiuwaCrypto.encrypt(plain) else {
+        guard let sealed = NiuwaCrypto.encrypt(plain) else {
             throw StoreError.crypto("请求体加密失败")
         }
-        req.httpBody = Data(sealedBody.utf8)
+        req.httpBody = Data(sealed.body.utf8)
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw StoreError.http(http.statusCode)
         }
-        return data
+        // T 随返回值一起交出去 —— 调用方解密时必须用**这一次**的 T（v0.3.661）
+        return (data, sealed.t)
     }
 
     // MARK: - 搜索
@@ -585,7 +591,7 @@ enum NiuwaStoreClient {
             var body = pubParams(iPad: iPad)
             body["keyword"] = kw
             body["region"] = regionValue
-            return try await perform(path: searchPath, body: body, region: region, shape: shape)
+            return try await perform(path: searchPath, body: body, shape: shape)
         }
     }
 
@@ -599,9 +605,24 @@ enum NiuwaStoreClient {
             var body = pubParams(iPad: iPad)
             body["bundleid"] = bid
             body["region"] = regionValue
-            return try await perform(path: downloadPath, body: body, region: region, shape: shape)
+            return try await perform(path: downloadPath, body: body, shape: shape)
         }
-        return list.first
+        // v0.3.661：服务端下载响应里**没有 `bundleid` 键**（真机实测 body 只有 ba_ipaURL/ba_sinfs），
+        // `perform` 于是给了空串。旧实现原样返回 —— 调用方 `I4StoreFreeView` 用 `full.bundleId`
+        // 拼产物文件名，空串会得到 `.ipa` 这种无名文件，也会让「装的是不是这个 App」无法校验。
+        // 请求本来就是按 bundleId 发的，空串时用请求值补齐是**无歧义的**。
+        guard var app = list.first else { return nil }
+        if app.bundleId.trimmingCharacters(in: .whitespaces).isEmpty {
+            //（a）响应里没给 bundleid → 用请求值补齐
+            app.bundleId = bid
+        } else if app.bundleId.caseInsensitiveCompare(bid) != .orderedSame {
+            //（b）响应给的 bundleid 与请求的**不是同一个 App** → 不能拿去装。
+            // 旧实现 `return list.first` 完全不校验，服务端串包时会装错应用。
+            LoginLogger.shared.log("\(logTag) [失败] 下载响应 bundleId 不匹配：请求 \(bid)、返回 \(app.bundleId)",
+                                   category: .appStore)
+            throw StoreError.server(code: "bundleId-mismatch", message: "返回的安装包与请求的应用不一致")
+        }
+        return app
     }
 
     // MARK: - region 双形态
@@ -616,6 +637,7 @@ enum NiuwaStoreClient {
     /// 所以本版**只发数字形态**（证据最强：`nwcore_region` 的 objc 类型是 `Tq` = `NSInteger`），
     /// 快速失败、快速给用户信息。**等响应解密做完**（见 `[牛蛙源] 失败 响应不是 JSON 对象` 的那条链路），
     /// 再决定要不要把候选形态加回来。
+    /// - Parameter region: 只用来生成候选形态（本版固定单元素）；请求体的区域值由 `attempt` 自己写入。
     private static func withRegionShapes(
         region: NiuwaRegion,
         _ attempt: (Any, String) async throws -> [NiuwaApp]
@@ -659,25 +681,54 @@ enum NiuwaStoreClient {
     /// 注意： 它属于 `NiuwaStoreClient` 而不是 `NiuwaCrypto` —— v0.3.399 曾把它放进
     /// `NiuwaCrypto`（private），结果客户端侧调用不到，CI 报
     /// `error: cannot find 'dumpResponse' in scope`。诊断落盘是客户端的职责，放这里。
-    private static func dumpResponse(_ raw: String) {
+    private static func dumpResponse(_ raw: String, path: String, t: String?) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("LoginLogs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("niuwa_last_response.txt")
-        let header = "len=\(raw.count)\ntail20=\(String(raw.suffix(20)))\n"
-            + "T=\(NiuwaCrypto.lastRequestT ?? "nil")\n---\n"
-        try? (header + raw).write(to: file, atomically: true, encoding: .utf8)
+        let header = "path=\(path)\nlen=\(raw.count)\ntail20=\(String(raw.suffix(20)))\n"
+            + "T=\(t ?? "nil")\n---\n"
+        // v0.3.661：落盘前把响应里出现过的本机 UDID 换成掩码。
+        // 请求体日志已走 `describeBody` 打码（见其 `pub_udid` 分支），此处不能成漏点。
+        let masked = maskUDIDIfPresent(in: raw)
+        try? (header + masked).write(to: file, atomically: true, encoding: .utf8)
     }
 
+    /// 把文本里出现的本机 UDID（真值或伪值）替换成 `maskUDID` 的形态。
+    ///
+    /// 只替换**能确证是这台设备**的两个值：缓存里的真 UDID 与 `niuwa.pseudoUDID`。
+    /// 不按正则猜 40 位十六进制 —— 那样会把响应里别的标识也改坏。
+    private static func maskUDIDIfPresent(in text: String) -> String {
+        var out = text
+        var secrets: [String] = []
+        if let real = LocalDeviceIdentity.cachedSnapshot()?.udid?
+            .trimmingCharacters(in: .whitespaces), !real.isEmpty {
+            secrets.append(real)
+        }
+        if let pseudo = UserDefaults.standard.string(forKey: "niuwa.pseudoUDID"), !pseudo.isEmpty {
+            secrets.append(pseudo)
+        }
+        for secret in secrets where out.contains(secret) {
+            out = out.replacingOccurrences(of: secret, with: maskUDID(secret))
+        }
+        return out
+    }
+
+    /// - Parameter shape: 本次实际发出的 region 形态描述，**只用于日志**。
+    /// v0.3.661：删掉形参 `region:` —— 函数体内从未读取它（区域值由调用方写进 `body["region"]`），
+    /// 留着会让后续维护者误以为区域在这里参与决策。
     private static func perform(path: String, body: [String: Any],
-                                region: NiuwaRegion, shape: String) async throws -> [NiuwaApp] {
+                                shape: String) async throws -> [NiuwaApp] {
         let log = LoginLogger.shared
         log.log("\(logTag) → POST \(host)\(path) region=\(shape)", category: .appStore)
         log.log("\(logTag) 请求体 \(describeBody(body))", category: .appStore)
 
         let data: Data
+        var requestT: String = ""
         do {
-            data = try await postJSON(path, body: body)
+            let sent = try await postJSON(path, body: body)
+            data = sent.data
+            requestT = sent.t
         } catch let e as StoreError {
             log.log("\(logTag) [失败] \(e.localizedDescription)", category: .appStore)
             throw e
@@ -693,14 +744,19 @@ enum NiuwaStoreClient {
         // 而真实大响应有 **9106 字** —— 尾部的 14 个字符（= `base64(时间数字)`）
         // 正好在截断之外，于是「分段到底对不对」这件事**永远验证不了**。
         // 存成独立文件后，电脑侧用 `ssh_run.py niuwa` 一条命令取回本地，不受任何截断与行序影响。
-        dumpResponse(raw)
+        //
+        // ▸ v0.3.661：**只在失败时落盘**，且落盘前打码 UDID。
+        // 旧实现每个响应都写一次（一次点击最多 4 次），而 `Documents/` 会被 iCloud 备份、
+        // 且响应里有服务端回显的本机 UDID —— 请求体日志打了码，落盘文件却没打，等于绕过打码。
+        // 现在成功路径不写盘；失败路径写上，但先把文档里出现过的 UDID 换成掩码。
         log.log("\(logTag) ← 原始响应 \(truncate(raw))", category: .appStore)
 
         // ▸ v0.3.392：响应是**加密体**，先解密再解析。
         // 解密失败时把原始体前 200 字符留档（否则以后又是「什么都看不到」）。
-        guard let plain = NiuwaCrypto.decrypt(raw) else {
+        guard let plain = NiuwaCrypto.decrypt(raw, requestT: requestT) else {
             log.log("\(logTag) [失败] 响应解密失败；原始体（前 200）：\(String(raw.prefix(200)))",
                     category: .appStore)
+            dumpResponse(raw, path: path, t: requestT.isEmpty ? nil : requestT)
             throw StoreError.crypto("响应解密失败")
         }
         let plainText = String(data: plain, encoding: .utf8) ?? "<非 UTF-8 \(plain.count) 字节>"
@@ -711,15 +767,28 @@ enum NiuwaStoreClient {
             throw StoreError.decode
         }
 
-        // ▸ v0.3.403：状态码/描述的真实键名是 `pub_code` / `pub_desc`
-        // （真机实测响应：`{"pub_code":0,"pub_desc":"接口调用成功","body":{…}}`）。
-        // 旧的 `nwcore_code` / `code` 保留兜底 —— 它们是从二进制字符串推的、至今未在真机命中。
-        let code = string(obj["pub_code"]) ?? string(obj["nwcore_code"]) ?? string(obj["code"]) ?? "-"
         let message = string(obj["pub_desc"])
             ?? string(obj["nwcore_messages"])
             ?? (obj["nwcore_messages"] as? [Any])?.map { string($0) ?? "" }.joined(separator: "；")
             ?? string(obj["message"])
             ?? ""
+
+        // ▸ v0.3.403：状态码/描述的真实键名是 `pub_code` / `pub_desc`
+        // （真机实测响应：`{"pub_code":0,"pub_desc":"接口调用成功","body":{…}}`）。
+        // 旧的 `nwcore_code` / `code` 保留兜底 —— 它们是从二进制字符串推的、至今未在真机命中。
+        let code = string(obj["pub_code"]) ?? string(obj["nwcore_code"]) ?? string(obj["code"]) ?? "-"
+
+        // ▸▸ v0.3.661：**`pub_code != 0` 就是失败**，不再顺着往下找数组。
+        // 真机实测信封：`{"pub_code":0,"pub_desc":"接口调用成功"}`，失败时 pub_code=650 / 非 0。
+        // 旧实现把 code 只写进日志、解析照走，于是服务端明确报错时用户只会看到
+        // 「无候选数组键命中」这种我们自己的诊断话术 —— 真原因（比如"无此应用"）被吞掉。
+        // 对照 `NBStoreClient.swift:624`：那边是 `if let n = obj["code"] as? NSNumber, n.intValue != 0 { throw … }`。
+        // 注意 **必须放在 `ba_ipaURL` 分支之前**：下载接口成功时 body 无数组，走的是另一条 return。
+        if let codeValue = Int(code.trimmingCharacters(in: .whitespaces)), codeValue != 0 {
+            log.log("\(logTag) [失败] 服务端返回码 \(code)：\(message.isEmpty ? "-" : message)",
+                    category: .appStore)
+            throw StoreError.server(code: code, message: message)
+        }
 
         // ▸▸ v0.3.407：**把「服务端没有包」与「我们解析漏了形态」分开**（只对下载请求生效）。
         //
@@ -899,8 +968,16 @@ enum NiuwaStoreClient {
         return v
     }
 
+    /// 取字符串值；**空串与纯空白都归一成 nil**。
+    ///
+    /// v0.3.661：加上 trim。旧版 `!s.isEmpty` 放过了 `" "` 这类值 —— 服务端字段带空白时
+    /// 会一路进到 `expectedFileName` / bundleId 比较里，表现为「字段看起来有值但哪儿都不匹配」。
+    /// 对照 `SignSourceClient.swift:291-295` 的同名函数（早已 trim）。
     private static func string(_ v: Any?) -> String? {
-        if let s = v as? String, !s.isEmpty { return s }
+        if let s = v as? String {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
         if let n = v as? NSNumber { return n.stringValue }
         return nil
     }

@@ -146,6 +146,8 @@ final class OnDeviceAnisetteManager: ObservableObject {
         case missingLibrary(String)
         case notELF(String)
         case unzipFailed(String)
+        /// v0.3.662（task-13 发现11）：载荷 sha256 与元数据声明不符 —— 拒绝安装.
+        case sha256Mismatch(expected: String, actual: String)
 
         var errorDescription: String? {
             switch self {
@@ -163,6 +165,8 @@ final class OnDeviceAnisetteManager: ObservableObject {
                 return "\(name) 不是 ELF 引擎库."
             case .unzipFailed(let detail):
                 return "引擎载荷解压失败：\(detail)"
+            case .sha256Mismatch(let expected, let actual):
+                return "引擎载荷完整性校验失败（期望 sha256 \(expected.prefix(12))… 实际 \(actual.prefix(12))…），已拒绝安装.请检查网络代理或后再试."
             }
         }
     }
@@ -252,7 +256,13 @@ final class OnDeviceAnisetteManager: ObservableObject {
         let (zipData, base64String) = try await resolvePayload(rawPayload)
 
         // sha256 校验：`s` = sha256(base64 载荷 + "\n")（实测确认）.
-        // 对齐 SideSign：不匹配只记日志、不中断 —— 最终以解压出的库文件（存在 + ELF 魔数）为准.
+        //
+        // ⚠️ v0.3.662（task-13 发现11）：**不匹配必须硬失败，不能只记日志**。
+        // 原实现「对齐 SideSign：不匹配只记日志、不中断 —— 最终以解压出的库文件（存在 + ELF 魔数）为准」，
+        // 但这两份库随后会被本进程**解释执行**（OnDeviceAnisetteClient -> Unicorn AArch64），
+        // sha256 是这个载荷**唯一的完整性锚点**；而下面 292-296 行的次级检查
+        // （文件存在 + ELF 魔数）反倒是硬失败 ⇒ 强弱校验倒置。
+        // 服务器被劫持 / 中间人替换后只需同时改 `oda.json` 的 `s` 字段即可绕过旧逻辑。
         //
         // 用显式绑定名（`let b64 = base64String`）而不是 `let base64String` 简写：
         // CI 上后者报「value of optional type 'String?' must be unwrapped」
@@ -262,8 +272,9 @@ final class OnDeviceAnisetteManager: ObservableObject {
                 .map { String(format: "%02x", $0) }.joined()
             if actual != expected.lowercased() {
                 LoginLogger.shared.log(
-                    "[本机Anisette] 引擎载荷 sha256 不匹配（期望 \(expected.prefix(12))… 实际 \(actual.prefix(12))…），继续安装",
+                    "[本机Anisette] 引擎载荷 sha256 不匹配（期望 \(expected.prefix(12))… 实际 \(actual.prefix(12))…），已拒绝安装",
                     category: .appleID)
+                throw EngineError.sha256Mismatch(expected: expected, actual: actual)
             }
         }
 

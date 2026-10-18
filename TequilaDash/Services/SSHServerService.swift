@@ -186,9 +186,20 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
                 }
             } catch {
                 guard let self else { return }
+                // v0.3.662（task-13 发现15）：**关掉已绑定的 server，别让端口泄漏**.
+                //
+                // 走到这里的路径有两种：
+                //  a) Citadel.SSHServer.host(...) 本身抛错 —— 此时没有 server 可关；
+                //  b) host(...) 成功后，enableExec/enableSFTP、closeFuture.get() 或
+                //     MainActor.run 抛错 —— 此时 server 已绑定端口并且**仍然活着**，
+                //     旧代码只把 self.server 置 nil，既没 close 也没留给任何人持有，
+                //     端口被那个无人引用的 server 一直占着。用户再点「启动」会拿到
+                //     「地址已被占用」，必须重启 App 才能恢复（与 :327 记录的实测事故同症状）.
+                let leaked = self.server
+                self.server = nil
+                try? await leaked?.close()
                 await MainActor.run { [weak self] in
                     self?.lastError = "SSH 启动失败：\(error.localizedDescription)"
-                    self?.server = nil
                     self?.isRunning = false
                 }
             }
@@ -206,8 +217,15 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
                 if isCurrent {
                     self.server = nil
                     self.isRunning = false
+                    // v0.3.662（task-13 发现3）：只在**确认自己就是当前实例**时结束后台任务.
+                    //
+                    // 旧代码把 endBackgroundTaskIfNeeded() 放在 if 外面，于是只要有人调 stop()，
+                    // 哪怕此时 server 已经是别人（start() 失败期间 self.server 被置 nil、或
+                    // 上一轮 stop 已清空），也会把 backgroundTask 杀掉并置 .invalid ——
+                    // 而此时真正的 server 仍在跑，它申请的 background task 就提前被释放，
+                    // App 一进后台 SSH 立刻被系统挂起，表现为「SSH 自己断了」.
+                    self.endBackgroundTaskIfNeeded()
                 }
-                self.endBackgroundTaskIfNeeded()
             }
         }
     }
