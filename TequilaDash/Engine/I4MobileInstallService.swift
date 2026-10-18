@@ -85,6 +85,19 @@ enum I4MobileInstallService {
     /// 放 Caches 符合 Apple 存储指引，系统在空间紧张时可回收（回收后重新下载 / 重新导入即可）.
     static let cacheDirectoryName = "I4MobileIPA"
 
+    /// **完成标记**目录名（`Caches/I4MobileIPAComplete/`）：下载 / 导入**真正写完**才写标记.
+    ///
+    /// 为什么不放进 `Caches/I4MobileIPA/`：那个目录里的文件会被 `removeCachedIPA` 逐个删除，
+    /// 标记若与 IPA 同目录，删包后标记会残留，下一个「写一半」的包就会顶着旧标记被判成已完成.
+    /// 放同级目录、按落盘名一一对应，由 `removeCachedIPA` 一并清理.
+    private static let completionMarkerDirectoryName = "I4MobileIPAComplete"
+
+    /// 没有完成标记时（本改版之前就下好的老包）判「完整」所需的最小字节数（1 MiB）.
+    ///
+    /// 内置三包最小的 `photo.ipa` 也有 3.3 MB；1 MiB 以下不可能是完整 IPA，
+    /// 只可能是下到一半 / 写一半被杀留下的半截包. 老包都远大于这个阈值，不会被误判.
+    private static let minimumPlausibleIPABytes = 1 << 20
+
     /// 自定义包体的持久化键（UserDefaults，存 `CustomPackRecord` 的 JSON 数组）.
     private static let customPacksKey = "I4Mobile.customPacks"
 
@@ -318,14 +331,140 @@ enum I4MobileInstallService {
         cacheDirectory().appendingPathComponent(pack.fileName)
     }
 
-    /// 该包的 IPA 是否已缓存（文件存在且非空）.
+    /// 该包的 IPA 是否**已缓存且写完**（下载 / 导入落盘结束才算）.
     ///
-    /// 注意：这里只说「文件在且有字节」，**不说「这份 IPA 是好的」**.
-    /// 下载中断留下的半截文件、手动导入放错的文件、扩展名对但内容不是 IPA 的，
-    /// 在这里都会被判成「已缓存」，直到真正安装时才在检测/取 sinf 那一步失败.
-    /// 因此 `packStatuses().cached == true` 不等于「能装上」（v0.3.660 审计 C 项）.
+    /// 判定三层（修 v0.3.660 审计 C 项：以前只判「文件在且有字节」，
+    /// 下到一半的 IPA 也被当成已缓存，于是跳过下载、直接拿去安装 ⇒ 安装失败而界面显示「已缓存」）：
+    ///
+    /// ① 文件必须存在且非空，否则 `false`.
+    /// ② **结构完整性**：ZIP 末尾必须有可自洽的中央目录结尾记录（EOCD），且它声明的
+    ///    中央目录落在文件内、EOCD 自身（22 字节 + 注释）不越过文件尾.
+    ///    下载中断 / 写一半被杀 ⇒ 文件尾丢失，EOCD 不在或中央目录偏移超出当前长度 ⇒ `false`.
+    /// ③ **完成标记** `Caches/I4MobileIPAComplete/<fileName>.done`（内容 = 写完时的字节数）：
+    ///    - 有标记 ⇒ 标记字节数必须等于当前文件字节数，不等（被截断 / 被替换）⇒ `false`；
+    ///    - 无标记 ⇒ 视为**本改版之前就下好的老包**，只要过了 ② 且不小于
+    ///      `minimumPlausibleIPABytes` 就判 `true` —— 否则用户已下载的包会全部重下.
+    ///
+    /// 诚实边界：这里仍**不解析 IPA 语义**（bundle id / 签名 / sinf 都不看），
+    /// 只保证「这是一份写完整的 ZIP」；「能不能装上」仍由 `verifyCachedIPA` 与安装期检查回答.
     static func isCached(_ pack: Pack) -> Bool {
-        fileSize(at: cachedIPAURL(for: pack).path) > 0
+        let path = cachedIPAURL(for: pack).path
+        let bytes = fileSize(at: path)
+        guard bytes > 0 else { return false }
+        if let marked = completionMarkerBytes(for: pack) {
+            guard marked == bytes else { return false }
+        } else {
+            guard bytes >= minimumPlausibleIPABytes else { return false }
+        }
+        return isCompleteIPAFile(path: path, bytes: bytes)
+    }
+
+    // MARK: - 完成标记 / 完整性（isCached 的判据）
+
+    /// 完成标记目录 `Caches/I4MobileIPAComplete/`（只算路径，不建目录）.
+    private static func completionMarkerDirectory() -> URL {
+        cacheDirectory()
+            .deletingLastPathComponent()
+            .appendingPathComponent(completionMarkerDirectoryName, isDirectory: true)
+    }
+
+    /// 某个包的完成标记位置（`Caches/I4MobileIPAComplete/<fileName>.done`）.
+    private static func completionMarkerURL(for pack: Pack) -> URL {
+        completionMarkerDirectory().appendingPathComponent(pack.fileName + ".done")
+    }
+
+    /// 读完成标记里的字节数；无标记 / 读不出 / 不是正整数 ⇒ `nil`（按老包处理）.
+    private static func completionMarkerBytes(for pack: Pack) -> Int? {
+        let url = completionMarkerURL(for: pack)
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed), value > 0 else { return nil }
+        return value
+    }
+
+    /// 写完成标记（内容 = 当前落盘字节数）. **失败不抛**：
+    /// 标记只是佐证，写不上最多让这份包退回「老包」判定（结构完整性 + 最小字节数），
+    /// 不能因为写标记失败就让一次成功的下载报错.
+    private static func writeCompletionMarker(for pack: Pack) {
+        let bytes = fileSize(at: cachedIPAURL(for: pack).path)
+        guard bytes > 0 else { return }
+        let url = completionMarkerURL(for: pack)
+        try? FileManager.default.createDirectory(at: completionMarkerDirectory(),
+                                                 withIntermediateDirectories: true)
+        try? Data("\(bytes)".utf8).write(to: url, options: .atomic)
+    }
+
+    /// 删完成标记（包被删掉时一并清理，避免旧标记落到下一个包上）.
+    private static func removeCompletionMarker(for pack: Pack) {
+        let url = completionMarkerURL(for: pack)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// 这份文件是否「写到尾」了：ZIP 的中央目录结尾记录（EOCD）必须存在且自洽.
+    ///
+    /// 只读文件尾最多 65558 字节（22 字节 EOCD + 最长 65535 字节注释），
+    /// 对几 MB 的 IPA 是常数开销，可放心在 UI 取状态时调用.
+    private static func isCompleteIPAFile(path: String, bytes: Int) -> Bool {
+        guard bytes >= 22 else { return false }
+        let tailLength = min(bytes, 65558)
+        guard let fh = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? fh.close() }
+        guard (try? fh.seek(toOffset: UInt64(bytes - tailLength))) != nil else { return false }
+        // 一次 read 可能只返回部分字节（大文件 / 系统压力下都见过），读满为止；
+        // 读不满说明文件正在变短，按「没写完」处理.
+        var tail = Data()
+        var remaining = tailLength
+        while remaining > 0 {
+            let chunk = (try? fh.read(upToCount: remaining)) ?? Data()
+            if chunk.isEmpty { break }
+            tail.append(chunk)
+            remaining -= chunk.count
+        }
+        guard tail.count == tailLength else { return false }
+        var offset = tailLength - 22
+        while offset >= 0 {
+            if le32(tail, offset) == 0x0605_4B50 {
+                let recordOffset = bytes - tailLength + offset
+                if isPlausibleEndRecord(tail, offset,
+                                        fileBytes: bytes, recordOffset: recordOffset) {
+                    return true
+                }
+            }
+            offset -= 1
+        }
+        return false
+    }
+
+    /// 校验一个候选 EOCD（`PK\x05\x06`）是否自洽：
+    /// 中央目录长度 ∈ (0, 64 MiB]、中央目录整段落在文件内且不越过 EOCD 自身、
+    /// EOCD（22 字节 + 注释）不越过文件尾.
+    private static func isPlausibleEndRecord(_ tail: Data, _ offset: Int,
+                                             fileBytes: Int, recordOffset: Int) -> Bool {
+        let cdSize = le32(tail, offset + 12)
+        let cdOffset = le32(tail, offset + 16)
+        let commentLength = le16(tail, offset + 20)
+        let maximumCentralDirectoryBytes: UInt64 = 64 * 1024 * 1024
+        guard cdSize > 0, cdSize <= maximumCentralDirectoryBytes else { return false }
+        let cdEnd = cdOffset + cdSize
+        guard cdEnd <= UInt64(fileBytes), cdEnd <= UInt64(recordOffset) else { return false }
+        return recordOffset + 22 + commentLength <= fileBytes
+    }
+
+    /// ZIP 小端读整（越界返回 0，不崩）.
+    private static func le16(_ d: Data, _ o: Int) -> Int {
+        guard o >= 0, o + 2 <= d.count else { return 0 }
+        let b = d.startIndex
+        return Int(d[b + o]) | Int(d[b + o + 1]) << 8
+    }
+
+    /// ZIP 小端读整（越界返回 0，不崩）.
+    private static func le32(_ d: Data, _ o: Int) -> UInt64 {
+        guard o >= 0, o + 4 <= d.count else { return 0 }
+        let b = d.startIndex
+        return UInt64(d[b + o]) | UInt64(d[b + o + 1]) << 8
+            | UInt64(d[b + o + 2]) << 16 | UInt64(d[b + o + 3]) << 24
     }
 
     /// 定位包资源：**只在缓存目录里找**（云端下载与手动导入都写这里）.
@@ -336,17 +475,26 @@ enum I4MobileInstallService {
     }
 
     /// 删除某个包的缓存 IPA（清理用）.
+    ///
+    /// 完成标记一并删除：否则「删包 → 重下写一半」时，旧标记会被当成这份半截包的完成凭证.
     static func removeCachedIPA(_ pack: Pack) throws {
         let url = cachedIPAURL(for: pack)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            removeCompletionMarker(for: pack)
+            return
+        }
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
             throw I4MobileError.cacheWriteFailed(error.localizedDescription)
         }
+        removeCompletionMarker(for: pack)
     }
 
     /// 列出各包（内置 + 自定义）缓存是否就位 + 仓库云端可用性（供 UI 展示）.
+    ///
+    /// `cached` 与 `isCached(_:)` 同源（写完 + 结构完整才算），所以半截包在界面上显示
+    /// 「未下载」而不是「已缓存」；`bytes` 仍是磁盘上的真实字节数，半截包也能看出已经下了多少.
     static func packStatuses() -> [PackStatus] {
         allPacks.map { pack in
             let bytes = fileSize(at: cachedIPAURL(for: pack).path)
@@ -354,7 +502,7 @@ enum I4MobileInstallService {
                 (!pack.cloudURL.isEmpty && URL(string: pack.cloudURL) != nil)
                 ? .available(detail: pack.cloudURL)
                 : .unavailable(reason: "未配置下载直链.")
-            return PackStatus(pack: pack, cached: bytes > 0, bytes: bytes,
+            return PackStatus(pack: pack, cached: isCached(pack), bytes: bytes,
                               warehouseAvailability: warehouse)
         }
     }
@@ -539,6 +687,8 @@ enum I4MobileInstallService {
         } catch {
             throw I4MobileError.cacheWriteFailed(error.localizedDescription)
         }
+        // 走到这里 = 下载器的临时文件已**整份**移进缓存目录，才写完成标记（写失败不影响本次下载）.
+        writeCompletionMarker(for: pack)
         onLog?("[i4移动端] 已缓存 \(pack.fileName) · \(fileSize(at: dst.path) / 1024 / 1024) MB")
     }
 
@@ -592,6 +742,8 @@ enum I4MobileInstallService {
         } catch {
             throw I4MobileError.cacheWriteFailed(error.localizedDescription)
         }
+        // 同上：copyItem 返回即「整份写完」，此刻才写完成标记.
+        writeCompletionMarker(for: pack)
         onLog?("[i4移动端] 手动导入 \(pack.fileName)（bundle id=\(bundleId)）"
                + " · \(fileSize(at: dst.path) / 1024 / 1024) MB")
         return pack

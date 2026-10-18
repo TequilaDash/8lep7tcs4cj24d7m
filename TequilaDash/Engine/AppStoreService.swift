@@ -859,11 +859,6 @@ enum AppStoreService {
 
     private static func catalogFailureKey(_ appId: String) -> String { "bilinHistory.\(appId).failedAt" }
 
-    /// 距上次失败是否还在负缓存窗口内
-    private static func catalogRecentlyFailed(appId: String) -> Bool {
-        catalogCooldownRemaining(appId: appId) != nil
-    }
-
     /// 负缓存窗口还剩几秒；不在窗口内则 nil（v0.3.674：文案要显示剩余等待时间）。
     private static func catalogCooldownRemaining(appId: String) -> TimeInterval? {
         let at = UserDefaults.standard.double(forKey: catalogFailureKey(appId))
@@ -878,7 +873,10 @@ enum AppStoreService {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: catalogFailureKey(appId))
     }
 
-    private static func clearCatalogFailure(appId: String) {
+    /// 清掉负缓存，让用户能**立刻**重试三方目录。
+    /// 供版本历史页的下拉刷新调用 —— 否则错误文案里承诺的「下拉刷新可立即重试」不成立。
+    /// 只在用户主动刷新时触发，有界；真失败会由 storeCatalogFailure 重新落回负缓存。
+    static func clearCatalogFailure(appId: String) {
         UserDefaults.standard.removeObject(forKey: catalogFailureKey(appId))
     }
 

@@ -117,7 +117,7 @@ actor AirliftToneTransport {
         try await withCheckedThrowingContinuation { continuation in
             Self.queue.async {
                 do {
-                    let data = try Self.readSync(path: path, pairingPath: pairingPath)
+                    let data = try Self.readSyncWithRetry(path: path, pairingPath: pairingPath)
                     continuation.resume(returning: data)
                 } catch {
                     continuation.resume(throwing: error)
@@ -186,12 +186,86 @@ actor AirliftToneTransport {
         }
 
         guard result == 0 else {
+            // 原文**原样**留在错误里，不在这里改写：真正给用户看的那一版由
+            // `readSyncWithRetry` 在重试额度用尽后统一翻译，那里才知道一共试了几次.
+            AirliftLog.shared.append("airlift: 读取 \(path) 失败（\(result)）：\(message ?? "无错误文案")")
             throw AirliftTransportError.failed(message ?? "AirLift 读取失败（\(result)）")
         }
         guard let data else {
+            AirliftLog.shared.append("airlift: \(path) 返回码为 0 但数据为空")
             throw AirliftTransportError.failed("AirLift 未返回 \(path) 的数据")
         }
         return data
+    }
+
+    // MARK: - 读：有界重试 + 可读文案
+
+    /// AirTraffic 恢复类失败的重试上限（**不含**首次尝试，故总尝试次数是 3）.
+    private static let readRetryLimit = 2
+    /// 两次尝试之间的间隔. 首次尝试在 Rust 侧已经等满约 20 秒，这里只补设备侧
+    /// ATC 会话收尾 / Media 落盘所需的余量，等太久会把界面卡到用户以为死机.
+    private static let readRetryDelay: TimeInterval = 1.5
+
+    /// 读一个设备上的绝对路径，**只**对 AirTraffic 恢复类失败做有界重试.
+    ///
+    /// 重试**只走 `readSync` 这一个入口**，不在本函数里复制任何 FFI 调用序列：
+    /// `readSync` 里的「先拷字节并 freeBytes / 先取文案并无条件 al_string_free / 再判返回码」
+    /// 这套顺序是 v0.3.673 的成果，必须原样保留. 每次尝试都是**独立一次完整调用**，
+    /// 它自己申请、自己释放，返回的 `Data` 是 Swift 侧拷贝 —— 上一次尝试的裸指针
+    /// 在本函数里从未被持有，因此不存在「已释放的指针被第二次使用」的路径.
+    ///
+    /// 不重试的失败（立刻上抛，重试只会白等）：配对文件读不出 / 隧道建不起 /
+    /// AFC 通道不可用 / 文件不存在 / 路径非法等确定性错误.
+    private static func readSyncWithRetry(path: String, pairingPath: String) throws -> Data {
+        var attempt = 1
+        while true {
+            do {
+                return try readSync(path: path, pairingPath: pairingPath)
+            } catch let error as AirliftTransportError {
+                // 只有 `.failed` 里判定为 AirTraffic 恢复类的才继续；`.unavailable` /
+                // `.pairingRequired` 是配置问题，重试没有意义.
+                guard case .failed(let rawReason) = error,
+                      Self.isAirTrafficRecoveryFailure(rawReason) else {
+                    throw error
+                }
+                // 额度用尽：把原始串翻成用户能看懂的一版再抛（原文上面已进日志）.
+                guard attempt <= Self.readRetryLimit else {
+                    throw AirliftTransportError.failed(
+                        Self.readFailureText(rawReason: rawReason, attempts: attempt)
+                    )
+                }
+                AirliftLog.shared.append(
+                    "airlift: \(path) 第 \(attempt) 次读取遇到 AirTraffic 恢复失败，\(Self.readRetryDelay) 秒后重试"
+                )
+                // 本队列是串行队列、且此刻没有别的 Airlift 调用在跑，睡眠不会堵住别人.
+                Thread.sleep(forTimeInterval: Self.readRetryDelay)
+                attempt += 1
+            }
+        }
+    }
+
+    /// 失败原文是否属于「设备侧 AirTraffic 没把文件搬回来」这一类.
+    ///
+    /// 判据取自 `Resources/Scripts/airlift-read-file.patch` 里 `exploit_read_file` 的三处
+    /// 收尾 `return Err(...)`（该补丁与上游逐字节一致，字符串不能改，故只能在这里认）：
+    /// · `AirTraffic did not recover <path>; any moved copy remains in Media` —— 20 秒轮询耗尽.
+    /// · `AirTraffic: ReadyForSync not observed while reading <leaf>` —— 会话没握手成功.
+    /// · `AirTraffic: AssetManifest not observed while reading <leaf>` —— 清单没回.
+    /// 其余（配对 / 隧道 / AFC / 路径 / 解压）一律不重试.
+    private static func isAirTrafficRecoveryFailure(_ rawReason: String) -> Bool {
+        rawReason.contains("AirTraffic did not recover")
+            || rawReason.contains("AirTraffic: ReadyForSync not observed")
+            || rawReason.contains("AirTraffic: AssetManifest not observed")
+    }
+
+    /// 把 Rust 的原始错误串翻成用户能看懂的中文（只翻 AirTraffic 恢复类，其余原样返回）.
+    ///
+    /// 原文**不丢**：它已由 `readSync` / `readSyncWithRetry` 写进 `AirliftLog`，
+    /// 本函数只产出摆在提示音页上的那一句. `attempts` 是**总尝试次数**（含首次），
+    /// 所以「已自动重试 N 次」里的 N 是 `attempts - 1`.
+    private static func readFailureText(rawReason: String, attempts: Int) -> String {
+        guard Self.isAirTrafficRecoveryFailure(rawReason) else { return rawReason }
+        return "设备侧文件搬运没在 20 秒内完成，通常是系统正忙.已自动重试 \(attempts - 1) 次仍失败时，请锁屏再解锁后重试."
     }
 
     private static func writeSync(files: [AirliftToneFile], directory: String, pairingPath: String) throws {

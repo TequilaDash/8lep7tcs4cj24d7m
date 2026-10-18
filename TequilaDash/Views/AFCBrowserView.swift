@@ -64,8 +64,10 @@ struct AFCBrowserView: View {
                         .foregroundColor(.red)
                     Button("重试") { reload() }
                 } else if entries.isEmpty {
-                    Text("目录为空")
-                        .foregroundColor(.secondary)
+                    // v0.3.678：空态统一到 InfoActionCard（此前是裸 Text + .secondary，属全仓 4 套空态写法里最不规范的一种）.
+                    InfoActionCard(icon: "folder",
+                                   title: "目录为空",
+                                   message: "这个目录下没有文件或子目录.可以返回上一级，或换一个目录看看.")
                 } else {
                     ForEach(entries) { entry in
                         row(entry)

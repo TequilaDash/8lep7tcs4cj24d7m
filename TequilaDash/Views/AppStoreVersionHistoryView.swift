@@ -165,6 +165,17 @@ struct AppStoreVersionHistoryView: View {
                 harvestTask?.cancel()
             }
         }
+        // 下拉刷新：复用本页既有的加载入口（startLoad → load），不另写一套请求。
+        // 先清掉两条通道的失败负缓存，让错误文案里那句「下拉刷新可立即重试」成立 ——
+        // 否则用户拉下去只会再撞回同一句冷却提示，等于没有手动重试入口。
+        .refreshable {
+            AppStoreService.clearCatalogFailure(appId: item.id)
+            AppStoreService.clearProductPageCache()
+            startLoad()
+            // startLoad 是同步登记，直接返回会让系统指示器还没转就被收掉；
+            // 等这一轮真的读完再收（与 IPADownloadManagerView 的 async 包装同一口径）。
+            if let task = loadTask { await task.value }
+        }
     }
 
     private var summaryText: String {
@@ -320,6 +331,10 @@ struct AppStoreVersionHistoryView: View {
             if Task.isCancelled { return false }
             LoginLogger.shared.log("版本历史：三方 API 通道失败（\(error.localizedDescription)）",
                                    category: .appStore)
+            // 失败要上屏：这条通道以前只写日志，界面停在「没有可读取的版本记录」，
+            // 用户会以为这 App 就是没有历史版本。只有手上一条数据都没有时才占用错误位，
+            // 后面还有账号 / 商品页通道可以接手（与 loadWeb 同口径）。
+            if versions.isEmpty { errorText = error.localizedDescription }
             return false
         }
     }

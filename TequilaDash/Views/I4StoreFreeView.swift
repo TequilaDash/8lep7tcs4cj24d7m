@@ -361,7 +361,9 @@ struct I4StoreFreeView: View {
                 }
             } else if nbRankItems.isEmpty {
                 Section {
-                    Text("该榜单暂时没有数据").font(.subheadline).foregroundStyle(.secondary)
+                    InfoActionCard(icon: "list.number",
+                                   title: "该榜单暂时没有数据",
+                                   message: "榜单来自 Apple 官方排行，这个区域当前没有返回数据.换个区域或稍后再试.")
                 }
             } else {
                 Section("\(nbRank.title)榜 · \(nbRankItems.count) 款") {
@@ -372,7 +374,9 @@ struct I4StoreFreeView: View {
             }
         } else if apps.isEmpty {
             Section {
-                Text("该分组暂时没有数据").font(.subheadline).foregroundStyle(.secondary)
+                InfoActionCard(icon: "square.grid.2x2",
+                               title: "该分组暂时没有数据",
+                               message: "这个分组在当前区域没有内容.换一个分组或区域试试.")
             }
         } else {
             Section("\(rank.title) · \(apps.count) 款") {
@@ -426,8 +430,9 @@ struct I4StoreFreeView: View {
                 // 下架库是**独立的**：它的条目不能走 Apple 那套行（字段与链路都不同）。
                 if nbOffSaleResults.isEmpty {
                     Section {
-                        Text("下架库里没有匹配的应用，换个关键词试试，或确认区域")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                        InfoActionCard(icon: "magnifyingglass",
+                                       title: "下架库里没有匹配的应用",
+                                       message: "换个关键词试试，或确认当前区域是否选对.")
                     }
                 } else {
                     Section("下架应用 · \(nbOffSaleResults.count) 款") {

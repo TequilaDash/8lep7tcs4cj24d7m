@@ -1,5 +1,102 @@
 # Changelog
 
+## [0.3.678] - 2026-10-19
+
+> **一句话**：四个真机可见的问题各修一处 —— Airlift 读文件失败改为「有界重试 + 说人话」，
+> I4 半截包不再被当成「已缓存」，App Store 版本历史页补上下拉刷新与失败上屏，剩下 4 处裸 Text 空态统一.
+> 界面结构不变，改的是失败时的行为与文案.
+
+### 一、Airlift 读文件：AirTraffic 恢复失败改为有界重试 + 可读文案
+
+用户真机在「通话录音提示音」页反复看到这句：
+
+```
+AirTraffic did not recover StartDisclosureWithTone.m4a; any moved copy remains in Media
+```
+
+这句不是本仓拼的，来自上游 Rust 补丁 `Resources/Scripts/airlift-read-file.patch:344`（该补丁与上游逐字节一致，
+19194B / sha256 前 16 位 `803be0993d06ccec`，本次不动）. 它的 read 流程是：ReadyForSync / AssetManifest 轮询 →
+逐条发 FileComplete → `sleep(2s)` → 80 次 × 250ms 试 `afc.open` + `read_entire`，合计约 20 秒，全失败才报这句.
+也就是设备侧 ATC 会话没在 20 秒内把文件从 Media 拉回来 —— 重试通常就能过，而我们此前一次就放弃.
+
+`TequilaDash/Engine/Airlift/AirliftToneTransport.swift`（+75/−1）：
+
+| 项 | 改法 |
+|---|---|
+| 有界重试 | 新增 `readSyncWithRetry`：最多 2 次重试（共 3 次尝试），间隔 1.5 秒 |
+| 只对可重试的失败重试 | 只认三条串：`AirTraffic did not recover` / `ReadyForSync not observed` / `AssetManifest not observed`；`.unavailable` / `.pairingRequired` / 路径类一律立刻上抛 |
+| 不复制 FFI 序列 | 重试只经 `readSync` 单一入口，每次尝试自申请自释放，包装层从不持有裸指针 |
+| 说人话 | 新增 `readFailureText`：恢复类失败返回「设备侧文件搬运没在 20 秒内完成，通常是系统正忙.已自动重试 N 次仍失败时，请锁屏再解锁后重试.」 |
+| 原始串不丢 | 失败分支先 `AirliftLog.shared.append` 原文（含返回码与路径），每次重试各记一行 |
+
+`readSync` 里 v0.3.673 那套顺序（先取文案并无条件 `al_string_free` → 先拷字节再 `freeBytes` → 最后判返回码）一字未改.
+
+### 二、I4 移动端安装：半截包不再算「已缓存」
+
+`I4MobileInstallService.isCached` 原来只判「文件在且有字节」，下到一半的 IPA 也被当成已缓存 ⇒ 跳过下载直接拿去安装 ⇒
+安装失败而界面显示「已缓存 X MB」. `TequilaDash/Engine/I4MobileInstallService.swift`（+160/−8）改成三层判据：
+
+1. 文件存在且非空；
+2. **结构完整性**：文件尾必须有可自洽的 ZIP 中央目录结尾记录（EOCD `PK\x05\x06`），且它声明的中央目录落在文件内、
+   EOCD 自身（22 字节 + 注释）不越过文件尾；
+3. **完成标记** `Caches/I4MobileIPAComplete/<fileName>.done`（内容 = 写完时的字节数）：有标记则字节数必须与实际大小相等；
+   无标记视为**本版之前就下好的老包**，只要过 ② 且 ≥ 1 MiB 就判 true.
+
+写标记只在两处真正写完的位置：`downloadCloudIPA` 的 `moveItem` 之后、`importIPA` 的 `copyItem` 之后；
+`removeCachedIPA` 两个分支都删标记（否则「删包 → 重下写一半」会顶着旧标记）. 写标记失败不抛错 ——
+标记只是佐证，写不上最多退回老包判定.
+
+**为什么老包不会被判成未缓存（回退红线）**：缺标记从不作为「不完整」的证据，完备性证据来自 ZIP 自身 ——
+完整 IPA 必然有一条自洽的 EOCD，截断必然破坏该等式或让中央目录越界. 三个内置包实测
+`EOCD偏移 + 22 + 注释长度 == 文件字节数`.
+
+7 个调用点（服务 `:505`/`:668`/`:702`/`:919`，视图 `:290`/`:852`/`:854`/`:870`）行为随之改变，
+UI 文件一行未改：`ipaStatusText` / `hasAnyDownloadable` / `cachedPackCount` / `clearCache` 全部只读
+`PackStatus.cached`，半截包现在显示「未下载」而不是「已缓存」.
+
+诚实边界：`isCached` 仍不解析 IPA 语义（bundle id / 签名 / sinf 都不看），只保证「这是一份写完整的 ZIP」；
+「能不能装上」仍由 `verifyCachedIPA` 与安装期检查回答.
+
+### 三、App Store 版本历史页：补下拉刷新 + 失败上屏 + 删死代码
+
+三方版本目录失败时的文案写着「约 N 秒后可再试（下拉刷新可立即重试）」，而这一页根本没有 `.refreshable` ——
+用户只能干等 3 分钟负缓存到期. `TequilaDash/Views/AppStoreVersionHistoryView.swift`（+15）与
+`TequilaDash/Engine/AppStoreService.swift`（+4/−6）：
+
+| 项 | 改法 |
+|---|---|
+| 下拉刷新 | 新增 `.refreshable`：先 `clearCatalogFailure(appId:)` + `clearProductPageCache()`，再 `startLoad()`，再 `await loadTask?.value` 等这一轮真读完（同步返回会让指示器还没转就被收掉） |
+| 复用既有入口 | 走本页原有的 `startLoad → load`，没新写请求 |
+| 失败上屏 | `loadCatalog` 的 catch 里补 `if versions.isEmpty { errorText = error.localizedDescription }`，复用本页既有的橙色错误位（与 `loadAccount` / `loadWeb` 同口径） |
+| 删死代码 | 删掉 `catalogRecentlyFailed`（全仓 grep 只有定义自身一处，零调用点） |
+| 打开私有 | `clearCatalogFailure` 由 `private static` 改 `static`，否则视图层调不到、下拉刷新是假刷新；有界性：全仓 3 个命中，真失败会重新落回负缓存 |
+
+### 四、剩下 4 处裸 Text 空态统一
+
+v0.3.677 换掉 13 处之后还剩 4 处「一行灰字当空态」，本轮换完（`AFCBrowserView.swift` +4/−2、
+`I4StoreFreeView.swift` +9/−4）：
+
+| 文件:行 | 原来的空态 | 现在 |
+|---|---|---|
+| `AFCBrowserView.swift:66` | `Text("目录为空")` | `InfoActionCard(icon: "folder")` + 说明「这个目录下没有文件或子目录.可以返回上一级，或换一个目录看看.」 |
+| `I4StoreFreeView.swift:362` | `Text("该榜单暂时没有数据")` | `InfoActionCard(icon: "list.number")` + 说明榜单来自 Apple 官方排行 |
+| `I4StoreFreeView.swift:375` | `Text("该分组暂时没有数据")` | `InfoActionCard(icon: "square.grid.2x2")` |
+| `I4StoreFreeView.swift:431` | `Text("下架库里没有匹配的应用…")` | `InfoActionCard(icon: "magnifyingglass")` |
+
+`AFCBrowserView` 那处改动时误删了 `} else {` 分支，已在提交前补回并核过全文件括号平衡（depth=0）.
+
+### 验证
+
+| 项 | 结果 |
+|---|---|
+| `python Resources/Scripts/normalize_eol.py` | EXIT=0（6 个文件换行与基线一致） |
+| `python Resources/Scripts/swift_precommit_check.py .` | EXIT=0，16 个 guard 全过（版本号三处 = 0.3.678 / 967；文案 G1/G2/G3 扫 293 个 .swift 命中 0） |
+| `swiftc -parse`（WSL）6 个改动文件 | 6/6 EXIT=0，FAIL_TOTAL=0 |
+| 括号平衡 | 4 个视图文件逐个算过，depth 全 0 |
+
+局限照旧：`-parse` 只查语法，类型错 / 缺 return / noasync / 跨结构体成员查不出，真判决在 CI 的
+`Build (compile/link, no Apple signing)` step.
+
 ## [0.3.677] - 2026-10-19
 
 > **一句话**：13 处「裸 Text 空态」统一到三态组件，外加下载链路两个「删不到文件」的补丁。
