@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.3.679] - 2026-10-19
+
+### 视图文件拆分（纯搬迁，零逻辑改动）
+
+- `TequilaDash/Views/I4StoreFreeView.swift` 1316 行 → 582 行，行渲染 / 安装动作 / NB 解析与抓取搬到新文件
+  `TequilaDash/Views/I4StoreFreeRows.swift`（742 行，`extension I4StoreFreeView` + 4 个顶层自由函数）.
+  拆分理由：单文件 1316 行已经没人能一次读完，改一个行渲染要在四个滚动屏之间来回找上下文.
+- `TequilaDash/Views/ProcessManagerView.swift` 1298 行 → 347 行，按职责拆成三个新文件：
+  `ProcessManagerModels.swift`（148 行：`ProcessAlert` / `ProcessEntry` / `ProcessControlAction` / `ProcessSortMode`）、
+  `ProcessManagerService.swift`（617 行：`ProcessManagerService`）、
+  `ProcessManagerViewModel.swift`（227 行：`ProcessManagerViewModel`）.
+- 保真口径：以 `git show HEAD:<path>` 为基准逐行逐字节比对，唯一差异是被跨文件引用的成员去掉 `private`
+  （I4StoreFree 21 处、ProcessManager 0 处）—— 零逻辑改动、零签名改动、零新类型名、全程未用 `fileprivate`.
+- xcodegen 的 `sources:` 按目录递归收源码（`project.yml:126-195`），新增 .swift 无需登记.
+
+### 守卫脚本跟随搬迁
+
+- `Resources/Scripts/swift_nb_offsale_guard.py` 的 G3 原先硬编码只读 `I4StoreFreeView.swift` 里的
+  `func installOffSale(`。该函数已搬到 `I4StoreFreeRows.swift`，只改路径会让「日后搬回去」变成静默漏检，
+  故改为两处都扫、命中哪处就在报错信息里写明哪处.
+
+### 空态统一收尾
+
+- `TequilaDash/Views/TunnelHealthCheckView.swift` 两处裸 `Text` 空态（`无候选` / `未枚举到接口`）改为 `InfoActionCard`.
+  这里**不套 `AppStateSection`**：该区块本身已有 `Section(header:)`，`AppStateSection` 自带 `Section`，
+  嵌进 `Section` 会形成非法的 `List` 结构.
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` EXIT 0（8 个文件换行与基线一致）.
+- `python Resources/Scripts/swift_precommit_check.py .` EXIT 0，15 组守卫全过（扫 297 个 .swift）.
+- WSL `/usr/bin/swiftc -parse` 对 6 个改动/新增文件全部 EXIT 0，`FAIL_TOTAL=0`.
+- 本机 `-parse` 只查语法：类型错、实参顺序、缺 `return`、Swift 6 并发隔离、跨结构体成员引用都查不出，
+  这些只有 CI 的真编译能抓.
 ## [0.3.678] - 2026-10-19
 
 > **一句话**：四个真机可见的问题各修一处 —— Airlift 读文件失败改为「有界重试 + 说人话」，

@@ -12,9 +12,10 @@ v0.3.588 内嵌快照直链过期即现取），把四条**只有人工 review �
       `packageWithFallback(...)` 二者出现其一即算通过。
   G2  同函数必须处理服务端 `code=7`（不得让 `StoreError.server(code:"7")` 直接
       冒到界面）—— 要么回 `nil`、要么转成用户看得懂的结果。
-  G3  `TequilaDash/Views/I4StoreFreeView.swift` 的 `installOffSale` 里，面向用户的
-      `ToastCenter.shared.show` 不得直接插 `error.localizedDescription`
-      （NB 的 `StoreError.server` 会把它格式化成 `msg（7）`，内部码会随之漏给用户）。
+  G3  `installOffSale` 里面向用户的 `ToastCenter.shared.show` 不得直接插
+      `error.localizedDescription`（NB 的 `StoreError.server` 会把它格式化成 `msg（7）`，
+      内部码会随之漏给用户）。该函数 v0.3.679 从 `I4StoreFreeView.swift` 搬到
+      `I4StoreFreeRows.swift`，两处都扫（搬回去也不会误报）。
   G4  同 `offSalePackage` 必须对**内嵌快照直链**做 `accessKeyExpired(...)` 过期判断
       （v0.3.588）—— 快照直链的 accessKey 过期即 HTTP 403，无条件用它会导致下载必失败。
   G5  `TequilaDash/Views/NBStoreDetailView.swift` 的 `installVersion`（详情页按版本取包）里，
@@ -351,18 +352,29 @@ def check(root):
                         " —— 最新版 code=7 时不会回退旧版本，一次失败就报「库里没包」")
 
     # ── G3：界面不得把原始 error 甩给用户 ──
-    if not os.path.isfile(view):
-        errs.append("[G3] 找不到 %s" % view)
+    # v0.3.679：`installOffSale` 随 I4StoreFreeView 拆分搬到 I4StoreFreeRows.swift。
+    # 两处都扫：只认新路径的话，日后有人把函数搬回主文件就会静默漏检。
+    g3_view = os.path.join(root, "TequilaDash", "Views", "I4StoreFreeView.swift")
+    g3_rows = os.path.join(root, "TequilaDash", "Views", "I4StoreFreeRows.swift")
+    g3_candidates = [p for p in (g3_view, g3_rows) if os.path.isfile(p)]
+    if not g3_candidates:
+        errs.append("[G3] 找不到 %s 或 %s" % (g3_view, g3_rows))
     else:
-        src = io.open(view, encoding="utf-8").read()
-        body = _extract_function_body(src, "func installOffSale(")
-        if body is None:
-            errs.append("[G3] I4StoreFreeView.swift 里找不到 installOffSale")
+        g3_body = None
+        g3_where = ""
+        for g3_path in g3_candidates:
+            g3_src = io.open(g3_path, encoding="utf-8").read()
+            g3_body = _extract_function_body(g3_src, "func installOffSale(")
+            if g3_body is not None:
+                g3_where = os.path.basename(g3_path)
+                break
+        if g3_body is None:
+            errs.append("[G3] I4StoreFreeView.swift / I4StoreFreeRows.swift 里都找不到 installOffSale")
         else:
-            leaks = _toast_show_arg_leaks_localized(body)
+            leaks = _toast_show_arg_leaks_localized(g3_body)
             for arg in leaks:
-                errs.append("[G3] installOffSale 把原始 error 直接弹给用户（内部码会漏出）："
-                            "ToastCenter.shared.show(%s)" % arg)
+                errs.append("[G3] %s 的 installOffSale 把原始 error 直接弹给用户（内部码会漏出）："
+                            "ToastCenter.shared.show(%s)" % (g3_where, arg))
 
     # ── G5：NB 详情页取包也不得把原始 error 甩给用户（v0.3.590 补）──
     detail = os.path.join(root, "TequilaDash", "Views", "NBStoreDetailView.swift")

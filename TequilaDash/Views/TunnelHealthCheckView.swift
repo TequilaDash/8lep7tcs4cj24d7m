@@ -220,7 +220,10 @@ struct TunnelHealthCheckView: View {
 
                 Section(header: Text("候选对端")) {
                     if viewModel.snapshot.candidatePeers.isEmpty {
-                        Text("无候选").foregroundColor(.secondary)
+                        // v0.3.679：裸 Text 空态 → 统一卡片（同上，区块自带 Section 头）。
+                        InfoActionCard(icon: "antenna.radiowaves.left.and.right.slash",
+                                       title: "无候选对端",
+                                       message: "既没枚举到 utun 对端，也没从路由表读到对端地址，请确认隧道已建立.")
                     } else {
                         ForEach(viewModel.snapshot.candidatePeers, id: \.self) { peer in
                             HStack {
@@ -236,7 +239,11 @@ struct TunnelHealthCheckView: View {
 
                 Section(header: Text("网络接口")) {
                     if viewModel.snapshot.interfaces.isEmpty {
-                        Text("未枚举到接口").foregroundColor(.secondary)
+                        // v0.3.679：裸 Text 空态 → 统一卡片（本区块已有 Section 头，故直接嵌 InfoActionCard，
+                        // 不再套 AppStateSection —— 后者自带 Section，嵌进 Section 是非法的 List 结构）。
+                        InfoActionCard(icon: "network.slash",
+                                       title: "未枚举到网络接口",
+                                       message: "设备上没有可用的 utun 或 Wi-Fi 接口，通常是 VPN 描述文件未生效.")
                     } else {
                         ForEach(viewModel.snapshot.interfaces) { iface in
                             VStack(alignment: .leading, spacing: 3) {
