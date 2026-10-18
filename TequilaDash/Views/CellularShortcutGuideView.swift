@@ -2,7 +2,12 @@ import SwiftUI
 
 /// 蜂窝快捷指令创建引导 —— 「设置 → Cellular隧道支持」里点进来的二级页。
 ///
-/// ## 为什么需要手动创建（如实说明，不包装成「自动安装」）
+/// ## 为什么是引导创建，而不是自动安装（v0.3.654 修正文案）
+///
+/// 动作库里**确实有**「设定蜂窝数据」（`is.workflow.actions.cellulardata.set`，
+/// 参数 `OnValue: Bool`）—— pfgithub/scpl 的 `OutActions.json` 与 `Shortcuts 2.2.json`
+/// 都收录了该动作（`SASettingSetCellularData` / `WFSiriAccessResource`）。
+/// 早期本页写「只能用飞行模式代替」是错的，已改正；不能自动装的卡点在分发环节。
 ///
 /// v0.3.599 试过 `shortcuts://import-shortcut?...&silent=true` 静默导入，
 /// **真机实测失败**：URL 无效 + 强制跳转到快捷指令 App（v0.3.616 撤销）。
@@ -13,7 +18,10 @@ import SwiftUI
 ///   `shortcuts://run-shortcut?name=TurnOffData`，**不创建也不引导创建**
 ///   （issue #1393 / #1413 / #1191 全是用户抱怨找不到指令）。
 ///
-/// ⇒ 两个参考项目都要求用户自建，iOS 也不允许第三方代建快捷指令。
+/// ⇒ 两个参考项目都要求用户自建；Apple 官方文档只承诺
+///   `shortcuts://import-shortcut?url=…`（指向 icloud.com 链接），
+///   第三方实测本机 HTTP / 自签 HTTPS 均被拒（"the specified shortcut URL is invalid"），
+///   `shortcuts sign` 在 macOS 14.6 也已坏掉 ⇒ **无可靠代建通道**。
 ///   所以本页做的是**把创建成本降到最低**，而不是伪造一个「已自动安装」。
 struct CellularShortcutGuideView: View {
     @Environment(\.dismiss) private var dismiss
@@ -26,18 +34,19 @@ struct CellularShortcutGuideView: View {
                     icon: "bolt.badge.plus",
                     title: "创建两个快捷指令",
                     message: "蜂窝网络下，iOS 会限制回环 VPN 访问本机服务，所以要先临时关掉蜂窝数据。"
-                        + "快捷指令动作库里没有「开关蜂窝数据」，只能用「飞行模式」代替（蜂窝场景下等效）。"
+                        + "用快捷指令 App 里的「设定蜂窝数据」动作（开关蜂窝号码同效），"
+                        + "Apple 不允许第三方代建，所以下面两步要你手动做一次，之后永久生效。"
                 )
             }
 
             Section {
                 stepRow(index: 1,
                         name: "TurnOffData",
-                        action: "设置飞行模式 → 打开",
+                        action: "设定蜂窝数据 → 关",
                         hint: "建隧道前跑它")
                 stepRow(index: 2,
                         name: "TurnOnData",
-                        action: "设置飞行模式 → 关闭",
+                        action: "设定蜂窝数据 → 开",
                         hint: "用完恢复网络")
             } header: {
                 Text("需要创建")
@@ -57,7 +66,7 @@ struct CellularShortcutGuideView: View {
                 Text("一键跳转")
             } footer: {
                 Text("会跳到系统「快捷指令」App 的新建页（Apple 不允许静默创建）。"
-                     + "新建后请把指令命名为上面给出的名字。")
+                     + "新建时添加「设定蜂窝数据」动作，再把指令命名为上面给出的名字。")
             }
 
             Section {

@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.3.655] - 2026-10-18
+
+> **一句话**：修「关掉的蜂窝永远不会恢复」这个真 bug —— `turnOnDataIfNeeded()` 在全仓**零调用点**；
+> 同时把引导页里「动作库里没有开关蜂窝数据」这句已被 scpl 数据推翻的假陈述改成如实描述。
+
+### P0 修复（蜂窝数据用完不还）
+
+`CellularTunnelManager.turnOnDataIfNeeded()`（`Engine/CellularTunnelManager.swift:322`）自 v0.3.647 接入后
+**没有任何调用点** —— 全仓 grep 只在该函数自己的注释里出现过。后果：
+
+- 用户在蜂窝模式下每用一次 App，蜂窝数据就被 `TurnOffData` 关掉一次；
+- App 切后台 / 回前台 / 下次冷启动，都没有人执行 `TurnOnData`；
+- 用户以为「App 用完了」，其实蜂窝数据一直是关的，只能自己去系统设置里手动打开。
+
+修复：在 `TequilaDashApp` 的生命周期 observer（`didEnterBackground` / `didBecomeActive`）里
+调用 `restoreCellularDataIfNeeded(reason:)` → `turnOnDataIfNeeded()`。
+没有挂在「隧道断开」处，因为本仓**没有**隧道断开通知（`TunnelContext.m` 只暴露
+`ensureHeartbeatWithError` / `hasActiveTunnel` / `isConnecting` / `lastTunnelError` 这类方法）。
+
+配套的三处改动：
+
+1. `turnOnDataIfNeeded()` 补 `isShortcutInstalled` 闸门，与 `turnOffDataIfNeeded()` 对称 ——
+   用户没建 `TurnOnData` 时不再被跳到快捷指令 App 看「未找到快捷指令」，只如实打日志。
+2. 新增只读探针 `hasTurnedOffDataInThisSession`，让并发边界（`stateLock`）留在 `CellularTunnelManager` 内部。
+3. `guard manager.hasTurnedOffDataInThisSession` 前置：没关过蜂窝时不起 Task、不派发主线程。
+
+### 诚实化（引导页假陈述）
+
+`Views/CellularShortcutGuideView.swift` 原文案写「动作库里没有『开关蜂窝数据』，只能用飞行模式代替」，
+这句话**不成立**：scpl（pfgithub/scpl）的 `OutActions.json` 里有
+`is.workflow.actions.cellulardata.set`（`SASettingSetCellularData` / `OnValue: Bool`），
+Apple 动作库确实有「设定蜂窝数据」。已改为如实描述：动作存在，
+卡的是**分发环节** —— `shortcuts://import-shortcut` 只认 iCloud 链接，
+本机 HTTP / 自签 HTTPS 托管都被拒（"the specified shortcut URL is invalid"），
+macOS 14.6 的 `shortcuts sign` 也已坏掉。所以本仓仍然引导用户自建，但不再编造「动作不存在」。
+
 ## [0.3.621] - 2026-10-17
 
 > **一句话**：修隧道完全连不上（4 个 P0，其中 3 个是 v0.3.621 自己引入的回归）+ 补齐 20 个版本的 CHANGELOG 缺口。

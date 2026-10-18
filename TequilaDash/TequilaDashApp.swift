@@ -54,18 +54,51 @@ struct TequilaDashApp: App {
         }
         // 切后台/回前台时保活状态同步：audio session 可能被系统中断释放，
         // 回前台或切后台都补一次 start（幂等）; 关闭开关时收回.
+        // v0.3.655：恢复蜂窝数据 —— `turnOnDataIfNeeded()` 此前在全仓**零调用点**
+        // （只在 CellularTunnelManager.swift:319 的注释里被提到），于是
+        // `turnOffDataIfNeeded()` 关掉的蜂窝永远不会被打开，L318 那句
+        // 「用完即还，不留副作用」是句空话：用户在蜂窝模式下用完 App 后
+        // 蜂窝数据一直是关的，只能自己去系统设置里手动打开。
+        //
+        // 为什么挂在生命周期而不是挂在「隧道断开」处：本仓**没有**隧道断开通知
+        // （TunnelContext.m 只暴露 ensureHeartbeatWithError / hasActiveTunnel /
+        // isConnecting / lastTunnelError 这类方法），而回前台 / 切后台是唯一
+        // 稳定的、与「用户用完了」等价的生命周期信号。
+        //
+        // 幂等性由 `turnOnDataIfNeeded()` 内部保证（`guard didTurnOffData`）：
+        // 没关过蜂窝时是纯 no-op，不跑任何快捷指令、不发任何请求。
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                            object: nil, queue: .main) { _ in
             if KeepAliveManager.shared.isEnabled {
                 KeepAliveManager.shared.start()
             }
+            Self.restoreCellularDataIfNeeded(reason: "切后台")
         }
         center.addObserver(forName: UIApplication.didBecomeActiveNotification,
                            object: nil, queue: .main) { _ in
             if KeepAliveManager.shared.isEnabled {
                 KeepAliveManager.shared.start()
             }
+            Self.restoreCellularDataIfNeeded(reason: "回前台")
+        }
+    }
+
+    /// v0.3.655：把「恢复蜂窝」收成一个函数，供生命周期 observer 复用.
+    ///
+    /// `turnOnDataIfNeeded()` 是 `@MainActor async`，而 observer 回调是同步
+    /// 闭包 ⇒ 起一个 `Task { @MainActor in ... }` 把调用搬回主隔离域。
+    /// 不 await、不阻塞回调线程（快捷指令执行期间 App 可能已被挂起，
+    /// 那时 `UIApplication.shared.open` 会被系统拒绝，属于预期降级）.
+    private static func restoreCellularDataIfNeeded(reason: String) {
+        let manager = CellularTunnelManager.shared
+        // 先看有没有真的关过：没关过就不必起 Task（省掉一次无谓的主线程派发）.
+        guard manager.hasTurnedOffDataInThisSession else { return }
+        Task { @MainActor in
+            let restored = await manager.turnOnDataIfNeeded()
+            LoginLogger.shared.log(
+                "[Cellular] \(reason)时恢复蜂窝数据：\(restored ? "已执行开蜂窝快捷指令" : "无需恢复（未关过或已恢复）")",
+                category: .tunnelCellular)
         }
     }
 

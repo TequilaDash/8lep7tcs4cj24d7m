@@ -316,12 +316,31 @@ final class CellularTunnelManager: @unchecked Sendable {
         return true
     }
 
+    /// 本次会话内是否已经通过 `turnOffDataIfNeeded()` 关过蜂窝（只读探针）.
+    ///
+    /// v0.3.655 新增：给 `TequilaDashApp` 的生命周期 observer 用 ——
+    /// 它在 observer 回调（非隔离域）里需要先判断「有没有真的关过」，
+    /// 但不能直接读 `didTurnOffData`（`private`，且由 `stateLock` 保护）.
+    /// 收一个只读访问器，让并发边界仍然留在本类内部。
+    var hasTurnedOffDataInThisSession: Bool { didTurnOffData }
+
     /// 执行 `TurnOnData` 快捷指令（恢复蜂窝数据）. 用完即还，不留副作用.
+    ///
+    /// v0.3.655：**补上调用点**（此前全仓零调用点，见 `TequilaDashApp.restoreCellularDataIfNeeded`）。
+    /// 同时补一道 `isShortcutInstalled` 闸门 —— 与 `turnOffDataIfNeeded` 对称：
+    /// 用户没建 `TurnOnData` 时，不跳转到快捷指令 App 报「未找到快捷指令」，
+    /// 只如实打日志并返回 false（`didTurnOffData` 保持 true，下个生命周期信号再试）。
     @MainActor
     @discardableResult
     func turnOnDataIfNeeded() async -> Bool {
         guard didTurnOffData else { return false }
         let name = turnOnShortcutName
+        guard CellularShortcutInstaller.isShortcutInstalled(name) else {
+            LoginLogger.shared.log(
+                "[Cellular] 快捷指令「\(name)」未创建，跳过开蜂窝跳转（引导用户先创建）",
+                category: .tunnelCellular)
+            return false
+        }
         let url = Self.shortcutURL(for: name)
         LoginLogger.shared.log("[Cellular] 执行开蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
