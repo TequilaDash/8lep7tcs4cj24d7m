@@ -1923,6 +1923,19 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
         }
         if let http = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(http.statusCode) {
+            // v0.3.676（D8 同类）：**失败分支必须把刚搬出来的 keep 删掉**.
+            //
+            // 上面 :1917-1919 已经把系统临时文件搬到了 `dl-<UUID>.part` —— 不删的话，
+            // 这个 UUID 命名的文件永远不会再被任何代码引用（下次下载会用新 UUID），
+            // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**。重定向到登录页 /
+            // 错误页时这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满。
+            //
+            // 与 `IPAFileDownloader`（AppStoreInstallService.swift）的区别：那边有
+            // `stagedPartial` 登记所有权、由 `abort()` 兜底清；`RemoteDownloader` 没有这套机制，
+            // `keep` 只在这个函数里存在 ⇒ **只能就地删**，否则这份文件彻底失联。
+            // 注意：moveItem 的 catch 分支（:1920-1922）不用删 —— 那条路径下 keep 从未被创建，
+            // 系统会在回调返回后自己清掉 `location`。
+            try? FileManager.default.removeItem(at: keep)
             finish(.failure(NSError(domain: "IPADownloadCenter", code: http.statusCode,
                                     userInfo: [NSLocalizedDescriptionKey: "服务器返回 \(http.statusCode)"])))
             return

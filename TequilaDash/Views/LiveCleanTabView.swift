@@ -187,8 +187,10 @@ struct LiveCleanTabView: View {
             }
             if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && visible.isEmpty && !vm.rows.isEmpty {
-                Text("没有匹配「\(searchText)」的应用.")
-                    .foregroundColor(.secondary)
+                // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（搜索无结果态）。
+                AppStateSection(state: .empty("没有匹配「\(searchText)」的应用",
+                                              message: "换个关键词试试.",
+                                              icon: "magnifyingglass"))
             }
             ForEach(visible) { row in
                 if selecting {

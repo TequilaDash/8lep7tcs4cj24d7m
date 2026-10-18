@@ -89,6 +89,13 @@ enum AppStoreInstallService {
         let safe = suggestedName.replacingOccurrences(of: "/", with: "_")
         let dest = dir.appendingPathComponent(safe.hasSuffix(".ipa") ? safe : safe + ".ipa")
         try? FileManager.default.removeItem(at: dest)
+        // v0.3.676（D1）：**起传输前**把「本次调用算出来的落盘目标」交给控制面。
+        //
+        // 这一步是 D1 的另一半：`dest` 只有本函数知道（文件名来自调用方给的 `suggestedName`，
+        // 对 AppleID 通道而言是 Apple 回的 `bundleShortVersionString`），而取消路径
+        // （`IPADownloadControl.abort()`）在「网络已下完、正在注入 sinf」这个窗口里必须拿到它，
+        // 才删得掉这个已经落盘、还没写台账的包。`control == nil` 时（爱思等其它通道）无副作用。
+        control?.recordDestination(dest)
 
         var req = URLRequest(url: url)
         req.timeoutInterval = 120
@@ -131,6 +138,10 @@ enum AppStoreInstallService {
                         // 本下载器 abort() 删掉之后又被搬回来的残物 —— 失败时由这里统一兜底删干净.
                         // 只删本函数自己算出来的 dest，不碰其它文件.
                         try? FileManager.default.removeItem(at: dest)
+                        // v0.3.676（D1）：失败 ⇒ 这次调用的产物已不存在，把登记摘掉.
+                        // **成功路径故意不摘**：`downloadIPA` 返回后调用方还要往 dest 里注入 sinf，
+                        // 那段窗口里用户点「删除安装包」仍要靠这份登记才找得到文件（见 `abort()`）.
+                        control?.recordDestination(nil)
                         cont.resume(throwing: err)
                     }
                 })
@@ -297,6 +308,28 @@ final class IPADownloadControl: @unchecked Sendable {
     private var pendingPause = false
     private var pendingAbort = false
 
+    /// v0.3.676：本次下载**最终落盘的目标路径**（`downloadIPA` 里算出来的 `dest`）。
+    ///
+    /// 为什么记在这里：`dest` 的文件名是 `AppStoreLocalInstallService.download` 用 Apple 回的
+    /// `bundleShortVersionString` 拼出来的（`<bundleID>-<version>.ipa`），与下载中心的
+    /// `Job.version` **不是同一个来源**，中心按任务字段拼不出来；而真正删文件的那份
+    /// `destination` 在 `IPAFileDownloader` 里是 private，控制面拿不到。
+    /// 于是「网络已下完、`dest` 已落盘、正在注入 sinf」这个窗口里用户点「删除安装包」时，
+    /// 中心与底层下载器**都不知道该删哪个文件**（下载器那一刻也已经 `finished` 了）。
+    /// 现在由 `downloadIPA` 在起传输前登记，取消时 `abort()` 凭它删。
+    ///
+    /// 语义：登记的是「本次调用的产物路径」，**成功落盘后故意保留**（注入 sinf 的窗口还要用）；
+    /// 失败 / 取消时由 `downloadIPA` 摘除。控制面按任务 id 建、任务收尾即从中心摘掉，
+    /// 因此不会指到别人的文件上。
+    private var destination: URL?
+
+    /// v0.3.676：登记 / 摘除本次下载的落盘目标（`fileprivate`：只有同文件的 `downloadIPA` 会调）。
+    fileprivate func recordDestination(_ url: URL?) {
+        lock.lock()
+        destination = url
+        lock.unlock()
+    }
+
     /// 下载器建好后把自己登记进来；此前若有暂停 / 取消意图，立刻补做。
     /// `fileprivate`：参数是文件私有的 `IPAFileDownloader`，只有同文件的下载器会调它。
     fileprivate func attach(_ d: IPAFileDownloader) {
@@ -326,9 +359,27 @@ final class IPADownloadControl: @unchecked Sendable {
 
     func abort() {
         lock.lock()
-        guard let d = downloader else { pendingAbort = true; lock.unlock(); return }
+        let d = downloader
+        // v0.3.676（D1）：目标路径在这里先取出来 —— 下载器可能在「网络已下完」那一刻就已经
+        // `finished` 了，它自己的 `abort()` 会因此提前返回（见下），清理只能由这边兜。
+        let target = destination
+        if d == nil { pendingAbort = true }
         lock.unlock()
-        d.abort()
+        // ① 传输还在跑时，这条线才是主力：停 task、删半成品、让 continuation 以取消错误收尾。
+        d?.abort()
+        // ② 兜住「下载器已 finished、文件已落盘」那个窗口（本次修的缺陷）。
+        //
+        // `IPAFileDownloader.abort()` 首行是 `guard !finished`，而 `finish(.success(keep))`
+        // 一执行完 `finished` 就是 true ⇒ 在「网络下载已完成、`downloadIPA` 正把 keep 搬成
+        // `dest` / 之后 `AppStoreLocalInstallService` 正在注入 sinf」这段时间里，
+        // 上面那句 `d?.abort()` 是**空操作**：行删了、dest 还在，注入完还会照常写台账。
+        // 所以这里不依赖下载器的状态位，直接按登记过的 dest 再删一次
+        // （文件不存在就是 no-op；删失败也不阻断 —— `downloadIPA` 的失败分支还有一次兜底）。
+        //
+        // 为什么由控制面来删而不是下载器：`dest` 的文件名由 Apple 回的
+        // `bundleShortVersionString` 拼成（`<bundleID>-<version>.ipa`），下载中心按任务字段
+        // 拼不出来，只能由 `downloadIPA` 在起传输前登记进来（见 `recordDestination`）。
+        if let target { try? FileManager.default.removeItem(at: target) }
     }
 }
 

@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.3.677] - 2026-10-19
+
+> **一句话**：13 处「裸 Text 空态」统一到三态组件，外加下载链路两个「删不到文件」的补丁。
+> 界面结构零变化，只有空态的呈现方式与失败时的清理行为变了。
+
+### 一、空态统一（11 个视图文件）
+
+这批改动全部是 `Text("…").foregroundColor(.secondary)` 这种「一行灰字当空态」→
+`AppStateSection(state: .empty(title, message:, icon:))`（`DesignSystem.swift:681`）。
+换完的页面在「加载失败 / 空 / 有内容」三态上长得一致，也不再各写各的图标尺寸。
+
+| 文件 | 处数 | 原来的空态 |
+| --- | --- | --- |
+| `Views/AppDetailView.swift` | 2 | 「暂无 X 的备份.」两支 |
+| `Views/AFCBrowserView.swift` | 1 | 「没有可移动的目标目录」 |
+| `Views/ImagePreviewSupport.swift` | 1 | 「没有可查看的图片」 |
+| `Views/ModuleManagerView.swift` | 1 | 「该模块没有可打开的 Web 页面」 |
+| `Views/Wallpaper/WallpaperView.swift` | 2 | 手写 96pt 图标卡片 + 两行裸 Text |
+| `Views/CertificateView.swift` | 1 | 「账号下没有可用团队」 |
+| `Views/IncreaseMemoryView.swift` | 2 | 「账号下没有可用团队」/「该团队下没有 App ID」 |
+| `Views/LiveCleanTabView.swift` | 1 | 「没有匹配「X」的应用.」 |
+| `Views/NBStoreDetailView.swift` | 1 | 「该应用暂无历史版本」 |
+| `Views/ProcessManagerView.swift` | 1 | 两行裸 Text（正文 + footnote） |
+| `Views/SignSourceAppListView.swift` | 2 | 「这个源里没有应用」/「没有匹配的应用」 |
+
+两处**判断后不改**：`CertificateView.swift:255-261` 与 `IncreaseMemoryView.swift:105-112` 的
+「尚未加载团队」在 `teamState` 的 `.idle` 分支 —— 语义是「还没发起请求」不是空列表，
+而且带一个 `Button("加载")`；`AppStateSection` 的 `.empty` 硬编码 `action: nil`（`DesignSystem.swift:716-721`），
+套进去按钮会消失，属功能回退。
+
+`ImagePreviewSupport.swift:221` 额外挂 `.environment(\.colorScheme, .dark)`：那一页底色是纯黑，
+`InfoActionCard` 用的 `.primary`/`.secondary` 在浅色模式下解析成黑字，落在黑底上读不出来。
+只作用于空态这一支，不动整页观感。
+
+### 二、下载链路：删不到的文件（D1 + D8 同类）
+
+**D1**：`AppStoreInstallService.swift` 的 `IPADownloadControl` 新增 `private var destination: URL?`，
+`downloadIPA` 在起传输前 `recordDestination(dest)`，`abort()` 里先取出来、`d?.abort()` 之后再
+无条件 `removeItem(at: target)`。
+
+修的是这一段：`IPAFileDownloader.abort()` 首行是 `guard !finished`，而 `finish(.success(keep))`
+一执行完 `finished` 就是 `true` ⇒ 在「网络下载已完成、`dest` 已落盘、`AppStoreLocalInstallService`
+正在注入 sinf」这段时间里点「删除安装包」，`d?.abort()` 是**空操作**，一个字节都不删，
+注入完还会照常写台账。
+
+为什么由控制面删：`dest` 的文件名是 `AppStoreLocalInstallService.swift:97` 用 Apple 回的
+`bundleShortVersionString` 拼的（`<bundleID>-<version>.ipa`），与下载中心的 `Job.version`
+不是同一来源，中心按任务字段拼不出来；真正删文件的那份 `destination` 在 `IPAFileDownloader` 里是 `private`。
+
+成功路径**故意不摘登记**：`downloadIPA` 返回后还要注入 sinf，那段窗口正是要修的那个。
+登记的生命周期由控制面自身决定（按 job id 建、任务收尾即摘），不会指到别人的文件上。
+
+**D8 同类**：`IPADownloadCenter.swift` 的 `RemoteDownloader` 非 2xx 分支在 `finish(.failure(...))`
+之前补 `removeItem(at: keep)`。顺序必须「先删后 finish」——`finish` 会走 `onFinish` →
+下载中心 `handle` 可能 update/pump 抛错，那之后 `keep` 就彻底失联了。
+
+### 三、验证
+
+- `python Resources/Scripts/normalize_eol.py` → EXIT=0，13 个改动文件换行符与基线一致。
+- `python Resources/Scripts/swift_precommit_check.py .` → EXIT=0，15 个 guard 全过（含版本号三处、UI 文案 G1/G2/G3 扫 293 个 .swift 命中 0）。
+- `swiftc -parse` 逐个 13 个 Swift 文件 → 13/13 EXIT=0，`FAIL_TOTAL=0`。
+- 局限：`-parse` 只查语法，类型错、缺 return、noasync 查不出 —— 真判决在 CI 的 `xcode-build` step。
+
 ## [0.3.676] - 2026-10-18
 
 > **一句话**：修掉最后一处「全宽信息行塞进 16 圆角卡片」的硬规则 5 违规。

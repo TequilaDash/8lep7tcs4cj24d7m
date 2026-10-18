@@ -278,8 +278,11 @@ struct CertificateView: View {
                     .foregroundColor(.secondary)
             case .loaded:
                 if manager.teams.isEmpty {
-                    Text("账号下没有可用团队")
-                        .foregroundColor(.secondary)
+                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。
+                    // 这里确实是「空列表」：团队已加载成功、但账号下 0 个团队（不是错误态）。
+                    AppStateSection(state: .empty("账号下没有可用团队",
+                                                  message: "登录的 Apple ID 名下还没有开发者团队，创建后重新加载即可.",
+                                                  icon: "person.2.slash"))
                 } else {
                     Picker("选择团队", selection: $manager.selectedTeamID) {
                         ForEach(manager.teams) { team in

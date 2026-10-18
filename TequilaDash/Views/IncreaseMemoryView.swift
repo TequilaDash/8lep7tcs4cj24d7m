@@ -128,8 +128,10 @@ struct IncreaseMemoryView: View {
                     .foregroundColor(.secondary)
             case .loaded:
                 if ctrl.teams.isEmpty {
-                    Text("账号下没有可用团队")
-                        .foregroundColor(.secondary)
+                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态，非错误态）。
+                    AppStateSection(state: .empty("账号下没有可用团队",
+                                                  message: "登录的 Apple ID 名下还没有开发者团队，创建后重新加载即可.",
+                                                  icon: "person.2.slash"))
                 } else {
                     Picker("选择团队", selection: $ctrl.selectedTeamID) {
                         ForEach(ctrl.teams) { team in
@@ -171,8 +173,10 @@ struct IncreaseMemoryView: View {
                 Button("重试") { Task { await ctrl.loadAppIDs() } }
             case .loaded:
                 if ctrl.apps.isEmpty {
-                    Text("该团队下没有 App ID")
-                        .foregroundColor(.secondary)
+                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。
+                    AppStateSection(state: .empty("该团队下没有 App ID",
+                                                  message: "在 Apple Developer 后台为这个团队创建 App ID 后重新加载.",
+                                                  icon: "tray.full"))
                 } else {
                     ForEach(ctrl.apps) { app in
                         AppRowView(

@@ -380,8 +380,10 @@ struct NBStoreDetailView: View {
     private var versionSection: some View {
         Section {
             if versions.isEmpty {
-                Text("该应用暂无历史版本")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。
+                AppStateSection(state: .empty("该应用暂无历史版本",
+                                              message: "该应用在当前源里没有其它版本记录.",
+                                              icon: "clock.arrow.circlepath"))
             } else {
                 ForEach(visibleVersions) { v in
                     HStack(alignment: .center, spacing: 10) {

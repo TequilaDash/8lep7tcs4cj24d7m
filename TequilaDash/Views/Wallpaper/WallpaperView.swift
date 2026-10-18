@@ -179,35 +179,12 @@ struct WallpaperView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 60)
 
-            VStack(spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(Color(.secondarySystemGroupedBackground))
-                        .frame(width: 96, height: 96)
-
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 40))
-                        .foregroundStyle(AppTheme.accent)
-                }
-
-                VStack(spacing: 6) {
-                    Text("还没有导入壁纸包")
-                        .font(.title3.weight(.semibold))
-                        .foregroundColor(.primary)
-
-                    Text("导入 .tendies 文件即可应用自定义壁纸.\n支持 Collections、MercuryPoster、Videos 三类描述符.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                }
-            }
-            .padding(28)
-            .background(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(Color(.systemBackground))
-            )
-            .padding(.horizontal, 24)
+            // v0.3.677：空态改用统一组件 AppStateSection（原为手写图标 + 标题 + 说明的卡片）。
+            // 列表页的空态本来就该是这一套，说明句并进 message。
+            AppStateSection(state: .empty("还没有导入壁纸包",
+                                          message: "导入 .tendies 文件即可应用自定义壁纸.支持 Collections、MercuryPoster、Videos 三类描述符.",
+                                          icon: "photo.on.rectangle.angled"))
+                .padding(.horizontal, 24)
 
             if !isReady {
                 HStack(spacing: 8) {
@@ -684,18 +661,12 @@ private struct WallpaperExtractorSheet: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("未找到可提取的壁纸")
-                .font(.headline)
-            Text("PosterBoard 容器中没有已安装的自定义描述符，或当前无权限读取.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-        }
+        // v0.3.677：空态改用统一组件 AppStateSection（原为手写图标 + 两行裸 Text）。
+        AppStateSection(state: .empty("未找到可提取的壁纸",
+                                      message: "PosterBoard 容器中没有已安装的自定义描述符，或当前无权限读取.",
+                                      icon: "photo.on.rectangle.angled"))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(32)
     }
 
     private var listContent: some View {

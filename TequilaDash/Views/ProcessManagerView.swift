@@ -1024,11 +1024,11 @@ struct ProcessManagerView: View {
                         PairingGuideCard(showsBackground: false, note: "进程管理还需要：① LocalDevVPN 已连接；② 开发者模式已开启.")
                             .listRowInsets(EdgeInsets())
                     } else {
-                        Text("未找到运行中的进程.")
-                            .foregroundStyle(.secondary)
-                        Text("设备可能处于空闲状态，或隧道尚未就绪；点击右上角刷新重试.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        // v0.3.677：两行裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。
+                        // 原两行合并成一条 title + 一条 message，语义不变：没扫到进程，可能是设备空闲或隧道未就绪。
+                        AppStateSection(state: .empty("未找到运行中的进程",
+                                                      message: "设备可能处于空闲状态，或隧道尚未就绪.点击右上角刷新重试.",
+                                                      icon: "gearshape.2"))
                     }
                 }
             } else {

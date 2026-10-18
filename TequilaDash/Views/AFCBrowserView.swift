@@ -179,9 +179,11 @@ struct AFCBrowserView: View {
                 } header: {
                     Text("目标目录（当前：\(currentPath)）")
                 }
+                // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
                 if entries.filter(\.isDirectory).isEmpty && parentPath == nil {
-                    Text("没有可移动的目标目录")
-                        .foregroundColor(.secondary)
+                    AppStateSection(state: .empty("没有可移动的目标目录",
+                                                  message: "当前目录下没有子目录，也无法回到上一级.",
+                                                  icon: "folder"))
                 }
             }
             .listStyle(.insetGrouped)

@@ -242,11 +242,16 @@ struct SignSourceAppListView: View {
 
     private var emptySection: some View {
         Section {
+            // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。
+            // 两种「空」的语义不同：源本身 0 条（apps.isEmpty）vs 有数据但被搜索/筛选滤空。
             if apps.isEmpty {
-                Text("这个源里没有应用").font(.subheadline).foregroundStyle(.secondary)
+                AppStateSection(state: .empty("这个源里没有应用",
+                                              message: "该软件源当前没有返回任何应用条目.",
+                                              icon: "tray.full"))
             } else {
-                Text("没有匹配的应用，试试换个关键词或筛选条件")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                AppStateSection(state: .empty("没有匹配的应用",
+                                              message: "试试换个关键词或筛选条件.",
+                                              icon: "magnifyingglass"))
             }
         }
     }

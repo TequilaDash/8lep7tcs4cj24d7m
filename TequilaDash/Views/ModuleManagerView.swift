@@ -247,7 +247,11 @@ struct ModuleManagerView: View {
                     }
                 } else {
                     // 模块未声明任何可打开页面（理论上不会到这：按钮只在有页面时出现）
-                    Text("该模块没有可打开的 Web 页面")
+                    // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
+                    AppStateSection(state: .empty("该模块没有可打开的 Web 页面",
+                                                  message: "该模块没有静态 webroot，也没有正在运行的本地服务.",
+                                                  icon: "globe"))
+                        .padding(.horizontal, 20)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {

@@ -218,9 +218,14 @@ struct ImageGalleryViewer: View {
                 //（图标：`showIconPreview` 里空地址只 toast；截图：`screenshots.isEmpty` 直接跳过）。
                 // v0.3.404 之前空数组是**纯黑**（`TabView` 一页都没有 → 什么都不画、也不提示），
                 // 所以这里留一句文案；v0.3.408 起它只在"代码写错"时可见。
-                Text("没有可查看的图片")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+                // v0.3.677：兜底空态改用统一组件 AppStateSection（原为裸 Text）。
+                AppStateSection(state: .empty("没有可查看的图片",
+                                              message: "图片地址为空，请返回后重新打开.",
+                                              icon: "photo"))
+                    .padding(.horizontal, 24)
+                    // 这一页底色是纯黑（全屏看图），系统字色在浅色模式下是黑字 → 读不出来.
+                    // 只给空态这一支强制深色外观，不动整页与图片浏览的既有观感.
+                    .environment(\.colorScheme, .dark)
             } else {
                 TabView(selection: $current) {
                     ForEach(Array(urls.enumerated()), id: \.offset) { index, url in

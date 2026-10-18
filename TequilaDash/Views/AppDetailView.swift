@@ -152,12 +152,17 @@ struct AppDetailView: View {
                         .font(.footnote)
                         .foregroundColor(.red)
                 } else if appBackups.records.isEmpty {
+                    // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
+                    // 空列表本来就是一个「区块的空态」，正好是该组件描述的场景；
+                    // 有不可读归档时把数量放进 message，不另起一行裸 Text。
                     if appBackups.unreadableCount > 0 {
-                        Text("暂无 \(app.name) 的备份.另有 \(appBackups.unreadableCount) 个归档无法读取.")
-                            .foregroundColor(.secondary)
+                        AppStateSection(state: .empty("暂无 \(app.name) 的备份",
+                                                      message: "另有 \(appBackups.unreadableCount) 个归档无法读取.",
+                                                      icon: "externaldrive"))
                     } else {
-                        Text("暂无 \(app.name) 的备份.")
-                            .foregroundColor(.secondary)
+                        AppStateSection(state: .empty("暂无 \(app.name) 的备份",
+                                                      message: "点「备份数据」即可为该应用生成第一份归档.",
+                                                      icon: "externaldrive"))
                     }
                 } else {
                     ForEach(appBackups.records) { record in
