@@ -223,7 +223,8 @@ struct I4MobileInstallView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard(padding: 0)
+            // 硬规则 5：设置类信息行一律全宽 + 发丝分隔，不套 16 圆角卡片（与 HomeView.cleanupSection 同款）。
+            // 原先这里是 .appCard(padding: 0)，把全宽信息行塞进了圆角卡片。
         }
     }
 

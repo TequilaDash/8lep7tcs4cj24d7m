@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.3.676] - 2026-10-18
+
+> **一句话**：修掉最后一处「全宽信息行塞进 16 圆角卡片」的硬规则 5 违规。
+> 这一版只改一个修饰符，界面结构、引擎、隧道行为零变化。
+
+### 一、违规点
+
+`TequilaDash/Views/I4MobileInstallView.swift:226` 的「设备信息」区块：
+
+```swift
+            VStack(spacing: 0) {
+                infoRow("iphone", AppTheme.accent, "机型", ...)
+                rowDivider
+                ...
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .appCard(padding: 0)        // <- 硬规则 5 违规
+```
+
+四条信息行（机型 / 容量·颜色 / 序列号 / 系统版本）本身已经是全宽行 + `rowDivider` 发丝分隔，
+外面再套一层 16 圆角卡片，等于把「设置类列表」画成了一张大卡片 —— 与 `DesignSystem.swift:18-19`
+写的硬规则 5（设置类列表用全宽行 + 发丝分隔，不要套 16 圆角卡片）直接冲突。
+
+### 二、改法
+
+删掉 `.appCard(padding: 0)`，保留 `.frame(maxWidth: .infinity, alignment: .leading)`，
+留两行注释说明为什么不能再加回来（与 `HomeView.swift:265-266`、`HomeView.swift:309-310`、
+`MoreView.swift:290` 三处同款处理一致）。
+
+改动量：`TequilaDash/Views/I4MobileInstallView.swift` +2 / -1。
+
+### 三、全仓复扫
+
+`grep "\.appCard\(padding: 0\)" TequilaDash/` 现在 4 处命中全部是注释：
+
+| 位置 | 性质 |
+| --- | --- |
+| `HomeView.swift:266` | 注释（v0.3.6xx 已改） |
+| `HomeView.swift:310` | 注释（v0.3.6xx 已改） |
+| `MoreView.swift:290` | 注释（v0.3.6xx 已改） |
+| `I4MobileInstallView.swift:227` | 注释（本版改） |
+
+真实调用点为 **0**。
+
+### 四、验证
+
+- `python Resources/Scripts/normalize_eol.py` 通过（1 个文件换行归一）。
+- `swiftc -parse` 通过（`EXIT=0`）。
+- `python Resources/Scripts/swift_precommit_check.py .` 通过，15 个 guard 全绿（含版本号三处 V1/V2/V3 = 0.3.676 / 965，UI 文案 G1/G2/G3 扫 293 个 .swift 命中 0）。
+- 本机 `swiftc -parse` 查不出类型错，真编译判决以 CI 为准。
+
 ## [0.3.675] - 2026-10-18
 
 > **一句话**：修 v0.3.673 引入的第 4 处编译错（`DeviceSlimService.clean` 少一个 `return`）。
