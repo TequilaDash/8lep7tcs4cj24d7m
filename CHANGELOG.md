@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.3.659] - 2026-10-18
+
+> **一句话**：把下载链路剩下的四个洞补上 —— 取消不再留下「后台还在跑」的传输（D2）、
+> AppleID 通道不再「百分比在动、字节与速度恒为 0」（D3）、没有直链的任务不再永久停在「排队中」（D4）、
+> 三个下载共用一套速度采样窗口导致数字乱跳（D5）、moveItem 失败留下的孤儿 .part（D8）。
+
+### D2 —— 外层 Task 取消，底层传输不知道
+
+`Engine/AppStoreInstallService.swift` 的 `downloadIPA` 只有一个裸 `withCheckedThrowingContinuation`：
+调用方的 Task 一被取消（下载中心删任务 / 退出页面），这个 continuation 既不会 `resume`、
+底层 `URLSessionDownloadTask` 也不会停 —— detached 任务挂在原地，传输却照样把几百 MB 拉完，
+拉完再落盘，留下「列表里没有、磁盘上有」的孤儿包。
+
+修法：套一层 `withTaskCancellationHandler`，`onCancel` 里调 `abort()`
+（它本来就会让 continuation 以 `CancellationError` 收尾，缺的只是「谁来触发」）。
+因为 `onCancel` 闭包在另一个上下文里跑、抓不到才刚被创建的下载器，中间加了一个只做三件事的小桥
+`DownloadCancellationBox`：登记下载器 / 记住取消已到 / 两个方向谁后到谁补做。
+另外 `IPAFileDownloader.start` 加了「已取消就不再起传输」的闸门 —— 否则 abort 之后仍会新建 session 并 resume，
+等于「删了还在下」。
+
+### D3 —— AppleID 通道的字节数与速度恒为 0
+
+这条路只透传 0~1 的百分比（`IPADownloadCenter.swift` 的 `downloadProgress`），而下载管理显示要的是
+「已下 X MB / 共 Y MB」与瞬时速度 —— 只有 `applyDownloadProgress` 才写
+`receivedBytes` / `totalBytes` / `speedBytesPerSecond`。
+现在 `downloadIPA` 与 `AppStoreLocalInstallService.download` 各加一个默认 `nil` 的
+`byteProgress: ((Int64, Int64) -> Void)?`，由 `IPAFileDownloader.didWriteData` 直接给出字节数；
+下载中心把它接到 `applyDownloadProgress`。默认值 ⇒ 其余 5 个调用点一行都不用改。
+
+### D4 —— 没有直链的失败任务，重试后永久「排队中」
+
+`pump()` 只挑 `phase == .waiting && remoteURL != nil`。AppleID 通道在「还没拿到直链」时就失败
+（账号 / 票据那一步）时 `remoteURL` 是 `nil`，`retry()` 把它改回 `.waiting` 之后**永远选不中** ——
+用户点重试什么都不会发生，界面一直转圈。
+
+修法：`pump()` 先把「`.waiting` 但没有直链」的任务收成明确失败（`markNoDownloadAddress`），
+并说清下一步（回商店页重新发起）。不自动重跑 AppleID 链路的原因写在注释里：
+那条链要 `AppStoreItem`（商品号 + 账号），任务里只剩 bundleId / 名称，凭现有字段重建会对不上号。
+
+### D5 —— 三个并发下载共用一套速度采样窗口
+
+v0.3.394 写下这段时下载是**串行**的（注释原文「`pump()` 保证一次只下一个」），
+v0.3.413 把并发开到 `maxConcurrentDownloads = 3` 之后这个前提就没了：
+三个任务共用同一对（上次时刻, 上次字节），A 的字节数去减 B 的，差值为负被丢弃 ——
+速度在三个任务之间乱跳，并且会长期停在 0。
+
+改成按 job id 各一套 `SpeedSample`，收工 / 暂停 / 续传 / 取消 / 失败时 `resetSpeedWindow(id)` 删掉。
+
+### D8 —— moveItem 失败留下的孤儿 .part
+
+`handle` 成功分支里 `moveItem(tmp → 下载目录)` 失败后只报错、不删 `tmp`，
+而它已经在系统临时目录里 —— 一次失败留一个几百 MB 的 `dl-<uuid>.part`，
+设置页的「清理」只认下载目录，永远清不到。现在当场删掉再报错。
+
+### D1 复核：判定不成立
+
+审计说「`cancel()` 对 AppleID 通道删不到文件（`localFileName` 恒 `nil`）」。
+复核后**不成立**：这条通道的取消走 `abort()`，它内部就 `removeItem(at: destination)`
+（`destination` = `downloadIPA` 落盘的 `dest`），半成品与目标文件都被删掉。
+`localFileName` 只在**下载完成写台账时**才有值，取消时本来就不该有。这里不改码。
+
+### 验证
+
+- `normalize_eol.py --base HEAD --check`：3 个文件行尾与基线一致；
+- `swiftc -parse`（`-swift-version 6`）：3 个文件 EXIT=0；
+- `swift_precommit_check.py`：guard 全绿（版本号三处 0.3.659 / 959）。
+
 ## [0.3.658] - 2026-10-18
 
 > **一句话**：下载台账的「读-改-写」补锁（D7），并把只为算体积而逐条开 IPA 包的两处 API 拆掉（D6）。

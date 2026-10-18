@@ -69,6 +69,13 @@ enum AppStoreInstallService {
                             // 暂停 / 继续 / 删除安装包能真正触达这条链（旧实现这条链没有任何句柄，
                             // 三个动作全是空操作，见 `IPADownloadControl` 的说明）。
                             control: IPADownloadControl? = nil,
+                            // v0.3.659（task-3 D3）：可选的字节级进度。
+                            //
+                            // 为什么不改 progress：那个参数是 0~1 的百分比，下游（下载中心）只有它
+                            // 就算不出「已下多少 MB / 共多少 MB / 当前速度」—— AppleID 通道在下载管理里
+                            // 因此长期是「百分比在动、字节与速度恒为 0」。加一个默认 nil 的新参数，
+                            // 其余 5 个调用点一行都不用改。
+                            byteProgress: ((Int64, Int64) -> Void)? = nil,
                             onLog: ((String) -> Void)? = nil) async throws -> URL {
         guard let url = URL(string: urlString) else { throw InstallError.badTemplate }
         if let hostPolicy {
@@ -87,22 +94,42 @@ enum AppStoreInstallService {
         req.timeoutInterval = 120
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
 
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            IPAFileDownloader(control: control, destination: dest,
-                              hostPolicy: hostPolicy, progress: progress, completion: { result in
-                switch result {
-                case .success(let tmp):
-                    do {
-                        try? FileManager.default.removeItem(at: dest)
-                        try FileManager.default.moveItem(at: tmp, to: dest)
-                        cont.resume()
-                    } catch {
-                        cont.resume(throwing: error)
+        // v0.3.659（task-3 D2）：把外层 Task 的取消接到这台传输上。
+        //
+        // 旧实现只有一个裸 withCheckedThrowingContinuation：调用方的 Task 一被取消
+        // （下载中心删任务 / 退出页面），这个 continuation 既不会 resume、传输也不会停 ——
+        // detached 任务挂在原地，URLSession 却还在后台把几百 MB 拉完，拉完再落盘，
+        // 留下一个「列表里没有、磁盘上有」的孤儿包。
+        // abort() 早就会让 continuation 以 CancellationError 收尾（见其注释），
+        // 缺的只是「谁来触发它」—— 这里补的就是这条线。
+        let cancellation = DownloadCancellationBox()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                let downloader = IPAFileDownloader(control: control, destination: dest,
+                                                   hostPolicy: hostPolicy, progress: progress,
+                                                   byteProgress: byteProgress,
+                                                   completion: { result in
+                    switch result {
+                    case .success(let tmp):
+                        do {
+                            try? FileManager.default.removeItem(at: dest)
+                            try FileManager.default.moveItem(at: tmp, to: dest)
+                            cont.resume()
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
+                    case .failure(let err):
+                        cont.resume(throwing: err)
                     }
-                case .failure(let err):
-                    cont.resume(throwing: err)
-                }
-            }).start(request: req)
+                })
+                // 先登记再启动：在启动之前就到的取消意图由 register 补做 ——
+                // 否则取消落在「登记」与「start」之间会丢失，continuation 永不收尾。
+                cancellation.register(downloader)
+                downloader.start(request: req)
+            }
+        } onCancel: {
+            // 取消不是失败：abort() 自己会 resume 这个 continuation（CancellationError）。
+            cancellation.cancel()
         }
 
         let attrs = try? FileManager.default.attributesOfItem(atPath: dest.path)
@@ -293,6 +320,38 @@ final class IPADownloadControl: @unchecked Sendable {
     }
 }
 
+/// v0.3.659（task-3 D2）：downloadIPA 的「外层 Task 取消 → 底层 abort()」转接器。
+///
+/// 为什么需要它：withTaskCancellationHandler 的 onCancel 闭包在**另一个上下文**里跑，
+/// 抓不到才刚被创建的下载器（下载器要在 continuation 闭包里才拿得到）。
+/// 所以用一个只做三件事的小对象当桥：登记下载器、记住「取消已经来了」、两个方向谁后到谁补做。
+///
+/// 线程模型：register 在下载启动的那条任务上；cancel 来自取消源。
+/// 一把 NSLock 收口，标 @unchecked Sendable 以便进 onCancel 闭包（Swift 6 严格并发）。
+private final class DownloadCancellationBox: @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var downloader: IPAFileDownloader?
+    private var cancelled = false
+
+    /// 下载器建好后登记；若取消**已经**先到，立刻补一次 abort()。
+    func register(_ d: IPAFileDownloader) {
+        lock.lock()
+        downloader = d
+        let already = cancelled
+        lock.unlock()
+        if already { d.abort() }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let d = downloader
+        lock.unlock()
+        d?.abort()
+    }
+}
+
 /// v0.3.300：带进度的 IPA 文件下载器（`URLSessionDownloadTask` + delegate）
 ///
 /// 用回调式下载而非 `URLSession.download(for:)`，目的只有一个：**拿到字节级进度**。
@@ -305,6 +364,9 @@ final class IPADownloadControl: @unchecked Sendable {
 private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
 
     private let onProgress: ((Double) -> Void)?
+    /// v0.3.659（task-3 D3）：字节级进度（已下 / 总量）。非 nil 时每次 didWriteData 都回调，
+    /// 让下载中心能算出字节数与瞬时速度（旧实现只透传 0~1 百分比）。
+    private let onByteProgress: ((Int64, Int64) -> Void)?
     private let completion: (Result<URL, Error>) -> Void
     /// v0.3.571：非空时，每一次 HTTP 重定向的目标 host 都必须通过它（AppleID 通道传 Apple 域白名单）。
     /// nil = 不限制（爱思等非 Apple 源沿用旧行为）。
@@ -337,16 +399,26 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
          destination: URL?,
          hostPolicy: ((String) -> Bool)?,
          progress: ((Double) -> Void)?,
+         byteProgress: ((Int64, Int64) -> Void)? = nil,
          completion: @escaping (Result<URL, Error>) -> Void) {
         self.control = control
         self.destination = destination
         self.hostPolicy = hostPolicy
         self.onProgress = progress
+        self.onByteProgress = byteProgress
         self.completion = completion
         super.init()
     }
 
     func start(request: URLRequest) {
+        // v0.3.659（task-3 D2）：已经取消过就不要再起传输。
+        // 场景：取消意图在 register 之前到达（DownloadCancellationBox.register 已补做 abort），
+        // 或者控制面在 attach 之前就收到了「删除安装包」（IPADownloadControl 的 pendingAbort）。
+        // 不挡这一下，abort 之后仍会新建 session 并 resume —— 等于「删了还在下」。
+        lock.lock()
+        let dead = finished || aborted
+        lock.unlock()
+        guard !dead else { return }
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 120
         let s = URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
@@ -444,6 +516,8 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
         guard totalBytesExpectedToWrite > 0 else { return }
         let p = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
         onProgress?(min(1.0, max(0.0, p)))
+        // v0.3.659（task-3 D3）：字节数一并给出，下载中心据此写 receivedBytes / totalBytes / 速度。
+        onByteProgress?(totalBytesWritten, totalBytesExpectedToWrite)
     }
 
     func urlSession(_ session: URLSession,

@@ -381,14 +381,22 @@ final class IPADownloadCenter: ObservableObject {
     /// 否则之后**真**的网络错误会被误判成暂停而永远显示「已暂停」）。
     private var pausingIDs: Set<UUID> = []
 
-    // MARK: v0.3.394：瞬时速度的采样窗口
+    // MARK: v0.3.394：瞬时速度的采样窗口（v0.3.659 改为按任务各一套）
     //
-    // 下载是**串行**的（`pump()` 保证一次只下一个），所以一套窗口变量就够，不必按任务存。
+    // v0.3.394 写下这段时下载是**串行**的（一次只下一个），一套窗口变量够用。
+    // v0.3.413 把并发开到 `maxConcurrentDownloads = 3` 之后就不成立了：三个任务共用
+    // 同一对（上次时刻, 上次字节），A 的字节数去减 B 的，差值为负被丢弃，
+    // 于是速度在三个任务之间乱跳、并且会长期停在 0。现在按 job id 各一套。
     // 窗口长度 0.8s：太短数字乱跳，太长反应迟钝。
 
-    private var speedWindowStart: Date?
-    private var speedWindowBytes: Int64 = 0
-    private var smoothedSpeed: Double = 0
+    private struct SpeedSample {
+        var windowStart: Date
+        var bytes: Int64
+        var smoothed: Double
+    }
+    /// 只放**正在跑**的任务：收工 / 暂停 / 取消 / 失败都调 `resetSpeedWindow(_:)` 删掉，
+    /// 否则字典会随历史任务无限长。
+    private var speedSamples: [UUID: SpeedSample] = [:]
     private static let speedWindow: TimeInterval = 0.8
 
     /// 把「已下字节 / 总字节」写进任务，顺便估一个**瞬时速度**。
@@ -398,22 +406,22 @@ final class IPADownloadCenter: ObservableObject {
     /// 采样窗口没满时沿用上一次的值（不刷新），所以界面上的数字是稳定的。
     private func applyDownloadProgress(_ id: UUID, written: Int64, expected: Int64) {
         let now = Date()
-        if let start = speedWindowStart {
-            let dt = now.timeIntervalSince(start)
-            if dt >= Self.speedWindow {
-                let delta = Double(written - speedWindowBytes)
-                speedWindowStart = now
-                speedWindowBytes = written
-                if delta >= 0 {
-                    let instant = delta / dt
-                    smoothedSpeed = smoothedSpeed <= 0 ? instant : smoothedSpeed * 0.55 + instant * 0.45
-                }
+        var sample = speedSamples[id]
+            ?? SpeedSample(windowStart: now, bytes: written, smoothed: 0)
+        let dt = now.timeIntervalSince(sample.windowStart)
+        if dt >= Self.speedWindow {
+            let delta = Double(written - sample.bytes)
+            sample.windowStart = now
+            sample.bytes = written
+            if delta >= 0 {
+                let instant = delta / dt
+                sample.smoothed = sample.smoothed <= 0
+                    ? instant
+                    : sample.smoothed * 0.55 + instant * 0.45
             }
-        } else {
-            speedWindowStart = now
-            speedWindowBytes = written
         }
-        let speed = smoothedSpeed
+        speedSamples[id] = sample
+        let speed = sample.smoothed
         update(id) { job in
             if expected > 0 { job.totalBytes = expected }
             if written > job.receivedBytes { job.receivedBytes = written }
@@ -422,12 +430,10 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// 换任务 / 暂停 / 续传 / 结束时清掉速度窗口。
+    /// 换任务 / 暂停 / 续传 / 失败 / 结束时清掉该任务的速度窗口。
     /// 不清的话，续传后第一次采样的字节差会跨过暂停那段空档，把速度算成天文数字。
-    private func resetSpeedWindow() {
-        speedWindowStart = nil
-        speedWindowBytes = 0
-        smoothedSpeed = 0
+    private func resetSpeedWindow(_ id: UUID) {
+        speedSamples[id] = nil
     }
 
     /// 免登录源：直接给直链
@@ -564,6 +570,15 @@ final class IPADownloadCenter: ObservableObject {
                                 $0.progress = p
                                 $0.setStage("下载中")
                             }
+                        }
+                    },
+                    // v0.3.659（task-3 D3）：字节级进度 —— 写 receivedBytes / totalBytes / 速度。
+                    // 旧实现只有下面那个 0~1 的百分比回调，下载管理里这条通道的
+                    // 「已下 X MB / 共 Y MB」与速度恒为 0（对照 `applyDownloadProgress` 才写这三项）。
+                    byteProgress: { written, expected in
+                        Task { @MainActor in
+                            guard self.job(id)?.phase == .downloading else { return }
+                            self.applyDownloadProgress(id, written: written, expected: expected)
                         }
                     },
                     onResolvedURL: { url in
@@ -862,7 +877,7 @@ final class IPADownloadCenter: ObservableObject {
         update(id) { $0.setStage("已暂停", phase: .paused); $0.speedBytesPerSecond = 0 }
         runners[id]?.pause()
         appleIDControls[id]?.pause()
-        resetSpeedWindow()
+        resetSpeedWindow(id)
     }
 
     func resume(_ id: UUID) {
@@ -871,7 +886,7 @@ final class IPADownloadCenter: ObservableObject {
         if let r = runners[id] {
             r.resume()
             // v0.3.394：续传要重新起窗口（见 `resetSpeedWindow` 注释）
-            resetSpeedWindow()
+            resetSpeedWindow(id)
             update(id) { $0.setStage("下载中", phase: .downloading) }
             return
         }
@@ -881,7 +896,7 @@ final class IPADownloadCenter: ObservableObject {
         // `RemoteDownloader` 下载同一个 URL ⇒ 两个任务写同一个文件（诊断 §③ 的重复下载风险）。
         if let c = appleIDControls[id] {
             c.resume()
-            resetSpeedWindow()
+            resetSpeedWindow(id)
             update(id) { $0.setStage("下载中", phase: .downloading) }
             return
         }
@@ -919,7 +934,7 @@ final class IPADownloadCenter: ObservableObject {
         if let r = runners[id] {
             r.abort()
             runners[id] = nil
-            resetSpeedWindow()
+            resetSpeedWindow(id)
         }
         // ▸▸▸ v0.3.583：AppleID 通道 —— 旧实现只查 `runners`（对这条链恒为 nil）⇒ `abort()`
         // 是空操作，「删除安装包」变成**假成功**：行没了、传输照跑、跑完还落盘写台账（诊断 §4.3）。
@@ -927,7 +942,7 @@ final class IPADownloadCenter: ObservableObject {
         if let c = appleIDControls[id] {
             c.abort()
             appleIDControls[id] = nil
-            resetSpeedWindow()
+            resetSpeedWindow(id)
         }
         // 安装看门狗：这一行要没了 → 停掉（否则会对着一个不存在的 job 空转）。
         installWatchdogs[id]?.cancel()
@@ -988,10 +1003,36 @@ final class IPADownloadCenter: ObservableObject {
     /// `startDownload` 会把命中的 job 改成 `.downloading`，所以下一轮
     /// `jobs.last(where: { .waiting })` 取到的是**下一个**任务 —— 不会死循环。
     private func pump() {
+        // v0.3.659（task-3 D4）：排队中却没有**可下载直链**的任务永远选不中 ⇒ 永久停在
+        // 「排队中」。AppleID 通道在「还没拿到直链」时失败（账号 / 票据那一步）就是这种：
+        // `retry()` 把它改回 .waiting，`pump()` 因 remoteURL == nil 跳过 —— 用户点重试
+        // 什么都不会发生，界面一直转圈。这里先把它收成明确失败并说清下一步。
+        for stuck in jobs where stuck.phase == .waiting && stuck.remoteURL == nil {
+            markNoDownloadAddress(stuck.id)
+        }
         while runners.count < Self.maxConcurrentDownloads,
               let next = jobs.last(where: { $0.phase == .waiting && $0.remoteURL != nil }) {
             startDownload(next.id)
         }
+    }
+
+    /// v0.3.659（task-3 D4）：排队中却没有直链 —— 如实收成失败，不让它无限「排队中」。
+    ///
+    /// 为什么不自动重跑 AppleID 链路：那条链需要 `AppStoreItem`（商品号 + 账号），
+    /// 任务里只剩 bundleId / 名称，凭现有字段重建会对不上号。宁可让用户回商店页重点一次，
+    /// 也不做一个「看起来在重试、其实下错了包」的入口。
+    private func markNoDownloadAddress(_ id: UUID) {
+        guard let job = job(id) else { return }
+        LoginLogger.shared.log("[下载中心] 该任务没有可下载的直链，无法继续：\(job.name)",
+                               category: logCategory(for: job.source))
+        pausingIDs.remove(id)
+        update(id) {
+            $0.failureStage = .download
+            $0.error = "这次没有拿到可下载的地址（账号或票据那一步就失败了），请在商店页重新发起下载."
+            $0.setStage("失败", phase: .failed)
+            $0.speedBytesPerSecond = 0
+        }
+        resetSpeedWindow(id)
     }
 
     private func startDownload(_ id: UUID) {
@@ -1011,7 +1052,7 @@ final class IPADownloadCenter: ObservableObject {
         IPADownloadLibrary.shared.updateSourceURL(fileName: safeName, url: urlString)
 
         // v0.3.394：新任务起一个新窗口
-        resetSpeedWindow()
+        resetSpeedWindow(id)
         let downloader = RemoteDownloader(
             request: req,
             onProgress: { written, expected in
@@ -1084,7 +1125,7 @@ final class IPADownloadCenter: ObservableObject {
                     if $0.totalBytes > 0 { $0.receivedBytes = $0.totalBytes }
                     $0.speedBytesPerSecond = 0
                 }
-                resetSpeedWindow()
+                resetSpeedWindow(id)
                 // v0.3.390：同名文件**刚刚成功落地** → 清掉之前那条「文件不存在」之类的失败记录。
                 //
                 // 为什么必须清（真 bug，`dl-ui` 定位）：`recordFileFailure` 插入的失败任务**不会自己消失**，
@@ -1100,6 +1141,10 @@ final class IPADownloadCenter: ObservableObject {
                 // v0.3.413：并发下载 —— 一个任务收工后把并发槽让给下一个排队的。
                 pump()
             } catch {
+                // v0.3.659（task-3 D8）：moveItem 失败时，系统临时目录里那个
+                // dl-<uuid>.part 就没人管了 —— 一次失败留一个几百 MB 的孤儿文件，
+                // 而设置页的「清理」只认下载目录。这里当场删掉再报错。
+                try? FileManager.default.removeItem(at: tmp)
                 finishWithError(id, error)
             }
         case .failure(let error):
@@ -1130,7 +1175,7 @@ final class IPADownloadCenter: ObservableObject {
             // v0.3.394：失败 → 速度归零（界面上不该挂着一个速度数字）
             $0.speedBytesPerSecond = 0
         }
-        resetSpeedWindow()
+        resetSpeedWindow(id)
         runners[id] = nil
         pump()
     }

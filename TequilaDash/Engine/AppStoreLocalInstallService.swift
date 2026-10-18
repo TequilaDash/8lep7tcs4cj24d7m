@@ -33,6 +33,10 @@ enum AppStoreLocalInstallService {
     static func download(item: AppStoreItem, email: String,
                          externalVersionID: String? = nil,
                          downloadProgress: ((Double) -> Void)? = nil,
+                         // v0.3.659（task-3 D3）：字节级进度（已下 / 总量）。一路透传给
+                         // downloadIPA → IPAFileDownloader，让下载中心能写 receivedBytes /
+                         // totalBytes / 瞬时速度（旧实现只有 0~1 百分比，字节与速度恒为 0）。
+                         byteProgress: ((Int64, Int64) -> Void)? = nil,
                          onResolvedURL: ((String) -> Void)? = nil,
                          // v0.3.583：可选的**传输控制面**（AppleID 通道专用）。
                          // 传 nil（默认）= 与从前完全一致；下载中心传一个 `IPADownloadControl`，
@@ -96,7 +100,7 @@ enum AppStoreLocalInstallService {
         // 商店 API 响应里的 `downloadURL` 逐字进入下载，若被引到第三方域，包内的
         // `SC_Info/Manifest.plist` 就不可信（vendor 侧有意不做路径校验，正是以此为前提）。
         let dest = try await AppStoreInstallService.downloadIPA(urlString: output.downloadURL,
-            suggestedName: name, progress: downloadProgress,
+            suggestedName: name, progress: downloadProgress, byteProgress: byteProgress,
             hostPolicy: StoreAuthenticationProtocol.isAppleHost, control: control, onLog: onLog)
         try Task.checkCancellation()
         // v0.3.578：注入 sinf 保留 —— 它是「**安装前的准备**」，与「是否自动装」无关
