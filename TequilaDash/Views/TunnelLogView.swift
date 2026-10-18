@@ -32,7 +32,7 @@ struct TunnelLogView: View {
             title: "隧道与蜂窝日志",
             onClear: {
                 // 只清「隧道蜂窝」这一类：不能调无参 clear()，那会穿透清掉全部板块的历史日志。
-                LoginLogger.shared.clear(categories: categories)
+                LoginLogger.shared.clear(categories: Set(categories))
                 refresh()
             },
             // 不传 onDone：本页是 `MoreView` 的 `NavigationLink` push 出来的，

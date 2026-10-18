@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.657] - 2026-10-18
+
+> **一句话**：修 v0.3.656 的遗留编译错 —— `clear(categories:)` 收 `Set<Category>` 不是数组，
+> 连赔三个 CI 红（`39082540606` / `39082689594` / `39088129602`）。
+
+### 编译错修复（Set 与 Array 混用）
+
+`LoginLogger` 的两个取数/清除 API 类型不一致：
+
+| API | 参数类型 |
+|---|---|
+| `recentLines(_ n: Int, categories: [Category])` | **数组** |
+| `clear(categories: Set<Category>)` | **集合** |
+
+`Views/TunnelLogView.swift` 把 `[LoginLogger.Category]` 直接传给 `clear`，
+CI 报 `error: cannot convert value of type '[LoginLogger.Category]' to expected argument type 'Set<LoginLogger.Category>'`。
+
+修法：`LoginLogger.shared.clear(categories: Set(categories))`。
+
+同一形状的正确先例：`Views/AppleIDLoginSheet.swift:265` 的 `var clearCategories: Set<LoginLogger.Category>?`
+（那里传的就是 Set，所以没暴露）；`Views/ShareConvertLogView.swift:25` 写的是字面量 `[.shareConvert]`，
+字面量会被推断成 Set，**看着像数组其实是集合** —— 这正是我照抄它却翻车的原因。
+
+### 教训
+
+连续三个版本（0.3.654/656/657）都栽在同一个页面上，且**每次 `swiftc -parse` 都全绿**：
+
+- `-parse` 只查语法，不查标识符是否存在、不查参数类型；
+- 照抄「调用点」比照抄「定义」危险 —— 调用点写的是**推导后的**类型，字面量尤其会骗人；
+- 真正该做的是先 `git grep` **定义行**，看清每个参数的确切类型再写。
+
+这次起，「新写调用仓内既有组件的 Swift 代码」在 precommit 里加一条人工核对项：
+必须贴出被调函数的定义行。
+
+
 ## [0.3.656] - 2026-10-18
 
 > **一句话**：修 v0.3.652 引入的编译错 —— 「隧道日志」页把 `LogConsoleView` 的初始化参数写错，
