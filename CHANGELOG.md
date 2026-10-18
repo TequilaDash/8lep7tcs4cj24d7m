@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.3.656] - 2026-10-18
+
+> **一句话**：修 v0.3.652 引入的编译错 —— 「隧道日志」页把 `LogConsoleView` 的初始化参数写错，
+> 连续两个版本 CI 红（`39082540606` / `39082689594`），`swiftc -parse` 查不出来（只查语法，不查标识符）。
+
+### 编译错修复（TunnelLogView 参数写错）
+
+`Views/TunnelLogView.swift`（v0.3.652 新增）调用 `LogConsoleView` 时写成了
+
+```swift
+LogConsoleView(
+    title: "隧道与蜂窝日志",
+    categories: [.tunnelCellular],   // ← 该类型没有这个参数
+    onClear: { ... },
+    clearConfirmTitle: "..."
+)
+```
+
+CI 报四条错：`extra argument 'categories' in call`、
+`missing argument for parameter 'lines' in call`、
+`reference to member 'tunnelCellular' cannot be resolved without a contextual type`。
+
+正确形状（照 `ShareConvertLogView` / `BluetoothLogView` 的既有写法）：
+
+- `lines: [String]` 是 `LogConsoleView` 的**必填**参数，得由调用方自己取数；
+- `LoginLogger.Category` 在 `[.tunnelCellular]` 这种**没有 contextual type** 的位置无法推断，
+  必须写成 `var categories: [LoginLogger.Category] = [.tunnelCellular]`；
+- 补 2s 轮询（蓝牙 / 共享转换两个日志页同款）—— 隧道状态是秒级变化的，不刷新就看不到现场；
+- `onClear` 里补 `refresh()`（原来清了不刷新，界面还是旧内容）。
+
+### 教训
+
+`swiftc -parse` 只查语法、**查不出未定义标识符 / 参数错配**；这次就是在 CI 上才暴露的，
+连赔两个版本（d142ee6 / 03c2fcd）。新写 Swift 页面时，凡是调用**仓内既有组件**，
+先 `git grep` 一个该组件的现有调用点照抄形状，不要凭记忆写参数名。
+
+
 ## [0.3.655] - 2026-10-18
 
 > **一句话**：修「关掉的蜂窝永远不会恢复」这个真 bug —— `turnOnDataIfNeeded()` 在全仓**零调用点**；
