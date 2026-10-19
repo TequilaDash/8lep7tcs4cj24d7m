@@ -34,18 +34,43 @@ struct BigInt: Equatable, Comparable, CustomStringConvertible {
     }
 
     /// Parse a big-endian hex string (optionally 0x-prefixed).
+    ///
+    /// 口径对齐 GSAAuth.hexToBytes 与 IPADownloadCenter.hexDecoded（同一个 bug 的另外两个副本）：
+    /// 先查长度与字符集，再交给 `UInt8(_:radix:16)`，解析失败一律显式返回 nil。
+    ///
+    /// 本次修的三处历史缺陷：
+    /// 1. 不能只靠 `UInt8(_:radix:16)` 判非法 —— 它**接受前导正号**：
+    ///    `UInt8("+1", radix: 16) == Some(1)`，于是 `"+ab"` 这种串会被静默解成 `01 ab`。
+    ///    （WSL Swift 6.1.3 实测：`UInt8("+", radix: 16)` 为 nil，但 `UInt8("+1", radix: 16)` 为 Some(1)。）
+    /// 2. 奇数长度分支原来的 `?? 0` 兜底把「解析失败」静默当成 `0x00`，与上一条是同一类
+    ///    「非 nil 的垃圾」问题，改成显式返回 nil。
+    ///    该兜底只在 `isHexDigit == true` 却解析不出字节时可达，实测只有全角数字/字母
+    ///    （U+FF10-FF19 / U+FF21-FF26 / U+FF41-FF46，共 22 个）能走到，普通输入走不到。
+    /// 3. 空串与裸 `"0x"` 直接返回 nil。旧实现会返回 count=0 的零值 BigInt。
+    ///
+    /// 容忍首尾空格/换行（与 `GSAAuth.hexToBytes` 口径一致），并接受 `0x` / `0X` 前缀。
     init?(hex: String) {
-        let s = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex
-        guard s.allSatisfy({ $0.isHexDigit }) else { return nil }
+        let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let s = (trimmed.hasPrefix("0x") || trimmed.hasPrefix("0X"))
+            ? String(trimmed.dropFirst(2))
+            : trimmed
+        guard !s.isEmpty else { return nil }
         var bytes = [UInt8]()
+        bytes.reserveCapacity((s.count + 1) / 2)
         var i = s.startIndex
         if s.count % 2 == 1 {
-            bytes.append(UInt8(String(s[i...s.index(i, offsetBy: 0)]), radix: 16) ?? 0)
+            // 奇数长度：最高位那个 nibble 单独占一个字节（"abc" -> 0a bc），行为与旧实现一致，只是改成显式校验
+            let only = s[i..<s.index(after: i)]
+            guard only.count == 1, only.allSatisfy({ $0.isHexDigit }),
+                  let b = UInt8(only, radix: 16) else { return nil }
+            bytes.append(b)
             i = s.index(after: i)
         }
         while i < s.endIndex {
             let next = s.index(i, offsetBy: 2)
-            guard let b = UInt8(String(s[i..<next]), radix: 16) else { return nil }
+            let pair = s[i..<next]
+            guard pair.count == 2, pair.allSatisfy({ $0.isHexDigit }),
+                  let b = UInt8(pair, radix: 16) else { return nil }
             bytes.append(b)
             i = next
         }

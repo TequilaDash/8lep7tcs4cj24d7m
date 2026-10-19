@@ -330,6 +330,23 @@ final class IPADownloadControl: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// v0.3.677（D1 续）：把登记的目标路径**取走**并清空登记。
+    ///
+    /// 为什么需要「取走」而不是「读一下」：下载中心收尾时要凭它删掉孤儿包
+    /// （用户已点「删除安装包」→ job 被移除 → 落盘/注入阶段的产物没人再认领），
+    /// 而删完之后这份登记必须失效 —— 同一个文件名会被下一次下载复用
+    /// （`downloadIPA` 的 `dest` 是 `<bundleID>-<version>.ipa`，重下必同名），
+    /// 留着就可能让后续清理删到用户新下的包。
+    ///
+    /// `internal`（非 fileprivate）：调用方在 `IPADownloadCenter` 那个文件里。
+    func takeDestination() -> URL? {
+        lock.lock()
+        let url = destination
+        destination = nil
+        lock.unlock()
+        return url
+    }
+
     /// 下载器建好后把自己登记进来；此前若有暂停 / 取消意图，立刻补做。
     /// `fileprivate`：参数是文件私有的 `IPAFileDownloader`，只有同文件的下载器会调它。
     fileprivate func attach(_ d: IPAFileDownloader) {
@@ -379,6 +396,10 @@ final class IPADownloadControl: @unchecked Sendable {
         // 为什么由控制面来删而不是下载器：`dest` 的文件名由 Apple 回的
         // `bundleShortVersionString` 拼成（`<bundleID>-<version>.ipa`），下载中心按任务字段
         // 拼不出来，只能由 `downloadIPA` 在起传输前登记进来（见 `recordDestination`）。
+        //
+        // 注意： 这里**不**摘登记。删没删掉必须由调用方在同一步里核对
+        // （`takeDestination()` + `fileExists`），否则「删失败（文件被占用）」会被
+        // 登记失效掩盖成「已清理」—— 那正是这一轮要修的假成功。
         if let target { try? FileManager.default.removeItem(at: target) }
     }
 }

@@ -353,6 +353,9 @@ enum I4MobileInstallService {
         guard bytes > 0 else { return false }
         if let marked = completionMarkerBytes(for: pack) {
             guard marked == bytes else { return false }
+        } else if completionMarkerExists(for: pack) {
+            // 标记在、但内容读不出 / 不是正整数：标记坏了，不当老包放行（审计第三轮 R1）.
+            return false
         } else {
             guard bytes >= minimumPlausibleIPABytes else { return false }
         }
@@ -373,7 +376,13 @@ enum I4MobileInstallService {
         completionMarkerDirectory().appendingPathComponent(pack.fileName + ".done")
     }
 
-    /// 读完成标记里的字节数；无标记 / 读不出 / 不是正整数 ⇒ `nil`（按老包处理）.
+    /// 读完成标记里的字节数；无标记 / 读不出 / 不是正整数 ⇒ `nil`（按「无标记」处理）.
+    ///
+    /// 注意返回值 `nil` 有**两种**由来，调用方必须分开处理（审计第三轮 R1）：
+    ///   · 标记文件不存在 ⇒ 真的没有标记，是改版前的老包，允许退回「结构完整性 + 最小字节数」判定；
+    ///   · 标记存在但内容读不出 / 不是正整数 ⇒ 标记在却坏了，这是**有问题的包**，
+    ///     不能当老包放行 —— 否则「删包后重下写一半、旧标记残留」这类情况会被放行.
+    /// 区别就在文件是否存在，故补一个 `markerExists(for:)` 给调用方先问一句.
     private static func completionMarkerBytes(for pack: Pack) -> Int? {
         let url = completionMarkerURL(for: pack)
         guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
@@ -381,6 +390,11 @@ enum I4MobileInstallService {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let value = Int(trimmed), value > 0 else { return nil }
         return value
+    }
+
+    /// 完成标记文件是否**存在**（内容好坏不管）.
+    private static func completionMarkerExists(for pack: Pack) -> Bool {
+        FileManager.default.fileExists(atPath: completionMarkerURL(for: pack).path)
     }
 
     /// 写完成标记（内容 = 当前落盘字节数）. **失败不抛**：
@@ -396,10 +410,19 @@ enum I4MobileInstallService {
     }
 
     /// 删完成标记（包被删掉时一并清理，避免旧标记落到下一个包上）.
-    private static func removeCompletionMarker(for pack: Pack) {
+    ///
+    /// 返回是否**确实删除成功**（原本就没有也算成功）. 删不掉要能上报，
+    /// 否则标记会残留，下一次下载写一半的包就可能顶着旧标记被判成已完成（审计第三轮 R2）.
+    @discardableResult
+    private static func removeCompletionMarker(for pack: Pack) -> Bool {
         let url = completionMarkerURL(for: pack)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-        try? FileManager.default.removeItem(at: url)
+        guard FileManager.default.fileExists(atPath: url.path) else { return true }
+        do {
+            try FileManager.default.removeItem(at: url)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// 这份文件是否「写到尾」了：ZIP 的中央目录结尾记录（EOCD）必须存在且自洽.
@@ -477,10 +500,14 @@ enum I4MobileInstallService {
     /// 删除某个包的缓存 IPA（清理用）.
     ///
     /// 完成标记一并删除：否则「删包 → 重下写一半」时，旧标记会被当成这份半截包的完成凭证.
+    /// 标记删不掉时抛 `cacheWriteFailed`（v0.3.660 审计第三轮 R2）：以前是 `try?` 静默吞掉，
+    /// 于是「包删了、标记还在」，下一次下载中断留下的半截包可能被旧标记放行.
     static func removeCachedIPA(_ pack: Pack) throws {
         let url = cachedIPAURL(for: pack)
         guard FileManager.default.fileExists(atPath: url.path) else {
-            removeCompletionMarker(for: pack)
+            guard removeCompletionMarker(for: pack) else {
+                throw I4MobileError.cacheWriteFailed("缓存 IPA 已删除，但完成标记清理失败（\(pack.fileName)）")
+            }
             return
         }
         do {
@@ -488,7 +515,9 @@ enum I4MobileInstallService {
         } catch {
             throw I4MobileError.cacheWriteFailed(error.localizedDescription)
         }
-        removeCompletionMarker(for: pack)
+        guard removeCompletionMarker(for: pack) else {
+            throw I4MobileError.cacheWriteFailed("缓存 IPA 已删除，但完成标记清理失败（\(pack.fileName)）")
+        }
     }
 
     /// 列出各包（内置 + 自定义）缓存是否就位 + 仓库云端可用性（供 UI 展示）.
@@ -668,6 +697,13 @@ enum I4MobileInstallService {
         if isCached(pack) {
             onLog?("[i4移动端] \(pack.fileName) 已在缓存，跳过下载")
             return
+        }
+        // 半截包（文件在但 isCached 判 false）先删掉再下：它的完成标记是旧包的，
+        // 留着会让这一轮的增量写入接着旧数据走，与标记里的字节数对不上（审计第三轮 R3）.
+        // 删失败不阻断下载（下面 move 前的 removeItem 会再试一次并如实抛错）.
+        if FileManager.default.fileExists(atPath: cachedIPAURL(for: pack).path) {
+            onLog?("[i4移动端] \(pack.fileName) 有未完成的半截包，先清掉再下载")
+            try? removeCachedIPA(pack)
         }
         let url = try await cloudURL(for: pack, source: source)
         onLog?("[i4移动端] \(source.displayName) 下载 \(pack.fileName)：\(url.absoluteString)")
@@ -863,15 +899,25 @@ enum I4MobileInstallService {
         }
 
         // ⑧ 安装后回读.
-        // 被拒时先拉一次载体（installd 拒绝/回滚的时机不固定），让回读看到的是最终状态，
-        // 而不是「刚被拒、旧版本还在」的中间态 —— 否则会稳定地误判成「已安装」.
-        if installFailed {
-            _ = try? await Task.sleep(nanoseconds: 1_500_000_000)
-            before = await probeDevice(bundleId: bundleId)
-            logProbe(before, phase: "被拒后复探", onLog: onLog)
-        }
-        let after = await probeDevice(bundleId: bundleId)
+        // 每一轮的正常路径只探测两次（安装前 / 安装后），多探一次就是多建一次隧道.
+        // 只有在「判不清」时才追加一次复探（审计第三轮 R4）：
+        //   安装成功 + 设备上本来就有该 App + 版本号没变 ⇒ 可能是同版本覆盖，也可能没落盘；
+        //   安装失败 + 设备上本来就有该 App ⇒ 可能是刚被拒、旧版本还在回滚中.
+        // 这两种情况等一下（回滚时机不固定），复探一次，让报告看到更接近最终的状态.
+        // 以前是安装失败一律等 1.5 秒，连「设备上本来就没这个 App」的白等也照等.
+        var after = await probeDevice(bundleId: bundleId)
         logProbe(after, phase: "安装后", onLog: onLog)
+        let ambiguous = before.error == nil && before.existingVersion != nil && (
+            !installFailed && after.error == nil && after.existingVersion == before.existingVersion
+        ) || (
+            installFailed && before.error == nil && before.existingVersion != nil
+        )
+        if ambiguous {
+            onLog?("[i4移动端] 回读与安装前一样（同名 App 版本未变），等 1.5 秒再复探一次")
+            _ = try? await Task.sleep(nanoseconds: 1_500_000_000)
+            after = await probeDevice(bundleId: bundleId)
+            logProbe(after, phase: "复探", onLog: onLog)
+        }
 
         // ⑨ 组装报告.
         let report = buildReport(pack: pack, ipaPath: ipaPath, ipaBytes: ipaBytes,

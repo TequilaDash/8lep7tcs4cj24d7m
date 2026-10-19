@@ -665,7 +665,18 @@ enum I4PairingService {
         //   · 每次尝试失败前都不阻塞太久：下面 3 次重试的间隔是 0.3s / 0.6s，合计不到 1s；
         //   · 「卡住」的真正表现为整个 await 不返回 —— 由调用方（performPairOnQueue）观察
         //     的 pairQueue 是否还活着来暴露，本函数不假装能中断 FFI.
-        // 需要实测确认：真机上 LocalDevVPN 未连时 tunnel_create_rppairing 是立即失败还是挂住.
+        //
+        // 实测方案（v0.3.660 审计第三轮，判定「立即失败」还是「挂住」）：
+        //   ① 前置：真机已装本版，LocalDevVPN 未连接（设置里关掉），RSD 配对文件已生成；
+        //   ② 进「设置 → 配对」点一次配对，同时用秒表 / 系统录屏计时；
+        //   ③ 看结论落在哪一支：
+        //      · 3 秒内弹「创建 RSD 隧道失败（请确认 LocalDevVPN 已连接）: ...」⇒ 立即失败，本函数不必再改；
+        //      · 超过 30 秒按钮一直转、日志最后一行停在「建 RSD 隧道」⇒ FFI 挂住，
+        //        此时必须去 rust/idevice-ffi 给 tunnel_create_rppairing 加上连接超时（写域外）；
+        //   ④ 同样的计时再做一遍 lockdownd_connect_rsd_named：把 49152 端口临时改成一个没人听的
+        //      端口（如 49153）复跑，若同样超过 30 秒不返回，则两个 FFI 都要加超时；
+        //   ⑤ 记录方式：每次配对在 onLog 里已有「建 RSD 隧道」一条，把它的时间戳与失败那条的时间戳
+        //      相减即得上限；三次重试间隔合计 0.9 秒可忽略.
         var lastError: String?
         for attempt in 0..<3 {
             var adapter: OpaquePointer?

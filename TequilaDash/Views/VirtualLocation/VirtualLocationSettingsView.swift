@@ -28,7 +28,7 @@ struct VirtualLocationSettingsView: View {
                         Text(session.hasPairing ? "已导入配对文件" : "未导入配对文件")
                     } icon: {
                         Image(systemName: session.hasPairing ? "checkmark.seal.fill" : "info.circle")
-                            .foregroundStyle(session.hasPairing ? LocusTheme.statusGood : LocusTheme.statusWarn)
+                            .foregroundStyle(session.hasPairing ? AppTheme.success : AppTheme.warning)
                     }
 
                     Button("清除虚拟定位") {
@@ -88,7 +88,7 @@ struct VirtualLocationSettingsView: View {
                         .onSubmit { saveTunnelIP() }
                     LabeledContent("状态") {
                         Text(tunnelConnected ? "已连接" : "未连接")
-                            .foregroundStyle(tunnelConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
+                            .foregroundStyle(tunnelConnected ? AppTheme.success : AppTheme.warning)
                     }
                     Button("保存隧道 IP") {
                         saveTunnelIP()

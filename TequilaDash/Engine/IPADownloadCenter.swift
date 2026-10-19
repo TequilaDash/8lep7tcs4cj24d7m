@@ -547,6 +547,15 @@ final class IPADownloadCenter: ObservableObject {
         // 全是空操作（暂停无效、删除安装包假成功，见 `诊断_暂停无效_底层角度` §①/§4.3）。
         let control = IPADownloadControl()
         appleIDControls[id] = control
+        // v0.3.677（D1 续）：下面两个「用户已删除任务」的分支要清理**本次调用的产物**。
+        //
+        // 为什么不能只用 download 的返回值：那个返回值要等「传输 + 落盘」都结束才拿到，
+        // 而用户点「删除安装包」恰好可能落在这之前 —— 那一刻 job 已被 cancel 移除，
+        // 两处 guard self.job(id) != nil 会直接返回，于是：
+        // · 下载还没落地 ⇒ cancel 里的 abort() 能删（半成品 + 目标文件）；
+        // · 下载已落地、正在注入 sinf ⇒ 只有控制面那条登记还指着那个文件（下载器已 finished）。
+        // 取登记一律在各自的 MainActor.run 闭包里用局部 let 完成，**不**用跨闭包的可变变量
+        // （那会被 @Sendable 的 Task.detached 捕获，Swift 6 严格并发下直接编译不过）。
 
         Task.detached(priority: .userInitiated) { [item, email] in
             do {
@@ -609,13 +618,21 @@ final class IPADownloadCenter: ObservableObject {
                         LoginLogger.shared.log("[下载中心] \(line)", category: .download)
                     })
                 await MainActor.run {
+                    // v0.3.677（D1 续）：摘控制面前先把登记路径**取走** —— 下面那个
+                    // 「任务已被删除」的分支要用它兜底删；取走同时让登记失效，
+                    // 避免后续任何一次清理删到用户重下的同名包。
+                    let stagedDest = self.appleIDControls[id]?.takeDestination()
                     // 下载已结束（成功）→ 控制面使命完成，摘掉。
                     self.appleIDControls[id] = nil
                     // v0.3.583：若这期间用户点了「删除安装包」（job 已被 `cancel` 移除），
                     // **不要再写台账**，并把刚落盘的包删掉 —— 否则会留下一个「列表里看不到、
                     // 磁盘上还在」的孤儿文件（`cancel` 对「还没落地」的任务不会删文件）。
+                    //
+                    // v0.3.677（D1 续）：删**登记过的那条路径**。dest 与它本该是同一个文件
+                    // （都来自 downloadIPA 的 dest），但登记路径不依赖「返回值已到手」这个前提，
+                    // 语义上也更准：要清的是「本次调用的产物」。
                     guard self.job(id) != nil else {
-                        try? FileManager.default.removeItem(at: dest)
+                        try? FileManager.default.removeItem(at: stagedDest ?? dest)
                         LoginLogger.shared.log(
                             "[下载中心] AppleID 通道下载完成时任务已被删除，丢弃安装包 \(dest.lastPathComponent).",
                             category: .download)
@@ -654,11 +671,28 @@ final class IPADownloadCenter: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
+                    // v0.3.677（D1 续）：与成功分支同样先取走登记路径 —— 失败时它同样是
+                    // 「本次调用可能已经落盘、但永远不会进台账」的那份产物。
+                    let stagedDest = self.appleIDControls[id]?.takeDestination()
                     self.appleIDControls[id] = nil
                     // v0.3.583：用户点「删除安装包」会**先**把 job 从 `jobs` 移除、**再**取消底层
-                    // task ⇒ 这里回调到达时 job 已不在。此时什么都不做：既无 job 可改，也不该
-                    // 写「下载失败」—— 用户主动取消不是失败（`abort()` 抛的是 `CancellationError`）。
-                    guard self.job(id) != nil else { return }
+                    // task ⇒ 这里回调到达时 job 已不在。此时既无 job 可改，也不该写「下载失败」
+                    // —— 用户主动取消不是失败（`abort()` 抛的是 `CancellationError`）。
+                    //
+                    // v0.3.677（D1 续）：但**必须把产物清掉**。旧实现这里直接 `return`，
+                    // 于是「下载已落盘、正在注入 sinf 时用户点删除」这条路径留下的包
+                    // （`dest` 已存在、台账里没有、列表里也没有）永久留在磁盘上 —— 这正是
+                    // D1 的另一半：控制面那一侧的 `abort()` 只删得掉「它当时登记的那一份」，
+                    // 之后重新落盘 / 注入过程中再产生的文件没人认领。
+                    guard self.job(id) != nil else {
+                        if let orphan = stagedDest {
+                            try? FileManager.default.removeItem(at: orphan)
+                            LoginLogger.shared.log(
+                                "[下载中心] AppleID 通道失败时任务已被删除，丢弃安装包 \(orphan.lastPathComponent).",
+                                category: .download)
+                        }
+                        return
+                    }
                     self.update(id) {
                         // v0.3.578：这条链路只剩「下载 + 注入 sinf」，**没有安装段** ⇒
                         // 失败一律属下载链路。旧的 `$0.phase == .installing ? .install : .download`
@@ -948,8 +982,15 @@ final class IPADownloadCenter: ObservableObject {
         // ▸▸▸ v0.3.583：AppleID 通道 —— 旧实现只查 `runners`（对这条链恒为 nil）⇒ `abort()`
         // 是空操作，「删除安装包」变成**假成功**：行没了、传输照跑、跑完还落盘写台账（诊断 §4.3）。
         // 现在控制面负责取消底层 `URLSessionDownloadTask` 并清掉半成品 / 目标文件。
+        // v0.3.677（D1 续）：这条通道有没有控制面、它登记的产物在哪 —— 收尾时要用它
+        // 如实回报「到底删掉没有」（见下面的 `appleIDTarget` 判据）。
+        let hadAppleIDControl = appleIDControls[id] != nil
+        var appleIDTarget: URL?
         if let c = appleIDControls[id] {
             c.abort()
+            // 取走登记：`abort()` 已按它删过一次。删成功 ⇒ 这条路径不该再被任何人用；
+            // 删失败（文件被占用）⇒ 文件还在，下面据此把「删除失败」报上去。
+            appleIDTarget = c.takeDestination()
             appleIDControls[id] = nil
             resetSpeedWindow(id)
         }
@@ -960,6 +1001,19 @@ final class IPADownloadCenter: ObservableObject {
         var result: IPADownloadLibrary.RemoveResult?
         if let fileName = job.localFileName {
             result = IPADownloadLibrary.shared.remove(fileName: fileName)
+        }
+        // v0.3.677（D1 续）：AppleID 通道的「删除安装包」必须**如实回报**。
+        //
+        // 它的落盘文件名是 `<bundleID>-<Apple 回的版本号>.ipa`，只有控制面那条登记知道；
+        // 而 `job.localFileName` 要等「落盘 + 写台账」那一步才赋值 ——
+        // 「网络已下完、正在注入 sinf」正是这段时间 ⇒ 上面那条 `remove(fileName:)`
+        // 一次都不会执行，`result` 恒为 nil ⇒ 界面显示删除成功，而 `abort()` 里
+        // `try?` 吞掉的失败无人知晓（假成功）。
+        // 现在按登记路径核对一次：登记过、且文件仍在 ⇒ 如实报「文件删不掉」，
+        // 由下面既有的分支保留行并标「删除失败」。宁可误报，也不放行假成功。
+        if result == nil, hadAppleIDControl, let target = appleIDTarget,
+           FileManager.default.fileExists(atPath: target.path) {
+            result = .fileRemovalFailed
         }
         // 删除被拒（台账只读）/ 文件删不掉时，**不能把任务从 `jobs` 抹掉**：
         // 文件与台账都还在，任务凭空消失就是假成功（旧行为）。
@@ -1077,7 +1131,14 @@ final class IPADownloadCenter: ObservableObject {
     }
 
     private func handle(id: UUID, safeName: String, result: Result<URL, Error>) {
-        guard let current = job(id) else { return }
+        // v0.3.677（D8 同类）：任务已被「删除安装包」移除时，`.success` 递进来的那个
+        // `dl-<UUID>.part` 就没人再认领了（`cancel()` 里的 `abort()` 只在文件**已登记**时
+        // 才删得到，而 `onFinish` 与 `abort()` 的先后没有保证）⇒ 就地删掉，
+        // 与下面 moveItem 失败分支同口径。否则又是一份永久失联的完整包。
+        guard let current = job(id) else {
+            if case .success(let orphan) = result { try? FileManager.default.removeItem(at: orphan) }
+            return
+        }
         switch result {
         case .success(let tmp):
             do {
@@ -1784,6 +1845,17 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
     private var finished = false
     private var paused = false
 
+    /// v0.3.677（D8 同类）：已经搬到稳定位置的成品（`dl-<UUID>.part`）——**所有权登记**。
+    ///
+    /// 为什么要登记：`didFinishDownloadingTo` 把系统临时文件搬成 `dl-<UUID>.part` 之后，
+    /// 这份文件的路径只存在于那个回调的栈上。回调一返回，除了 `onFinish` 递出去的那次
+    /// `handle()`，**没有任何代码还知道它叫什么**（UUID 每次都不一样）。
+    /// 于是「文件已搬好、`finish(.success)` 已发出、主 actor 上的 `handle()` 还没轮到跑」
+    /// 这段窗口里用户点「删除安装包」时，`abort()` 首行 `guard !finished` 直接返回
+    /// （`finish()` 已经把 `finished` 置位）⇒ 行删了、文件留在 tmp 里，永远不会再被引用。
+    /// 与 `IPAFileDownloader.stagedPartial` 是同一个问题的同一种修法。
+    private var stagedPartial: URL?
+
     /// v0.3.549：`paused` / `finished` / `task` / `resumeData` 会被**两条线程**碰 ——
     /// `URLSession` 的 delegate 回调（后台队列）与主 actor 上的 `pause()` / `resume()`。
     /// 以前它们全是裸变量：暂停后进度还在走、暂停后立刻继续会丢续传数据，
@@ -1856,13 +1928,27 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
 
     func abort() {
         lock.lock()
-        guard !finished else { lock.unlock(); return }
+        // v0.3.677（D8 同类）：**先取登记，再判 finished**.
+        //
+        // `finish(.success(keep))` 一执行 `finished` 就是 true，而 `keep` 要等主 actor 上的
+        // `handle()` 才搬进下载目录。旧实现首行 `guard !finished` 直接返回 ⇒ 这段窗口里
+        // 用户点「删除安装包」是空操作：任务行被移除、`handle()` 又因 job 不存在直接 return，
+        // 那份 `dl-<UUID>.part` 就永久失联（每次取消留一个几百 MB 的孤儿）。
+        // 所以这里不依赖状态位：只要登记还在，就按登记删。
+        let staged = stagedPartial
+        stagedPartial = nil
+        guard !finished else {
+            lock.unlock()
+            if let staged { try? FileManager.default.removeItem(at: staged) }
+            return
+        }
         finished = true
         paused = true
         let t = task
         let s = session
         session = nil
         lock.unlock()
+        if let staged { try? FileManager.default.removeItem(at: staged) }
         t?.cancel()
         s?.finishTasksAndInvalidate()
     }
@@ -1921,21 +2007,41 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
             finish(.failure(error))
             return
         }
+        // v0.3.677（D8 同类）：文件已落到稳定位置 ⇒ 立刻登记所有权（见 stagedPartial）。
+        //
+        // 这里必须**同时**复查一次取消态：上面那道 `isPausedOrFinished()` 与本句之间
+        // 用户可能刚点了「删除安装包」/「暂停」（`abort()` / `pause()` 那时登记还是 nil，
+        // 什么也删不到）。不复查的话，`abort()` 已经置位的 `finished` 会让下面的
+        // `finish()` 直接返回，于是这份刚搬出来的文件既没人接手、也没人删 —— 又变成孤儿。
+        lock.lock()
+        let dropped = finished || paused
+        if !dropped { stagedPartial = keep }
+        lock.unlock()
+        if dropped {
+            // 只删文件，**不改状态位**：与上面 :1910 那道早退保持同一语义 ——
+            // 「暂停恰好撞上完成」时下载器必须仍然可 `resume()`（调用 `finish()` 会把
+            // `finished` 置位，而 `resume()` 首行是 `guard !finished` ⇒ 「继续」变死按钮）；
+            // 「取消（abort）」时 `finished` 早已置位，这里本来也无需再收尾。
+            try? FileManager.default.removeItem(at: keep)
+            return
+        }
         if let http = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(http.statusCode) {
             // v0.3.676（D8 同类）：**失败分支必须把刚搬出来的 keep 删掉**.
             //
-            // 上面 :1917-1919 已经把系统临时文件搬到了 `dl-<UUID>.part` —— 不删的话，
+            // 上面已经把系统临时文件搬到了 `dl-<UUID>.part` —— 不删的话，
             // 这个 UUID 命名的文件永远不会再被任何代码引用（下次下载会用新 UUID），
             // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**。重定向到登录页 /
             // 错误页时这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满。
             //
-            // 与 `IPAFileDownloader`（AppStoreInstallService.swift）的区别：那边有
-            // `stagedPartial` 登记所有权、由 `abort()` 兜底清；`RemoteDownloader` 没有这套机制，
-            // `keep` 只在这个函数里存在 ⇒ **只能就地删**，否则这份文件彻底失联。
-            // 注意：moveItem 的 catch 分支（:1920-1922）不用删 —— 那条路径下 keep 从未被创建，
+            // v0.3.677：现在这条通道也有 `stagedPartial` 登记了（与 `IPAFileDownloader`
+            // 同一个修法），所以这里删完必须同步摘登记 —— 否则 `abort()` 会拿着一条已失效的
+            // 路径再删一次。但**不能只靠 `abort()` 兜底**：这条失败路径自己就要删干净，
+            // 因为 `onFinish` 交给 `handle()` 的是 `.failure`，那边没有文件可清。
+            // 注意：moveItem 的 catch 分支不用删 —— 那条路径下 keep 从未被创建，
             // 系统会在回调返回后自己清掉 `location`。
             try? FileManager.default.removeItem(at: keep)
+            lock.lock(); stagedPartial = nil; lock.unlock()
             finish(.failure(NSError(domain: "IPADownloadCenter", code: http.statusCode,
                                     userInfo: [NSLocalizedDescriptionKey: "服务器返回 \(http.statusCode)"])))
             return

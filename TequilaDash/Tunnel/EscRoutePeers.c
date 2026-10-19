@@ -21,7 +21,8 @@
 //  2. 每条记录是 96 字节消息头 + 最多 `RTAX_MAX` 个 sockaddr；
 //  3. 哪些 sockaddr 存在由 `rtm_addrs` 的位掩码决定，顺序固定为
 //     DST(0) GATEWAY(1) NETMASK(2) GENMASK(3) IFP(4) IFA(5) …
-//  4. 每个 sockaddr 按 **4 字节 ROUNDUP** 推进（`sa_len` 不含填充）；
+//  4. 每个 sockaddr 按 **8 字节槽位**推进（`sa_len` 不含填充；见 esc_sa_roundup）；
+//     但**不管按几字节推进**，解释这一段之前都必须有 16 字节可见（ESC_SA_HEADER_BYTES）；
 //  5. `RTAX_IFP` 是 `sockaddr_dl`，`sdl_data` 前 `sdl_nlen` 字节是接口名；
 //     点对点链路的 `RTAX_GATEWAY` 也是 `sockaddr_dl`，其地址区尾部 4 字节是对端 IPv4。
 //
@@ -80,6 +81,9 @@ typedef char esc_rt_msghdr_size_check[(sizeof(esc_rt_msghdr) == 96) ? 1 : -1];
 
 #define ESC_MAX_PEERS 16
 #define ESC_MAX_IFNAME 32
+/// 解释一段 sockaddr 前必须可见的字节数（= sizeof(struct sockaddr)，
+/// 足够覆盖 sockaddr_dl 的 sdl_len/sdl_family/sdl_nlen/sdl_alen/sdl_slen）.
+#define ESC_SA_HEADER_BYTES 16u
 
 /// sockaddr 之间的推进口径.
 ///
@@ -178,13 +182,21 @@ char *esc_route_utun_peers(size_t *outCount) {
         int hasDestination = 0;
         int hasGateway = 0;
 
-        // v0.3.673：循环条件用 `sizeof(struct sockaddr)`（16）而不是 8 ——
-        // 6 字节的 sockaddr_dl 头虽然够读 sa_len/sa_family，但 esc_peer_from_dl
-        // 要读 sdl_nlen/sdl_alen/sdl_len，那是 sockaddr_dl 的 8 字节头，必须有 8 字节可见。
-        for (int index = 0; index < ESC_RTAX_MAX && cursor + sizeof(struct sockaddr) <= end; index++) {
+        // v0.3.673：循环条件用 ESC_SA_HEADER_BYTES（16 = sizeof(struct sockaddr)）——
+        // esc_peer_from_dl 要读 sdl_nlen/sdl_alen/sdl_len（sockaddr_dl 的 8 字节头），
+        // 只保证 6 字节可见是读不到的。
+        for (int index = 0; index < ESC_RTAX_MAX && cursor + ESC_SA_HEADER_BYTES <= end; index++) {
             const struct sockaddr *sa = (const struct sockaddr *)(const void *)cursor;
             size_t length = (size_t)sa->sa_len;
             if (length == 0) break;
+            // v0.3.673（task-7 发现21 续，**需实测**）：
+            // 原先后面只在「推进会越界」时 break，但**先把这一段读成了 sockaddr**——
+            // 若把推进口径改成内核真实的 8 字节槽位（SA_SIZE），最后一项（例如
+            // AF_LINK 的 sockaddr_dl，sa_len 往往只有 10~20）的 16 字节头就可能跨过
+            // 消息末尾，读 sa_len/sdl_* 即为越界读。
+            // 必须有 16 字节可见（= sizeof(struct sockaddr)，覆盖 sockaddr_dl 的
+            // sdl_len/sdl_family/sdl_nlen/sdl_alen/sdl_slen 五个字段）才允许解释这一段。
+            if (cursor + ESC_SA_HEADER_BYTES > end) break;
 
             if ((header->esc_addrs & (1 << index)) != 0) {
                 switch (index) {
