@@ -144,10 +144,12 @@ struct AppStoreI4View: View {
                             Task { await install(a) }
                         } label: {
                             // 与免登录商店统一为「获取」（这里是"定位包 → 下载 → 安装"，不是装已下载的包）
-                            Text("获取").font(.caption.weight(.semibold))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                                .foregroundStyle(AppTheme.accent)
+                            // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                            // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                            SizePill(text: "获取",
+                                     tint: AppTheme.accent,
+                                     level: .regular,
+                                     fillOpacity: 0.14)
                         }
                         .buttonStyle(.plain)
                     }
@@ -309,10 +311,12 @@ struct I4SpecialAppsView: View {
                                 Task { await install(a) }
                             } label: {
                                 // 与免登录商店统一为「获取」（这里是"定位包 → 下载 → 安装"，不是装已下载的包）
-                                Text("获取").font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                                    .foregroundStyle(AppTheme.accent)
+                                // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                                // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                                SizePill(text: "获取",
+                                         tint: AppTheme.accent,
+                                         level: .regular,
+                                         fillOpacity: 0.14)
                             }
                             .buttonStyle(.plain)
                         }

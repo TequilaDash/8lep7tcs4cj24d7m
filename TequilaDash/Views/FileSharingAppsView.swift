@@ -287,14 +287,17 @@ struct FileSharingAppsView: View {
 
     /// v0.3.363：胶囊视觉（文本可换行到 2 行，不截断）
     private func capsuleLabel(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(tint)
+        // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+        // 字重原为 `.medium`（`.compact` 档默认是 `.semibold`），用 `weight` 覆盖；底色 12% 与档位默认一致.
+        // 注意：`.multilineTextAlignment(.center)` / `.lineLimit(2)` /
+        // `.fixedSize(horizontal: false, vertical: true)` 三个修饰符必须留在调用处 ——
+        // 它们是 v0.3.363「长文本被压成竖排」老 bug 的修复，顺序与语义一字不动.
+        SizePill(text: text,
+                 tint: tint,
+                 level: .compact,
+                 weight: .medium)
             .multilineTextAlignment(.center)
             .lineLimit(2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(tint.opacity(0.12), in: Capsule())
             .fixedSize(horizontal: false, vertical: true)
     }
 

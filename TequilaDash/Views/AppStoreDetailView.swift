@@ -369,12 +369,14 @@ struct AppStoreDetailView: View {
 
     /// 阶段胶囊：颜色区分「下载中 / 安装中 / 已暂停 / 等待中」
     private func phaseChip(_ phase: IPADownloadCenter.Phase) -> some View {
-        Text(phase.title)
-            .font(.caption2.weight(.semibold))
+        // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.tiny` 档（caption2 + 6 / 1）；
+        // 字重 `.semibold` 与底色 14% 和档位默认逐项一致；`.lineLimit(1)` / `.fixedSize()` 留在调用处.
+        SizePill(text: phase.title,
+                 tint: phaseTint(phase),
+                 level: .tiny,
+                 weight: .semibold,
+                 fillOpacity: 0.14)
             .lineLimit(1)
-            .padding(.horizontal, 6).padding(.vertical, 1)
-            .background(phaseTint(phase).opacity(0.14), in: Capsule())
-            .foregroundStyle(phaseTint(phase))
             .fixedSize()
     }
 

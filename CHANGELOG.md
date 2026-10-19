@@ -1,4 +1,21 @@
 # Changelog
+## [0.3.699] - 2026-10-19
+
+### 撤销：覆盖安装失败自动回滚（v0.3.696 整段撤回）
+
+- 用户裁定（原话）：「v0.3.696：覆盖安装失败自动回滚的没必要 这个我看不懂你的逻辑和行为 我认为没用且没必要 我实在想不出installd失败为什么会影响现有的安装应用 这根本不会发生 而且回滚机制也很笨拙还要下载 以后等我审批吧」。
+- `TequilaDash/Engine/AppStoreInstallService.swift` 恢复到 v0.3.695（`1ee2625`）状态：移除回滚候选挑选（同 bundleId 台账过滤 / 排序 / sinf 与明文通道探测）、`installAttempted` 判定、三条 `[回滚]` 日志分支；加密与明文两条安装通道回到原样，安装失败一律原错误上抛。净变化 -154 / +34 行。
+- 历史记录保留：`02_审计与报告/修复记录/install-rollback-d.md` 末尾追加「撤销记录」一节（判据与真机清单不删，仅作历史）。
+- 教训已进永久规矩第 8 条：凡会改变设备状态或用户可见流程的功能性改动（安装 / 回滚 / 卸载链路、协议交互与目标主机、数据落盘与清理策略、新增自动行为），先出方案等审批再动手；纯 UI 收敛与明确 bug 修复不在此列。
+
+### Step 3 批 6-C：18 处手写胶囊收编到共享 `SizePill`（13 文件）
+
+- `TequilaDash/Views/` 下 AppStoreAccountsView / AppStoreDetailView / AppStoreI4View / AppStoreVersionHistoryView / AppStoreView / BackupsListView / FileSharingAppsView / I4MobileInstallView / I4StoreFreeDetailView / NBStoreDetailView / ProfileConfigView / PurchaseHistoryView / TunnelHealthCheckView。
+- 每处逐项钉住档位 / 字重 / 水平垂直内边距 / 底色不透明度，视觉零像素差：`需重新登录` 等橙标走 `.compact + weight .regular + fillOpacity 0.15`；版本号胶囊走 `.tiny + semibold + 0.14`；其余按原值映射到 `regular / compact / tiny` 三档。
+- 2 处刻意保留手写：`I4MobileInstallView.swift:451-454`（「推荐」用 `AppFont.captionEmphasis`，带 `design: .rounded`）与 `:605-607`（缓包计数用 `AppFont.numberSmall`，rounded + monospacedDigit）—— `SizePill` 三档无 design / 等宽覆盖项，强并会改字形并丢数字对齐；两处已加注释说明。
+- 度量断言：`Capsule()` 全仓 77 → 60；`SizePill` 命中行 18 → 58；`PackageChip(` 20 → 20 未变（定义仍在 `Views/Shared/ImportedPackageUI.swift`）。
+- 报告：`02_审计与报告/修复记录/step3-b6d.md`。
+
 ## [0.3.698] - 2026-10-19
 
 ### 修复

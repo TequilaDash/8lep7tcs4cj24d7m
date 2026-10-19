@@ -279,11 +279,12 @@ struct I4StoreFreeDetailView: View {
     }
 
     private func chip(_ text: String, _ tint: Color) -> some View {
-        Text(text)
-            .font(.caption2)
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(tint.opacity(0.12), in: Capsule())
-            .foregroundStyle(tint)
+        // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.tiny` 档（caption2 + 6 / 1）；
+        // 水平内边距原为 5（非档位默认 6），用 `horizontalPadding` 覆盖；底色 12% 与档位默认一致.
+        SizePill(text: text,
+                 tint: tint,
+                 level: .tiny,
+                 horizontalPadding: 5)
     }
 
     /// 历史版本行上的进度：只认**版本号完全一致**的任务

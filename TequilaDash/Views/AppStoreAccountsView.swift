@@ -137,11 +137,13 @@ struct AppStoreAccountsView: View {
                     Spacer(minLength: 0)
                     reloginCapsule(a)
                     if needsRelogin(a) {
-                        Text("需重新登录")
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.orange)
+                        // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                        // 字重原为 default（即 `.regular`）、底色 15% 用覆盖项钉住（`.compact` 默认 `.semibold` / 12%）.
+                        SizePill(text: "需重新登录",
+                                 tint: .orange,
+                                 level: .compact,
+                                 weight: .regular,
+                                 fillOpacity: 0.15)
                     } else if a.email == current {
                         Image(systemName: "checkmark").foregroundStyle(.green).font(.caption)
                     }
@@ -185,13 +187,20 @@ struct AppStoreAccountsView: View {
         } label: {
             Group {
                 if reloginBusyEmail == a.email {
+                    // 转圈态不是胶囊：10 / 4 + 12% 底留在原地，渲染与收编前逐项一致.
                     ProgressView().controlSize(.mini)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(AppTheme.accent.opacity(0.12), in: Capsule())
                 } else {
-                    Text("重登").font(.caption.weight(.medium))
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                    // 原竖直内边距 4（非档位默认 5）与字重 `.medium` 用覆盖项钉住，12% 底与档位默认一致.
+                    SizePill(text: "重登",
+                             tint: AppTheme.accent,
+                             level: .regular,
+                             verticalPadding: 4,
+                             weight: .medium)
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(AppTheme.accent.opacity(0.12), in: Capsule())
             .foregroundStyle(AppTheme.accent)
         }
         .buttonStyle(.plain)

@@ -441,13 +441,12 @@ struct NBStoreDetailView: View {
     }
 
     private func chip(_ text: String, _ tint: Color) -> some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(tint.opacity(0.12))
-            .clipShape(Capsule())
+        // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+        // 字重与底色 12% 都走档位默认；原 `background(tint.opacity(0.12)) + clipShape(...)` 两段，
+        // 由组件内置的 `background(tint.opacity(0.12), in:)` 等价接管.
+        SizePill(text: text,
+                 tint: tint,
+                 level: .compact)
     }
 
     private var loadingSection: some View {

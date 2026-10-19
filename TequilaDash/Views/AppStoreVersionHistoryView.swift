@@ -194,11 +194,13 @@ struct AppStoreVersionHistoryView: View {
                 Text(v.version)
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                 if isCurrent {
-                    Text("当前")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.green.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.green)
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                    // 字重 `.medium` 与底色 15% 用覆盖项钉住（`.compact` 默认 `.semibold` / 12%）.
+                    SizePill(text: "当前",
+                             tint: .green,
+                             level: .compact,
+                             weight: .medium,
+                             fillOpacity: 0.15)
                 }
                 Spacer(minLength: 0)
                 // 只在**确实知道**该版本发布日期时才显示。

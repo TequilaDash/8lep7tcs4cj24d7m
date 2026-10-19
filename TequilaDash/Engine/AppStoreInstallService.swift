@@ -204,168 +204,48 @@ enum AppStoreInstallService {
             onLog?("[检测] 无法读取包信息（加密状态无法判定，需凭包内 sinf 判断能否安装）")
         }
 
-        // ── 覆盖安装失败自动回滚：先挑好「回滚候选」─────────────────────────────────
-        // 为什么只能在这里做：installd 覆盖安装会**先移除**设备上的旧版本，失败后旧版本不会
-        // 自己回来（IPAInstallService 的原话：「系统可能已移除旧版本且无法自动恢复，
-        // 请重新安装原版本」）。本函数是全仓唯一同时握着 bundleId（上面的 ins）、下载台账里的
-        // 旧版本包（IPADownloadLibrary，文件名 <bundleId>-<版本>.ipa）和再安装能力（svc）
-        // 的地方，所以回滚编排落在这里。
-        //
-        // 回滚 = 安装失败后把台账里的旧包再交给 installd 一次，走 upgrade: true
-        // （同一个 bundleId，Upgrade 命令不拦降级 —— 旧包版本号更低）。
-        //
-        // allowDowngrade == true 时调用方要的本来就是「装历史版本」，失败即失败，不做回滚。
-        //
-        // 本机判不出候选包里的 sinf 是不是**为当前设备**签发（IPAInstallService 注释：
-        // sinf 必须是本机 Apple ID 下载所得），这一点只能真机验证，见
-        // 02_审计与报告/修复记录/install-rollback-d.md 的「真机验证清单」。
-        var rollbackItem: IPADownloadItem?
-        var rollbackPath = ""
-        var rollbackSINF: Data?
-        if !allowDowngrade, let bid = ins?.bundleIdentifier, !bid.isEmpty {
-            let lib = IPADownloadLibrary.shared
-            let thisIPA = URL(fileURLWithPath: ipaPath).standardizedFileURL.path
-            // 候选口径：同一 bundleId · 不是本次要装的那个包 · 文件还在盘上。
-            // 排序：台账明确记过「上次安装成功」（lastInstalledAt）的优先、其中时间晚的靠前；
-            //       都没记过就按下载时间倒序（越新越可能还是系统认得的版本）。
-            let candidates = lib.items()
-                .filter { $0.bundleId == bid }
-                .filter { URL(fileURLWithPath: lib.path(for: $0)).standardizedFileURL.path != thisIPA }
-                .filter { FileManager.default.fileExists(atPath: lib.path(for: $0)) }
-                .sorted { (a: IPADownloadItem, b: IPADownloadItem) -> Bool in
-                    let ax = a.lastInstalledAt
-                    let bx = b.lastInstalledAt
-                    if let x = ax, let y = bx { return x > y }
-                    if ax != nil { return true }
-                    if bx != nil { return false }
-                    return a.downloadedAt > b.downloadedAt
-                }
-            // 本机卷余量。BackupLimits.availableCapacity 返回 nil 表示**文件系统没报**，
-            // 既不等于 0 也不等于不足 —— 不能把「没报」当「不够」。
-            // 路线 C 的回滚只**读**本机候选包、不往本机再落一份，所以这条是防御性判据：
-            // 余量明确报 ≤ 0 时就不敢承诺候选包还在、还能读，宁可明说没有回滚保护。
-            let freeBytes = (try? downloadDirectory()).flatMap { BackupLimits.availableCapacity(at: $0) }
-            if (freeBytes ?? 1) <= 0 {
-                onLog?("[回滚] 本次无回滚保护：本机可用空间报 0（BackupLimits.availableCapacity），候选包可能已被系统回收.")
-            } else {
-                // 候选还必须有**真的装得上**的通道，否则回滚只是安慰：
-                //   ① 包内 SC_Info/<exe>.sinf —— App Store 流程会把 Apple 签发的 sinf 写回包内
-                //   ② 台账里的 sinfBase64 —— 老包可能没写回包内，只有台账有
-                //   ③ 明确明文包 —— 走 upgradeSignedIPA（已重签名 / 已解密包）
-                // 按排序逐个试，取第一个真有通道的。
-                for item in candidates {
-                    let path = lib.path(for: item)
-                    let sinf = IPAPackageInspector.extractSINF(ipaPath: path)
-                        ?? item.sinfBase64.flatMap { Data(base64Encoded: $0) }
-                    if let sinf {
-                        rollbackItem = item
-                        rollbackPath = path
-                        rollbackSINF = sinf
-                        break
-                    }
-                    if IPAPackageInspector.inspect(ipaPath: path)?.encryption == .plaintext {
-                        rollbackItem = item
-                        rollbackPath = path
-                        rollbackSINF = nil
-                        break
-                    }
-                }
-                if let item = rollbackItem {
-                    onLog?("[回滚] 已就绪：安装失败时自动装回 \(item.fileName)（\(item.version ?? "-")）.")
-                } else if candidates.isEmpty {
-                    onLog?("[回滚] 本次无回滚保护：下载台账里没有同一 bundleId 的其它安装包.")
-                } else {
-                    onLog?("[回滚] 本次无回滚保护：台账里的旧包没有可用 sinf、也不是明文包，装不回去.")
-                }
-            }
-        }
-
         // 加密状态三态（v0.3.570）：**只有确定是明文包**才走常规安装。
         // 加密或「无法判定」（主二进制读不出）都先看包内有没有 sinf；**没有 sinf 一律拒绝** ——
         // 否则「读不出加密状态」会被当成「未加密」，把加密包按明文装（装不上 / 装后崩，
         // 即用户最初报的症状）。真明文包的主二进制是读得出来的，判不出即不可信。
         let encryption = ins?.encryption ?? .unknown
-        // 「包有没有真的交给 installd」——没交出去就失败（缺 sinf / 加密状态判不出）时，
-        // 设备上的旧版本根本没被动过，不需要也不应该回滚。
-        var installAttempted = false
-        do {
-            if encryption != .plaintext {
-                if let sinf = IPAPackageInspector.extractSINF(ipaPath: ipaPath) {
-                    // 加密包 → ApplicationSINF 通道
-                    let meta = IPAPackageInspector.extractiTunesMetadata(ipaPath: ipaPath)
-                    let kindLabel = encryption == .encrypted
-                        ? "加密包"
-                        : "加密状态未知（主二进制读不出），但包内有 sinf"
-                    onLog?("[安装] \(kindLabel)：携带 ApplicationSINF（\(sinf.count) 字节）"
-                           + (meta != nil ? " + iTunesMetadata" : "") + " 交给 installd 解密安装")
-                    installAttempted = true
-                    try await Task.detached(priority: .userInitiated) {
-                        try svc.installWithSINF(ipaPath,
-                                                sinf: sinf,
-                                                iTunesMetadata: meta,
-                                                upgrade: allowDowngrade,
-                                                progress: { p in progress?(p) })
-                    }.value
-                    onLog?("[安装] 完成")
-                    return
-                }
-                // 无 sinf ⇒ 走不了 ApplicationSINF 通道，按加密状态分别拒绝（**都不落到明文通道**）：
-                //   · 明确加密 → missingSINF（缺 sinf）
-                //   · 无法判定 → indeterminateEncryption（连加密状态都判不出，不能按明文装）
-                if encryption == .encrypted {
-                    throw InstallError.missingSINF(bundleId: ins?.bundleIdentifier)
-                }
-                throw InstallError.indeterminateEncryption(bundleId: ins?.bundleIdentifier)
+        if encryption != .plaintext {
+            if let sinf = IPAPackageInspector.extractSINF(ipaPath: ipaPath) {
+                // 加密包 → ApplicationSINF 通道
+                let meta = IPAPackageInspector.extractiTunesMetadata(ipaPath: ipaPath)
+                let kindLabel = encryption == .encrypted
+                    ? "加密包"
+                    : "加密状态未知（主二进制读不出），但包内有 sinf"
+                onLog?("[安装] \(kindLabel)：携带 ApplicationSINF（\(sinf.count) 字节）"
+                       + (meta != nil ? " + iTunesMetadata" : "") + " 交给 installd 解密安装")
+                try await Task.detached(priority: .userInitiated) {
+                    try svc.installWithSINF(ipaPath,
+                                            sinf: sinf,
+                                            iTunesMetadata: meta,
+                                            upgrade: allowDowngrade,
+                                            progress: { p in progress?(p) })
+                }.value
+                onLog?("[安装] 完成")
+                return
             }
-
-            // 明文包（明确 cryptid==0）→ 常规安装
-            installAttempted = true
-            try await Task.detached(priority: .userInitiated) {
-                if allowDowngrade {
-                    try svc.upgradeSignedIPA(ipaPath, progress: { p in progress?(p) })
-                } else {
-                    try svc.installSignedIPA(ipaPath, progress: { p in progress?(p) })
-                }
-            }.value
-            onLog?("[安装] 完成")
-        } catch let installError {
-            // ── 安装失败 → 自动回滚 ────────────────────────────────────────────────
-            // 范式照 CallRecordingToneService 的「写入失败回滚到写入前内容」：
-            // 能回就回；回不了必须**如实说状态未知**，绝不静默吞掉。
-            guard installAttempted else {
-                // 包还没交出去就失败 → 设备上的旧版本没被动过，原样上抛。
-                throw installError
+            // 无 sinf ⇒ 走不了 ApplicationSINF 通道，按加密状态分别拒绝（**都不落到明文通道**）：
+            //   · 明确加密 → missingSINF（缺 sinf）
+            //   · 无法判定 → indeterminateEncryption（连加密状态都判不出，不能按明文装）
+            if encryption == .encrypted {
+                throw InstallError.missingSINF(bundleId: ins?.bundleIdentifier)
             }
-            guard let item = rollbackItem else {
-                onLog?("[回滚] 安装失败（\(installError.localizedDescription)），且本次无回滚保护，设备上该应用当前状态未知：旧版本可能已被系统移除，请重新安装原版本.")
-                throw installError
-            }
-            onLog?("[回滚] 安装失败（\(installError.localizedDescription)），正在装回 \(item.fileName)…")
-            do {
-                // 闭包只能捕获 let：把回滚路径先取成不可变快照，
-                // 否则在 `Task.detached` 里读 var 局部变量会在严格并发下被诊断.
-                let rollbackIPAPath = rollbackPath
-                if let sinf = rollbackSINF {
-                    let meta = IPAPackageInspector.extractiTunesMetadata(ipaPath: rollbackPath)
-                    try await Task.detached(priority: .userInitiated) {
-                        try svc.installWithSINF(rollbackIPAPath,
-                                                sinf: sinf,
-                                                iTunesMetadata: meta,
-                                                upgrade: true,
-                                                progress: { p in progress?(p) })
-                    }.value
-                } else {
-                    try await Task.detached(priority: .userInitiated) {
-                        try svc.upgradeSignedIPA(rollbackIPAPath, progress: { p in progress?(p) })
-                    }.value
-                }
-                onLog?("[回滚] 已装回 \(item.fileName)，本次安装仍判定为失败，失败原因见上.")
-            } catch let rollbackError {
-                onLog?("[回滚] 回滚也失败：\(rollbackError.localizedDescription)，设备上该应用当前状态未知（既不是新版本，也不是旧版本），请重新安装原版本.")
-            }
-            // 原错误原样上抛：回滚成功也不掩盖「本次安装失败」这个事实。
-            throw installError
+            throw InstallError.indeterminateEncryption(bundleId: ins?.bundleIdentifier)
         }
+
+        // 明文包（明确 cryptid==0）→ 常规安装
+        try await Task.detached(priority: .userInitiated) {
+            if allowDowngrade {
+                try svc.upgradeSignedIPA(ipaPath, progress: { p in progress?(p) })
+            } else {
+                try svc.installSignedIPA(ipaPath, progress: { p in progress?(p) })
+            }
+        }.value
+        onLog?("[安装] 完成")
     }
 
     /// 完整链路：源 → manifest → IPA → 下载 → RSD 隧道安装

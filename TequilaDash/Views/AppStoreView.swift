@@ -458,11 +458,12 @@ struct AppStoreView: View {
                 if center.activeJob(bundleId: app.bundleId, name: app.name) != nil {
                     ProgressView().controlSize(.mini).frame(width: 36)
                 } else {
-                    Text(app.priceText == "免费" ? "获取" : app.priceText)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                        .foregroundStyle(AppTheme.accent)
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                    // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                    SizePill(text: app.priceText == "免费" ? "获取" : app.priceText,
+                             tint: AppTheme.accent,
+                             level: .regular,
+                             fillOpacity: 0.14)
                 }
             }
             .buttonStyle(.plain)
@@ -494,11 +495,12 @@ struct AppStoreView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(app.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                    Text("已购")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                        .foregroundStyle(AppTheme.accent)
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                    // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                    SizePill(text: "已购",
+                             tint: AppTheme.accent,
+                             level: .compact,
+                             fillOpacity: 0.14)
                 }
                 if let bid = app.bundleId, !bid.isEmpty {
                     Text(bid).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -511,11 +513,12 @@ struct AppStoreView: View {
                 if busy {
                     ProgressView().controlSize(.mini).frame(width: 36)
                 } else {
-                    Text("下载")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                        .foregroundStyle(AppTheme.accent)
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                    // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                    SizePill(text: "下载",
+                             tint: AppTheme.accent,
+                             level: .regular,
+                             fillOpacity: 0.14)
                 }
             }
             .buttonStyle(.plain)

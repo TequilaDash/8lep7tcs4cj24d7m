@@ -149,11 +149,12 @@ struct PurchaseHistoryView: View {
                                 .font(.subheadline.weight(.medium))
                                 .lineLimit(1)
                             if delistedIds.contains(app.id) {
-                                Text("已下架")
-                                    .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 6).padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(.secondary)
+                                // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                                // 字重 `.semibold` 与档位默认一致，底色 15% 用覆盖项钉住（默认 12%）.
+                                SizePill(text: "已下架",
+                                         tint: .secondary,
+                                         level: .compact,
+                                         fillOpacity: 0.15)
                             }
                         }
                         Text(subtitle(app))
@@ -198,11 +199,12 @@ struct PurchaseHistoryView: View {
             if busy {
                 ProgressView().controlSize(.mini).frame(width: 32)
             } else {
-                Text("下载")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                    .foregroundStyle(AppTheme.accent)
+                // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
+                // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
+                SizePill(text: "下载",
+                         tint: AppTheme.accent,
+                         level: .regular,
+                         fillOpacity: 0.14)
             }
         }
         .buttonStyle(.plain)

@@ -448,6 +448,10 @@ struct I4MobileInstallView: View {
                 HStack(spacing: 6) {
                     Text(pack.fileName).font(AppFont.numberSubheadline)
                     if isRecommended(pack) {
+                        // Step 3 批 6-C：此处不并入共享 `SizePill`：`AppFont.captionEmphasis` 是
+                        // `.system(.caption, design: .rounded).weight(.semibold)`，而 SizePill 三档只出默认
+                        // design 的 `.caption` / `.caption2`，且没有 design 覆盖项（组件定义只读、不许改）；
+                        // 强并入会改字形，故保留手写胶囊，内边距 6 / 1 与底色 12% 原样.
                         Text("推荐")
                             .font(AppFont.captionEmphasis)
                             .foregroundStyle(AppTheme.accent)
@@ -601,6 +605,9 @@ struct I4MobileInstallView: View {
                 }
                 Spacer(minLength: 6)
                 if cachedPackCount > 0 {
+                    // Step 3 批 6-C：此处不并入共享 `SizePill`：`AppFont.numberSmall` 是
+                    // `.system(.caption, design: .rounded).monospacedDigit()`，SizePill 既无 design 覆盖项
+                    // 也无等宽数字，强并入会丢字形与数字对齐；故保留手写胶囊，8 / 3 与底色 12% 原样.
                     Text("\(cachedPackCount)")
                         .font(AppFont.numberSmall)
                         .foregroundStyle(.secondary)

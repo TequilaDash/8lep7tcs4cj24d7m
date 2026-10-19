@@ -254,13 +254,14 @@ private struct BackupRow: View {
                         Text(record.displayTitle)
                             .font(.headline)
                         if record.metadata.isContainerApp {
-                            Text("容器")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.15))
-                                .foregroundColor(.orange)
-                                .clipShape(Capsule())
+                            // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                            // 字重 `.semibold` 与档位默认一致，底色 15% 用覆盖项钉住（默认 12%）.
+                            // 原 `background(Color.orange.opacity(0.15)) + clipShape(...)` 两段，
+                            // 由组件内置的 `background(tint.opacity(fillOpacity), in:)` 等价接管.
+                            SizePill(text: "容器",
+                                     tint: .orange,
+                                     level: .compact,
+                                     fillOpacity: 0.15)
                         }
                     }
                     Text(record.metadata.bundleIdentifier)
@@ -491,13 +492,14 @@ struct CustomRestoreSheet: View {
                     HStack(spacing: 8) {
                         Text(title).font(.headline)
                         if isContainer {
-                            Text("容器")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.15))
-                                .foregroundColor(.orange)
-                                .clipShape(Capsule())
+                            // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
+                            // 字重 `.semibold` 与档位默认一致，底色 15% 用覆盖项钉住（默认 12%）.
+                            // 原 `background(Color.orange.opacity(0.15)) + clipShape(...)` 两段，
+                            // 由组件内置的 `background(tint.opacity(fillOpacity), in:)` 等价接管.
+                            SizePill(text: "容器",
+                                     tint: .orange,
+                                     level: .compact,
+                                     fillOpacity: 0.15)
                         }
                     }
                     Text(subtitle)

@@ -188,11 +188,12 @@ struct ProfileConfigView: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    Text(p.isProvisioning ? "预置描述" : (p.type ?? "配置描述"))
-                        .font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Capsule().fill(AppTheme.accent.opacity(0.10)))
-                        .foregroundStyle(AppTheme.accent)
+                    // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.tiny` 档（caption2 + 6 / 1）；
+                    // 底色原为 10%（非档位默认 12%），用 `fillOpacity` 覆盖.
+                    SizePill(text: p.isProvisioning ? "预置描述" : (p.type ?? "配置描述"),
+                             tint: AppTheme.accent,
+                             level: .tiny,
+                             fillOpacity: 0.10)
                     if let team = p.teamName, !team.isEmpty {
                         Text(team).font(.caption2).foregroundStyle(.secondary)
                             .lineLimit(1)
