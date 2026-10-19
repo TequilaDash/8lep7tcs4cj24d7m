@@ -57,7 +57,7 @@ struct DeviceInfoView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
         .navigationTitle("设备信息")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $browserTarget) { target in

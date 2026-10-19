@@ -55,7 +55,7 @@ struct TreasureBoxView: View {
             }
             .scrollContentBackground(.hidden)
         }
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
     }
 
     /// 页面头部：品牌图标块 + 标题 + 副标题（**不是全宽方块 banner**）。

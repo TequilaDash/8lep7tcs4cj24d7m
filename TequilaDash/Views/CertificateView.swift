@@ -227,9 +227,8 @@ struct CertificateView: View {
                             Text("登录 Apple ID")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                     .controlSize(.regular)
-                    .tint(.blue)
                 }
             }
             .padding(.vertical, 6)

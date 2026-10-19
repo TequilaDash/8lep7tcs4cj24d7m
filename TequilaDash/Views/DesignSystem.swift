@@ -1469,12 +1469,14 @@ extension View {
 // MARK: - Reclaim category styling
 
 extension ReclaimRisk {
-    /// Visual role color: safe = green, session = amber, kept = grey.
+    /// Visual role color: safe = success, session = pending, kept = unselected.
+    ///
+    /// v0.3.701：改取 AppTheme 语义 token（原为裸 Color.green / .orange / .secondary）.
     var tint: Color {
         switch self {
-        case .safe: return Color.green
-        case .session: return Color.orange
-        case .kept: return Color.secondary
+        case .safe: return AppTheme.success
+        case .session: return AppTheme.pending
+        case .kept: return AppTheme.unselected
         }
     }
 }

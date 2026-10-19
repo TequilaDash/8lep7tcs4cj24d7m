@@ -636,8 +636,11 @@ static void hook_mkdir(EmulatorVM *vm) {
 static void hook_umask(EmulatorVM *vm) {
     uint64_t mask = 0;
     uc_reg_read(vm->uc, UC_ARM64_REG_X0, &mask);
-    int64_t old_mask = (int64_t)umask((mode_t)mask);
+    // 纯模拟：宿主进程 umask 不被 guest 改写（旧实现取返回值后从不还原）.
+    int64_t old_mask = 022;
     uc_reg_write(vm->uc, UC_ARM64_REG_X0, &old_mask);
+    LOG_UC("[Hook] umask(0%o) -> old 0%o (simulated, host umask untouched)\n",
+           (unsigned)mask, (unsigned)old_mask);
 }
 
 static void hook_chmod(EmulatorVM *vm) {

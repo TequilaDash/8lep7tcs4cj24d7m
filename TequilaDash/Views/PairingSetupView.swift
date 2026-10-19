@@ -60,7 +60,7 @@ struct PairingSetupView: View {
                     Label("导入配对文件", systemImage: "doc.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                 .controlSize(.large)
                 .padding(.horizontal)
 
@@ -106,9 +106,8 @@ struct PairingSetupView: View {
                             Label("开始无线配对", systemImage: "lock.iphone")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                         .controlSize(.large)
-                        .tint(.blue)
                     }
                     .padding(16)
                     .background(
@@ -300,7 +299,7 @@ struct PairingSetupView: View {
                     Button("关闭") {
                         cancelWirelessPairing()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(TintedButtonStyle())
                 } else if let name = wirelessDeviceName {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
@@ -314,8 +313,7 @@ struct PairingSetupView: View {
                         cancelWirelessPairing()
                         viewModel.reload()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                 } else if let pin = wirelessPin {
                     VStack(spacing: 10) {
                         Image(systemName: "lock.iphone")

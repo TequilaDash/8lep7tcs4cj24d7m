@@ -213,8 +213,7 @@ struct IncreaseMemoryView: View {
                         }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                 .disabled(ctrl.isBatchRunning)
             }
         }
@@ -256,8 +255,7 @@ private struct AppRowView: View {
                 ProgressView().controlSize(.small)
             } else {
                 Button("开启", action: onEnableOne)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                     .disabled(isOperating)
             }
         }

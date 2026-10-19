@@ -45,7 +45,7 @@ struct BatteryHealthView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
         .navigationTitle("电池健康")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

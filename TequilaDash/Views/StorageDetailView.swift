@@ -40,7 +40,7 @@ struct StorageDetailView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
         .navigationTitle("硬盘详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -1,4 +1,23 @@
 # Changelog
+## [0.3.702] - 2026-10-19
+
+### 修复
+- 六处实底纯蓝按钮改 `TintedButtonStyle`：配对设置 / IPA 安装 / 内存 / 证书 / SSH 调试 / 配对文件写入.
+- Anisette `hook_umask` 改纯模拟，不再改写宿主进程 umask.
+- `ReclaimRisk.tint` 改取 `AppTheme` 语义 token（原裸 `Color.green` / `.orange` / `.secondary`）.
+
+### 变更
+- 7 个子页页面底改 `AppTheme.surfaceBase`：电量 / 设备信息 / 健康检查 / 启动项 / 存储详情 / 百宝箱 / 模块管理.
+
+### 守卫
+- `swift_theme_blue_guard.py` 新增 G9：`.borderedProminent` 同链写死系统蓝（`.tint(.blue)` / `Color.blue` / `Color(.systemBlue)`）+ 9 条负控自测.
+
+### 校验
+- `normalize_eol.py` EXIT 0；`swift_precommit_check.py` 16 组全过；`swiftc -parse` 14 个改动文件 PARSE_FAIL=0.
+
+### 补记
+- v0.3.701 内含文档浏览 double free 修复：同一 AFC 会话被 `afcClient` / `containerAfc` 两条 @State 同时持有，选 Library 后返回即 double free。对应「主页 → 文档浏览 → 选 App → 选 Library → 返回闪退」.
+
 ## [0.3.701] - 2026-10-19
 
 ### 加载态收口批 2（26 文件 / 36 处）

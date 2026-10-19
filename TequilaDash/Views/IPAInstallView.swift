@@ -369,8 +369,7 @@ struct IPAInstallView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
                 .controlSize(.large)
                 .disabled(isRunning || ipaURL == nil
                           || (!service.isSignedIn && (appleID.isEmpty || password.isEmpty)))

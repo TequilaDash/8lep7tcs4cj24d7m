@@ -138,7 +138,7 @@ struct ModuleManagerView: View {
             )
             .padding(.horizontal, 32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
+            .background(AppTheme.surfaceBase)
             .interactiveDismissDisabled(true)
         }
         // 修复完成结果

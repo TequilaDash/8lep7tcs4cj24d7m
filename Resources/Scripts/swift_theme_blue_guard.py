@@ -32,11 +32,18 @@
       出现 `userInterfaceStyle` + `.dark` 分支）—— 用户要求「更不要单一的颜色」而新增色彩层次，
       但硬规则 6 要求新增色一律明暗两套；有人退回写死单值（浅色字面量）即在深色模式出现
       刺眼亮块 / 对比不足，此条机械守住。
+  G9  `.borderedProminent` 不得与**写死系统蓝**的 `.tint(.blue)` / `.tint(Color.blue)` /
+      `.tint(Color(.systemBlue))` 出现在**同一条修饰链**上 —— 那也是实底纯蓝按钮（用户明确
+      否掉过的视觉）。G5 只拦 `.tint(AppTheme.accent)` 这一支，写死系统蓝一直漏网：
+      P1-2 取证时 `Views/PairingSetupView.swift:109-111` 就是 `.borderedProminent` +
+      `.tint(.blue)` 叠出来的全宽纯蓝实底。应改
+      `TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button)`（半透明着色 + 发丝描边）。
 
 判据只认**符号/结构**，不绑行号、不绑文案。扫描前先用状态机把注释屏蔽为空白（字符串保留），
 故注释里提 `trAccent` / `.borderedProminent` 不会误报。
 
 用法：python3 swift_theme_blue_guard.py <仓库根>
+      python3 swift_theme_blue_guard.py --selftest    # 只跑 G9 负控自测（不扫仓库）
 退出码：0 = 通过；1 = 有违规；2 = 路径错。
 """
 import io
@@ -45,6 +52,13 @@ import sys
 
 BS = chr(92)   # 反斜杠
 Q = chr(34)    # 双引号
+
+# G9 要拦的「写死系统蓝」写法（`.tint(...)` 参数侧；只认符号，不认行号/文案）.
+BLUE_TINT_FORMS = (
+    ".tint(.blue)",
+    ".tint(Color.blue)",
+    ".tint(Color(.systemBlue))",
+)
 
 
 def _mask_comments(src):
@@ -185,6 +199,52 @@ def _find_all(hay, needle):
         pos = k + len(needle)
 
 
+def _chain_window(masked, pos):
+    """取 `pos` 所在的**修饰链**文本：向上 / 向下各吃掉连续的、以 `.` 起头的行.
+
+    SwiftUI 的修饰链是连续的 postfix 行（`.buttonStyle(...)` / `.controlSize(...)` /
+    `.tint(...)` ...）；链跟链之间必有一条不以 `.` 起头的行（`Button {`、`}`、空行）。
+    用它做 G9 的「同一链」判据：固定字符窗口会把下一条链的 `.tint(.blue)` 也算进来（误报），
+    而只看单行又会漏掉分行书写的链（漏报）。
+    """
+    n = len(masked)
+    start = masked.rfind("\n", 0, pos) + 1
+    end = masked.find("\n", pos)
+    if end < 0:
+        end = n
+    # 向上扩：前一条非空行以 `.` 起头 ⇒ 同一条链
+    while start > 0:
+        prev_end = start - 1                      # 上一行末尾的换行符位置
+        prev_start = masked.rfind("\n", 0, prev_end) + 1
+        line = masked[prev_start:prev_end]
+        if not line.strip() or not line.lstrip().startswith("."):
+            break
+        start = prev_start
+    # 向下扩：下一条非空行以 `.` 起头 ⇒ 同一条链
+    while end < n:
+        next_start = end + 1
+        next_end = masked.find("\n", next_start)
+        if next_end < 0:
+            next_end = n
+        line = masked[next_start:next_end]
+        if not line.strip() or not line.lstrip().startswith("."):
+            break
+        end = next_end
+    return masked[start:end]
+
+
+def _g9_hits(masked):
+    """G9：返回「同链 `.borderedProminent` + 写死蓝 `.tint(...)`」的 (偏移, 写法) 列表."""
+    hits = []
+    for k in _find_all(masked, ".borderedProminent"):
+        squash = "".join(_chain_window(masked, k).split())
+        for form in BLUE_TINT_FORMS:
+            if form in squash:
+                hits.append((k, form))
+                break
+    return hits
+
+
 def check(root):
     errs = []
     views = os.path.join(root, "TequilaDash", "Views")
@@ -221,6 +281,14 @@ def check(root):
                         "（`brandGradient` 铺满一整行，用户反馈「开始修复按钮太丑」）；"
                         "主行动应改 `TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button)`"
                         % (rel, _line_of(masked, k)))
+
+        # G9：`.borderedProminent` 不得与写死蓝的 `.tint(.blue)` / `.tint(Color.blue)` /
+        #     `.tint(Color(.systemBlue))` 同链（实底纯蓝按钮，用户已明确否掉）
+        for k, form in _g9_hits(masked):
+            errs.append("[G9] %s:%d `.borderedProminent` 与 `%s` 同链 —— 实底纯蓝按钮"
+                        "（用户明确否掉纯蓝实底）；应改 "
+                        "`TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button)`"
+                        % (rel, _line_of(masked, k), form))
 
     # ── G2 / G3：DesignSystem.swift 里 accent 必须自适应、switchOnTint 不得写死蓝 ──
     if not os.path.isfile(design):
@@ -301,10 +369,86 @@ def check(root):
     return errs
 
 
+# ── G9 负控自测样例：源码 → 期望命中数（1 = 必须报，0 = 不许报）──
+# 正样例覆盖三种写死蓝写法 + `.tint` 写在 `.buttonStyle` 之前的链序无关；
+# 负样例覆盖「只有实底没写死蓝」「`.bordered` 不属实底族」「跨链不误报」「行 / 块注释被屏蔽」。
+G9_SELFTEST_CASES = (
+    ("同链 `.tint(.blue)`", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    .controlSize(.large)
+    .tint(.blue)
+""", 1),
+    ("同链 `.tint(Color.blue)`", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    .tint(Color.blue)
+""", 1),
+    ("同链 `.tint(Color(.systemBlue))`", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    .tint(Color(.systemBlue))
+""", 1),
+    ("`.tint` 写在 `.buttonStyle` 之前（链序无关）", """
+Button("开始") { }
+    .tint(.blue)
+    .buttonStyle(.borderedProminent)
+""", 1),
+    ("只有 `.borderedProminent`、没有写死蓝 tint", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    .controlSize(.large)
+""", 0),
+    ("`.bordered` + `.tint(.blue)`（不是实底族）", """
+Button("开始") { }
+    .buttonStyle(.bordered)
+    .tint(.blue)
+""", 0),
+    ("`.tint(.blue)` 在另一条链上（跨链不误报）", """
+Button("A") { }
+    .buttonStyle(.bordered)
+    .tint(.blue)
+Button("B") { }
+    .buttonStyle(.borderedProminent)
+""", 0),
+    ("行注释里的同链写法（注释被屏蔽）", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    // .tint(.blue)
+    .controlSize(.large)
+""", 0),
+    ("块注释里的同链写法（注释被屏蔽）", """
+Button("开始") { }
+    .buttonStyle(.borderedProminent)
+    /* .tint(.blue) */
+    .controlSize(.large)
+""", 0),
+)
+
+
+def _self_test():
+    """G9 负控自测：正样例必须报、负样例必须不报（含注释屏蔽与跨链）.
+
+    只跑内存样例、不扫仓库；`python3 swift_theme_blue_guard.py --selftest` 触发.
+    """
+    print("-" * 72)
+    fails = 0
+    for name, src, expect in G9_SELFTEST_CASES:
+        got = len(_g9_hits(_mask_comments(src)))
+        ok = got == expect
+        if not ok:
+            fails += 1
+        print("%s %s（期望命中 %d，实际 %d）" % ("OK  " if ok else "FAIL", name, expect, got))
+    print("G9 负控自测：%d 例，失败 %d" % (len(G9_SELFTEST_CASES), fails))
+    return 1 if fails else 0
+
 def main():
     if len(sys.argv) < 2:
         print("用法：swift_theme_blue_guard.py <仓库根>")
+        print("      swift_theme_blue_guard.py --selftest    # G9 负控自测（不扫仓库）")
         return 2
+    if sys.argv[1] == "--selftest":
+        return _self_test()
     root = sys.argv[1]
     if not os.path.isdir(os.path.join(root, "TequilaDash")):
         print("仓库根下找不到 TequilaDash/ ：%s" % os.path.abspath(root))
@@ -316,7 +460,8 @@ def main():
             print("ERROR %s" % e)
         print("命中：%d（G1 trAccent 复现 / G2 accent 非自适应 / G3 switchOnTint 写死蓝 / "
               "G4 空态色非自适应 / G5 borderedProminent+accent 实底 / G6 Color.blue.opacity 淡底 / "
-              "G7 BrandProminentButtonStyle 全宽深色实底 / G8 多色板新增色非自适应）"
+              "G7 BrandProminentButtonStyle 全宽深色实底 / G8 多色板新增色非自适应 / "
+              "G9 borderedProminent+写死蓝 tint 实底）"
               % len(errs))
         return 1
     print("G1 无 trAccent 复现：OK")
@@ -327,6 +472,7 @@ def main():
     print("G6 无 `Color.blue.opacity(...)` 淡底：OK")
     print("G7 无 `BrandProminentButtonStyle` 全宽深色实底按钮：OK")
     print("G8 多色板新增色自适应（8 模块色 / 4 表面层 / accentSoft / accentBorder）：OK")
+    print("G9 无 `.borderedProminent` + 写死蓝 `.tint(.blue)` 同链实底按钮：OK")
     print("命中：0")
     return 0
 

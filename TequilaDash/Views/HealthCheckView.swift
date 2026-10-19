@@ -37,7 +37,7 @@ struct HealthCheckView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
         .navigationTitle("设备体检")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

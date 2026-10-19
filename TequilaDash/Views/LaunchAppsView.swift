@@ -84,7 +84,7 @@ struct LaunchAppsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surfaceBase)
         // 常驻搜索框的占位：把滚动内容区顶部让出「搜索框实测高度」，网格第一行不再被压住.
         // 高度来自 `SearchBarInsetProbe`（机型 / 横竖屏 / 动态字号自适应），不写死.
         .safeAreaInset(edge: .top, spacing: 0) {
