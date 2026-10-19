@@ -334,9 +334,8 @@ struct ModuleManagerView: View {
             }
 
             if let err = runner.startErrors[module.id] {
-                Label(err, systemImage: "xmark.circle.fill")
-                    .font(.caption)
-                    .foregroundColor(.red)
+                // v0.3.683：区块级错误行统一到 AppErrorRow（模块启动失败 = 操作失败）.
+                AppErrorRow(message: err)
             }
         }
         .padding(10)

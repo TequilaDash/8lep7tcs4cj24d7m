@@ -75,16 +75,14 @@ struct PairingSetupView: View {
                 .padding(.horizontal)
 
                 if let importError = importError {
-                    Text(importError)
-                        .font(.caption)
-                        .foregroundColor(.red)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow（ScrollView 内无 Section，直接裸放）.
+                    AppErrorRow(message: importError)
                         .padding(.horizontal)
                 }
 
                 if let clipboardError = clipboardError {
-                    Text(clipboardError)
-                        .font(.caption)
-                        .foregroundColor(.red)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: clipboardError)
                         .padding(.horizontal)
                 }
 

@@ -90,9 +90,8 @@ struct AppStoreVersionHistoryView: View {
                 }
             } else if let errorText {
                 Section {
-                    Label(errorText, systemImage: "info.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(.orange)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: errorText)
                 }
             } else if versions.isEmpty {
                 AppStateSection(state: .empty("没有可读取的版本记录",

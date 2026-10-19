@@ -26,9 +26,8 @@ struct IPCCInstallView: View {
         List {
             Section {
                 if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundColor(.red)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: errorMessage)
                 }
                 if let parsed {
                     VStack(alignment: .leading, spacing: 4) {

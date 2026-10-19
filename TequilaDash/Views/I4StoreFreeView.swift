@@ -339,8 +339,8 @@ struct I4StoreFreeView: View {
             }
         } else if let errorText {
             Section {
-                Label(errorText, systemImage: "xmark.circle.fill")
-                    .font(.subheadline).foregroundStyle(.orange)
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: errorText)
             }
         } else if source == .niuwa {
             // v0.3.382：牛蛙源只有搜索，不做榜单（接口文档里只有 /appstore/search + /download）

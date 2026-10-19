@@ -111,9 +111,8 @@ struct PiPKeepAliveView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
                 if let err = service.lastError {
-                    Label(err, systemImage: "xmark.circle.fill")
-                        .font(.footnote)
-                        .foregroundColor(.red)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: err)
                 }
             } header: {
                 Text("说明")

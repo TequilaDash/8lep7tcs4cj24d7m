@@ -67,9 +67,8 @@ struct ActivationView: View {
             .disabled(isBusy)
 
             if let errorText {
-                Text(errorText)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: errorText)
             }
             if let resultText {
                 Text(resultText)
@@ -97,9 +96,8 @@ struct ActivationView: View {
             .disabled(!(status?.canDeactivate ?? false) || isBusy)
 
             if let reason = status?.blockedReason {
-                Text(reason)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: reason)
             }
         }
     }

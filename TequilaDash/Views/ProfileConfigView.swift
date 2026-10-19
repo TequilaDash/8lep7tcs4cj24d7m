@@ -51,8 +51,8 @@ struct ProfileConfigView: View {
                         PairingGuideCard(showsBackground: false)
                             .listRowInsets(EdgeInsets())
                     } else {
-                        Label(err, systemImage: "info.circle")
-                            .foregroundStyle(.orange)
+                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        AppErrorRow(message: err)
                     }
                 }
             } else if profiles.isEmpty {

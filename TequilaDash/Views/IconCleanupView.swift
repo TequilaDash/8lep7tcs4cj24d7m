@@ -69,9 +69,8 @@ struct IconCleanupView: View {
                     .foregroundStyle(.secondary)
             }
             if let errorText {
-                Text(errorText)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: errorText)
             }
             if let resultText {
                 Text(resultText)

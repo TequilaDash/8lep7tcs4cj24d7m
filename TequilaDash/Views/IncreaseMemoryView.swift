@@ -117,15 +117,8 @@ struct IncreaseMemoryView: View {
                         .foregroundColor(.secondary)
                 }
             case .failed(let message):
-                HStack {
-                    Text("加载失败")
-                        .foregroundColor(.red)
-                    Spacer()
-                    Button("重试") { Task { await ctrl.reload() } }
-                }
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: message, retry: { Task { await ctrl.reload() } })
             case .loaded:
                 if ctrl.teams.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态，非错误态）。
@@ -167,10 +160,8 @@ struct IncreaseMemoryView: View {
                         .foregroundColor(.secondary)
                 }
             case .failed(let message):
-                Text("加载失败：\(message)")
-                    .font(.caption)
-                    .foregroundColor(.red)
-                Button("重试") { Task { await ctrl.loadAppIDs() } }
+                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                AppErrorRow(message: "加载失败：\(message)", retry: { Task { await ctrl.loadAppIDs() } })
             case .loaded:
                 if ctrl.apps.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。

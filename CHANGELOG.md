@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.3.683] - 2026-10-19
+
+### 内联错误行全仓收口到 AppErrorRow（28 处 / 23 文件）
+
+v0.3.682 只统一了 4 处错误行，本轮把**全仓内联错误提示**一次收干净。
+
+扫描口径：`.foregroundColor(.red|.orange)` / `.foregroundStyle(.red|.orange)` 落在 Text / Label 上.
+改前 **70 行 / 42 文件**，改后剩 **43 行 / 26 文件**（全部有理由，见下）.
+
+改法要点：
+
+- 原「`Text` + 独立 `Button("重试")`」合并成 `AppErrorRow(message:, retry:)`，retry 闭包体原样搬运，异步动作仍包 `Task { await ... }`.
+- 外层 `Section { }` 一律保留 —— `AppErrorRow` 不自带 Section，套了会双层卡片.
+- 两处 Section header 的 `xmark.circle.fill` 改为 `info.circle`，与组件内部图标一致.
+- 红字标题「加载失败」不再单独成行，由图标语义承担，错误原文完整保留.
+
+改动清单（28 处）：
+
+`AFCBrowserView` `ActivationView`(×2) `CertificateView` `CrashLogView` `FilePropertiesView`
+`FileSharingAppsView` `IconCleanupView` `IPCCInstallView` `IncreaseMemoryView`(×2) `KernelCacheView`
+`ModuleManagerView` `NBStoreDetailView` `PairingSetupView`(×2) `PiPKeepAliveView` `ProfileConfigView`
+`PurchaseHistoryView` `RingtonesView` `SSHDebugView`(×2) `I4StoreFreeView` `I4StoreFreeDetailView`
+`AppStoreVersionHistoryView` `AppFileBrowserView`(×2) `SignedIPAInstallView`
+
+未改的 43 行按 7 类记录理由：
+
+1. **按钮内文字 / tint** —— 可点击控件的配色，`AppErrorRow` 是静态信息行，套上会丢按钮语义.
+2. **状态枚举图标** —— 与绿色成功态成对的权限/健康状态（`xmark.shield.fill` 红 / `checkmark.shield.fill` 绿），是状态对不是错误行.
+3. **`largeTitle` 大图标结果页** —— 硬套会把大图标降成 footnote 且丢标题，属形态降级.
+4. **胶囊 / 徽标** —— 自带底色圆角的分类标记.
+5. **装饰 / 信息图标** —— 非错误.
+6. **提示横幅** —— 「注意 / 限制」不是「失败」，改它会动形态.
+7. **行内短标签** —— 一行里做占位，符合既有排版.
+
+其中 `AppStoreDetailView.swift` 下载失败 VStack 与现成 `getButton` 紧耦合，
+`AppErrorRow` 的 retry 无法复用该 View，强改需重构 `getButton`，保留.
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` —— 23 个文件换行与基线一致.
+- `python Resources/Scripts/swift_precommit_check.py .` —— 16 组守卫全绿（扫 302 个 .swift 命中 0）.
+- 23 个改动文件 `swiftc -parse` 全部 EXIT=0.
+- `git diff --stat`：23 files changed, 60 insertions(+), 97 deletions(-)，全在 `TequilaDash/Views/`.
+
 ## [0.3.682] - 2026-10-19
 
 ### 错误行与加载行收口到统一组件

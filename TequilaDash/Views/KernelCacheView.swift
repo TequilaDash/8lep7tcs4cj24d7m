@@ -144,11 +144,10 @@ struct KernelCacheView: View {
 
             if let errorMessage {
                 Section {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: errorMessage)
                 } header: {
-                    Label("错误", systemImage: "xmark.circle.fill")
+                    Label("错误", systemImage: "info.circle")
                 }
             }
 

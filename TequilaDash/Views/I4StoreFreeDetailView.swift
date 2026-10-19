@@ -318,8 +318,8 @@ struct I4StoreFreeDetailView: View {
 
     private func errorSection(_ text: String) -> some View {
         Section {
-            Label(text, systemImage: "info.circle")
-                .font(.subheadline).foregroundStyle(.orange)
+            // v0.3.683：区块级错误行统一到 AppErrorRow.
+            AppErrorRow(message: text)
         }
     }
 

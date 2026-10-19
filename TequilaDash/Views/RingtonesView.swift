@@ -61,10 +61,8 @@ struct RingtonesView: View {
                         PairingGuideCard(showsBackground: false)
                             .listRowInsets(EdgeInsets())
                     } else {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                        Button("重试") { reload() }
+                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        AppErrorRow(message: errorMessage, retry: { reload() })
                     }
                 }
             }

@@ -40,9 +40,8 @@ struct CrashLogView: View {
                         PairingGuideCard(showsBackground: false, note: "崩溃分析还需要 LocalDevVPN 已连接.")
                             .listRowInsets(EdgeInsets())
                     } else {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
-                        Button("重试") { reload() }
+                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        AppErrorRow(message: errorMessage, retry: { reload() })
                     }
                 } else if entries.isEmpty {
                     AppStateSection(state: .empty("没有日志",

@@ -345,8 +345,8 @@ struct AppFileBrowserView: View {
                 }
             } else if let err = errorText {
                 Section {
-                    Label(err, systemImage: "info.circle")
-                        .foregroundStyle(.orange)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: err)
                 }
             } else if filteredEntries.isEmpty {
                 Section {
@@ -394,8 +394,8 @@ struct AppFileBrowserView: View {
         List {
             if let err = errorText {
                 Section {
-                    Label(err, systemImage: "info.circle")
-                        .foregroundStyle(.orange)
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: err)
                 }
             } else if filteredEntries.isEmpty {
                 Section {

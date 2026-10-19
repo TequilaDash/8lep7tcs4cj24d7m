@@ -267,15 +267,8 @@ struct CertificateView: View {
                         .foregroundColor(.secondary)
                 }
             case .failed(let message):
-                HStack {
-                    Text("加载失败")
-                        .foregroundColor(.red)
-                    Spacer()
-                    Button("重试") { manager.loadTeams() }
-                }
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // v0.3.683：区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
+                AppErrorRow(message: message, retry: { manager.loadTeams() })
             case .loaded:
                 if manager.teams.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。

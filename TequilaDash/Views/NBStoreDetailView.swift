@@ -470,7 +470,8 @@ struct NBStoreDetailView: View {
 
     private func errorSection(_ text: String) -> some View {
         Section {
-            Text(text).font(.subheadline).foregroundStyle(.red)
+            // v0.3.683：区块级错误行统一到 AppErrorRow.
+            AppErrorRow(message: text)
         }
     }
 

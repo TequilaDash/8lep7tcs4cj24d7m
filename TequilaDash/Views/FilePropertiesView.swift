@@ -86,7 +86,8 @@ struct FilePropertiesView: View {
                                 Label("复制 SHA-256", systemImage: "doc.on.doc")
                             }
                         } else if let error = vm.errorMessage {
-                            Text(error).foregroundColor(.red)
+                            // v0.3.683：区块级错误行统一到 AppErrorRow.
+                            AppErrorRow(message: error)
                         }
                     } header: {
                         Text("SHA-256")

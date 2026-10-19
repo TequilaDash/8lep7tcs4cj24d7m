@@ -61,11 +61,8 @@ struct PurchaseHistoryView: View {
                     }
                 } else if let errorText {
                     Section {
-                        Label(errorText, systemImage: "info.circle")
-                            .font(.subheadline)
-                            .foregroundStyle(.orange)
-                        Button("重试") { Task { await load() } }
-                            .font(.subheadline.weight(.medium))
+                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        AppErrorRow(message: errorText, retry: { Task { await load() } })
                     }
                 } else if apps.isEmpty {
                     Section {

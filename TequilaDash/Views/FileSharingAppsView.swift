@@ -34,15 +34,10 @@ struct FileSharingAppsView: View {
                     }
                 } else if let err = errorText {
                     Section {
-                        HStack(spacing: 8) {
-                            Label(err, systemImage: "info.circle")
-                                .foregroundStyle(.orange)
-                            Spacer(minLength: 0)
-                            // v0.3.378：超时/失败态下必须能一键重来
-                            //（用户实测反馈：只有「读取超时」没有重试入口 = 完全用不了）
-                            Button("重试") { Task { await load() } }
-                                .font(.subheadline)
-                        }
+                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        // v0.3.378：超时/失败态下必须能一键重来
+                        //（用户实测反馈：只有「读取超时」没有重试入口 = 完全用不了）
+                        AppErrorRow(message: err, retry: { Task { await load() } })
                     }
                 } else {
                     Section {

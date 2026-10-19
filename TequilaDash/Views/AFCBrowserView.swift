@@ -60,9 +60,8 @@ struct AFCBrowserView: View {
                             .foregroundColor(.secondary)
                     }
                 } else if let errorMessage {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                    Button("重试") { reload() }
+                    // v0.3.683：区块级错误行统一到 AppErrorRow（info.circle + AppTheme.pending + 重试按钮）.
+                    AppErrorRow(message: errorMessage, retry: { reload() })
                 } else if entries.isEmpty {
                     // v0.3.678：空态统一到 InfoActionCard（此前是裸 Text + .secondary，属全仓 4 套空态写法里最不规范的一种）.
                     InfoActionCard(icon: "folder",
