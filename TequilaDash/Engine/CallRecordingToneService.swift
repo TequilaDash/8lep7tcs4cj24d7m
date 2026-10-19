@@ -86,8 +86,6 @@ enum CallRecordingToneService {
         case original
         /// 已替换为静音。
         case silenced
-        /// 读不到提示音文件（未导入配对文件 / 隧道不通 / 版本不支持）—— 不猜。
-        case unreachable
     }
 
     /// 一次「禁用」的结果报告。
@@ -136,6 +134,12 @@ enum CallRecordingToneService {
         case rollbackFailed(original: String, rollback: String)
         /// v0.3.661：读不到原始提示音 ⇒ 无法备份，需要用户确认后才继续。
         case backupIncomplete([String])
+        /// v0.3.689：备份已不可用，且系统还没有重新生成原始提示音。
+        ///
+        /// 与 .noBackup 的区别：.noBackup 可能只是「用户还没禁用过」；
+        /// 本错误专指「我们确实把它静音过，但备份已经拿不到（0 字节 / 缺项 / 被清理）」，
+        /// 此时指引必须可执行 —— 不能说「请先执行一次禁用」（那一刻禁用按钮是锁住的）。
+        case languageRestoreRequired
 
         var errorDescription: String? {
             switch self {
@@ -153,6 +157,9 @@ enum CallRecordingToneService {
                 return "设备上的提示音已经是静音，且本机没有备份 —— 无法恢复原始提示音."
                     + "这种情况发生在：禁用后删除/重装过 App，或备份被清理."
                     + "可通过切换系统语言让系统重新生成提示音，或用 iTunes/iOS 还原恢复."
+            case .languageRestoreRequired:
+                return "本机备份已不可用，系统也还没有重新生成原始提示音."
+                    + "请先切换一次系统语言（设置 → 通用 → 语言与地区），让 iOS 重新生成提示音后再点恢复."
             case .backupIncomplete(let names):
                 return "读不到原始提示音（\(names.joined(separator: "、"))），因此无法备份."
                     + "如果继续禁用，原始提示音将无法通过本 App 恢复."
@@ -163,6 +170,11 @@ enum CallRecordingToneService {
 
     /// 持久化标记键（用户级）.
     static let disabledKey = "CallRecordingTone.disabled"
+    /// v0.3.689：第二个持久键 —— 「曾在没有完整备份的情况下把设备置为静音」.
+    ///
+    /// 语义等价上游 AirBeep v2.5.1 的 ToneBackupStateCache.
+    /// 缺了它，restore() 无法区分「从未静音过」与「静音过但备份丢了」，只能给一条做不到的指令。
+    static let silencedWithoutBackupKey = "CallRecordingTone.silencedWithoutBackup"
     /// 备份目录名（App Documents 下）.
     static let backupDirectoryName = "CallRecordingToneBackup"
 
@@ -183,7 +195,9 @@ enum CallRecordingToneService {
     ///   > airlift reads are unreliable on some iOS releases and would surface a spurious error.
     ///
     /// 也就是说这个探测在某些 iOS 版本上**必然失败**，于是本页常年显示「不可达」，
-    /// 而且 .unreachable 会让「恢复」按钮被禁用 —— 用户想恢复都点不了。
+    /// v0.3.689：原先还有第三种状态 .unreachable（读不到就报不可达）。它由 loadState
+    /// 时期的 airlift 探测产生，而那段探测已按 AirBeep 的建议删除 ⇒ 该状态**永不出现**，
+    /// 已从 ToneState 里移除，避免界面出现一条走不到的文案。
     ///
     /// 现在与 AirBeep 一致：**以持久化标记为准**，不做网络探测。
     /// 真实可达性留给具体的禁用 / 恢复动作去验证（那时失败也会如实报错）。
@@ -199,7 +213,7 @@ enum CallRecordingToneService {
             lastReadFailure = nil
             return true
         } catch {
-            // 与 readOne 一致地留痕：界面上「检查写入通道」失败时要能说出为什么。
+            // 与 readOne 一致地留痕：界面上「检查读取通道」失败时要能说出为什么。
             lastReadFailure = startTone.name + "：" + error.localizedDescription
             return false
         }
@@ -263,6 +277,9 @@ enum CallRecordingToneService {
         do {
             try await writeTones(silent)
             UserDefaults.standard.set(true, forKey: disabledKey)
+            // v0.3.689：记下「这次是在没有完整备份的情况下静音的」——
+            // 没有这个标记，restore() 在备份丢失时只能给一条用户做不到的指令。
+            UserDefaults.standard.set(!backupComplete, forKey: silencedWithoutBackupKey)
             return DisableReport(
                 backupComplete: backupComplete,
                 unreadable: unreadable,
@@ -297,20 +314,53 @@ enum CallRecordingToneService {
     /// 这句提示在「设备上已经是静音、但备份丢了」的场景下是**有害的**：
     /// 用户照着做 → 再禁一次 → disable() 看到已是静音 → 补标记返回「成功」
     /// ⇒ 用户以为恢复了，其实系统文件还是静音，而且**永远**拿不回来了。
+    /// v0.3.689 三处修正：
+    /// ① 先读设备、再判备份 —— 原实现第一行就读备份，缺备份即抛 noBackup，文案却是
+    ///    「请先执行一次『禁用提示音』以生成备份」，而那一刻禁用按钮被
+    ///    .disabled(state == .silenced) 锁住 ⇒ 用户既做不到，也不会被告知真正有效的做法；
+    /// ② 「已是原始音」必须**全部读得到**才敢断言（requireAll: true，对齐上游 :307），
+    ///    原实现 requireAll: false 会让「有一项读不到」也判成已恢复；
+    /// ③ 用第二个持久键区分「从未静音过」与「静音过但备份丢了」，后者给可执行指引。
     static func restore() async throws {
-        let backup = try readBackups()
         let current = await readTones()
+        let flagged = UserDefaults.standard.bool(forKey: silencedWithoutBackupKey)
 
-        // 读得到的项都等于备份 ⇒ 已经是原始音，只补标记。
-        if current.contains(where: { $0 != nil }),
-           tonesEqual(current, backup, requireAll: false) {
+        let backup: [Data?]
+        do {
+            backup = try readBackups()
+        } catch {
+            // 没有可用备份（缺失 / 0 字节 / 必选项读不回）。
+            if !flagged {
+                // 从未在无备份状态下静音过 ⇒ 没有证据说明我们改过设备文件，按「已是原始音」收尾。
+                UserDefaults.standard.set(false, forKey: disabledKey)
+                return
+            }
+            // 我们确实在无备份状态下把它静音过。先看设备现在是什么：
+            let silent = try silentTones()
+            let readableNow = current.compactMap { $0 }.count
+            if readableNow == allTones.count, !tonesEqual(current, silent, requireAll: true) {
+                // 读到的内容已经不是我们的静音素材 ⇒ iOS 已重新生成原始提示音。
+                UserDefaults.standard.set(false, forKey: disabledKey)
+                UserDefaults.standard.set(false, forKey: silencedWithoutBackupKey)
+                return
+            }
+            // 仍然是静音且没有备份 ⇒ 只能给可执行的指引，不能说「请先禁用一次」。
+            throw ToneError.languageRestoreRequired
+        }
+
+        // 全部读得到、且逐项等于备份 ⇒ 已经是原始音，只补标记；读不全则不做此断言，走写入分支。
+        let readable = current.compactMap { $0 }.count
+        if readable == allTones.count,
+           tonesEqual(current, backup, requireAll: true) {
             UserDefaults.standard.set(false, forKey: disabledKey)
+            UserDefaults.standard.set(false, forKey: silencedWithoutBackupKey)
             return
         }
 
         do {
             try await writeTones(backup)
             UserDefaults.standard.set(false, forKey: disabledKey)
+            UserDefaults.standard.set(false, forKey: silencedWithoutBackupKey)
         } catch {
             // v0.3.646：同上，回滚失败必须如实告知。
             do {
@@ -412,31 +462,65 @@ enum CallRecordingToneService {
 
     // MARK: - 备份
 
-    /// 备份目录里是否已有**完整**备份（每个提示音都有一份）。
+    /// 备份目录里是否有**可用**的完整备份。
+    ///
+    /// v0.3.689：原来只做 fileExists，于是「两个文件都在但其中一个是 0 字节」也算完整备份
+    /// ⇒ disable() 的 backupComplete 判 true、永不重新备份，界面显示「已备份」，
+    /// 用户之后点恢复拿到的是那个 0 字节文件。现在与 readBackups 共用同一套判定。
     private static func hasBackup() -> Bool {
-        allTones.allSatisfy { FileManager.default.fileExists(atPath: backupURL(for: $0).path) }
+        backupIsUsable()
+    }
+
+    /// 备份可用性（非空 + 必需项齐全）的唯一判据 —— hasBackup 与 readBackups 必须一致。
+    private static func backupIsUsable() -> Bool {
+        (try? readBackups()) != nil
     }
 
     /// 把当前内容写成备份（跳过读不出的项；调用方已在全部可读时才会调用）。
+    ///
+    /// v0.3.689 两条保护（对齐上游 AirBeep v2.5.1 的 ensureBackup）：
+    /// ① 内容等于静音素材的项**不备份** —— 那不是「原始提示音」，存下来只会让 restore
+    ///    把静音写回设备还报成功（上游注释：data == silentData 则跳过）；
+    /// ② 已有备份**绝不覆盖** —— 备份是恢复的唯一凭据，覆盖等于毁掉唯一的一份原始音。
     private static func writeBackups(_ current: [Data?]) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
-        for (tone, data) in zip(allTones, current) {
-            guard let data else { continue }
-            try data.write(to: backupURL(for: tone), options: .atomic)
+        let silent = try? silentTones()
+        for (index, tone) in allTones.enumerated() {
+            guard current.indices.contains(index), let data = current[index] else { continue }
+            if let silent, silent.indices.contains(index), let silentData = silent[index], silentData == data {
+                continue
+            }
+            let url = backupURL(for: tone)
+            if fm.fileExists(atPath: url.path) { continue }
+            try data.write(to: url, options: .atomic)
         }
     }
 
-    /// 读回已备份的原始提示音（缺任一份即视为无备份）。
+    /// 读回已备份的原始提示音。
+    ///
+    /// v0.3.689：判定从「文件在不在」升级为「**非空 + 必需项齐全**」。
+    ///
+    /// 原实现只判 fileExists，于是 0 字节备份被当成有效备份：
+    /// restore() 会把 0 字节写进设备、读回校验读到的也是 0 字节（与 expected 相等）
+    /// ⇒ 界面报「已从备份恢复原始提示音」，而设备上的提示音根本没动。
+    /// 上游 AirBeep v2.5.1 的等价判据是 file.optional || (data?.isEmpty == false)。
     private static func readBackups() throws -> [Data?] {
         var result: [Data?] = []
         result.reserveCapacity(allTones.count)
         for tone in allTones {
             let url = backupURL(for: tone)
             guard FileManager.default.fileExists(atPath: url.path) else {
+                if tone.optional { result.append(nil); continue }
                 throw ToneError.noBackup
             }
-            result.append(try Data(contentsOf: url))
+            let data = try Data(contentsOf: url)
+            guard !data.isEmpty else {
+                // 0 字节 = 不可用的备份，按「没有备份」处理，绝不写进设备。
+                if tone.optional { result.append(nil); continue }
+                throw ToneError.noBackup
+            }
+            result.append(data)
         }
         return result
     }

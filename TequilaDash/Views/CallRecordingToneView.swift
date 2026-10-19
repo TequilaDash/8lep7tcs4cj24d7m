@@ -17,7 +17,7 @@ struct CallRecordingToneView: View {
     @State private var phase: String?
     /// v0.3.661：读不到原始提示音时的「继续即不可恢复」确认。
     @State private var risk: RiskPrompt?
-    /// v0.3.672：正在做「检查写入通道」的探测。
+    /// v0.3.672：正在做「检查读取通道」的探测。
     @State private var checking = false
 
     var body: some View {
@@ -71,9 +71,9 @@ struct CallRecordingToneView: View {
                 } label: {
                     Label("恢复原始提示音", systemImage: "arrow.uturn.backward")
                 }
-                // v0.3.650：.disabled(busy || state != .silenced) 会把 .unreachable
-                // 也一起禁掉 —— 而 .unreachable 恰恰是最该允许用户尝试恢复的时候
-                // （AirBeep 的探测在某些 iOS 版本上必然失败，会常年卡在这个状态）。
+                // v0.3.650：.disabled(busy || state != .silenced) 会把「读不到」也一起禁掉，
+                // 而读不到恰恰是最该允许用户尝试恢复的时候（AirBeep 的探测在某些 iOS 版本上
+                // 必然失败，会常年卡在这个状态）。v0.3.689 起已删除该状态，本行保留说明为什么只禁 original。
                 // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试。
                 .disabled(busy || state == .original)
 
@@ -82,7 +82,7 @@ struct CallRecordingToneView: View {
                 Button {
                     checkChannel()
                 } label: {
-                    Label("检查写入通道", systemImage: "antenna.radiowaves.left.and.right")
+                    Label("检查读取通道", systemImage: "antenna.radiowaves.left.and.right")
                 }
                 .disabled(busy || checking)
 
@@ -145,7 +145,6 @@ struct CallRecordingToneView: View {
         switch state {
         case .original: return "原始提示音"
         case .silenced: return "已禁用（静音）"
-        case .unreachable: return "不可达"
         }
     }
 
@@ -230,7 +229,7 @@ struct CallRecordingToneView: View {
 
     /// v0.3.672：把 probeReachable 接到界面上.
     ///
-    /// 它原来是死符号（定义在 Service、全仓零调用），.unreachable 也就永远走不到.
+    /// 它原来是死符号（定义在 Service、全仓零调用），v0.3.672 起接到这里。
     /// 现在用户可以在动手之前先确认前置是否真的通，失败时把 lastReadFailureReason()
     /// 一并显示出来 —— 那个诊断字段同样曾是死符号.
     private func checkChannel() {
@@ -242,13 +241,16 @@ struct CallRecordingToneView: View {
             checking = false
             if ok {
                 alert = ToneAlert(
-                    title: "通道可用",
-                    message: "已成功读取系统提示音文件，可以执行禁用或恢复."
+                    title: "读取通道正常",
+                    // v0.3.689：这条探针**只读**（AirLiftService.readFile），读得到不等于写得上。
+                    // 原文案说「检查写入通道」并断言「可以执行禁用或恢复」，是把读通道的结论当成了写通道的结论。
+                    message: "已成功读到系统提示音文件.这只证明读取通道可用，"
+                        + "写入是否生效仍需实际执行一次禁用或恢复来验证."
                 )
             } else {
                 let reason = CallRecordingToneService.lastReadFailureReason() ?? "原因未知"
                 alert = ToneAlert(
-                    title: "通道不可用",
+                    title: "读取通道不可用",
                     message: "读不到系统提示音文件.请确认已导入配对文件、已连接 LocalDevVPN，"
                         + "且系统版本在支持范围内（iOS/iPadOS 18.0–27.2 B2）."
                         + "\n\n" + reason

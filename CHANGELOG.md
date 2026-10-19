@@ -1,4 +1,39 @@
 # Changelog
+
+## [0.3.689] - 2026-10-19
+
+### 通话录音提示音：备份可用性判据修正（对齐 AirBeep v2.5.1）
+
+- 备份可用性判据从「文件在不在」升级为「**非空 + 必需项齐全**」。原实现只判 `fileExists`，
+  于是 0 字节备份被当成有效备份：`restore()` 把它写进设备、读回校验读到的也是 0 字节
+  （与 expected 相等）⇒ 界面报「已从备份恢复原始提示音」，而设备上的提示音根本没动。
+  现在 `hasBackup()` 与 `readBackups()` 共用同一个 `backupIsUsable()` 判据，0 字节按「没有备份」处理。
+- `writeBackups(_:)` 补两条保护：内容等于静音素材的项不备份（那不是原始提示音），
+  已有备份绝不覆盖（备份是恢复的唯一凭据）。
+- `restore()` 三处修正：① 先读设备、再判备份（原来第一行就读备份，缺备份即抛 `noBackup`，
+  文案却是「请先执行一次『禁用提示音』以生成备份」，而那一刻禁用按钮被
+  `.disabled(state == .silenced)` 锁住 ⇒ 用户既做不到、也不知道真正有效的做法）；
+  ② 「已是原始音」必须全部读得到才敢断言（`requireAll: true`，对齐上游 :307）；
+  ③ 新增第二个持久键区分「从未静音过」与「静音过但备份丢了」，后者给**可执行**指引。
+- 新增 `ToneError.languageRestoreRequired`：备份已不可用且系统还没重新生成原始提示音时，
+  指引用户切换一次系统语言让 iOS 重新生成，而不是给一条做不到的指令。
+
+### 通话录音提示音：清掉一个永不出现的状态与一条不诚实的文案
+
+- 删除 `ToneState.unreachable`：它由页面加载时的 airlift 探测产生，而那段探测已按 AirBeep 的
+  建议删除（Never probe the system disclosure files at app-open）⇒ 该状态永不出现，
+  界面却留着「不可达」文案。
+- 「检查写入通道」改名「检查读取通道」：该探针只调 `AirLiftService.readFile`，读得到不等于写得上，
+  原文案把读通道的结论当成了写通道的结论。结果弹窗同步改为「读取通道正常 / 读取通道不可用」，
+  并明确写出「写入是否生效仍需实际执行一次禁用或恢复来验证」。
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` 通过；`python Resources/Scripts/swift_precommit_check.py .`
+  16 组守卫全过（含版本号三处、界面文案 G1/G2/G3 扫 302 个 .swift）。
+- WSL `/usr/bin/swiftc -parse` 对两个改动文件均通过（`-parse` 只查语法，
+  类型错 / 缺 return / noasync 限制仍需真编译，由 CI 判定）。
+
 ## [0.3.688] - 2026-10-19
 
 ### Step 3 批 3 错误态收尾（Section 内整行报错 / 卡片内正文语义）
