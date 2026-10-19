@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.3.681] - 2026-10-19
+
+### 第四个超大视图文件拆分（IPADownloadManagerView 1308 → 736）
+
+- `TequilaDash/Views/IPADownloadManagerView.swift` 1308 行 → **736 行**，按职责拆成两个新文件：
+  `IPADownloadManagerRows.swift`（488 行，`extension IPADownloadManagerView`：行渲染 / 徽标 / 图标 /
+  进度环 / 动作入口）与 `IPADownloadManagerSheets.swift`（95 行：`InstallProgressRing` +
+  `OnlineInstallSettingsSheet`）. 主文件只留状态、body、五个 section 与动作函数.
+- 保真复核：以 `git show HEAD:` 取 1308 行原文与三个新文件做贪心连续子串归属 ——
+  View 720 行 / Rows 465 行 / Sheets 90 行；未被覆盖的 33 行**全部**是「去掉 `private` 前缀后
+  即可在新文件中找到」，未解释行 **0** ⇒ 除 `private` 前缀外 byte-exact.
+- 跨文件引用：`InstallProgressRing` 只在 Rows 里被使用（main 引用 0 次），`OnlineInstallSettingsSheet`
+  在 main 引用 1 次；main 中被跨文件引用的 9 个成员（`actionItem` / `actionJob` / `icons` /
+  `previewTarget` / `center` / `otaProgress` / `isEditing` / `stampFormatter` / `filterSource`）已去
+  `private`，其余 24 个只被 main 自己用的成员保持 `private` 不变.
+
+### precommit guard 的 glob 跟着文件走
+
+- 拆分后 `swift_precommit_check.py` 报 1 个 ERROR：
+  `IPADownloadManagerRows.swift:475 [R4] 硬编码状态文案 '安装中' —— 应来自 .displayStage`.
+  这是**误报**：该行是 OTA 在线安装进度环的文案，来源是 `otaProgress.stage`
+  （`OnlineInstallProgress.Stage`，另一套状态机），与 `IPADownloadCenter.Job` 无关.
+- 根因：`Resources/Scripts/swift_view_state_derivation.py` 的 ALLOW 表本来就有这条豁免，
+  但 glob 写死成 `**/IPADownloadManagerView.swift`，文件拆走后不再命中.
+- 改法：两条相关豁免的 glob 放宽到 `**/IPADownloadManager*.swift`（`failureStage == .download` 与
+  `case .installing: return (nil, "安装中")`），**正则本身不动** —— 仍只放行该具体形状，不是整文件放行.
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` → EXIT 0.
+- `python Resources/Scripts/swift_precommit_check.py .` → EXIT 0，15 组守卫全过（扫 302 个 .swift）.
+- WSL `/usr/bin/swiftc -parse` → 三个文件全 RC=0，`FAIL_TOTAL=0`.
+- 本机 `-parse` 只查语法：类型错 / 实参标签顺序 / 缺 `return` / 跨类型引用不存在的成员一律查不出，
+  只有 CI 真编译能抓 —— 故本次提交后以 CI 判决为准.
+
+### 四个超大视图文件拆分收官
+
+- `I4StoreFreeView.swift` 1316 → 582、`ProcessManagerView.swift` 1298 → 347、
+  `GestaltView.swift` 1086 → 629、`IPADownloadManagerView.swift` 1308 → 736.
+- 至此仓内不再有超过 1000 行的视图文件（`DesignSystem.swift` 1247 行是设计系统本体，不拆）.
 ## [0.3.680] - 2026-10-19
 
 ### 第三个超大视图文件拆分（GestaltView 1086 → 629）

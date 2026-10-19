@@ -92,7 +92,7 @@ ALLOW = [
      "模块管理域自己的状态，与 Job 无关"),
     ("**/AppStoreDetailView.swift", r'Text\(phase\.title\)',
      "阶段胶囊 helper：phase.title 的渲染点（审计列为「平行来源·可疑 S3」，本轮不改 P1，保留并登记）"),
-    ("**/IPADownloadManagerView.swift", r'failureStage == \.download',
+    ("**/IPADownloadManager*.swift", r'failureStage == \.download',
      "失败**阶段**徽标（下载失败 / 安装失败），非状态行文案 —— displayStage 给不出该区分，有意保留"),
     ("**/AppStoreDetailView.swift", r'displayStage\s*!=\s*job\.phase\.title',
      "去重**比较**（非渲染 phase.title）：判断「黑字」与「阶段胶囊」文案是否相同来决定是否多画一行；"
@@ -101,7 +101,7 @@ ALLOW = [
      "操作结果 alert 的标题，非任务阶段状态行 —— CallRecordingToneService.ToneState 只有 "
      "original/silenced/unreachable 三个 case，本就没有 displayStage 这个源；"
      "错误正文来自 error.localizedDescription，标题只是「这次操作没成功」的分类词"),
-    ("**/IPADownloadManagerView.swift", r'case\s+\.installing:\s*return\s*\(nil,\s*"安装中"\)',
+    ("**/IPADownloadManager*.swift", r'case\s+\.installing:\s*return\s*\(nil,\s*"安装中"\)',
      "OTA **在线安装**进度环文案：来源是 otaProgress.stage（OnlineInstallProgress.Stage，另一套状态机），"
      "与 IPADownloadCenter.Job 无关 ⇒ displayStage 不是它的源（脚本默认提示『应来自 displayStage』对它是错的）"),
 ]
