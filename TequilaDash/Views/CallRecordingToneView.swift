@@ -19,6 +19,10 @@ struct CallRecordingToneView: View {
     @State private var risk: RiskPrompt?
     /// v0.3.672：正在做「检查读取通道」的探测。
     @State private var checking = false
+    /// perform 的后台任务句柄：页面退出（onDisappear）时取消，避免离开后任务继续跑.
+    @State private var runningTask: Task<Void, Never>?
+    /// checkChannel 的后台任务句柄，同样在页面退出时取消.
+    @State private var channelTask: Task<Void, Never>?
 
     var body: some View {
         List {
@@ -94,6 +98,10 @@ struct CallRecordingToneView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             state = loadState()
+        }
+        .onDisappear {
+            runningTask?.cancel()
+            channelTask?.cancel()
         }
         .alert(item: $alert) { item in
             Alert(
@@ -173,7 +181,7 @@ struct CallRecordingToneView: View {
         busy = true
         phase = action.startPhase
         AppHaptics.tap()
-        Task {
+        runningTask = Task {
             // v0.3.672：全程可能数十秒，默认锁屏时间（最短 30 秒）足够在中途锁屏.
             // 锁屏会让写到一半的提示音停在中间态，而持久化标记要到写完才置位 ⇒
             // 界面显示「原始提示音」、设备上却是半新半旧. 所以操作期间不自动锁屏.
@@ -224,7 +232,7 @@ struct CallRecordingToneView: View {
         guard !checking else { return }
         checking = true
         AppHaptics.tap()
-        Task {
+        channelTask = Task {
             let ok = await CallRecordingToneService.probeReachable()
             checking = false
             if ok {

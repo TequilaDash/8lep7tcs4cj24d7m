@@ -1,4 +1,20 @@
 # Changelog
+## [0.3.704] - 2026-10-19
+
+### 新增
+- 崩溃分析解析层：搬入 Xrash 的 `XrashReport`（19 个文件，MIT License, OwnGoal Studio）到 `TequilaDash/Engine/CrashReport/`，逐文件原样搬入，未改逻辑.
+
+### 修复
+- Airlift 提示音读取重试加 60 秒总时长上限，超限抛既有 `.failed`，不再无限重试.
+- 通话提示音页面的后台任务加句柄，页面退出时取消.
+- 文档浏览导出进度卡与底部提示条的投影接 `AppShadow` token.
+
+### 守卫
+- `swift_hex_parse_guard.py` 为逐文件搬入的 `CrashReport/LegacyCrashLines.swift` 登记豁免，并钉明理由.
+
+### 校验
+- `normalize_eol.py` EXIT 0；`swift_precommit_check.py .` 17 组守卫全过，ERROR 0 / WARN 0.
+
 ## [0.3.703] - 2026-10-19
 
 ### 修复

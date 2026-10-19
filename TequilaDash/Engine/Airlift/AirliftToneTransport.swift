@@ -201,6 +201,8 @@ actor AirliftToneTransport {
     /// 两次尝试之间的间隔. 首次尝试在 Rust 侧已经等满约 20 秒，这里只补设备侧
     /// ATC 会话收尾 / Media 落盘所需的余量，等太久会把界面卡到用户以为死机.
     private static let readRetryDelay: TimeInterval = 1.5
+    /// 整轮重试（含首次尝试与全部间隔）的总时长上限，超过即不再发起下一次尝试.
+    private static let readRetryTotalTimeLimit: TimeInterval = 60
 
     /// 读一个设备上的绝对路径，**只**对 AirTraffic 恢复类失败做有界重试.
     ///
@@ -212,9 +214,21 @@ actor AirliftToneTransport {
     ///
     /// 不重试的失败（立刻上抛，重试只会白等）：配对文件读不出 / 隧道建不起 /
     /// AFC 通道不可用 / 文件不存在 / 路径非法等确定性错误.
+    ///
+    /// 每轮循环开头做两项检查（均复用既有 `.failed`，不新增错误 case）：
+    /// `Task.isCancelled` 为真即抛「已取消.」；距整轮开始超过
+    /// `readRetryTotalTimeLimit` 即抛「重试超过 N 秒.」. 单次 FFI 调用是阻塞的，
+    /// 这两项检查只能发生在两次尝试之间.
     private static func readSyncWithRetry(path: String, pairingPath: String) throws -> Data {
         var attempt = 1
+        let startedAt = CFAbsoluteTimeGetCurrent()
         while true {
+            if Task.isCancelled {
+                throw AirliftTransportError.failed("已取消.")
+            }
+            if CFAbsoluteTimeGetCurrent() - startedAt >= Self.readRetryTotalTimeLimit {
+                throw AirliftTransportError.failed("重试超过 \(Int(Self.readRetryTotalTimeLimit)) 秒.")
+            }
             do {
                 return try readSync(path: path, pairingPath: pairingPath)
             } catch let error as AirliftTransportError {

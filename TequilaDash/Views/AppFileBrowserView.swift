@@ -91,6 +91,9 @@ struct AppFileBrowserView: View {
 
     struct ShareItems: Identifiable { let id = UUID(); let urls: [URL] }
 
+    /// 明暗模式：导出进度卡 / toast 投影走 AppShadow token，需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         content
         .overlay(alignment: .bottom) {
@@ -161,7 +164,9 @@ struct AppFileBrowserView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(.systemBackground))
         )
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+        // 卡片投影接 AppShadow.card：原手写值与 radius 8 / y 2 完全一致，只把颜色
+        // 收到 token（浅色黑 6% / 深色 .clear）.
+        .appCardShadow(colorScheme)
         .padding(.bottom, 12)
         .transition(.opacity)
     }
@@ -174,7 +179,8 @@ struct AppFileBrowserView: View {
                 .font(.caption)
                 .padding(.horizontal, 18).padding(.vertical, 9)
                 .background(Capsule().fill(Color(.systemBackground)))
-                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                // 底部悬浮提示条接 AppShadow.raised：与 FileClipboard.CopyBanner 同构.
+                .appRaisedShadow(colorScheme)
                 .padding(.bottom, 12)
                 .transition(.opacity)
         }

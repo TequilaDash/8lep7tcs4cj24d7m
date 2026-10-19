@@ -83,6 +83,12 @@ WAIVERS = {
     # v0.3.698：HexEditorView.applyEdit 的豁免已撤销 —— 该点已用 hexByteValue()
     # 补齐字符集 / 空串 / 定长三防，守卫实测 OK，豁免条目不再命中（留着每次都会打 NOTE）。
     # 新增豁免必须写「为什么本守卫不该管它」并钉出处，否则就是在掩盖缺陷。
+    # v0.3.704：Xrash 解析层逐文件原样搬入（TequilaDash/Engine/CrashReport/），
+    # 改动会破坏与上游 github.com/owngoal-dev/Xrash 的可对照性。该处是
+    # UInt64(digits, radix: 16) 整串解析、不做切片，无越界风险；仅容忍前导正号，
+    # 而调用方传入的是设备回传的地址串，不接受用户输入。
+    ("TequilaDash/Engine/CrashReport/LegacyCrashLines.swift", "init"):
+        "上游逐文件原样搬入，无切片越界风险；不接受用户输入。",
 }
 MISSING_LABEL = {
     "charset": "缺字符集校验（UInt8(_:radix:16) 接受前导正号 \"+F\" / 非 hex 字符）-> 补 allSatisfy { $0.isHexDigit }",
