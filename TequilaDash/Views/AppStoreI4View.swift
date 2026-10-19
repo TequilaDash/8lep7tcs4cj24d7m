@@ -52,12 +52,9 @@ struct AppStoreI4View: View {
                 }
             } else if let errorText {
                 Section {
-                    VStack(spacing: 10) {
-                        Text(errorText).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Button("重试") { Task { await reload() } }.buttonStyle(.bordered)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 30)
+                    // v0.3.x 批 3 错误态收敛：同构错误区统一到 AppErrorRow.
+                    AppErrorRow(message: errorText, retry: { Task { await reload() } }, centered: true)
+                        .padding(.vertical, 30)
                 }
             } else if tab == 0 {
                 specialSection

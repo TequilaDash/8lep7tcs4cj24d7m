@@ -317,14 +317,9 @@ struct AppStoreView: View {
             }
         } else if let errorText {
             Section {
-                VStack(spacing: 10) {
-                    Image(systemName: "wifi.exclamationmark").font(.title2).foregroundStyle(.secondary)
-                    Text(errorText).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("重试") { Task { await loadCharts() } }
-                        .buttonStyle(.bordered)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 30)
+                // v0.3.x 批 3 错误态收敛：同构错误区统一到 AppErrorRow.
+                AppErrorRow(message: errorText, retry: { Task { await loadCharts() } }, centered: true)
+                    .padding(.vertical, 30)
             }
         } else if items.isEmpty {
             Section {

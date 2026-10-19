@@ -1,4 +1,27 @@
 # Changelog
+## [0.3.686] - 2026-10-19
+
+### Step 3 批 3：错误态收敛（接手冻结成员未提交改动）
+- `AppStoreI4View.swift:52-59`、`AppStoreView.swift:317-325`、`DeviceInfoView.swift:381-395` 三处自造「图标 + 文案 + 重试」错误区统一到 `AppErrorRow(message:retry:centered:)`（`DesignSystem.swift:675-703`）.
+- 顺带收掉 DeviceInfoView 里手写的 `RoundedRectangle(AppRadius.card)` + `AppSurface.card` 卡片底（AppErrorRow 不自带 Section，外层已有 Section 时不再套卡）.
+- 三处均用居中模式 `centered: true`；重试闭包体原样搬运（保留 `AppHaptics.tap()` 与 `Task { await load() }`）.
+
+### 验证
+- normalize_eol / swift_precommit_check（16 组守卫）全过；三文件 WSL `swiftc -parse` EXIT=0. 真编译以 CI 判决.
+
+## [0.3.685] - 2026-10-19
+
+### 接手旧成员遗留改动（下载中心 D1 续 / I4 审计三轮 / BigInt hex / 路由表越界）
+- 下载中心 D1 续：`IPADownloadControl.takeDestination()` 取走登记路径并失效；下载完成/失败回调里任务已被用户删除时，按登记路径清掉本次落盘的孤儿包；`cancel` 对 AppleID 通道按登记核对，删不掉如实报 `fileRemovalFailed`，不再假成功.
+- I4MobileInstallService（审计第三轮 R1-R4）：完成标记「存在但内容坏」不再当老包放行；删标记失败抛错（旧 `try?` 静默吞）；半截包先删再下；安装后回读只在「判不清」时才等 1.5 秒复探（旧实现失败一律白等）.
+- I4PairingService：`tunnel_create_rppairing` 挂住判定补真机实测步骤（仅注释）.
+- BigInt.init?(hex:)：拒绝前导正号（`UInt8("+1", radix: 16) == 1`）、奇数长度解析失败显式返回 nil（不再 `?? 0`）、空串与裸 `0x` 返回 nil、容忍首尾空白.
+- EscRoutePeers.c：解释 sockaddr 前强制 16 字节可见（`ESC_SA_HEADER_BYTES`），防最后一段 sockaddr_dl 跨消息末尾越界读.
+- 接手时修复：`I4MobileInstallService` 两处插值丢反斜杠（会原样打印 `(pack.fileName)`）.
+
+### 验证
+- normalize_eol / swift_precommit_check（16 组守卫）全过；5 个 Swift 文件 WSL `swiftc -parse` EXIT=0；`EscRoutePeers.c` `clang -fsyntax-only` 过. 真编译以 CI 判决.
+
 
 ## [0.3.684] - 2026-10-19
 

@@ -378,30 +378,14 @@ struct DeviceInfoView: View {
         return String(format: "%.0f MB", mb)
     }
 
-    /// 错误态：保留原「居中图标 + 文案 + 重试」布局，仅换 token 与按钮样式.
-    /// 按钮走 `TintedButtonStyle` 淡蓝底（**不用纯蓝实底** `borderedProminent`）.
+    /// 错误态：统一到 AppErrorRow（批 3 错误态收敛），保留居中布局与重试动作.
     private var errorCard: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "info.circle")
-                .font(.title)
-                .foregroundStyle(.secondary)
-                .appSymbol()
-            Text("无法读取").font(AppFont.headline)
-            Text(errorText ?? "未知错误")
-                .font(AppFont.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("重试") {
-                AppHaptics.tap()
-                Task { await load() }
-            }
-            .buttonStyle(TintedButtonStyle())
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(AppSurface.card)
-        )
+        AppErrorRow(message: errorText ?? "未知错误",
+                    retry: {
+                        AppHaptics.tap()
+                        Task { await load() }
+                    },
+                    centered: true)
+            .padding(.vertical, 30)
     }
 }
