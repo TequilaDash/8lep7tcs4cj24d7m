@@ -795,17 +795,79 @@ struct AppStateSection: View {
 }
 
 /// A small pill that highlights a byte count with a tinted background.
+///
+/// Step 3 批 6：胶囊口径收敛到这一处定义，按 `Level` 分三档度量.
+/// 既有调用点 `SizePill(text:)` 不传 `level` 即走 `.regular`（10 / 5 + `.semibold`），
+/// 渲染与收敛前一致；另四个覆盖项为 `nil` 时一律回落到档位默认值.
 struct SizePill: View {
+    /// 胶囊档位（Step 3 批 6 收敛口径）.
+    ///
+    /// 嵌在 `SizePill` 内，全仓只需这一处声明即可同时服务组件本身与其调用方.
+    enum Level {
+        /// 数值 / 统计档（原 `SizePill` 现值）：`.caption` + `.semibold` + 10 / 5.
+        case regular
+        /// 行内状态档（列表行徽章）：`.caption2` + `.semibold` + 6 / 2.
+        case compact
+        /// 行内极小档（包管理 / 来源 / 系统）：`.caption2` + `.regular` + 6 / 1.
+        case tiny
+    }
+
     let text: String
     var tint: Color = AppTheme.accent
+    /// 档位（默认 `.regular`，即收敛前的度量）.
+    var level: Level = .regular
+    /// 横向内边距覆盖（`nil` = 按档取 10 / 6 / 6）.
+    var horizontalPadding: CGFloat? = nil
+    /// 纵向内边距覆盖（`nil` = 按档取 5 / 2 / 1）.
+    var verticalPadding: CGFloat? = nil
+    /// 字重覆盖（`nil` = `.regular` / `.compact` 取 `.semibold`，`.tiny` 取 `.regular`）.
+    var weight: Font.Weight? = nil
+    /// 底色不透明度覆盖（`nil` = 12%，与收敛前一致）.
+    var fillOpacity: Double? = nil
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .font(levelFont)
             .foregroundColor(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(tint.opacity(0.12), in: Capsule())
+            .padding(.horizontal, horizontalPadding ?? defaultHorizontalPadding)
+            .padding(.vertical, verticalPadding ?? defaultVerticalPadding)
+            .background(tint.opacity(fillOpacity ?? 0.12), in: Capsule())
+    }
+
+    /// 按档取字体（覆盖项优先）.
+    ///
+    /// `.tiny` 在不传 `weight` 时直接返回 `.caption2`（不追加 `.weight(.regular)`），
+    /// 以便 `PackageChip` 的渲染与收敛前逐字节一致.
+    private var levelFont: Font {
+        if let weight {
+            switch level {
+            case .regular:          return .caption.weight(weight)
+            case .compact, .tiny:   return .caption2.weight(weight)
+            }
+        }
+        switch level {
+        case .regular: return .caption.weight(.semibold)
+        case .compact: return .caption2.weight(.semibold)
+        case .tiny:    return .caption2
+        }
+    }
+
+    /// 按档取横向内边距默认值.
+    private var defaultHorizontalPadding: CGFloat {
+        switch level {
+        case .regular: return 10
+        case .compact: return 6
+        case .tiny:    return 6
+        }
+    }
+
+    /// 按档取纵向内边距默认值.
+    private var defaultVerticalPadding: CGFloat {
+        switch level {
+        case .regular: return 5
+        case .compact: return 2
+        case .tiny:    return 1
+        }
     }
 }
 
@@ -1061,7 +1123,7 @@ enum AppShadow {
 /// 同一条「卡片」硬规则有两套落地方式。
 ///
 /// 现在把「卡片底」提升为显式 token，`appCard()` 改为引用它；
-/// 页面若要自定义卡片底（如 HomeToolTile 的模块色渐变），
+/// 页面若要自定义卡片底（如 `AppGridTile(tinted: true)` 的模块色渐变），
 /// 应该在**这个底之上叠加**，而不是另取一个系统色。
 enum AppSurface {
     /// 卡片底色（跟随系统 grouped 背景，明暗自适应）.

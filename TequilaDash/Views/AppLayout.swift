@@ -11,7 +11,7 @@ import UIKit
 /// 的地方：TRApp 几乎只有分组全宽行，本仓在此之上扩展出自己的网格 / 横滑 / hero 语言。
 ///
 /// ## 五种布局模式（什么时候用）
-/// - **A 分组全宽行**（既有，`AppSettingsRow` / `HomeView.featureSection`）：设置项、开关、说明性列表 ——
+/// - **A 分组全宽行**（既有 `AppSettingsRow`；功能入口用本文件 `AppNavRow`）：设置项、开关、说明性列表 ——
 ///   每行一个「词条」，需要副标题 + 右箭头时。
 /// - **B 卡片网格**（本文件 `AppCardGrid` + `AppGridTile`）：**平级的多个功能入口**（设备工具 6 项等）——
 ///   没有主次之分、彼此并列，用 2 列网格比 6 条横条更省纵向空间、更像「工具箱」。
@@ -23,7 +23,9 @@ import UIKit
 ///   自动决定列数，横竖屏 / 不同机型都能铺满。
 ///
 /// ## 硬规则对齐（不破坏既有语言）
-/// - 卡片一律 `secondarySystemGroupedBackground` + 连续圆角（走既有 `.appCard()`）。
+/// - 卡片一律 `secondarySystemGroupedBackground` + 连续圆角（走既有 `.appCard()`）；
+///   唯一的例外是 `AppGridTile(tinted: true)` 的模块色档（`AppTheme.surfaceCard` 上叠 14%→3% 渐变，
+///   见 `DesignSystem.swift` `AppSurface` 注释「自定义卡片底应在 token 之上叠加」）。
 /// - 深色品牌色只出现在**紧凑连续圆角图标块** `AppBrandTile` 里（硬规则 1 / 7），不做全宽深色 banner。
 /// - 按钮沿用 `TintedButtonStyle`（半透明着色 + 发丝描边），不用纯蓝实底。
 /// - 颜色一律走 `AppTheme` 语义 token，不写死 RGB。
@@ -229,6 +231,52 @@ extension AppSectionHeader where Trailing == EmptyView {
     }
 }
 
+// MARK: - 布局 A 的行标签：主页 / 更多页共用的全宽行
+
+/// 功能行标签（布局 A 的单元）：连续圆角图标底 + 17pt semibold 标题 + 13pt footnote 副标题 + 右侧 chevron.
+///
+/// 由 `HomeView` 的 `HomeRowLabel` 与 `MoreView` 的 `MoreRowLabel` 合并而来 —— 两者原先逐行相同，
+/// 差异只有两处：副标题换行策略（主页 `.lineLimit(1)` 截断 / 更多页完整换行）与图标取色
+/// （主页传模块色 / 更多页写死品牌蓝）。合并后统一取**完整换行**（长介绍不再显示成省略号），
+/// 取色走 `tint` 参数，更多页不传即沿用品牌蓝 `AppTheme.accent`.
+///
+/// 调用方一律把它当作 `NavigationLink` 的 label，外层配 `.buttonStyle(.plain)` 保留整行点击.
+struct AppNavRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var tint: Color = AppTheme.accent
+    var showsChevron: Bool = true
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AppRowIcon(systemName: icon, tint: tint, symbolSize: 16, frameSize: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.bodyEmphasis)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    // 介绍完整显示：不设 lineLimit，行高按文字行数自适应.
+                    // `fixedSize(vertical:)` 让 Text 在 VStack 内拿到真实高度，避免被压成单行省略.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 6)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .appSymbol()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - 布局 B：卡片网格
 
 /// 卡片网格（布局 B）：`columns` 列等宽网格，逐项带阶梯入场动画.
@@ -269,14 +317,49 @@ struct AppCardGrid<Item: Identifiable, Content: View>: View {
 ///
 /// 与全宽行（`AppSettingsRow`）的区别：**纵向堆叠**（图标在上、文字在下），2 列并排时读起来是
 /// 「格子」而非「列表条」。等宽等高由网格行高对齐（`maxHeight: .infinity`）.
+///
+/// `tinted`：默认 `false` = 白卡（`.appCard`，与其余网格卡一致）；为 `true` 时整格带**模块色**
+/// —— `surfaceCard` 底 + `tint` 14% → 3% 斜向渐变 + 0.5pt 模块色描边。这是主页 Bento 网格
+/// 「彩色中心」那一档，原先由 `HomeView` 的私有 `HomeToolTile` 手拼，合并成同一组件的参数后
+/// 网格卡的取色 / 圆角 / 描边只有一份实现.
 struct AppGridTile: View {
     let icon: String
     let title: String
     var subtitle: String? = nil
     var tint: Color = AppTheme.accent
     var showsChevron: Bool = false
+    var tinted: Bool = false
 
     var body: some View {
+        if tinted {
+            tileBody
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                        .fill(AppTheme.surfaceCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                                .fill(LinearGradient(
+                                    colors: [tint.opacity(0.14), tint.opacity(0.03)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                        .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        } else {
+            tileBody
+                .appCard(padding: 14)
+                .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        }
+    }
+
+    /// 卡片内容（图标行 + 标题 + 副标题），底色由 `tinted` 决定，这里只管排版.
+    private var tileBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 0) {
                 AppRowIcon(systemName: icon, tint: tint, symbolSize: 18, frameSize: 36)
@@ -304,8 +387,6 @@ struct AppGridTile: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .appCard(padding: 14)
-        .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 }
 

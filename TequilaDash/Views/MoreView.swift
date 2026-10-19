@@ -9,7 +9,7 @@ import SwiftUI
 /// - **页边距 20**（`AppTheme.pageInset`，原 16）；**大标题**走系统 `.large`（34pt bold）.
 /// - **功能入口改 inset-grouped 卡片分组**（分段标题 + 连续圆角卡片），行 =
 ///   连续圆角图标底 + **17pt semibold** 标题 + **13pt footnote** 副标题 + 右 chevron
-///   （与主页 `HomeRowLabel` 同一度量；分隔线全宽贯通）.
+///   （走 `AppLayout.swift` 的共享 `AppNavRow`，与主页同一实现；分隔线全宽贯通）.
 /// - **强调色**统一到 `AppTheme.accent`（亮 `#005493` / 暗 `#76D6FF`，自适应）.
 /// - 图标 `.hierarchical` 分层渲染；工具栏动作补触觉 `AppHaptics.tap()`.
 /// - **布局**：分段标题统一用 `AppSectionHeader`（品牌色竖条 + 主标题）；「设备工具」6 项平级工具
@@ -50,21 +50,24 @@ struct MoreView: View {
     }
 
     /// 分组定义（v0.3.29：22 个功能 → 7 个逻辑分区）.
-    /// 每项 =（分段标题, 分段 SF Symbol, 脚注, 条目）.
-    private var sections: [(header: String, symbol: String, footer: String?, items: [MoreItem])] {
+    /// 每项 =（分段标题, 分段 SF Symbol, 脚注, **是否网格**, 条目）.
+    ///
+    /// `isGrid` 显式写在分组定义里，不再靠「标题字符串属于某个集合」反查 —— 改标题不会静默退回
+    /// 全宽行，读定义处即知该组用哪种布局（布局 B 网格 / 布局 A 全宽行）.
+    private var sections: [(header: String, symbol: String, footer: String?, isGrid: Bool, items: [MoreItem])] {
         [
             // v0.3.412：漏洞利用 —— 置顶的普通导航行，点进去是二级选择页。
-            ("漏洞利用", "ladybug.fill", nil, [
+            ("漏洞利用", "ladybug.fill", nil, false, [
                 MoreItem("exploit", "ladybug.fill", "漏洞利用",
                          "选择使用的漏洞利用",
                          ExploitSelectionView()),
             ]),
-            ("配对文件", "key.horizontal", "重置/更换配对文件后从这里重新导入", [
+            ("配对文件", "key.horizontal", "重置/更换配对文件后从这里重新导入", false, [
                 MoreItem("pairing-import", "key.horizontal", "配对文件导入",
                          "文件导入 / 剪贴板 / 无线配对",
                          PairingSetupView(viewModel: appList)),
             ]),
-            ("设备工具", "wrench.and.screwdriver", "需要配对文件 + LocalDevVPN 隧道", [
+            ("设备工具", "wrench.and.screwdriver", "需要配对文件 + LocalDevVPN 隧道", true, [
                 MoreItem("virtual-location", "location.fill", "虚拟定位",
                          "地图定位模拟，支持轨迹",
                          VirtualLocationView()),
@@ -84,7 +87,7 @@ struct MoreView: View {
                          "局域网无线连接诊断",
                          SSHDebugView()),
             ]),
-            ("应用安装", "arrow.down.app.fill", "签名、安装与下载", [
+            ("应用安装", "arrow.down.app.fill", "签名、安装与下载", false, [
                 MoreItem("ipa-install", "arrow.down.app.fill", "IPA 侧载",
                          "签名安装 IPA",
                          IPAInstallView()),
@@ -98,7 +101,7 @@ struct MoreView: View {
                          "写入其它侧载工具，复用配对身份",
                          PairingInstallView()),
             ]),
-            ("文件管理", "folder.fill", nil, [
+            ("文件管理", "folder.fill", nil, false, [
                 MoreItem("file-browser", "folder.fill", "文件浏览器",
                          "浏览编辑设备文件",
                          FileBrowserRootView(appList: appList)),
@@ -106,7 +109,7 @@ struct MoreView: View {
                          "AFC 文件浏览 / 导入导出文件",
                          AFCBrowserView()),
             ]),
-            ("个性化", "paintbrush.fill", nil, [
+            ("个性化", "paintbrush.fill", nil, false, [
                 MoreItem("wallpaper", "photo.fill.on.rectangle.fill", "壁纸",
                          "导入壁纸包",
                          WallpaperView()),
@@ -117,7 +120,7 @@ struct MoreView: View {
                          "导入 / 导出铃声",
                          RingtonesView()),
             ]),
-            ("系统工具", "gearshape.2.fill", nil, [
+            ("系统工具", "gearshape.2.fill", nil, false, [
                 MoreItem("app-expiry", "calendar.badge.clock", "预置描述管理",
                          "过期描述管理（.mobileprovision）",
                          AppExpiryView()),
@@ -143,7 +146,7 @@ struct MoreView: View {
                          "静音通话录音提示音",
                          CallRecordingToneView()),
             ]),
-            ("账户与安全", "lock.shield.fill", nil, [
+            ("账户与安全", "lock.shield.fill", nil, false, [
                 MoreItem("certificates", "checkmark.seal.fill", "证书管理",
                          "管理开发证书",
                          CertificateView()),
@@ -154,7 +157,7 @@ struct MoreView: View {
                          "提高内存上限",
                          IncreaseMemoryView()),
             ]),
-            ("数据与诊断", "chart.bar.doc.horizontal", nil, [
+            ("数据与诊断", "chart.bar.doc.horizontal", nil, false, [
                 MoreItem("backups", "externaldrive.fill.badge.timemachine", "备份",
                          "备份恢复管理",
                          BackupsListView(appList: appList)),
@@ -247,23 +250,16 @@ struct MoreView: View {
 
     // MARK: - 分组渲染（两种布局：网格 / 全宽行）
 
-    /// 用**卡片网格**（布局 B，`AppCardGrid` + `AppGridTile`）渲染的分组标题集合.
-    ///
-    /// 「设备工具」是 6 个**平级、并列**的工具入口，无主次之分 —— 用 2 列格子比 6 条全宽横条
-    /// 更紧凑、更像「工具箱」，也是本仓区别于 TRApp「全用横条」的地方。其余分组是「词条 + 说明」，
-    /// 仍用全宽行（布局 A），各得其所.
-    private let gridSectionHeaders: Set<String> = ["设备工具"]
-
     /// 单个功能分组：分段标题（`AppSectionHeader`，带品牌色竖条）+ 内容 + 可选脚注.
-    /// 内容按 `gridSectionHeaders` 二选一：卡片网格（布局 B）或全宽行卡片（布局 A）.
+    /// 内容按分组自带的 `isGrid` 二选一：卡片网格（布局 B）或全宽行（布局 A）.
     /// 热补丁把整组都隐藏时不渲染该组（避免只剩一个空标题）.
     @ViewBuilder
-    private func moreSection(_ section: (header: String, symbol: String, footer: String?, items: [MoreItem])) -> some View {
+    private func moreSection(_ section: (header: String, symbol: String, footer: String?, isGrid: Bool, items: [MoreItem])) -> some View {
         let items = section.items.filter(isVisible)
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 AppSectionHeader(section.header, symbol: section.symbol)
-                if gridSectionHeaders.contains(section.header) {
+                if section.isGrid {
                     AppCardGrid(items: items, columns: 2) { item in
                         NavigationLink {
                             NavigationLazyView(item.destination)
@@ -278,7 +274,7 @@ struct MoreView: View {
                             NavigationLink {
                                 NavigationLazyView(item.destination)
                             } label: {
-                                MoreRowLabel(icon: item.icon, title: item.title, subtitle: item.subtitle)
+                                AppNavRow(icon: item.icon, title: item.title, subtitle: item.subtitle)
                             }
                             .buttonStyle(.plain)
                             // 末行不附分隔线（组尾）
@@ -315,40 +311,3 @@ struct MoreView: View {
     }
 }
 
-/// 更多页功能行标签（TRApp inset-grouped 行语言）：连续圆角图标底 + 17pt semibold 标题 +
-/// 13pt footnote 副标题 + 右侧 chevron. 与主页 `HomeRowLabel` 同一度量，仅作本页 `NavigationLink`
-/// 的 label 使用.
-///
-/// v0.3.xxx：**副标题不再截断** —— 原先 `.lineLimit(1)` 让较长介绍（如「过期描述管理
-/// （.mobileprovision）」）显示成省略号；现改为按内容完整换行，行高随文字行数自适应.
-private struct MoreRowLabel: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AppRowIcon(systemName: icon, tint: AppTheme.accent, symbolSize: 16, frameSize: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppFont.bodyEmphasis)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(AppFont.footnote)
-                    .foregroundStyle(.secondary)
-                    // 介绍完整显示：不设 lineLimit，行高按文字行数自适应.
-                    // `fixedSize(vertical:)` 让 Text 在 VStack 内拿到真实高度，避免被压成单行省略.
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer(minLength: 6)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .appSymbol()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
-    }
-}

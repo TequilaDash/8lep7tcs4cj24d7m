@@ -1,4 +1,25 @@
 # Changelog
+## [0.3.692] - 2026-10-19
+
+### Step 3 批 4 / 批 5 / 批 6-A：行语言与网格卡合并、胶囊口径收敛
+
+- **批 4（行语言）**：新增共享 `AppNavRow`（`TequilaDash/Views/AppLayout.swift`），副标题完整换行、
+  图标取色走 `tint` 参数。主页 `HomeRowLabel`、更多页 `MoreRowLabel` 两份逐行相同的实现删除，
+  `HomeView.navRow` / `MoreView` 全宽行改调共享行标签。更多页分组由「标题字符串集合反查」
+  改成元组显式字段 `isGrid: Bool`，字符串匹配那套删掉。
+- **批 5（网格卡）**：`AppGridTile` 新增 `tinted: Bool = false`，把主页私有的 `HomeToolTile`
+  （模块色 14% -> 3% 渐变卡）并成同一组件的参数档，`tileBody` 只留一份排版实现。
+  主页 `deviceSection` 改调 `AppGridTile(..., tinted: true)`。
+- **批 6-A（胶囊）**：`SizePill` 收敛口径，新增嵌套 `enum Level`（regular / compact / tiny）与四个
+  可选覆盖项（横向 / 纵向内边距、字重、底色不透明度），**不改任何既有签名**，既有调用点零改动。
+  `PackageChip` 改为 `SizePill(level: .tiny)` 的薄封装，`horizontalPadding` 参数名与默认 6 保留 ⇒
+  20 处调用点零改动、渲染与收敛前一致。
+- 文档收口：`AppLayout.swift` 文件头修掉悬空引用并补「卡片一律 .appCard()」的唯一例外说明；
+  `DesignSystem.swift:1126` 注释里的 `HomeToolTile` 举例改成 `AppGridTile(tinted: true)`。
+- **本机验证边界**：只有语法级校验（`swiftc -parse` 全 PASS + 16 组 precommit 守卫全过）。
+  「`AppNavRow` 被两个文件调用」「`AppGridTile` 顶层 if/else 两分支的返回类型」以及主页副标题
+  由截断改为完整换行后的行高，都要靠 CI 全量编译与真机目视。
+
 ## [0.3.691] - 2026-10-19
 
 ### 下载链路：取消落在搬运窗口时留下的整包不再无人认领（task-3 D1 续）

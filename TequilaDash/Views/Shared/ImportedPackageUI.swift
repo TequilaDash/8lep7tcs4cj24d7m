@@ -121,19 +121,19 @@ struct ImportedPackageMonogram: View {
 ///
 /// `horizontalPadding` 默认 6 —— 与既有三个二级页调用点一致，故不传即零变化；
 /// 部分商店页的胶囊口径为 5，显式传入即可，无需另写一份 `chip`。
+/// Step 3 批 6：改为共享 `SizePill` 的**薄封装**（`.tiny` 档 = `.caption2` + 6 / 1 + 12% 底）.
+/// `horizontalPadding` 参数名与默认 6 全部保留 ⇒ 既有调用点零改动、渲染与收敛前一致.
 struct PackageChip: View {
     let text: String
     var tint: Color = AppTheme.accent
     var horizontalPadding: CGFloat = 6
 
     var body: some View {
-        Text(text)
-            .font(.caption2)
+        SizePill(text: text,
+                 tint: tint,
+                 level: .tiny,
+                 horizontalPadding: horizontalPadding)
             .lineLimit(1)
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, 1)
-            .background(Capsule().fill(tint.opacity(0.12)))
-            .foregroundStyle(tint)
             .fixedSize()
     }
 }

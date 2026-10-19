@@ -271,6 +271,9 @@ struct HomeView: View {
     /// 每格用**自己的模块色**做淡色渐变卡 + 模块色图标底 —— 这是页面的「彩色中心」。
     /// 4 项用 4 个不同色相（靛蓝 / 绿 / 石板灰 / 蓝），一屏之内就看出「不再单一」。
     /// 分组头竖条用设备模块色（靛蓝），与组内主色呼应.
+    ///
+    /// v0.3.692：格子原先用本页私有的 `HomeToolTile`，与 `AppLayout.swift` 的 `AppGridTile` 逐行相同
+    /// （只差底色），现合并成 `AppGridTile(tinted: true)` 这一档，网格卡只有一份实现.
     private var deviceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             AppSectionHeader("设备与系统", symbol: "iphone.gen3", tint: AppModule.device.tint)
@@ -278,8 +281,9 @@ struct HomeView: View {
                 NavigationLink {
                     NavigationLazyView(tool.destination)
                 } label: {
-                    HomeToolTile(icon: tool.icon, title: tool.title,
-                                 subtitle: tool.subtitle, tint: tool.tint)
+                    AppGridTile(icon: tool.icon, title: tool.title,
+                                subtitle: tool.subtitle, tint: tool.tint,
+                                tinted: true)
                 }
                 .appPressable()
             }
@@ -431,7 +435,10 @@ struct HomeView: View {
         AppHairline()
     }
 
-    /// 功能行：`HomeRowLabel` 作 label 的 `NavigationLink`（`.plain` 样式，保留整行点击）。
+    /// 功能行：`AppNavRow` 作 label 的 `NavigationLink`（`.plain` 样式，保留整行点击）。
+    ///
+    /// v0.3.692：行标签原先叫本页私有的 `HomeRowLabel`，与 `MoreView` 的 `MoreRowLabel` 逐行相同，
+    /// 现合并成 `AppLayout.swift` 的共享 `AppNavRow`，行高 / 字号 / chevron 只有一份.
     private func navRow<Destination: View>(
         title: String, subtitle: String, icon: String, tint: Color,
         @ViewBuilder destination: () -> Destination
@@ -439,7 +446,7 @@ struct HomeView: View {
         NavigationLink {
             destination()
         } label: {
-            HomeRowLabel(icon: icon, tint: tint, title: title, subtitle: subtitle)
+            AppNavRow(icon: icon, title: title, subtitle: subtitle, tint: tint)
         }
         .buttonStyle(.plain)
     }
@@ -453,81 +460,3 @@ struct HomeView: View {
     private var scoreColor: Color { AppTheme.scoreColor(securityScore) }
 }
 
-/// 主页功能行标签：连续圆角图标底 + 17pt semibold 标题 + 13pt footnote 副标题 + 右侧 chevron。
-/// 图标底走**该模块自己的色**（`tint`），不再全蓝。仅作 `HomeView.navRow` 的 label 使用。
-private struct HomeRowLabel: View {
-    let icon: String
-    let tint: Color
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AppRowIcon(systemName: icon, tint: tint, symbolSize: 16, frameSize: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppFont.bodyEmphasis)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(AppFont.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .appSymbol()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
-    }
-}
-
-/// 主页 Bento 网格单元：**模块色淡渐变卡**（`surfaceCard` + tint 14% → 3%）+ 模块色图标底 +
-/// 标题 + 副标题。与 `AppGridTile`（白卡 + 彩图标）的区别在于**整格带色**，让网格成为页面的
-/// 彩色中心；卡片与图标底都走 `AppRowIcon` / `AppRadius.card` 既有语言。
-private struct HomeToolTile: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            AppRowIcon(systemName: icon, tint: tint, symbolSize: 18, frameSize: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(AppFont.bodyEmphasis)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(AppFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(AppTheme.surfaceCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: [tint.opacity(0.14), tint.opacity(0.03)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-    }
-}
