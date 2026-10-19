@@ -26,7 +26,8 @@ struct FileViewerView: View {
     var body: some View {
         Group {
             if vm.isLoading {
-                ProgressView("正在打开…")
+                // 整页加载态收口到 AppLoadingRow(.page)——大圈 + 标题竖排居中 + 上下 60pt 呼吸留白.
+                AppLoadingRow(title: "正在打开…", level: .page)
             } else if let error = vm.errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "info.circle")

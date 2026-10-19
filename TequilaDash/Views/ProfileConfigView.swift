@@ -43,7 +43,8 @@ struct ProfileConfigView: View {
         List {
             if loading {
                 Section {
-                    HStack { Spacer(); ProgressView("正在读取设备描述文件…"); Spacer() }
+                    // v0.3.699：区块级加载行收口到 AppLoadingRow（.block 档）.
+                    AppLoadingRow(title: "正在读取设备描述文件…", level: .block)
                 }
             } else if let err = errorText {
                 Section {

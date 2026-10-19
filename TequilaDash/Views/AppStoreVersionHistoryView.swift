@@ -82,11 +82,7 @@ struct AppStoreVersionHistoryView: View {
         List {
             if loading {
                 Section {
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("读取中…").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
+                    AppLoadingRow(title: "读取中…", level: .block)
                 }
             } else if let errorText {
                 Section {

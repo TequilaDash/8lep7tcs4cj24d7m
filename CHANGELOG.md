@@ -1,4 +1,18 @@
 # Changelog
+## [0.3.701] - 2026-10-19
+
+### 加载态收口批 2（26 文件 / 36 处）
+
+- 剩余手写加载行统一到 AppLoadingRow 三档：inline / block / page。
+- AppStoreView 两处 loading 分支按容器改判为 block + centered，原 .padding(.vertical, 40) 随之删除。
+- WallpaperView 两处：emptyState 的手写 HStack 与 WallpaperExtractorSheet 的整页加载。
+
+### 校验
+
+- normalize_eol.py EXIT 0。
+- swift_precommit_check.py EXIT 0（16 组守卫，扫描 305 个 .swift）。
+- swiftc -parse 26 个改动 .swift 全部 exit 0。
+
 ## [0.3.700] - 2026-10-19
 
 ### 加载态收口（第 1 批：12 个文件 / 18 处）

@@ -342,11 +342,8 @@ struct PairingSetupView: View {
                     // keepAliveCard 较高把菊花+文字重心拉下，看起来偏下）.
                     Spacer(minLength: 8)
                     VStack(spacing: 12) {
-                        ProgressView()
-                        Text(wirelessStatus)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                        AppLoadingRow(title: wirelessStatus, level: .page)
                         if let code = wirelessBroadcastErrorCode {
                             Text("广播未确认（错误码 \(code)）")
                                 .font(.caption)

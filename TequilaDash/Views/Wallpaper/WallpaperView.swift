@@ -189,13 +189,7 @@ struct WallpaperView: View {
                 .padding(.horizontal, 24)
 
             if !isReady {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("正在准备…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 24)
+                AppLoadingRow(title: "正在准备…", level: .block)
             }
 
             Spacer(minLength: 80)
@@ -635,7 +629,7 @@ private struct WallpaperExtractorSheet: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("正在扫描 PosterBoard…")
+                    AppLoadingRow(title: "正在扫描 PosterBoard…", level: .page)
                 } else if descriptors.isEmpty {
                     emptyState
                 } else {

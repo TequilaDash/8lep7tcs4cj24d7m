@@ -250,10 +250,7 @@ struct AnisetteServersView: View {
     @ViewBuilder
     private var engineRow: some View {
         if oda.isDownloading {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("正在下载 ADI 引擎").foregroundColor(.secondary)
-            }
+            AppLoadingRow(title: "正在下载 ADI 引擎", level: .block)
         } else if oda.hasEngineInstalled {
             HStack {
                 Text("ADI 引擎")

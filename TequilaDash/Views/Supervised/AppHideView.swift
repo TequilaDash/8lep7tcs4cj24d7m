@@ -152,7 +152,8 @@ struct AppHideView: View {
     private var pickerSheet: some View {
         Group {
             if isPickerLoading {
-                ProgressView("正在枚举已安装应用…")
+                // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                AppLoadingRow(title: "正在枚举已安装应用…", level: .page)
             } else if installedApps.isEmpty {
                 ContentUnavailableView("暂无应用", systemImage: "app", description: Text(pickerMessage.isEmpty ? "未找到已安装应用." : pickerMessage))
             } else {

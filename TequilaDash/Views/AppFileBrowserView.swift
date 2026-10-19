@@ -251,7 +251,9 @@ struct AppFileBrowserView: View {
                         return
                     }
                 }
-                afcClient = containerAfc
+                // 不再把 afcClient 指向 containerAfc：同一句柄两处持有会让 closeClient
+                // 释放后 containerAfc 变悬垂（再切回 Library 用已释放句柄），closeAll 又
+                // 二次释放成 double free。activeClient() 已优先返回 containerAfc，此处无需别名。
                 currentPath = scope.path
                 await loadDir(path: scope.path)
             } else {
@@ -806,7 +808,12 @@ struct AppFileBrowserView: View {
     }
 
     private func closeClient() {
-        if let c = afcClient { afc_client_free(c); afcClient = nil }
+        // 别名防御：containerAfc 与 afcClient 曾可能指向同一会话，这种状态下这里只解绑、
+        // 不释放，交给 closeAll 统一释放，避免 double free。
+        if let c = afcClient {
+            if containerAfc != c { afc_client_free(c) }
+            afcClient = nil
+        }
         // containerAfc 保留（复用）——除非离开页面
     }
     private func closeAll() {
@@ -843,8 +850,16 @@ struct AppFileBrowserView: View {
         }
     }
     private func importUrls(_ urls: [URL]) {
-        guard let client = activeClient(), let url = urls.first,
-              let data = try? Data(contentsOf: url) else { return }
+        guard let client = activeClient(), let url = urls.first else { return }
+        // 大文件不许整读进内存：Data(contentsOf:) 会在读取时把整个文件摊到内存，导入几百 MB
+        // 的视频 / ipa 时真机直接被 jetsam 杀掉（观感就是闪退）。与 downloadFile 同口径，
+        // 上限 200MB；超限只提示、不读。
+        let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard bytes <= 200 * 1024 * 1024 else {
+            showToast("文件超过 200MB，无法导入")
+            return
+        }
+        guard let data = try? Data(contentsOf: url) else { return }
         let name = (url.lastPathComponent as NSString).lastPathComponent
         let dest = currentPath.hasSuffix("/") ? currentPath + name : currentPath + "/" + name
         showToast("正在导入…")

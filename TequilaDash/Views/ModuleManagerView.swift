@@ -129,17 +129,14 @@ struct ModuleManagerView: View {
         .refreshable { reload() }
         // v0.3.197：容器路径修复全屏进度（阻断其它操作）
         .fullScreenCover(isPresented: $repairInProgress) {
-            VStack(spacing: 16) {
-                ProgressView().controlSize(.large)
-                Text("正在修复容器路径…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("扫描所有模块 config.json 中残留的旧容器绝对路径，按当前 dataDir 语义重写.\n期间不启动任何模块，完成前请勿操作.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
+            // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中 + 60pt 呼吸留白）.
+            // 原文的 32pt 左右留白照原值保留，长说明仍是缩进块。
+            AppLoadingRow(
+                title: "正在修复容器路径…",
+                detail: "扫描所有模块 config.json 中残留的旧容器绝对路径，按当前 dataDir 语义重写.\n期间不启动任何模块，完成前请勿操作.",
+                level: .page
+            )
+            .padding(.horizontal, 32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.systemBackground))
             .interactiveDismissDisabled(true)

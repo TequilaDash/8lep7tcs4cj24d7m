@@ -309,11 +309,9 @@ struct I4StoreFreeDetailView: View {
 
     private var loadingSection: some View {
         Section {
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("正在加载详情…").font(.subheadline).foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 6)
+            // 区块级加载收敛到共享 AppLoadingRow（.block 档）；
+            // 纵向留白由档位自带的 AppSpacing.section 接管，不再叠加行内原有的 6pt.
+            AppLoadingRow(title: "正在加载详情…", level: .block)
         }
     }
 

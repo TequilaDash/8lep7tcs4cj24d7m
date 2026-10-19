@@ -442,13 +442,8 @@ struct AppListView: View {
                 }
 
                 if let status = viewModel.uninstallStatus {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.85)
-                        Text(status)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
+                    // 区块级加载态收口到 AppLoadingRow（裸 List 行、无 Section 卡片，用默认 .inline 档）.
+                    AppLoadingRow(title: status)
                 }
                 if visible.isEmpty {
                     Text(emptyListMessage)

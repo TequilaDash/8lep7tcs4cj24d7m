@@ -22,8 +22,8 @@ struct MDMManageView: View {
                     Label("MDM 配置目录沙盒逃逸", systemImage: "shield.lefthalf.filled.badge.checkmark")
                         .font(.headline)
                     if probing {
-                        HStack { ProgressView().controlSize(.small); Text("正在逐层尝试逃逸策略…") }
-                            .font(.caption).foregroundStyle(.secondary)
+                        // v0.3.699：区块级加载行收口到共享 AppLoadingRow（.block 档）.
+                        AppLoadingRow(title: "正在逐层尝试逃逸策略…", level: .block)
                     } else if let m = escapeMethod {
                         Text("逃逸成功：\(m)").font(.caption.weight(.semibold)).foregroundStyle(.green)
                         Text(escapeTarget ?? "").font(.caption2.monospaced()).foregroundStyle(.secondary)

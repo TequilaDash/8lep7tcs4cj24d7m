@@ -57,13 +57,7 @@ struct CallRecordingToneView: View {
                 // 加起来可能几十秒。原来界面什么都不显示，用户看到的就是
                 // 「点了没反应 / 一直转圈」，以为卡死了。
                 if let phase {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text(phase)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
+                    AppLoadingRow(title: phase, level: .block)
                 }
 
                 Button {
@@ -87,13 +81,7 @@ struct CallRecordingToneView: View {
                 .disabled(busy || checking)
 
                 if checking {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("正在读取系统提示音文件…")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
+                    AppLoadingRow(title: "正在读取系统提示音文件…", level: .block)
                 }
             } header: {
                 Label("操作", systemImage: "slider.horizontal.3")

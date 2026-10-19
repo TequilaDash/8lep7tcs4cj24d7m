@@ -196,13 +196,10 @@ struct I4MobileInstallView: View {
 
             VStack(spacing: 0) {
                 if loading {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("正在读取设备信息…").font(AppFont.caption).foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 14)
+                    // 区块级加载收敛到共享 AppLoadingRow（.block 档）；
+                    // 横向 14pt 是卡片内边距（不属档位职责）按原值保留；纵向留白由档位自带的 AppSpacing.section 接管.
+                    AppLoadingRow(title: "正在读取设备信息…", level: .block)
+                        .padding(.horizontal, 14)
                 } else if let errorText {
                     Text(errorText)
                         .font(AppFont.caption).foregroundStyle(AppTheme.trDanger)
@@ -251,10 +248,8 @@ struct I4MobileInstallView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 if picking {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("正在识别本机并选包…").font(AppFont.caption).foregroundStyle(.secondary)
-                    }
+                    // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+                    AppLoadingRow(title: "正在识别本机并选包…", level: .block)
                 } else if let autoPick {
                     autoPickContent(autoPick)
                 } else {

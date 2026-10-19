@@ -57,11 +57,8 @@ struct CertificateView: View {
                 if manager.teamState == .loaded {
                     if manager.isWorking && manager.certs.isEmpty {
                         Section {
-                            HStack {
-                                ProgressView().controlSize(.small)
-                                Text("正在加载证书…")
-                                    .foregroundColor(.secondary)
-                            }
+                            // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+                            AppLoadingRow(title: "正在加载证书…", level: .block)
                         }
                     } else if manager.hasLoaded && manager.certs.isEmpty {
                         emptySection
@@ -261,11 +258,8 @@ struct CertificateView: View {
                 }
                 .onAppear { manager.loadTeams() }
             case .loading:
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("正在加载团队…")
-                        .foregroundColor(.secondary)
-                }
+                // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+                AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
                 // v0.3.683：区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
                 AppErrorRow(message: message, retry: { manager.loadTeams() })

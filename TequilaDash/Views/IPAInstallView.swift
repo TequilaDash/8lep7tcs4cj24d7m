@@ -241,17 +241,12 @@ struct IPAInstallView: View {
                         .font(.subheadline)
                     }
                 } else if isAutoSigningIn || isManuallySigningIn {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(isManuallySigningIn ? "正在登录 Apple ID…" : "正在用「设置」里的 Apple ID 自动登录…")
-                                .font(.subheadline)
-                            Text("如需两步验证，会自动弹出验证码输入框.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
+                    // 区块级加载收敛到共享 AppLoadingRow（.block 档）：
+                    // 原来手写的「圈 + 标题 + 说明」与组件 .block 形态一一对应.
+                    AppLoadingRow(title: isManuallySigningIn ? "正在登录 Apple ID…"
+                                                            : "正在用「设置」里的 Apple ID 自动登录…",
+                                  detail: "如需两步验证，会自动弹出验证码输入框.",
+                                  level: .block)
                 } else {
                     // v0.3.118：邮箱恒为明文（邮箱不是机密；旧实现错误地跟随密码的
                     // showPassword，导致小眼睛把两栏都变星号）

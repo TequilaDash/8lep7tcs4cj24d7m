@@ -232,7 +232,8 @@ struct TreasureBoxView: View {
             .disabled(wifiPairingBusy)
 
             if devModeBusy || wifiPairingBusy {
-                HStack { ProgressView().controlSize(.small); Text("正在执行…").font(AppFont.caption).foregroundStyle(.secondary) }
+                // v0.3.699：区块级加载行收口到 AppLoadingRow（.block 档）.
+                AppLoadingRow(title: "正在执行…", level: .block)
             }
             if let msg = devModeMsg {
                 Text(msg)

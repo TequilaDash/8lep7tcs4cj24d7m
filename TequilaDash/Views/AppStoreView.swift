@@ -308,12 +308,10 @@ struct AppStoreView: View {
     private var listSection: some View {
         if loading {
             Section {
-                HStack {
-                    Spacer()
-                    ProgressView("正在加载榜单…")
-                    Spacer()
-                }
-                .padding(.vertical, 40)
+                // 档位判据「看容器」：这一屏的 loading / error / empty / 内容四个分支长在同一张 Section 卡里，
+                // 同卡错误态是 AppErrorRow(centered: true).padding(.vertical, 30)，故 loading 取卡内档 .block 并居中，
+                // 不在卡片里蹲一个 .page 的 60pt 大圈；纵向留白由 .block 自带、不叠加页面原有的 40pt.
+                AppLoadingRow(title: "正在加载榜单…", centered: true, level: .block)
             }
         } else if let errorText {
             Section {
@@ -342,7 +340,9 @@ struct AppStoreView: View {
     private var searchSection: some View {
         if searching {
             Section {
-                HStack { Spacer(); ProgressView("搜索中…"); Spacer() }.padding(.vertical, 40)
+                // 搜索结果同一张 Section 卡里的加载分支，按「看容器」判据取卡内档 .block 并居中（与同卡错误态同构）；
+                // 纵向留白由 .block 自带、不叠加页面原有的 40pt.
+                AppLoadingRow(title: "搜索中…", centered: true, level: .block)
             }
         } else if searchResults.isEmpty && ownedMatches.isEmpty {
             Section {

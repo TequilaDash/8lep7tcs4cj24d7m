@@ -74,11 +74,9 @@ struct AppExpiryView: View {
         List {
             if isLoading && matchedEntries.isEmpty && unmatchedGroups.isEmpty {
                 Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("正在读取设备描述文件…")
-                        Spacer()
-                    }
+                    // 区块级加载态收口到 AppLoadingRow（.block 档）；
+                    // 原文用 Spacer 居中，故保留 centered: true，视觉重心不变.
+                    AppLoadingRow(title: "正在读取设备描述文件…", centered: true, level: .block)
                 }
             } else if matchedEntries.isEmpty && unmatchedGroups.isEmpty {
                 AppStateSection(state: .empty("没有找到描述文件",

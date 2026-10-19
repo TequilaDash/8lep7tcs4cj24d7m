@@ -111,11 +111,8 @@ struct IncreaseMemoryView: View {
                     Button("加载") { Task { await ctrl.reload() } }
                 }
             case .loading:
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("正在加载团队…")
-                        .foregroundColor(.secondary)
-                }
+                // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+                AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
                 // v0.3.683：区块级错误行统一到 AppErrorRow.
                 AppErrorRow(message: message, retry: { Task { await ctrl.reload() } })
@@ -154,11 +151,8 @@ struct IncreaseMemoryView: View {
                     Button("加载 App 列表") { Task { await ctrl.loadAppIDs() } }
                 }
             case .loading:
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("正在加载 App 列表…")
-                        .foregroundColor(.secondary)
-                }
+                // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+                AppLoadingRow(title: "正在加载 App 列表…", level: .block)
             case .failed(let message):
                 // v0.3.683：区块级错误行统一到 AppErrorRow.
                 AppErrorRow(message: "加载失败：\(message)", retry: { Task { await ctrl.loadAppIDs() } })

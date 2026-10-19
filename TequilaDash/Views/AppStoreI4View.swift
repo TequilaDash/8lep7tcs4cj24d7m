@@ -48,7 +48,7 @@ struct AppStoreI4View: View {
 
             if loading {
                 Section {
-                    HStack { Spacer(); ProgressView("加载中…"); Spacer() }.padding(.vertical, 40)
+                    AppLoadingRow(title: "加载中…", level: .block)
                 }
             } else if let errorText {
                 Section {
@@ -275,7 +275,7 @@ struct I4SpecialAppsView: View {
             }
 
             if loading {
-                Section { HStack { Spacer(); ProgressView("读取中…"); Spacer() }.padding(.vertical, 36) }
+                Section { AppLoadingRow(title: "读取中…", level: .block) }
             } else if apps.isEmpty {
                 Section("服务端返回的原始响应") {
                     Text(raw.isEmpty ? "(空响应)" : raw)

@@ -54,11 +54,8 @@ struct AFCBrowserView: View {
         List {
             Section {
                 if loading {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("正在连接 AFC 服务…")
-                            .foregroundColor(.secondary)
-                    }
+                    // 区块级加载态收口到 AppLoadingRow（.block 档：圈升一档 + 上下 AppSpacing.section 留白）.
+                    AppLoadingRow(title: "正在连接 AFC 服务…", level: .block)
                 } else if let errorMessage {
                     // v0.3.683：区块级错误行统一到 AppErrorRow（info.circle + AppTheme.pending + 重试按钮）.
                     AppErrorRow(message: errorMessage, retry: { reload() })

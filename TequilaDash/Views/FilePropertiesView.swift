@@ -72,10 +72,8 @@ struct FilePropertiesView: View {
                 if !item.isDirectory {
                     Section {
                         if vm.isLoading {
-                            HStack {
-                                ProgressView()
-                                Text("计算中…")
-                            }
+                            // 区块级加载态收口到 AppLoadingRow（.block 档：圈升一档 + 上下 AppSpacing.section 留白）.
+                            AppLoadingRow(title: "计算中…", level: .block)
                         } else if let hash = vm.sha256 {
                             Text(hash)
                                 .font(.system(size: 12, design: .monospaced))

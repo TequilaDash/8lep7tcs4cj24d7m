@@ -351,13 +351,7 @@ struct DialerThemeView: View {
     private var statusSection: some View {
         Section {
             if viewModel.isScanning {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("正在定位电话 App 容器…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 2)
+                AppLoadingRow(title: "正在定位电话 App 容器…", level: .block)
             } else if let status = viewModel.status {
                 LabeledContent("电话容器") {
                     Text("…\(status.containerPath.suffix(10))")

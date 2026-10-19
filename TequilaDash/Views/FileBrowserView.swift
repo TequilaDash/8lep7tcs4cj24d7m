@@ -137,7 +137,8 @@ struct FileBrowserView: View {
     private var contentWithChrome: some View {
         Group {
             if vm.isLoading && vm.items.isEmpty {
-                ProgressView("正在打开容器…")
+                // 整页加载态收口到 AppLoadingRow(.page)——大圈 + 标题竖排居中 + 上下 60pt 呼吸留白.
+                AppLoadingRow(title: "正在打开容器…", level: .page)
             } else if let error = vm.errorMessage, vm.items.isEmpty {
                 List {
                     Section {
