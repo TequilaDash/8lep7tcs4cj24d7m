@@ -473,11 +473,12 @@ struct AppExpiryView: View {
 
     private func expiryColor(_ days: Int) -> Color {
         switch days {
-        case ..<0: return .red
-        case 0...1: return .red
-        case 2...3: return .orange
-        case 4...5: return .yellow
-        case 6...: return .green
+        // v0.3.682：规则 6 —— 固定色改 AppTheme 语义 token（自适应明暗模式）.
+        case ..<0: return AppTheme.danger
+        case 0...1: return AppTheme.danger
+        case 2...3: return AppTheme.pending
+        case 4...5: return AppTheme.warning
+        case 6...: return AppTheme.success
         default: return .secondary
         }
     }

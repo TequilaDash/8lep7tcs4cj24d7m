@@ -321,7 +321,9 @@ struct I4AdvancedView: View {
     private func reportCard(_ report: I4PairingService.Report) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: report.verified.isEmpty ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                // v0.3.682：硬规则 4（不用 exclamationmark.triangle）—— 未写入时改 info.circle,
+                // 与同文件 errorCard / AppTheme.pending 的失败语义保持一致.
+                Image(systemName: report.verified.isEmpty ? "info.circle" : "checkmark.seal.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(report.verified.isEmpty ? AppTheme.pending : AppTheme.trSuccess)
                     .appSymbol()
@@ -357,8 +359,10 @@ struct I4AdvancedView: View {
     private func errorCard(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: "xmark.octagon.fill").font(.system(size: 14))
-                    .foregroundStyle(AppTheme.trDanger).appSymbol()
+                // v0.3.682：错误卡语义（高级功能没走通）属可重试失败，按 AppErrorRow /
+                // AppStateSection.error 的口径统一成 info.circle + pending 橙，不再用红色八角叉.
+                Image(systemName: "info.circle").font(.system(size: 14))
+                    .foregroundStyle(AppTheme.pending).appSymbol()
                 Text("未完成").font(AppFont.headline)
                 Spacer(minLength: 0)
             }

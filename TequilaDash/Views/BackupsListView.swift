@@ -299,9 +299,9 @@ private struct BackupRow: View {
                         .font(.footnote)
                         .foregroundColor(.orange)
                 case .invalidArchive(let message):
-                    Label(message, systemImage: "xmark.octagon.fill")
-                        .font(.footnote)
-                        .foregroundColor(.red)
+                    // v0.3.682：行内错误统一走 AppErrorRow（info.circle + pending 橙），
+                    // 不再用红色八角叉 —— 归档读不出来通常是可恢复问题（文件损坏 / 隧道中断）.
+                    AppErrorRow(message: message)
                 }
             }
         }
@@ -317,16 +317,14 @@ private struct UnreadableBackupRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
+                Image(systemName: "info.circle")
+                    .foregroundStyle(AppTheme.pending)
                 Text(item.archiveFileName)
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Label("无法读取：\(item.reason)", systemImage: "xmark.octagon.fill")
-                .font(.footnote)
-                .foregroundColor(.orange)
+            AppErrorRow(message: "无法读取：\(item.reason)")
             if let modified = item.modified {
                 Text(BackupPaths.displayStamp.string(from: modified))
                     .font(.caption2)
@@ -595,9 +593,11 @@ struct RestoreView: View {
                     .padding()
                 case .failed(let message):
                     VStack(spacing: 12) {
-                        Image(systemName: "xmark.octagon.fill")
+                        // v0.3.682：语义是「恢复失败」= 可重试的失败，不是「设备坏了 / 数据损坏」.
+                        // 按 DesignSystem.swift:622-624 的口径统一成 info.circle + pending 橙.
+                        Image(systemName: "info.circle")
                             .font(.system(size: 48))
-                            .foregroundColor(.red)
+                            .foregroundStyle(AppTheme.pending)
                         Text("恢复失败")
                             .font(.headline)
                         Text(message)

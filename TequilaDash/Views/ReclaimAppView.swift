@@ -252,16 +252,12 @@ struct ReclaimAppView: View {
                     .foregroundColor(.secondary)
             }
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Label("备份失败", systemImage: "xmark.octagon.fill")
-                    .foregroundColor(.red)
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button("重试") {
-                    backup.start(app: app, isContainerApp: true, iconData: guestIcon)
-                }
-            }
+            // 改用 AppErrorRow（info.circle + pending 橙 + TintedButtonStyle 的「重试」），
+            // 与 AppStateSection.error 视觉一致；原先是红字 xmark.octagon 标题 + 灰字说明 + 独立按钮.
+            // 外层 Section 由 containerSection 提供，此处不再套 Section（否则双层卡片）.
+            AppErrorRow(message: message, retry: {
+                backup.start(app: app, isContainerApp: true, iconData: guestIcon)
+            })
         }
     }
 

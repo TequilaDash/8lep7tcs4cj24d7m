@@ -30,7 +30,7 @@ struct FileSharingAppsView: View {
         List(selection: $selectedIcons) {
                 if loading {
                     Section {
-                        HStack { ProgressView(); Text("正在读取已装应用…") }
+                        AppLoadingRow(title: "正在读取已装应用…")
                     }
                 } else if let err = errorText {
                     Section {

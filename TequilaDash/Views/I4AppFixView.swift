@@ -136,12 +136,7 @@ struct I4AppFixView: View {
 
     private var progressSection: some View {
         Section {
-            HStack(spacing: AppSpacing.row) {
-                ProgressView()
-                Text("正在修复，请稍候…")
-                    .font(AppFont.caption)
-                    .foregroundStyle(.secondary)
-            }
+            AppLoadingRow(title: "正在修复，请稍候…")
         }
     }
 

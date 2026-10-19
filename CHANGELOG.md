@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.3.682] - 2026-10-19
+
+### 错误行与加载行收口到统一组件
+
+全仓「错误提示」与「区块加载」此前各有多套写法（审计实证：错误 4 套 / 加载 3 套）.
+本轮把已能归并的部分统一到两个组件，不再逐页自造.
+
+**新增 `AppLoadingRow`**（`TequilaDash/Views/DesignSystem.swift`）
+
+- 一行式区块加载提示：小号 `ProgressView` + 主文案 + 可选说明，左对齐（`centered` 可居中）.
+- 与 `AppStateSection` 分工明确：后者自带 `Section` + `InfoActionCard`（整卡），只适合整页/整块单一状态；
+  本组件是一行，可嵌进已有 `Section` 或与相邻行并列.
+- 替换 5 处自造加载行：`AppDetailView.swift`（访问权限检查中 / 容器内容统计中 / 备份加载中，共 3 处）、
+  `I4AppFixView.swift`（修复中）、`FileSharingAppsView.swift`（读取已装应用）、`GestaltView.swift`（加载 MobileGestalt）.
+  原先字号有 subheadline / caption / 默认 body 三种，颜色有无着色两种，现统一为 footnote + secondary.
+
+**错误行统一到 `AppErrorRow`**（4 处）
+
+- `AppDetailView.swift`（备份列表读不出来）、`ReclaimAppView.swift`（容器备份失败，带重试）、
+  `BackupsListView.swift`（不可读归档 / 逐条读取失败）.
+- 取色统一为 `AppTheme.pending`（橙）而非 danger（红）：读不出来通常是隧道/配对这类可恢复问题，
+  红色会让用户以为设备坏了. 与 `AppStateSection.error` 口径一致.
+
+**保留整卡形态的三处**（不是漏改，是形态不同）
+
+- `BackupsListView.swift` 恢复失败结果页（48pt 大图标 + 居中标题）、`I4AdvancedView.swift` 的 `errorCard`（整卡 + 标题行）：
+  硬套 `AppErrorRow` 会把大图标降成小图标、把标题丢掉，属形态降级，故只统一图标与取色.
+- `ImportView.swift` 的 `importSymbol` 返回的是「导入被拒」的状态图标（`switch` 里的枚举分支），不是错误行，保留.
+
+### 硬规则 1 / 规则 6 收尾
+
+- 硬规则 1（不用黄色感叹号 / 不用红色八角叉）：`AppStoreDetailView.swift` 下架提示的
+  `exclamationmark.triangle` 改 `info.circle`；`I4AdvancedView.swift` 报告卡未写入态的
+  `exclamationmark.triangle.fill` 改 `info.circle`；`BackupsListView.swift` 两处 `xmark.octagon.fill` 归并.
+- 规则 6（颜色必须明暗两套）：`SecurityScanner.swift` 体检项状态色、`AppExpiryView.swift` 到期色阶、
+  `BatteryHealthView.swift` 健康环与低电量模式色，全部由系统固定色（`.yellow` / `.green` / `.orange` / `.red`）
+  改为 `AppTheme` 语义 token（`Color(uiColor:)` 自适应明暗模式）.
+- `AppStoreDetailView.swift` 的收藏星标 `.yellow` 保留：那是装饰性星标（SF Symbol `star.fill`），
+  硬规则 1 禁的是 ★/✨ 这类文本装饰符，不是 SF Symbol 星形.
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` —— 12 个文件换行与基线一致.
+- `python Resources/Scripts/swift_precommit_check.py .` —— 16 组守卫全绿（含 UI 文案 G1/G2/G3，扫 303 个 .swift 命中 0）.
+- 12 个改动文件 `swiftc -parse` 全部 EXIT=0（`FAIL_TOTAL=0`）.
+- 说明：`-parse` 只查语法，查不出类型错 / 缺 return / 跨结构体引用 —— 这三类只能由 CI 真编译抓.
+
 ## [0.3.681] - 2026-10-19
 
 ### 第四个超大视图文件拆分（IPADownloadManagerView 1308 → 736）

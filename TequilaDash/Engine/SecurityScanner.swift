@@ -39,7 +39,9 @@ struct SecurityCheckResult: Identifiable {
         uncertain ? "questionmark.circle" : (passed ? "checkmark.circle.fill" : (warn ? "info.circle" : "xmark.circle.fill"))
     }
     var color: Color {
-        uncertain ? .gray : (passed ? .green : (warn ? .yellow : .orange))
+        // v0.3.682：规则 6（颜色必须明暗两套）—— 原先用系统 .yellow / .green / .orange
+        // 这类固定色，深色模式下对比度不足；改用 AppTheme 语义 token（Color(uiColor:) 自适应）.
+        uncertain ? .gray : (passed ? AppTheme.success : (warn ? AppTheme.warning : AppTheme.pending))
     }
 }
 

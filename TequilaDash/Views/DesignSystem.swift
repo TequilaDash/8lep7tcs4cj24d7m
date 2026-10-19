@@ -598,6 +598,55 @@ extension AppRow where Trailing == EmptyView {
     }
 }
 
+/// 区块级加载行（v0.3.682 新增）.
+///
+/// ## 为什么要有它
+/// 全仓「区块正在加载」的写法有 3 套并存（审计实证）：
+///   · `HStack { ProgressView(); Text("正在…").foregroundColor(.secondary) }` —— 最常见
+///   · 裸 `ProgressView()` —— 136 处 / 70 文件（多数是按钮内小圈，不算区块态）
+///   · `AppStateSection.loading` —— 自带整卡，只适合「整页空态」
+/// 同一句「正在加载」，字号有 subheadline / caption / 默认 body 三种，颜色有 secondary / 无 两种.
+///
+/// ## 与 AppStateSection 的分工
+/// `AppStateSection` 自带 `Section` + `InfoActionCard`（整卡 + 图标 + 标题 + 说明），
+/// 适合「整页或整块区域只有一个状态」；本组件只是**一行**，适合嵌进已有 Section
+/// 或与相邻行并列（例如「访问权限」Section 里的检查中状态）.
+///
+/// ## 用法
+/// ```swift
+/// AppLoadingRow(title: "正在加载备份…")
+/// AppLoadingRow(title: "正在检查容器访问…", detail: "需要读取该应用的 Data 容器.")
+/// ```
+struct AppLoadingRow: View {
+    /// 主文案（一行，例如「正在加载备份…」）.
+    let title: String
+    /// 可选补充说明，显示在标题下方.
+    var detail: String? = nil
+    /// 是否居中。列表内的行默认左对齐；整页加载场景可居中.
+    var centered: Bool = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            VStack(alignment: centered ? .center : .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(centered ? .center : .leading)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(AppFont.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(centered ? .center : .leading)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+    }
+}
+
 /// 行内错误提示（v0.3.630 新增）.
 ///
 /// ## 为什么要有它

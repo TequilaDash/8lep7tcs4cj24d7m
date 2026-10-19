@@ -102,7 +102,9 @@ struct BatteryHealthView: View {
     // MARK: 健康度环形
     private func healthRing(info: BatteryHealthInfo) -> some View {
         let health = info.healthPercent ?? 0
-        let color: Color = health >= 85 ? .green : (health >= 70 ? .yellow : .orange)
+        // v0.3.682：规则 6 —— 固定色改 AppTheme 语义 token.
+        let color: Color = health >= 85 ? AppTheme.success
+                          : (health >= 70 ? AppTheme.warning : AppTheme.pending)
         return VStack(spacing: 10) {
             ZStack {
                 Circle()
@@ -200,7 +202,7 @@ struct BatteryHealthView: View {
         return HStack(spacing: 12) {
             Image(systemName: "battery.25percent")
                 .font(.title2)
-                .foregroundStyle(lpm ? .yellow : .green)
+                .foregroundStyle(lpm ? AppTheme.warning : AppTheme.success)
                 .appSymbol()
             VStack(alignment: .leading, spacing: 3) {
                 Text(lpm ? "低电量模式开启" : "低电量模式关闭")
@@ -212,7 +214,7 @@ struct BatteryHealthView: View {
             Spacer()
             Text(lpm ? "开" : "关")
                 .font(AppFont.subheadlineEmphasis)
-                .foregroundStyle(lpm ? .yellow : .green)
+                .foregroundStyle(lpm ? AppTheme.warning : AppTheme.success)
         }
         .padding(AppMetrics.cardPadding)
         .background(

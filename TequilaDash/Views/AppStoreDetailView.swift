@@ -179,7 +179,7 @@ struct AppStoreDetailView: View {
     private var delistedSection: some View {
         Section {
             Label("该应用已从 App Store 下架，此页信息来自下架库收录的快照.",
-                  systemImage: "exclamationmark.triangle")
+                  systemImage: "info.circle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

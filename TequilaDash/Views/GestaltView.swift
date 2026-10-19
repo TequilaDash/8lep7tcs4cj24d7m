@@ -205,12 +205,7 @@ struct GestaltView: View {
                 if !model.loaded {
                     Section {
                         if model.isLoading {
-                            HStack {
-                                ProgressView()
-                                Text("正在加载 MobileGestalt…")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
+                            AppLoadingRow(title: "正在加载 MobileGestalt…")
                         } else {
                             Button("Load MobileGestalt") {
                                 model.load()

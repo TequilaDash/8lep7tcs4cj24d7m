@@ -63,10 +63,7 @@ struct AppDetailView: View {
             Section(header: Text("访问权限")) {
                 switch access.state {
                 case .unknown, .checking:
-                    HStack {
-                        ProgressView()
-                        Text("正在检查容器访问…").foregroundColor(.secondary)
-                    }
+                    AppLoadingRow(title: "正在检查容器访问…")
                 case .granted:
                     Label("容器可访问", systemImage: "checkmark.shield.fill")
                         .foregroundColor(.green)
@@ -79,10 +76,7 @@ struct AppDetailView: View {
             if access.isGranted {
                 Section(header: Text("容器内容")) {
                     if inventory.isLoading && inventory.roots.isEmpty {
-                        HStack {
-                            ProgressView()
-                            Text("正在统计文件…").foregroundColor(.secondary)
-                        }
+                        AppLoadingRow(title: "正在统计文件…")
                     } else if inventory.roots.isEmpty {
                         Text("未找到 Documents、Library 或 tmp.")
                             .foregroundColor(.secondary)
@@ -142,15 +136,12 @@ struct AppDetailView: View {
                 footer: Text("恢复操作将写入该应用当前容器.请先关闭应用.")
             ) {
                 if appBackups.isLoading && appBackups.records.isEmpty && appBackups.errorMessage == nil {
-                    HStack {
-                        ProgressView()
-                        Text("正在加载备份…").foregroundColor(.secondary)
-                    }
+                    AppLoadingRow(title: "正在加载备份…")
                 } else if let error = appBackups.errorMessage {
                     // 列举失败**明确报错**，不落成空数组（回空 = 假空，用户会以为备份丢了）。
-                    Label("无法读取备份列表：\(error)", systemImage: "xmark.octagon.fill")
-                        .font(.footnote)
-                        .foregroundColor(.red)
+                    // v0.3.682：硬规则 1（不用红色八角叉）—— 错误行统一到 AppErrorRow，
+                    // 取 pending 橙而非 danger 红（读不出来通常是隧道/配对这类可恢复问题）.
+                    AppErrorRow(message: "无法读取备份列表：\(error)")
                 } else if appBackups.records.isEmpty {
                     // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
                     // 空列表本来就是一个「区块的空态」，正好是该组件描述的场景；
@@ -311,21 +302,17 @@ struct AppDetailView: View {
                     .foregroundColor(.secondary)
             }
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Label("备份失败", systemImage: "xmark.octagon.fill")
-                    .foregroundColor(.red)
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button("重试") {
-                    // Swift 6：同上 —— 只捕获 Sendable 局部值，不捕获 View 的 self.
-                    let backups = appBackups
-                    let bundleID = app.bundleIdentifier
-                    backup.start(app: app, isContainerApp: false) {
-                        backups.reload(bundleIdentifier: bundleID)
-                    }
+            // 改用 AppErrorRow（info.circle + pending 橙 + TintedButtonStyle 的「重试」），
+            // 与 AppStateSection.error 视觉一致；原先是红字 xmark.octagon 标题 + 灰字说明 + 独立按钮.
+            // 外层 Section 由 backupStatus 的调用点提供，此处不再套 Section（否则双层卡片）.
+            AppErrorRow(message: message, retry: {
+                // Swift 6：同上 —— 只捕获 Sendable 局部值，不捕获 View 的 self.
+                let backups = appBackups
+                let bundleID = app.bundleIdentifier
+                backup.start(app: app, isContainerApp: false) {
+                    backups.reload(bundleIdentifier: bundleID)
                 }
-            }
+            })
         }
     }
 
