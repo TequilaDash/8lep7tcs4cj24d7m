@@ -396,6 +396,9 @@ struct HomeView: View {
     }
 
     /// 4 项模块色：靛蓝（设备）/ 绿（健康）/ 石板灰（信息）/ 蓝（文档）—— 色相各不相同。
+    ///
+    /// v0.3.xxx：健康绿改用专用模块色 `AppTheme.categoryHealth`，不再借语义色 `AppTheme.success`
+    /// （语义色 = 操作成功，被当调色板后调 `success` 会连带动到主页）.
     private var deviceTools: [HomeTool] {
         [
             HomeTool(id: "apps", icon: "square.grid.2x2.fill", title: "应用管理",
@@ -403,7 +406,7 @@ struct HomeView: View {
                 AppListView(viewModel: appList)
             },
             HomeTool(id: "battery", icon: "battery.75percent", title: "电池健康",
-                     subtitle: "循环次数 / 容量 / 健康度", tint: AppTheme.success) {
+                     subtitle: "循环次数 / 容量 / 健康度", tint: AppTheme.categoryHealth) {
                 BatteryHealthView()
             },
             HomeTool(id: "device", icon: "iphone.gen3", title: "设备信息",
@@ -419,9 +422,13 @@ struct HomeView: View {
 
     // MARK: - 通用视觉件
 
-    /// 行分隔线：左缩进对齐到图标底右侧（图标 30 + 间距 12 + 左内边距 14 = 56）。
+    /// 行分隔线：**全宽**发丝线.
+    ///
+    /// v0.3.xxx：原先 `.padding(.leading, 56)` 是给「卡片内行」用的缩进线，本页行早已脱离卡片、
+    /// 直接落在页面底上（见 :265 硬规则 5 注），缩进反而把分隔从行左缘断开 —— 现与 `MoreView`
+    /// 同款全宽发丝线对齐，见 `TreasureBoxView.swift:273-274`.
     private var rowDivider: some View {
-        AppHairline().padding(.leading, 56)
+        AppHairline()
     }
 
     /// 功能行：`HomeRowLabel` 作 label 的 `NavigationLink`（`.plain` 样式，保留整行点击）。

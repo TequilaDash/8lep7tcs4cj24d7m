@@ -1,4 +1,30 @@
 # Changelog
+## [0.3.687] - 2026-10-19
+
+### Step 3 批 2：色彩收口（语义色被当调色板 / 页面底不一致 / 分隔线注释与代码矛盾）
+
+- **新增模块色 `AppTheme.categoryHealth`**（`Views/DesignSystem.swift:212-221`）：主页「电池健康」入口此前借语义色 `AppTheme.success`（= 操作成功）当模块装饰色。`HomeView.swift:481-483` 的 `HomeToolTile` 把 tint 铺成整格淡渐变卡（14% -> 3%），tint 就是整卡身份 —— 调 `success` 会连带动到主页观感。色相仍取健康绿，明暗两套（亮 `#1E9E52` / 暗 `#4FD87B`），满足硬规则 6。
+
+- **`HomeView.swift:409`** 换用新 token（原 `AppTheme.success`）。
+
+- **两个一级 tab 页面底统一**：`MoreView.swift:190` 的 `.background(Color(.systemBackground))` 改 `.background(AppTheme.surfaceBase)`，与 `HomeView.swift` 一致。
+
+  说明：这里**没有**用 `AppSurface.page` —— 它的值是 `systemGroupedBackground`（`DesignSystem.swift:1070`），暗色下是纯黑 `#000000`，会把 HomeView 已验收的 `#0E1116` 拉成纯黑；且 `AppSurface.page` 作页面底全仓 0 消费，`surfaceBase` 才是既定的页面底 token。
+
+- **行分隔线口径统一为全宽**：`HomeView.swift:430-432` 的 `rowDivider` 去掉 `.padding(.leading, 56)`（该缩进是「卡片内行」时代遗留，本页行早已脱离卡片，缩进反而把分隔从行左缘断开），与 `TreasureBoxView.swift:270-274` 同款；`MoreView.swift:306-312` 删掉自相矛盾的陈旧注释，`:12` 头注「分隔线左缩进对齐标题」改「分隔线全宽贯通」。
+
+- **守卫加固**：`Resources/Scripts/swift_theme_blue_guard.py:276` 的 G8 多色板名单补入 `static let categoryHealth`，防后续把这枚新 token 退回写死单值。
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` EXIT=0
+- `python Resources/Scripts/swift_precommit_check.py .` EXIT=0（16 组守卫，扫 302 个 .swift）
+- WSL `/usr/bin/swiftc -parse` 对 3 个改动文件全 EXIT=0（查不出成员存在性，只有 CI 能真判决）
+
+### 已知未做
+
+- 从「更多」进二级页仍是 `systemBackground`，跨 tab 进二级页仍有底色跳变 —— 其余 7 处页面底不在本批写域，留待后续批次。
+
 ## [0.3.686] - 2026-10-19
 
 ### Step 3 批 3：错误态收敛（接手冻结成员未提交改动）

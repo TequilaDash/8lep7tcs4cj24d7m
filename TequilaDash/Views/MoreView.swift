@@ -9,7 +9,7 @@ import SwiftUI
 /// - **页边距 20**（`AppTheme.pageInset`，原 16）；**大标题**走系统 `.large`（34pt bold）.
 /// - **功能入口改 inset-grouped 卡片分组**（分段标题 + 连续圆角卡片），行 =
 ///   连续圆角图标底 + **17pt semibold** 标题 + **13pt footnote** 副标题 + 右 chevron
-///   （与主页 `HomeRowLabel` 同一度量；分隔线左缩进对齐标题）.
+///   （与主页 `HomeRowLabel` 同一度量；分隔线全宽贯通）.
 /// - **强调色**统一到 `AppTheme.accent`（亮 `#005493` / 暗 `#76D6FF`，自适应）.
 /// - 图标 `.hierarchical` 分层渲染；工具栏动作补触觉 `AppHaptics.tap()`.
 /// - **布局**：分段标题统一用 `AppSectionHeader`（品牌色竖条 + 主标题）；「设备工具」6 项平级工具
@@ -185,7 +185,9 @@ struct MoreView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        .background(Color(.systemBackground))
+        // v0.3.xxx：与 `HomeView` 同为一级 tab 根视图，页面底统一走 `AppTheme.surfaceBase`
+        // （原先取 `Color(.systemBackground)`，两个 tab 之间切换时底色会跳）.
+        .background(AppTheme.surfaceBase)
         .navigationTitle("更多")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -301,12 +303,13 @@ struct MoreView: View {
         }
     }
 
-    /// 行分隔线：全宽发丝（`AppHairline`），左缩进对齐到图标底右侧
-    /// （图标 30 + 间距 12 + 左内边距 14 = 56）.
-    /// 行底分隔线。
+    /// 行分隔线：**全宽**发丝（`AppHairline`）.
     ///
-    /// 改成**全宽**（原先 padding(.leading, 56) 是给卡片内行用的缩进线）。
-    /// 规则 5 的全宽行语言里，分隔线应当整行贯通 —— 见 TreasureBoxView.swift:273-274 同款。
+    /// 规则 5 的全宽行语言里，分隔线应当整行贯通（原先 `padding(.leading, 56)` 是给卡片内行用的
+    /// 缩进线，本页行已脱离卡片）—— 见 `TreasureBoxView.swift:273-274` 同款.
+    ///
+    /// v0.3.xxx：删掉上一版残留的「左缩进对齐到图标底右侧（图标 30 + 间距 12 + 左内边距 14 = 56）」
+    /// 描述 —— 该公式自改成全宽起就与代码矛盾，Step 3 方案「不足 11」点名.
     private var rowDivider: some View {
         AppHairline()
     }

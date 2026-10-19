@@ -273,6 +273,7 @@ def check(root):
         "static let categoryDownload",
         "static let categorySign",
         "static let categoryAdvanced",
+        "static let categoryHealth",
         # ② 表面层（四级背景）
         "static let surfaceBase",
         "static let surfaceCard",

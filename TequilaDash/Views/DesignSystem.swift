@@ -209,6 +209,16 @@ enum AppTheme {
             ? UIColor(red: 0x9D / 255, green: 0xAA / 255, blue: 0xFF / 255, alpha: 1)
             : UIColor(red: 0x3B / 255, green: 0x4C / 255, blue: 0xC0 / 255, alpha: 1)
     })
+    /// 电池健康模块色（绿）.
+    ///
+    /// v0.3.xxx：主页「电池健康」入口此前借语义色 `AppTheme.success`（= 操作成功）当模块装饰色.
+    /// 语义色一旦被当调色板，后续调 `success` 就会连带动到主页观感. 这里给它一个**专用模块色**，
+    /// 色相仍取「健康绿」，明暗两套（硬规则 6，口径同 `swift_theme_blue_guard.py` G8）.
+    static let categoryHealth = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0x4F / 255, green: 0xD8 / 255, blue: 0x7B / 255, alpha: 1)
+            : UIColor(red: 0x1E / 255, green: 0x9E / 255, blue: 0x52 / 255, alpha: 1)
+    })
     /// 扩展与商店模块色（青蓝）.
     ///
     /// ⚠️ 此前为**橙棕** `#C2620E`（HSL 28° / 86% / 41%）——用户原话「我不喜欢棕色的颜色
