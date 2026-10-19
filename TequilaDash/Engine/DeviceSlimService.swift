@@ -204,6 +204,11 @@ enum DeviceSlimService {
         /// 现在把读不出的目录记下来：扫描结果可以被明确标成「不完整」.
         /// 用 Optional 是为了让旧版本写下的缓存文件仍能解码（缺键 = nil）.
         var unreadablePaths: [String]? = nil
+
+        /// v0.3.694：**因为触顶而被跳过的目录数**. 与 `unreadablePaths` 区分开：
+        /// 那些是「读不出」，这里是「能读但按上限没读」，两者的界面提示与对策不同.
+        /// 同样用 Optional，让旧版本写下的缓存文件仍能解码（缺键 = nil）.
+        var limitSkippedDirectories: Int? = nil
     }
 
     struct LogHit: Codable { var path: String; var bytes: Int64 }
@@ -248,6 +253,15 @@ enum DeviceSlimService {
         return snap
     }
 
+    /// v0.3.694：**扫描上限**（防性能悬崖）. 本函数从 "/" 穷举，每访问一个目录就是
+    /// 一次 AFCService.listDirectory —— 设备上目录上万时会把 AFC 通道长时间占满，
+    /// 「设备瘦身」页一直转圈，别的功能也拿不到通道；而旧实现**没有任何上限**，
+    /// 顶不顶得住完全取决于设备实际目录数（事先不可知）.
+    /// 现在给「已展开目录数」和「深度」各设一个远高于真实用量、但能兜住的硬上限；
+    /// 触顶不静默截断，而是记数并让界面标注「本轮数字只是下界」.
+    private static let snapshotMaxDepth = 64
+    private static let snapshotMaxDirectories = 20_000
+
     /// **单次遍历**媒体分区：同时算出空间占用各分区、缓存项、临时项、日志项.
     static func buildSnapshot(progress: ((String) -> Void)? = nil) throws -> Snapshot {
         var snap = Snapshot()
@@ -257,12 +271,25 @@ enum DeviceSlimService {
         var budget = 0
         // v0.3.673：读不出的子树（见 Snapshot.unreadablePaths）.
         var unreadable: [String] = []
+        // v0.3.694：因为触顶被跳过的目录数（见 Snapshot.limitSkippedDirectories）.
+        var limitSkipped = 0
 
         progress?("正在扫描设备文件…")
         try AFCService.shared.batch { client in
             // 迭代式 DFS（显式栈，避免深递归）
             var stack: [(path: String, depth: Int)] = [("/", 0)]
+            // v0.3.694：已展开（listDirectory 过）的目录数，用于兜住性能悬崖.
+            var listedDirectories = 0
             while let node = stack.popLast() {
+                // v0.3.694：先查上限再干活 —— 触顶立即收工，栈里没展开的一并计成跳过.
+                guard listedDirectories < Self.snapshotMaxDirectories else {
+                    limitSkipped += stack.count + 1
+                    LoginLogger.shared.log(
+                        "[设备瘦身] 目录数触顶（上限 \(Self.snapshotMaxDirectories) 个），"
+                        + "本轮数字只是下界，停止下探."
+                    )
+                    break
+                }
                 // v0.3.673：**读不出就记下来**，不再静默跳过.
                 // 旧写法 `try? … else { continue }` 让整棵子树凭空消失，
                 // 而本函数的结果会被缓存 10 分钟并驱动所有分片数字.
@@ -279,11 +306,17 @@ enum DeviceSlimService {
                     }
                     continue
                 }
+                listedDirectories += 1
                 budget += entries.count
                 for entry in entries {
                     let p = entry.path
                     if entry.isDirectory {
                         // 目录自身不累加；继续下探（全部下探——数值要准）
+                        // v0.3.694：深度触顶就不再入栈（超深目录树是性能悬崖的另一半）.
+                        if node.depth + 1 > Self.snapshotMaxDepth {
+                            limitSkipped += 1
+                            continue
+                        }
                         stack.append((p, node.depth + 1))
                         continue
                     }
@@ -317,6 +350,15 @@ enum DeviceSlimService {
         logs.sort { $0.bytes > $1.bytes }
         snap.logs = Array(logs.prefix(40))
         snap.unreadablePaths = unreadable.isEmpty ? nil : unreadable
+        snap.limitSkippedDirectories = limitSkipped > 0 ? limitSkipped : nil
+        // v0.3.694：触顶只在日志里说是不够的 —— 用户看不到「数字偏小」，
+        // 所以 usage()/scan() 也会把它带成「不完整」提示（见下）.
+        if limitSkipped > 0 {
+            LoginLogger.shared.log(
+                "[设备瘦身] 扫描触顶（本轮数字只是下界）：目录数上限 \(Self.snapshotMaxDirectories) 个 / "
+                + "深度上限 \(Self.snapshotMaxDepth) 层，另有 \(limitSkipped) 个目录未展开."
+            )
+        }
         snap.takenAt = Date()
 
         let encoder = JSONEncoder()
@@ -777,6 +819,10 @@ enum DeviceSlimService {
         if partial { notes.append("应用大小不完整") }
         if freeUnknown { notes.append("剩余容量未读到") }
         if !unreadable.isEmpty { notes.append("\(unreadable.count) 个目录读不出") }
+        // v0.3.694：触顶与「读不出」是两回事，分开说（数字同样偏小，但原因与对策不同）.
+        if let limitSkipped = snap.limitSkippedDirectories, limitSkipped > 0 {
+            notes.append("\(limitSkipped) 个目录未展开")
+        }
         usage.incompleteReason = notes.isEmpty ? nil : notes.joined(separator: " / ")
         usageIssueLock.lock()
         usageIssueFlag = usage.incompleteReason
@@ -843,10 +889,14 @@ enum DeviceSlimService {
         groups.append(Group(kind: .tempFiles, items: tempItems))
 
         groups.append(Group(kind: .bigApps, items: bigApps()))
-        if skippedUnmeasured > 0 || !unreadable.isEmpty {
+        // v0.3.694：触顶同样属于「这份列表不完整」，要一起说.
+        let limitSkipped = snap.limitSkippedDirectories ?? 0
+        if skippedUnmeasured > 0 || !unreadable.isEmpty || limitSkipped > 0 {
             LoginLogger.shared.log(
                 "[设备瘦身] 扫描不完整：\(skippedUnmeasured) 个候选路径没量到，"
-                + "\(unreadable.count) 个目录读不出（可清理项列表可能偏少）"
+                + "\(unreadable.count) 个目录读不出"
+                + (limitSkipped > 0 ? "，\(limitSkipped) 个目录未展开" : "")
+                + "（可清理项列表可能偏少）"
             )
         }
         return groups

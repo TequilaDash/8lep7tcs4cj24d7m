@@ -23,9 +23,7 @@ struct BatteryHealthView: View {
         ScrollView {
             VStack(spacing: 16) {
                 if isLoading {
-                    ProgressView("正在读取电池数据…")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 60)
+                    AppLoadingRow(title: "正在读取电池数据…", level: .page)
                 } else if let info {
                     healthRing(info: info)
                     metricsGrid(info: info)

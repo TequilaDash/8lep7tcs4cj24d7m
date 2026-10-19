@@ -358,13 +358,10 @@ struct AppStoreDetailView: View {
             }
         } else if let failed = center.lastFinishedJob(bundleId: item.bundleId, name: item.name),
                   failed.phase == .failed, let err = failed.error {
-            VStack(alignment: .leading, spacing: 6) {
-                Label(err, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                getButton
-            }
+            // v0.3.694：改用 AppErrorRow 的**按钮位**（trailing）—— 整颗复用 getButton，
+            // 不再自己拼「info.circle + 橙字 + 按钮」三件套（ui-error-inline.md 第三节把这里
+            // 记为「需按钮位形态」的遗留项：原字号 caption、取色 .orange 与全仓错误行不统一）.
+            AppErrorRow(message: err, trailing: { getButton })
         } else {
             getButton
         }

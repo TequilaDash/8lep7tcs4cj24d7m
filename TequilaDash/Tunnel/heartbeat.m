@@ -177,6 +177,14 @@ void startHeartbeat(IdevicePairingFile* pairing_file, IdeviceProviderHandle** pr
         //   只在 **marco/polo 真失败**（:91 / :118）时通知，因为那才是连接真断了；
         //   而本分支是**本地计时判定**，不代表连接已断，不该触发拆隧道。
         if (lastHeartbeatDate && [[NSDate now] timeIntervalSinceDate:lastHeartbeatDate] > current_interval) {
+            // v0.3.694（frozen-takeover 欠交付物 #7 / audit-appstore.md:562）：本分支是
+            // **本地计时**判定（不代表连接已断），因此只补埋点、不改判定与回调语义.
+            // 原先这里完全不打日志，真机无法确认「心跳线程自杀」的触发频率 ——
+            // 报告「发现 A 触发频率」需要真机日志才能定性，先让这条路径可观测.
+            fprintf(stderr, "heartbeat timeout (local timer): token = %d, elapsed = %.2f s, interval = %llu s, exiting worker\n",
+                    heartbeatToken,
+                    [[NSDate now] timeIntervalSinceDate:lastHeartbeatDate],
+                    (unsigned long long)current_interval);
             lastHeartbeatDate = nil;
             // 超时退出同样要释放心跳客户端（原先直接 return 泄漏了 client）.
             heartbeat_client_free(client);

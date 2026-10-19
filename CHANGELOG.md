@@ -1,4 +1,31 @@
 # Changelog
+## [0.3.694] - 2026-10-19
+
+### 加载三档 / 错误行三形态 / 设备瘦身扫描上限 / Rust panic 兜底
+
+本版内容来自上一批被中断成员的在途改动，由 lead 逐份复核后接手落地（永久规矩：先接后弃）。
+
+- **AppLoadingRow 三档**（`TequilaDash/Views/DesignSystem.swift`）：新增嵌套 `enum Level { case inline, block, page }`
+  与 `var level: Level = .inline`，既有三个参数一字未改。`.inline` 与原实现逐字一致（既有 6 处调用点渲染不变）；
+  `.block` 供卡片内「这一块正在加载」（圈升一档 + `AppSpacing.section` 上下留白）；`.page` 供整页加载
+  （大圈 + `AppFont.subheadline` 标题居中 + 上下 60pt，沿用 v0.3.650 用户反馈后加的呼吸留白，页面高度不变）。
+  4 处散落的整页加载收敛到它：`TunnelHealthCheckView`（原手写 `ZStack { Color.clear; VStack }`）、`DeviceInfoView`、
+  `BatteryHealthView`、`StorageDetailView`。
+- **AppErrorRow 三形态**（同文件）：新增 `badge: AnyView?` / `trailing: AnyView?` / `largeIcon: Bool = false`
+  三个**带默认值**的属性，与一个 `@ViewBuilder trailing` 便捷初始化器（`trailing()` 自动包 `AnyView`）。
+  既有调用点渲染不变。`TequilaDash/Views/AppStoreDetailView.swift` 的下载失败卡从「Label + 橙字 + 按钮」
+  三件套改为 `AppErrorRow(message: err, trailing: { getButton })`，整颗复用既有按钮、不再自己拼颜色与字号。
+- **设备瘦身扫描上限**（`TequilaDash/Engine/DeviceSlimService.swift`）：`buildSnapshot` 的迭代式 DFS 新增
+  目录数上限 20000 与深度上限 64（原实现没有任何上限，顶不顶得住取决于设备实际目录数）。触顶不静默截断：
+  新增 `Snapshot.limitSkippedDirectories` 计数，`usage()` 的 `incompleteReason` 与 `scan()` 的「扫描不完整」
+  日志区分「N 个目录读不出」与「N 个目录未展开」（原因与对策不同）。
+- **心跳超时埋点**（`TequilaDash/Tunnel/heartbeat.m`）：**本地计时判定**分支补一行 `fprintf`（token / 已过秒数 /
+  间隔），只加可观测性 —— 该分支原先完全不打日志，真机无法确认「心跳线程自杀」的触发频率。判定与回调语义不变。
+- **Rust FFI panic 兜底**（`rust/idevice-ffi/src/lib.rs`）：新增 `run_sync_ffi<F, T>() -> Result<T, *mut IdeviceFfiError>`，
+  用 `catch_unwind` 把 worker panic 从「穿过 FFI 边界即 abort」收成可被 `idevice_error_free` 释放的
+  `IdeviceFfiError`（`InternalError`）。`run_sync` 本身与全仓上百处调用点一个字未改（它的 R 至少 7 种形态，
+  直接加 trait 约束会报一批 E0277）。
+
 ## [0.3.693] - 2026-10-19
 
 ### Step 3 批 8-A：忙碌遮罩收敛 + Airlift 补丁升到上游 v2.5.1

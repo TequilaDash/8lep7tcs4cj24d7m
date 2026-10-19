@@ -20,9 +20,7 @@ struct StorageDetailView: View {
         ScrollView {
             VStack(spacing: 16) {
                 if loading {
-                    ProgressView("正在读取硬盘详情…")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 60)
+                    AppLoadingRow(title: "正在读取硬盘详情…", level: .page)
                 } else if let info {
                     // 布局 D：先给「这是什么」（品牌图标块 + 型号 + 关键 stat），再往下是明细卡片.
                     heroHeader(info)

@@ -626,16 +626,50 @@ extension AppRow where Trailing == EmptyView {
 /// ```swift
 /// AppLoadingRow(title: "正在加载备份…")
 /// AppLoadingRow(title: "正在检查容器访问…", detail: "需要读取该应用的 Data 容器.")
+/// AppLoadingRow(title: "正在读取设备信息…", level: .page)
 /// ```
+///
+/// ## 三档（本次新增）
+/// `level` 默认 `.inline`，与既有调用点（4/5/6 批验收过的那 6 处）渲染逐像素一致：
+///   · `.inline` —— 小圈 + footnote 标题 + caption detail，一行左对齐，无额外留白
+///   · `.block`  —— 圈升一档 + 上下留白 `AppSpacing.section`，用于卡片内「这一块正在加载」
+///   · `.page`   —— 大圈 + subheadline 标题竖排居中 + 上下 60pt 呼吸留白，
+///                  替代散落各页的 `VStack { ProgressView(); Text(...) }` 整页加载
+/// 三档共用同一套文案与取色（标题 secondary / detail tertiary），不新增符号.
 struct AppLoadingRow: View {
+    /// 加载态档位（本次新增）。三档只改「圈的大小 / 留白 / 对齐」，不改文案与取色.
+    enum Level {
+        /// 行内一行（默认）：小圈 + 标题 + 可选 detail，左对齐、无额外留白 —— 即 v0.3.682 的既有形态.
+        case inline
+        /// 区块一段：圈略大、上下留白到 `AppSpacing.section`，用于卡片内「这一块正在加载」.
+        case block
+        /// 整页居中：大圈 + 标题（+ 可选 detail），替代散落的 `VStack { ProgressView(); Text(...) }`.
+        case page
+    }
+
     /// 主文案（一行，例如「正在加载备份…」）.
     let title: String
     /// 可选补充说明，显示在标题下方.
     var detail: String? = nil
     /// 是否居中。列表内的行默认左对齐；整页加载场景可居中.
     var centered: Bool = false
+    /// 档位。默认 `.inline` 与既有调用点行为逐像素一致（不传此参数即不变）.
+    var level: Level = .inline
 
+    @ViewBuilder
     var body: some View {
+        switch level {
+        case .inline:
+            inlineBody
+        case .block:
+            blockBody
+        case .page:
+            pageBody
+        }
+    }
+
+    /// 行内一行：与 v0.3.682 的实现逐像素一致（小圈 + footnote 标题 + caption detail，左对齐）.
+    private var inlineBody: some View {
         HStack(alignment: .center, spacing: 10) {
             ProgressView()
                 .controlSize(.small)
@@ -654,6 +688,53 @@ struct AppLoadingRow: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+    }
+
+    /// 区块一段：圈升一档（`.regular`），行内间距走 `AppSpacing.row`，上下留白 `AppSpacing.section`.
+    private var blockBody: some View {
+        HStack(alignment: .center, spacing: AppSpacing.row) {
+            ProgressView()
+                .controlSize(.regular)
+            VStack(alignment: centered ? .center : .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(centered ? .center : .leading)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(AppFont.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(centered ? .center : .leading)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+        .padding(.vertical, AppSpacing.section)
+    }
+
+    /// 整页居中：大圈 + 标题（+ 可选 detail）竖排居中，上下留白 60pt.
+    ///
+    /// 60pt 不是随手取的数：被替换的 3 处整页加载（设备信息 / 电池健康 / 硬盘详情）
+    /// 原本都是 `.padding(.vertical, 60)`，是 v0.3.650 用户反馈「页面像坏了」后加的呼吸留白；
+    /// 换组件时保留同值，页面高度不变、内容不跳动.
+    private var pageBody: some View {
+        VStack(spacing: AppSpacing.row) {
+            ProgressView()
+                .controlSize(.large)
+            Text(title)
+                .font(AppFont.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if let detail, !detail.isEmpty {
+                Text(detail)
+                    .font(AppFont.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }
 
@@ -676,7 +757,24 @@ struct AppLoadingRow: View {
 /// }
 /// // 或带重试：
 /// AppErrorRow(message: error, retry: { reload() })
+/// // 或按钮位放自定义按钮（retry 表达不了、要整颗复用既有按钮时）：
+/// AppErrorRow(message: error, trailing: { getButton })
+/// // 或整页结果页形态（大图标 + 居中 + callout）：
+/// AppErrorRow(message: error, largeIcon: true)
 /// \`\`\`
+///
+/// ## 三个可选形态（v0.3.694 新增）
+///
+///   · `badge: AnyView?` —— 文案下方的徽标位（「需重新登录」「已过期」这类状态胶囊）.
+///     与 `AppRow.badge` 同口径：调用方自己包 `AnyView`，组件不预设底色与圆角.
+///   · `trailing: AnyView?` —— 文案下方的按钮位，放 `retry` 表达不了的自定义按钮
+///     （整颗既有按钮复用，不再逼调用方把它拆成「标题 + 动作」）. 与 `retry` 同时给时
+///     `trailing` 优先（两者别一起给）.
+///   · `largeIcon: Bool` —— 大图标结果页：图标 `largeTitle`、整块居中、文案 `callout`，
+///     用于「整页只有一个错误」的兜底页；列表内的行内错误保持默认 `false`.
+///
+/// 三个新属性**全部带默认值**，既有调用点（`message` / `retry` / `centered`）渲染不变.
+/// `trailing` 另给了一个 `@ViewBuilder` 便捷初始化器，调用方不必手写 `AnyView(...)`.
 ///
 /// ## 为什么用 pending（橙）而不是 danger（红）
 /// 列表/数据读不出来通常是「隧道没通 / 配对文件缺失 / 网络抖动」这类**可恢复**问题，
@@ -688,28 +786,86 @@ struct AppErrorRow: View {
     var retry: (() -> Void)? = nil
     /// 是否居中。列表内的行内错误默认左对齐；整页空态场景可居中。
     var centered: Bool = false
+    /// 可选徽标位（v0.3.694 新增）：渲染在文案下方，用于「需重新登录 / 已过期」这类状态胶囊.
+    /// 与 `AppRow.badge` 同口径（`AnyView?`），底色与圆角由调用方决定。
+    var badge: AnyView? = nil
+    /// 可选按钮位（v0.3.694 新增）：`retry` 表达不了的自定义按钮，整颗复用（不拆「标题 + 动作」）.
+    /// 与 `retry` 同时给时本项优先。
+    var trailing: AnyView? = nil
+    /// 大图标结果页形态（v0.3.694 新增）：图标 `largeTitle` + 整块居中 + 文案 `callout`.
+    /// 给「整页只有一个错误」的兜底页用；列表内的行内错误保持默认 `false`。
+    var largeIcon: Bool = false
 
+    @ViewBuilder
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "info.circle")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(AppTheme.pending)
-                .appSymbol()
-            VStack(alignment: centered ? .center : .leading, spacing: 6) {
+        if largeIcon {
+            VStack(spacing: 12) {
+                Image(systemName: "info.circle")
+                    .font(.largeTitle)
+                    .foregroundStyle(AppTheme.pending)
+                    .appSymbol()
                 Text(message)
-                    .font(AppFont.footnote)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(centered ? .center : .leading)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                if let retry {
-                    Button("重试", action: retry)
-                        .buttonStyle(TintedButtonStyle(tint: AppTheme.pending))
-                        .controlSize(.small)
+                if let badge {
+                    badge
+                }
+                if trailing != nil || retry != nil {
+                    if let trailing {
+                        trailing
+                    } else if let retry {
+                        Button("重试", action: retry)
+                            .buttonStyle(TintedButtonStyle(tint: AppTheme.pending))
+                            .controlSize(.small)
+                    }
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "info.circle")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppTheme.pending)
+                    .appSymbol()
+                VStack(alignment: centered ? .center : .leading, spacing: 6) {
+                    Text(message)
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(centered ? .center : .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let badge {
+                        badge
+                    }
+                    if trailing != nil || retry != nil {
+                        if let trailing {
+                            trailing
+                        } else if let retry {
+                            Button("重试", action: retry)
+                                .buttonStyle(TintedButtonStyle(tint: AppTheme.pending))
+                                .controlSize(.small)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
         }
-        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+    }
+}
+
+extension AppErrorRow {
+    /// 便捷初始化器：按钮位传 `@ViewBuilder` 闭包，免调用方手写 `AnyView(...)`.
+    /// 参数顺序与成员初始化器一致，只把 `trailing` 换成闭包 —— 传闭包时只会命中本初始化器.
+    init<Trailing: View>(message: String,
+                         retry: (() -> Void)? = nil,
+                         centered: Bool = false,
+                         badge: AnyView? = nil,
+                         @ViewBuilder trailing: () -> Trailing,
+                         largeIcon: Bool = false) {
+        self.init(message: message, retry: retry, centered: centered,
+                  badge: badge, trailing: AnyView(trailing()), largeIcon: largeIcon)
     }
 }
 

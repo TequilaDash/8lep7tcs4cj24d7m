@@ -30,9 +30,7 @@ struct DeviceInfoView: View {
         ScrollView {
             VStack(spacing: 16) {
                 if loading {
-                    ProgressView("正在读取设备信息…")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 60)
+                    AppLoadingRow(title: "正在读取设备信息…", level: .page)
                 } else if let info {
                     hero(info)
                     ForEach(sections(info)) { section in

@@ -169,6 +169,44 @@ where
     }
 }
 
+/// `run_sync` 的 **FFI 错误专用入口**（v0.3.694，frozen-takeover 欠交付物 #8 / task-10 P2-1）。
+///
+/// 与 `run_sync` 只差一处：把「worker panic」从**在调用线程上 panic** 变成返回一个
+/// 可被 `idevice_error_free` 释放的 `IdeviceFfiError`。`run_sync` 自身保持原样，
+/// 全仓上百处调用点一个字都不用改（它的 R 至少 7 种形态，见上面的说明，
+/// 直接加 trait 约束会让 CI 报一批 E0277）。
+///
+/// 为什么需要它：调用线程是 `unsafe extern "C" fn`，panic 一旦穿过 FFI 边界
+/// 就会被运行时中止（abort）；需要「不闪退」的调用点可以改走本入口，
+/// 把 panic 收成普通 FFI 错误，交回 Swift 侧按失败处理。
+///
+/// 只在 `R = Result<T, IdeviceError>` 的调用点上可用（这是绝大多数形态）；
+/// 返回 `AdapterHandle` / `ReadWrite` 等非 Result 的调用点仍用 `run_sync`。
+pub fn run_sync_ffi<F, T>(fut: F) -> Result<T, *mut IdeviceFfiError>
+where
+    F: std::future::Future<Output = Result<T, IdeviceError>> + Send + 'static,
+    T: Send + 'static,
+{
+    // AssertUnwindSafe：fut 被移动进闭包，编译器无法证明它 UnwindSafe；
+    // 这里不依赖 fut 的 UnwindSafe 语义（与 run_sync 的既有行为一致）。
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        run_sync::<F, Result<T, IdeviceError>>(fut)
+    })) {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(e)) => Err(ffi_err!(e)),
+        Err(_) => {
+            tracing::error!("idevice-ffi: run_sync_ffi caught a panic from the runtime worker");
+            // InternalError(String)：本 crate 能表达「内部失败」的变体
+            // （IdeviceError 来自外部 crate，无法新增变体）。
+            // ffi_err! 走 CString::new(...).into_raw() 堆分配，与
+            // idevice_error_free 的 CString::from_raw 配对，不会 free 静态内存（P2-2）。
+            Err(ffi_err!(IdeviceError::InternalError(
+                "idevice-ffi: runtime worker panicked".to_string()
+            )))
+        }
+    }
+}
+
 /// 与 run_sync 同语义，但在调用线程上直接 block_on（不要求 F: Send）。
 ///
 /// pairable_host_run.rs 的 run() 把 `ctx: *mut c_void` 带进回调闭包并跨 await 持有，

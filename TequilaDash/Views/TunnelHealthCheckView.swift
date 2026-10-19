@@ -183,23 +183,14 @@ struct TunnelHealthCheckView: View {
                 // v0.3.650：加载态**整页居中**。
                 //
                 // 原实现是一个孤立 Section，转圈图标停在页面顶部、下面大片空白，
-                // 用户第一眼以为页面坏了。改为：
-                //   1) Section 不带头部、行背景透明、无行内边距
-                //   2) 用 ZStack + Color.clear 把内容在剩余空间里撑满并居中
-                // 与全站其它耗时页（虚拟定位加载、应用列表首屏）一致的观感。
+                // 用户第一眼以为页面坏了。当时的做法是 ZStack + Color.clear 手写居中；
+                // 现收口到 AppLoadingRow 的 .page 档（整页居中：大圈 + 标题），
+                // Section 不带头部 / 行背景透明 / 无行内边距这三条保持不变。
+                // minHeight 320 是 v0.3.650 的产物：List 行若只按内容高度排，
+                // 转圈仍会贴在页面顶部 —— 保留同值，页面高度不变.
                 Section {
-                    ZStack {
-                        Color.clear
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .controlSize(.large)
-                            Text("正在检查…")
-                                .font(AppFont.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 320)
+                    AppLoadingRow(title: "正在检查…", level: .page)
+                        .frame(maxWidth: .infinity, minHeight: 320)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
