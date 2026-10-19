@@ -887,8 +887,12 @@ struct SignSourceAppListView: View {
                 } header: {
                     Text("解锁软件源")
                 } footer: {
+                    // 区块内错误行统一到 AppErrorRow（info.circle + AppTheme.pending）.
+                    // 解锁码为空 / 该源未提供解锁接口都是可恢复的用户侧问题，按 `AppErrorRow`
+                    // 文档注的取色判据不用 danger 红.
+                    // 不传 retry：下方「解锁」按钮就是同义重试入口.
                     if let unlockError {
-                        Text(unlockError).foregroundStyle(AppTheme.danger)
+                        AppErrorRow(message: unlockError)
                     }
                 }
                 Section {

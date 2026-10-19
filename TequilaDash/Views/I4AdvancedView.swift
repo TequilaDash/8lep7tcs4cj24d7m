@@ -366,7 +366,9 @@ struct I4AdvancedView: View {
                 Text("未完成").font(AppFont.headline)
                 Spacer(minLength: 0)
             }
-            Text(text).font(AppFont.subheadline).foregroundStyle(AppTheme.danger)
+            // v0.3.688：本卡头部已按「可重试失败」口径统一成 info.circle + AppTheme.pending（见 :362-363），
+            // 正文却还留着 danger 红 —— 同一张卡两套语义。正文跟随头部改用 pending.
+            Text(text).font(AppFont.subheadline).foregroundStyle(AppTheme.pending)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

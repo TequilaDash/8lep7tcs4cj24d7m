@@ -1,4 +1,24 @@
 # Changelog
+## [0.3.688] - 2026-10-19
+
+### Step 3 批 3 错误态收尾（Section 内整行报错 / 卡片内正文语义）
+
+- `Views/I4AppFixView.swift:124-130`：Section 内整行报错由 `Text(...).foregroundStyle(AppTheme.danger)` 改 `AppErrorRow(message: repairError)`，**不传 retry** —— 同区块上方 `InfoActionCard` 的「开始修复」已是同义入口，两个会打架。
+
+- `Views/SignSourceAppListView.swift:890-896`：Section footer 里的 `unlockError` 整行报错改 `AppErrorRow(message: unlockError)`，**不传 retry** —— 同区块下方「解锁」按钮就是同义入口。
+
+- `Views/I4AdvancedView.swift:369`：报告卡正文 `Text(text).font(AppFont.subheadline).foregroundStyle(AppTheme.danger)` 改 `AppTheme.pending`。这张卡的头（`:362-365` `info.circle` + `AppTheme.pending` + 「未完成」）在 v0.3.682 已被判定为「可重试失败」并统一成橙色语义，正文却仍留 danger 红 —— 同一张卡两套语义。**没有换成 `AppErrorRow`**：该卡头部已是一行「图标 + 标题 + Spacer」，套 AppErrorRow 会重复一行标题，破坏卡片结构。
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` EXIT=0
+- `python Resources/Scripts/swift_precommit_check.py .` EXIT=0（16 组守卫，扫 302 个 .swift）
+- WSL `/usr/bin/swiftc -parse` 对 3 个改动文件全 EXIT=0，FAIL_TOTAL=0
+
+### 已知未做
+
+- 4 处整页居中加载（`TunnelHealthCheckView.swift:194-196`、`DeviceInfoView.swift:33`、`BatteryHealthView.swift:26`、`StorageDetailView.swift:23`）保持原样：`AppLoadingRow` 目前只有行内一档（`centered` 分支全仓 8 个调用点无一使用），要收口需先按 `UI重设计_Step3_方案.md` 项 2 给它补 inline/block/page 三档。
+
 ## [0.3.687] - 2026-10-19
 
 ### Step 3 批 2：色彩收口（语义色被当调色板 / 页面底不一致 / 分隔线注释与代码矛盾）

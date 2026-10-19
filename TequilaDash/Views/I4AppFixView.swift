@@ -121,11 +121,12 @@ struct I4AppFixView: View {
                 action: { confirmShown = true },
                 disabled: !ready || busy
             )
+            // 区块内错误行统一到 AppErrorRow（info.circle + AppTheme.pending）. 判据取自
+            // `AppErrorRow` 自己的文档注（为什么用 pending 橙而不是 danger 红）：列表 / 数据
+            // 读不出来通常是可恢复问题，红色会让用户以为设备坏了或数据损坏了.
+            // 不传 retry：上方 InfoActionCard 的「开始修复」就是同义重试入口，同区块放两个会打架.
             if let repairError {
-                Text(repairError)
-                    .font(AppFont.caption)
-                    .foregroundStyle(AppTheme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
+                AppErrorRow(message: repairError)
             }
         }
     }
