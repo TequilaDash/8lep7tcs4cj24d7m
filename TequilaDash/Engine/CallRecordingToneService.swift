@@ -330,21 +330,21 @@ enum CallRecordingToneService {
             backup = try readBackups()
         } catch {
             // 没有可用备份（缺失 / 0 字节 / 必选项读不回）。
-            if !flagged {
-                // 从未在无备份状态下静音过 ⇒ 没有证据说明我们改过设备文件，按「已是原始音」收尾。
-                UserDefaults.standard.set(false, forKey: disabledKey)
-                return
+            //
+            // 关键：**不能凭一个标记就断言「已是原始音」**——只有「本 App 从未把它静音过」
+            // 且「设备上的内容也不是我们的静音素材」时，才能按「已经是原始音」收尾；
+            // 其余情形都要给可执行指引：我们确实改过设备，而备份已经拿不回来。
+            let wasSilenced = UserDefaults.standard.bool(forKey: disabledKey) || flagged
+            var stillSilent = false
+            if let silent = try? silentTones(),
+               current.compactMap({ $0 }).count == allTones.count {
+                stillSilent = tonesEqual(current, silent, requireAll: true)
             }
-            // 我们确实在无备份状态下把它静音过。先看设备现在是什么：
-            let silent = try silentTones()
-            let readableNow = current.compactMap { $0 }.count
-            if readableNow == allTones.count, !tonesEqual(current, silent, requireAll: true) {
-                // 读到的内容已经不是我们的静音素材 ⇒ iOS 已重新生成原始提示音。
+            if !wasSilenced && !stillSilent {
                 UserDefaults.standard.set(false, forKey: disabledKey)
                 UserDefaults.standard.set(false, forKey: silencedWithoutBackupKey)
                 return
             }
-            // 仍然是静音且没有备份 ⇒ 只能给可执行的指引，不能说「请先禁用一次」。
             throw ToneError.languageRestoreRequired
         }
 

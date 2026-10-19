@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.690] - 2026-10-19
+
+### 通话录音恢复：补上一个「凭标记断言已是原始音」的洞
+
+- v0.3.689 的 `restore()` 在「备份不可用」分支里用 `silencedWithoutBackupKey` 一个标记判断
+  「从未静音过」就清标记返回成功。这留下一个洞：**在有完整备份时禁用**（该标记为 false），
+  之后备份被删掉（而 `disabledKey` 仍在），restore 会报「已从备份恢复原始提示音」
+  而设备上其实还是静音。
+- 现在该分支同时看三件事：`disabledKey || silencedWithoutBackupKey`、设备内容是否仍然等于
+  静音素材、以及读通道是否读全。只有「本 App 从未把它静音过」且「设备内容也不是我们的
+  静音素材」时才按「已经是原始音」收尾；其余一律抛 `languageRestoreRequired`，
+  给可执行指引（切换一次系统语言让 iOS 重新生成提示音）。
+
+### 验证
+
+- `python Resources/Scripts/normalize_eol.py` 通过；`python Resources/Scripts/swift_precommit_check.py .`
+  16 组守卫全过；WSL `/usr/bin/swiftc -parse` 通过。
+
+
 ## [0.3.689] - 2026-10-19
 
 ### 通话录音提示音：备份可用性判据修正（对齐 AirBeep v2.5.1）
