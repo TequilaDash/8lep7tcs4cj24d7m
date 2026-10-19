@@ -721,17 +721,16 @@ private struct WallpaperExtractorSheet: View {
         .listStyle(.insetGrouped)
         .overlay {
             if isExporting {
-                ZStack {
-                    Color.black.opacity(0.18).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("正在打包…")
-                            .font(.subheadline)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+                AppBusyOverlay(
+                    title: "正在打包…",
+                    scrimOpacity: 0.18,
+                    radius: 14,
+                    spacing: 12,
+                    horizontalPadding: 24,
+                    verticalPadding: 16,
+                    titleFont: .subheadline,
+                    progressScale: nil
+                )
             }
         }
     }

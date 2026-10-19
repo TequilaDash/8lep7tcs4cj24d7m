@@ -1,4 +1,30 @@
 # Changelog
+## [0.3.693] - 2026-10-19
+
+### Step 3 批 8-A：忙碌遮罩收敛 + Airlift 补丁升到上游 v2.5.1
+
+- **批 8-A（忙碌遮罩）**：新增共享组件 `TequilaDash/Views/AppBusyOverlay.swift`（全屏黑幕 +
+  系统材质卡片 + 进度圈 + 标题，9 个参数全部带默认值）。7 处逐字复制的私有实现收敛到它：
+  `AppDetailView` / `DeviceControlView` / `FileBrowserView` / `LiveCleanTabView` / `ReclaimAppView` /
+  `ReclaimTabView` / `Wallpaper/WallpaperView`。默认参数就是复制块的原值（0.28 / 14 / 16 / 22 / 28 /
+  `.headline` / `1.15`），差异站点一律显式传参（壁纸页 0.18 / 12 / 14 / 16 / 24 / `.subheadline` / 不加缩放）
+  ⇒ 渲染结果逐像素不变。净 −67 行。
+- **批 8-A 刻意保留 2 处**：`CrashLogView` 与 `RingtonesView` 的同名遮罩没有全屏黑幕层、文案是
+  `.caption + .secondary` 次级样式且带投影，并入会凭空多一层黑幕并改文案层级 ⇒ 不满足逐像素等价，
+  原样保留（统一组件不该为了凑数反向长复杂）。
+- **Airlift 补丁升级**：`Resources/Scripts/airlift-read-file.patch` 换成上游 v2.5.1 版本
+  （`288abd0`）：19194B / 438 行 → 25699B / 579 行，sha256 前缀 `803be0993d06cec` → `1f3724e63649f0d9`。
+  与我们旧版逐字节比对确认**零本地定制**，因此直接整份替换。补上的是 Lockdown 心跳保活批次
+  （`LockdownHeartbeat` + Drop 中止 + Marco/Polo 循环 + try_lockdown 路由改造），解决 iOS 18
+  及更老 Lockdown 路径（62078）在长等待期间被设备静默断开的问题。构建脚本钉的
+  `AIRCARD_COMMIT=40640c4d827aeab8d798285b57d24fcf6be070d0` 不变，CI 缓存键含补丁 hash ⇒ 本版会重建原生库。
+- **决策 D1（记录在案）**：上游该批次让 `exploit.rs:518` 的缓存路由失败由「不可失败」变成可 `Err`，
+  而 `Err` 会跳过 `:524-525` 的「cached route failed, re-probing routes」回退。我们**不本地改这一行**，
+  保持与上游逐字节一致（可同步、可用 `git checkout` 秒回滚），回归风险与回退方式已记入
+  `02_审计与报告/修复记录/airbeep-patch.md`；真机验证仍缺（CI 只保证能编译链接）。
+- **决策 D2（上游口径更正）**：携带该批次的是 LinkPass888/AirBeep
+  （`288abd03bf32b1b7680ddf8c32056e6d6e0a3c39`，tag v2.5.1 = `6309292` 同 sha），
+  不是 jiutinglifeng/airbeep-calltone-research（该仓 API 404 且文件与我们的旧版逐字节相同）。
 ## [0.3.692] - 2026-10-19
 
 ### Step 3 批 4 / 批 5 / 批 6-A：行语言与网格卡合并、胶囊口径收敛

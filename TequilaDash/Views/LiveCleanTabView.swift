@@ -92,18 +92,7 @@ struct LiveCleanTabView: View {
         }
         .overlay {
             if vm.isScanning || vm.isBusy {
-                ZStack {
-                    Color.black.opacity(0.28).ignoresSafeArea()
-                    VStack(spacing: 14) {
-                        ProgressView()
-                            .scaleEffect(1.15)
-                        Text(vm.busyTitle)
-                            .font(.headline)
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 22)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
+                AppBusyOverlay(title: vm.busyTitle)
             }
         }
         .alert("清理安全空间？", isPresented: $vm.confirmBatch) {

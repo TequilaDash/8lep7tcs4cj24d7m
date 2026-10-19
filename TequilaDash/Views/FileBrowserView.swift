@@ -124,20 +124,9 @@ struct FileBrowserView: View {
     @ViewBuilder
     private var busyOverlayContent: some View {
         if vm.isBusy {
-            ZStack {
-                Color.black.opacity(0.28).ignoresSafeArea()
-                VStack(spacing: 14) {
-                    ProgressView()
-                        .scaleEffect(1.15)
-                    Text(vm.busyTitle)
-                        .font(.headline)
-                }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 22)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(vm.busyTitle)
+            AppBusyOverlay(title: vm.busyTitle)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(vm.busyTitle)
         }
     }
 

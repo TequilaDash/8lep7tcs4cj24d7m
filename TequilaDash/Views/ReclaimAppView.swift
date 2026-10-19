@@ -40,18 +40,7 @@ struct ReclaimAppView: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if vm.isBusy || vm.isLoading {
-                ZStack {
-                    Color.black.opacity(0.28).ignoresSafeArea()
-                    VStack(spacing: 14) {
-                        ProgressView()
-                            .scaleEffect(1.15)
-                        Text(vm.isLoading ? "测量中…" : vm.busyTitle)
-                            .font(.headline)
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 22)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
+                AppBusyOverlay(title: vm.isLoading ? "测量中…" : vm.busyTitle)
             }
         }
         .onAppear {
