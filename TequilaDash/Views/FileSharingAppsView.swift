@@ -495,7 +495,8 @@ struct FileSharingAppsView: View {
             }
             // ② profile 上下文 + 分批判定（get_apps 字段 + profile）
             let context = FileSharingService.fetchAppTypeContext()
-            await MainActor.run { self.typeContextIssues = context.issues }
+            let contextIssues = context.issues
+            await MainActor.run { self.typeContextIssues = contextIssues }
             let batchSize = 8
             var index = 0
             while index < workList.count {

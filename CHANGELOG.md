@@ -1,4 +1,9 @@
 # Changelog
+## [0.3.708] - 2026-10-20
+
+### 修复
+- FileSharingAppsView 类型降级提示不再把非 Sendable 的 context 传进 @MainActor 闭包（RegionIsolation::SendingRisksDataRace），改为先取 [String] 局部值.
+
 ## [0.3.707] - 2026-10-20
 
 ### 修复
