@@ -9,29 +9,38 @@ struct AppTypeBadge: View {
     let type: AppType
     var compact: Bool = false
 
-    private var palette: (text: Color, fill: Color) {
+    /// 类型 → 配色（文本色 + 底色不透明度）.
+    ///
+    /// Step 3 批 6-B：底色由「色 + 内联 opacity」拆成「纯色 + 不透明度」两项，
+    /// 与 `SizePill(tint:fillOpacity:)` 的口径对齐（该组件默认 12%）；
+    /// 6 类色（blue 12% / purple 14% / orange 14% / green 14% / pink 16% /
+    /// secondary 10%）逐一保留原值，不做归一，故收敛后逐类型渲染零变化.
+    private var palette: (text: Color, fillOpacity: Double) {
         switch type {
-        case .appStorePersonal: return (.blue,       .blue.opacity(0.12))
-        case .appStoreShared:   return (.purple,     .purple.opacity(0.14))
-        case .appStore:         return (.blue,       .blue.opacity(0.12))
-        case .enterprise:       return (.orange,     .orange.opacity(0.14))
-        case .development:      return (.green,      .green.opacity(0.14))
-        case .jailbroken:       return (.pink,       .pink.opacity(0.16))
-        case .hidden:           return (.secondary,  Color.secondary.opacity(0.10))
-        case .unknown:          return (.secondary,  Color.secondary.opacity(0.10))
+        case .appStorePersonal: return (.blue,      0.12)
+        case .appStoreShared:   return (.purple,    0.14)
+        case .appStore:         return (.blue,      0.12)
+        case .enterprise:       return (.orange,    0.14)
+        case .development:      return (.green,     0.14)
+        case .jailbroken:       return (.pink,      0.16)
+        case .hidden:           return (.secondary, 0.10)
+        case .unknown:          return (.secondary, 0.10)
         }
     }
 
+    /// Step 3 批 6-B：手写胶囊收编到共享 `SizePill`，度量靠覆盖项逐项钉住：
+    /// `compact` 走 `.compact` 档（caption2 + 6 / 2），否则走 `.regular` 档并用
+    /// 8 / 3 覆盖（`.regular` 的档位默认是 10 / 5，与原 8 / 3 不同）；
+    /// 字重同样覆盖（compact 原为 default，即 `.regular`；否则 `.medium`）.
     var body: some View {
         let p = palette
-        Text(type.displayName)
-            .font(compact ? .caption2 : .caption.weight(.medium))
-            .foregroundStyle(p.text)
-            .padding(.horizontal, compact ? 6 : 8)
-            .padding(.vertical, compact ? 2 : 3)
-            .background(
-                Capsule().fill(p.fill)
-            )
+        SizePill(text: type.displayName,
+                 tint: p.text,
+                 level: compact ? .compact : .regular,
+                 horizontalPadding: compact ? 6 : 8,
+                 verticalPadding: compact ? 2 : 3,
+                 weight: compact ? .regular : .medium,
+                 fillOpacity: p.fillOpacity)
             .accessibilityLabel("\(type.displayName)，\(type.subtitle)")
     }
 }

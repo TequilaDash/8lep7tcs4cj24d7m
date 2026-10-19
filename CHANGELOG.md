@@ -1,4 +1,24 @@
 # Changelog
+## [0.3.695] - 2026-10-19
+
+### Step 3 批 6-B：胶囊标签收编到共享 SizePill
+
+- `AppTypeBadge` 的调色板由「色 + 内联不透明度」拆成「纯色 + 不透明度」两项，与 `SizePill(fillOpacity:)` 对齐；六类色的 12% / 14% / 14% / 14% / 16% / 10% 逐一原值保留，不归一，故逐类型渲染零变化.
+- `CertificateView` 的白名单胶囊收编到 `.compact` 档（零像素差）；已过期的 9/4 归并到 `.regular` 档（10/5，与其他胶囊同一档位），字重与底色 16% 用覆盖项钉住.
+- `ReclaimAppView` 的保留/字节胶囊收编到 `.regular`（9/4 归并到 10/5），字体与 tint 与档位默认一致，无需覆盖项.
+- `AppListView` 的「系统」标签有意不收编：底色是系统语义填充 `tertiarySystemFill`，无法用 tint + 不透明度精确复刻；字体 `captionEmphasis` 也不落在 `.tiny` 档上。已就地写明理由，避免后人误当漏改.
+
+### Step 3 批 8-B / 8-C：阴影与胶囊毛玻璃接 token
+
+- 新增 `TequilaDash/Views/AppSurfaceModifiers.swift`：`appCardShadow(_:)` / `appRaisedShadow(_:)` / `appGlassCapsule()` 三个 View 扩展，只读引用 DesignSystem 的 `AppShadow` 常量与同源材质，不改 token 本体.
+- `DomainBlockerView` 与 `WallpaperView` 的卡片投影改走 `AppShadow.card`（浅色黑 6% / radius 8 / y 2；深色按 token 设计为无投影）；`LaunchAppsView` 的底部提示条改走 `AppShadow.raised`（radius 4 → 12、y 0 → 4，是本版唯一有意的观感变化，回退只需改一行）.
+- 三处 Capsule 形状的毛玻璃背景收编到 `appGlassCapsule()`；`LaunchAppsView` 启动遮罩的形状承载改走 `appGlass(radius:)`.
+
+### 说明
+
+- 两处口径偏差已记录：`.shadow(` 由 15 降到 12（写域内三处已清零，其余在写域外），`appGlass(` 的真实调用点写域内只有一处，故形状为 Capsule 的三处按方案另开口，未越界凑数.
+- 深色下 `AppShadow.card` 为无投影，是 token 的既有设计意图，需真机确认观感.
+
 ## [0.3.694] - 2026-10-19
 
 ### 加载三档 / 错误行三形态 / 设备瘦身扫描上限 / Rust panic 兜底

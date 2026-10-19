@@ -18,6 +18,8 @@ struct WallpaperView: View {
     @State private var showExtractor = false
     @State private var showShareSheet = false
     @State private var extractedURL: URL?
+    /// 明暗模式：底部胶囊按钮的投影走 `AppShadow.card`（深色下为 .clear），需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     private let columns = Array(repeating: GridItem(.flexible()), count: UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2)
     private let handler = WallpaperHandler()
@@ -102,7 +104,7 @@ struct WallpaperView: View {
                         .background(
                             Capsule()
                                 .fill(AppSurface.card)
-                                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+                                .appCardShadow(colorScheme)
                         )
                     }
                     Spacer()

@@ -113,7 +113,7 @@ struct SignedIPAInstallView: View {
                     .font(.footnote)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .appGlassCapsule()
                     .padding(.bottom, 12)
                     .transition(.opacity)
                     .onAppear {

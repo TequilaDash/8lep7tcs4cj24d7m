@@ -21,6 +21,8 @@ struct LaunchAppsView: View {
     /// 常驻搜索框在滚动内容区顶部实测的遮挡高度（由 `SearchBarInsetProbe` 从系统视图树量出，不写死）.
     /// 首帧为 0；探针量到后立刻回填，内容区随即让位 —— 量到之前也不会比「不占位」更差.
     @State private var searchBarInset: CGFloat = 0
+    /// 明暗模式：底部提示条的浮层投影走 `AppShadow.raised`（深色下更重），需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     private var hasPairing: Bool { TunnelContext.shared.hasPairingFile }
 
@@ -121,9 +123,9 @@ struct LaunchAppsView: View {
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(.ultraThinMaterial))
+                    .appGlassCapsule()
                     .foregroundStyle(feedback.success ? .green : .red)
-                    .shadow(radius: 4)
+                    .appRaisedShadow(colorScheme)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.bottom, 24)
             }
@@ -145,9 +147,9 @@ struct LaunchAppsView: View {
                 ZStack {
                     JITAppIconView(bundleID: app.bundleID, size: 60)
                     if launchingBundleIDs.contains(app.bundleID) {
-                        RoundedRectangle(cornerRadius: 60 * (8.0 / 36.0), style: .continuous)
-                            .fill(.ultraThinMaterial)
+                        Color.clear
                             .frame(width: 60, height: 60)
+                            .appGlass(radius: 60 * (8.0 / 36.0))
                         ProgressView()
                     }
                 }

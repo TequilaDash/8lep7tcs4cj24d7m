@@ -263,12 +263,10 @@ struct ReclaimAppView: View {
             }
             Spacer(minLength: 8)
             if bucket.available, (bucket.files > 0 || bucket.bytes > 0) {
-                Text(role == .kept ? "保留" : ReclaimService.formatBytes(bucket.bytes))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(role.tint)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(role.tint.opacity(0.12), in: Capsule())
+                // Step 3 批 6-B：手写胶囊（9 / 4）收编到共享 `SizePill` 的 `.regular` 档（10 / 5）；
+                // 字体（caption + semibold）、tint、底色 12% 与档位默认逐项一致，无需覆盖项.
+                SizePill(text: role == .kept ? "保留" : ReclaimService.formatBytes(bucket.bytes),
+                         tint: role.tint)
             }
         }
         .padding(.vertical, 3)

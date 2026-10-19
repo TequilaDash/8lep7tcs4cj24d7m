@@ -670,6 +670,11 @@ struct AppListView: View {
         let badge: AnyView? = {
             if app.isSystem {
                 return AnyView(
+                    // Step 3 批 6-B：本处有意**不**收编到 `SizePill`，理由是复刻不了而不是漏改：
+                    // 底色是系统语义填充 `tertiarySystemFill`，无法用「tint + opacity」精确还原
+                    // （浅色 / 深色都会略偏，且随对比度设置变化）；字体 `AppFont.captionEmphasis`
+                    // 是 `.caption` + rounded + semibold，也不落在 `.tiny` 档的 `.caption2` 上。
+                    // 强改等于引入像素差异，故保持手写；待设计口径明确后再单独一轮处理.
                     Text("系统")
                         .font(AppFont.captionEmphasis)
                         .foregroundStyle(.secondary)

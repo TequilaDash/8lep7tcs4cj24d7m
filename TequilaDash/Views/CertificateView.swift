@@ -458,13 +458,13 @@ struct CertificateView: View {
                             .font(.subheadline.weight(.semibold))
                         if isWhitelisted(cert) {
                             // v0.3.131：白名单胶囊标签（自动撤销时放行）
-                            Text("白名单")
-                                .font(.caption2.weight(.bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(AppTheme.accent.opacity(0.15)))
-                                .foregroundColor(AppTheme.accent)
-
+                            // Step 3 批 6-B：手写胶囊收编到共享 `SizePill` 的 `.compact` 档
+                            // （caption2 + 6 / 2）。字重原为 `.bold`、底色原为 15%，均用覆盖项钉住.
+                            SizePill(text: "白名单",
+                                     tint: AppTheme.accent,
+                                     level: .compact,
+                                     weight: .bold,
+                                     fillOpacity: 0.15)
                         }
                     }
                     if let machine = cert.machineLabel {
@@ -475,12 +475,13 @@ struct CertificateView: View {
                 }
                 Spacer()
                 if cert.isExpired {
-                    Text("已过期")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.orange.opacity(0.16)))
+                    // Step 3 批 6-B：与左侧「白名单」同页并列，不再保留非档位的 9 / 4；
+                    // 归 `.regular` 档（caption + 10 / 5），字重 `.bold` 与底色 16% 用覆盖项钉住.
+                    SizePill(text: "已过期",
+                             tint: .orange,
+                             level: .regular,
+                             weight: .bold,
+                             fillOpacity: 0.16)
                 }
             }
             .contentShape(Rectangle())

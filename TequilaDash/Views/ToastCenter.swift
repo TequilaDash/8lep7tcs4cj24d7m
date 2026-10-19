@@ -42,7 +42,7 @@ struct ToastOverlay: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .appGlassCapsule()
                     .overlay(Capsule().stroke(Color.primary.opacity(0.06)))
                     .padding(.horizontal, 24)
                     .padding(.bottom, 26)

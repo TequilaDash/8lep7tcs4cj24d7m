@@ -20,6 +20,8 @@ struct DomainBlockerView: View {
     @State private var didGenerate = false
     @State private var shareTarget: ShareTarget?
     @State private var errorAlert: DomainBlockerAlert?
+    /// 明暗模式：卡片投影走 `AppShadow.card`（深色下为 .clear），需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     init() {
         let store = DomainBlockerStore.shared
@@ -195,7 +197,7 @@ struct DomainBlockerView: View {
                 .background(
                     Capsule()
                         .fill(AppSurface.card)
-                        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+                        .appCardShadow(colorScheme)
                 )
             }
         }
