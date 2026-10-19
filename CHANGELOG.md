@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.3.684] - 2026-10-19
+
+### Step 3 批 1：卡片底色接上 token（20 文件，纯换名零视觉变化）
+
+`AppSurface` 这组 token 在 v0.3.626 就写好了，但全仓 grep 命中 **0** —— 定义了却没人用。
+同一件事（卡片底取色）此前有 4 条并行路径，改一个底色要改 100 多个页面。
+本轮把系统分组色一次性换成 token，值与原值**逐字等价**，界面不会有一点变化。
+
+新增 token：
+  · `AppSurface.inner` —— 卡片里的嵌套块（`Color(uiColor: .tertiarySystemGroupedBackground)`）
+
+接入点：
+  · `AppCardBackground`（DesignSystem.swift）—— 全仓 `.appCard()` 的唯一出口，此前硬取系统色
+  · `AppLayout.swift` 内层容器底 —— 改 `AppSurface.inner`
+  · `PairingSetupView.swift` 卡片底 —— 顺带把字面量圆角 16 换成 `AppRadius.card`
+
+机械替换（值等价，逐行核对）：
+  · `Color(uiColor: .secondarySystemGroupedBackground)` / `Color(.secondarySystemGroupedBackground)` → `AppSurface.card`
+  · `Color(uiColor: .tertiarySystemGroupedBackground)` → `AppSurface.inner`
+  · `Color(uiColor: .systemGroupedBackground)` → `AppSurface.page`
+  · 共 18 个视图文件、33 处；注释行与 token 定义行一律跳过
+
+涉及文件：
+  AppFileBrowserView / AppLayout / AppStoreDetailView / BatteryHealthView(7 处) /
+  ConfigurationsView / DesignSystem / DeviceInfoSections(4 处) / DeviceInfoView(2 处) /
+  DialerThemeView / DomainBlockerView(2 处) / HealthCheckView(3 处) / I4MobileInstallView /
+  LaunchAppsView / PairingGuideCard / PairingSetupView(4 处) / PlistEditorView /
+  ProfileConfigView / StorageDetailView(2 处) / WebClipView / WallpaperView
+
+验证：
+  · `python Resources/Scripts/normalize_eol.py` —— 22 个文件换行与基线一致
+  · `python Resources/Scripts/swift_precommit_check.py .` —— 16 组守卫全绿（扫 302 个 .swift）
+  · 20 个改动文件 `swiftc -parse` 全部 EXIT=0，FAIL_TOTAL=0
+  · `git diff --numstat` 每处都是 1/1 对称替换（BatteryHealthView 7/7、PairingSetupView 4/4）
+  · CI run 39202756220（v0.3.683）success，本批在其之上只做换名
+
 ## [0.3.683] - 2026-10-19
 
 ### 内联错误行全仓收口到 AppErrorRow（28 处 / 23 文件）

@@ -101,7 +101,7 @@ struct WallpaperView: View {
                         .padding(.vertical, 12)
                         .background(
                             Capsule()
-                                .fill(Color(.secondarySystemGroupedBackground))
+                                .fill(AppSurface.card)
                                 .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
                         )
                     }

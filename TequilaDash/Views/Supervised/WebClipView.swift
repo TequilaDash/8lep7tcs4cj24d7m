@@ -38,7 +38,7 @@ struct WebClipView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         } else {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(.secondarySystemGroupedBackground))
+                                .fill(AppSurface.card)
                                 .frame(width: 72, height: 72)
                                 .overlay {
                                     Image(systemName: "plus")

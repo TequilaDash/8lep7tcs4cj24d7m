@@ -54,7 +54,7 @@ struct PairingGuideCard: View {
             // 与同页其它卡片天然一致，自绘 16pt 圆角永远差一点（用户实测截图）.
             if showsBackground {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(AppSurface.card)
             }
         }
     }

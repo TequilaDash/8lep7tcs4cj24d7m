@@ -161,7 +161,7 @@ struct DomainBlockerView: View {
         VStack(spacing: 16) {
             ZStack {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(AppSurface.card)
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "doc.badge.plus")
@@ -194,7 +194,7 @@ struct DomainBlockerView: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(AppSurface.card)
                         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
                 )
             }

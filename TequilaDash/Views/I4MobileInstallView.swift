@@ -616,7 +616,7 @@ struct I4MobileInstallView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(AppSurface.card)
             )
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         }

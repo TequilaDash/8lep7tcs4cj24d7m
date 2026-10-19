@@ -415,7 +415,7 @@ struct AppHeroHeader: View {
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .fill(AppSurface.inner)
                         )
                     }
                 }

@@ -179,7 +179,7 @@ struct StorageDetailView: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 
     @ViewBuilder
@@ -192,7 +192,7 @@ struct StorageDetailView: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 
     private func infoRow(_ label: String, _ value: String?) -> some View {

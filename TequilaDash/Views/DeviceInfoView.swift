@@ -146,7 +146,7 @@ struct DeviceInfoView: View {
         .padding(.vertical, 18)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -401,7 +401,7 @@ struct DeviceInfoView: View {
         .padding(.vertical, 30)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 }

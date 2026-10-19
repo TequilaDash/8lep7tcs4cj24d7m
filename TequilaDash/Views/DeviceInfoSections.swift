@@ -144,7 +144,7 @@ struct DeviceInfoSectionCard: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 }
 
@@ -170,7 +170,7 @@ struct DeviceInfoTextCard: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 }
 
@@ -209,7 +209,7 @@ struct DeviceInfoRawCard: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 }
 
@@ -233,7 +233,7 @@ struct StorageDetailLinkCard: View {
             }
             .padding(AppMetrics.cardPadding)
             .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                .fill(AppSurface.card))
         }
         .buttonStyle(.plain)
     }

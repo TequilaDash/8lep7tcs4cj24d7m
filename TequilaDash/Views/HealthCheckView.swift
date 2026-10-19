@@ -73,7 +73,7 @@ struct HealthCheckView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 
     private var progress: CGFloat {
@@ -110,7 +110,7 @@ struct HealthCheckView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 
     private var resultsCard: some View {
@@ -139,7 +139,7 @@ struct HealthCheckView: View {
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            .fill(AppSurface.card))
     }
 
     // v0.3.626：改走统一 token（阈值 90/70 与原实现一致，但取色改为明暗自适应）。

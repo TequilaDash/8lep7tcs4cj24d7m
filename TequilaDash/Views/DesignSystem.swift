@@ -1058,6 +1058,11 @@ enum AppSurface {
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
     /// 页面底色（跟随系统 grouped 背景，明暗自适应）.
     static let page = Color(uiColor: .systemGroupedBackground)
+    /// 内层容器底（卡片里的嵌套块，比卡片底再深一级）.
+    ///
+    /// v0.3.684：此前这类底在 AppLayout 里直接写 Color(uiColor: .tertiarySystemGroupedBackground)，
+    /// 全仓 2 处。值与 token 完全一致，只是给它一个名字，避免下一轮又长出第四种取色路径.
+    static let inner = Color(uiColor: .tertiarySystemGroupedBackground)
     /// 卡片描边（发丝，0.5pt 用）.
     static let cardBorder = Color(uiColor: .separator)
 }
@@ -1189,7 +1194,9 @@ struct AppCardBackground: ViewModifier {
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    // v0.3.684：卡片底统一走 token。此前这里硬取系统色，导致 AppSurface.card
+                    // 定义了却零消费（全仓 grep 命中 0），Step 3 批 1 把这条路径接上电.
+                    .fill(AppSurface.card)
             )
     }
 }

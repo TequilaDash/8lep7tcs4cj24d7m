@@ -133,7 +133,7 @@ struct BatteryHealthView: View {
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -190,7 +190,7 @@ struct BatteryHealthView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                        .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                        .fill(AppSurface.inner)
                 )
             }
         }
@@ -219,7 +219,7 @@ struct BatteryHealthView: View {
         .padding(AppMetrics.cardPadding)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -255,7 +255,7 @@ struct BatteryHealthView: View {
         .padding(AppMetrics.cardPadding)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -311,7 +311,7 @@ struct BatteryHealthView: View {
         .padding(.horizontal, AppMetrics.cardPadding)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -428,7 +428,7 @@ struct BatteryHealthView: View {
 
     private var errorCardBackground: some View {
         RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            .fill(AppSurface.card)
     }
 
     /// 调试：原始字段（字段缺失时可排查 iOS 版本差异）
@@ -455,7 +455,7 @@ struct BatteryHealthView: View {
         .padding(AppMetrics.cardPadding)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 }

@@ -55,7 +55,7 @@ struct PlistEditorView: View {
                         }
                         .padding(24)
                         .background(
-                            Color(.secondarySystemGroupedBackground),
+                            AppSurface.card,
                             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                         )
                     }

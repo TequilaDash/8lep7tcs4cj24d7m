@@ -112,8 +112,8 @@ struct PairingSetupView: View {
                     }
                     .padding(16)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(.secondarySystemGroupedBackground))
+                        RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                            .fill(AppSurface.card)
                     )
                     .padding(.horizontal)
                 }
@@ -274,7 +274,7 @@ struct PairingSetupView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
     }
 
@@ -329,7 +329,7 @@ struct PairingSetupView: View {
                             .padding(.vertical, 12)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(.secondarySystemGroupedBackground))
+                                    .fill(AppSurface.card)
                             )
                         Text("在另一台设备的 设置 › 隐私与安全性 › 开发者模式 中选择「与 TequilaDash 配对」，并输入上方配对码.")
                             .font(.subheadline)

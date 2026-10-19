@@ -348,7 +348,7 @@ struct ConfigurationsView: View {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundColor(.blue)
                         .frame(width: 30, height: 30)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(AppSurface.card)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("备份并分享配置")

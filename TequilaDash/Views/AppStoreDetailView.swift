@@ -755,7 +755,7 @@ struct InstallOptionsSheet: View {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
             .padding(12)
-            .background(Color(.secondarySystemGroupedBackground),
+            .background(AppSurface.card,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)

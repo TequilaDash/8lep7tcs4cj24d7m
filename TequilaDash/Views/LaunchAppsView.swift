@@ -163,7 +163,7 @@ struct LaunchAppsView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    .fill(AppSurface.card)
             )
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         }

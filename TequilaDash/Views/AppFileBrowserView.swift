@@ -384,7 +384,7 @@ struct AppFileBrowserView: View {
         .padding(.vertical, 44).padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(AppSurface.card)
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)

@@ -244,7 +244,7 @@ struct ProfileConfigView: View {
                 }
                 .padding(.vertical, 11)
                 .padding(.horizontal, 14)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(AppSurface.card)
             }
         }
     }
