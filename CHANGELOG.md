@@ -1,4 +1,14 @@
 # Changelog
+## [0.3.698] - 2026-10-19
+
+### 修复
+- **HexEditorView 的字节编辑框补齐三防**：`UInt8(_:radix:16)` 的失败模式是「返回非 nil 的垃圾」而不是「非法返回 nil」，`"+F"` 会静默写入 `0x0F`、空串会写入 `0x00`、超长会被旧逻辑解成垃圾值。
+  现在新增 `private static func hexByteValue(_:)`：非空 + 长度必须为 2 + `allSatisfy { $0.isHexDigit }` + `UInt8(_:radix:16)` 逐项通过才返回，口径对齐 `BigInt.swift:52` 与 `IPADownloadCenter.swift:1830`。
+  非法输入一律拒绝：不写字节、弹窗保持，`editHint` 给行内提示「需为 2 位十六进制，如 0A 或 FF.」；顺带修掉「点取消后 `editValue` 残留上次脏值」（新增 `cancelEdit()` 同时清偏移与输入）。
+
+### 自检
+- **撤销 `swift_hex_parse_guard.py` 里 HexEditorView 的豁免条目**：该点已修好，守卫实测 `已防护 8 / 已知豁免 0`，豁免留着每次都会打印一条 NOTE。
+
 ## [0.3.697] - 2026-10-19
 
 ### 新增 hex 解析口径守卫（第 17 组提交前自检）

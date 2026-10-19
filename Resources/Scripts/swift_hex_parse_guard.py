@@ -80,10 +80,10 @@ HEX_VALIDATORS = {
 # 已知豁免：本仓当前确实未防护、但不在本守卫写域的点。只报告，不改。
 # key = (相对仓库根路径, 作用域名)；用「路径 + 函数名」而不是行号，改行不会失效。
 WAIVERS = {
-    ("TequilaDash/Views/HexEditorView.swift", "applyEdit"):
-        "用户 hex 编辑框：UInt8(cleaned, radix: 16) 未挡前导正号（\"+F\" 解成 15），也未挡空串；见 gsa-hex-fix.md:175-176，留给该文件写域",
+    # v0.3.698：HexEditorView.applyEdit 的豁免已撤销 —— 该点已用 hexByteValue()
+    # 补齐字符集 / 空串 / 定长三防，守卫实测 OK，豁免条目不再命中（留着每次都会打 NOTE）。
+    # 新增豁免必须写「为什么本守卫不该管它」并钉出处，否则就是在掩盖缺陷。
 }
-
 MISSING_LABEL = {
     "charset": "缺字符集校验（UInt8(_:radix:16) 接受前导正号 \"+F\" / 非 hex 字符）-> 补 allSatisfy { $0.isHexDigit }",
     "empty": "缺空串校验（空串 / 裸 0x 会被当成零值）-> 补 guard !x.isEmpty",
