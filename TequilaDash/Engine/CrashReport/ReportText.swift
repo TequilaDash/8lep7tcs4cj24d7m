@@ -43,7 +43,7 @@ enum ReportText {
 /// The date spellings reports use: `2026-09-08 19:17:17.00 +0900` in the
 /// header, four fractional digits in `captureTime`, none at all in some logs.
 enum ReportDates {
-    private static let formatters: [DateFormatter] = [stamp] + [
+    private nonisolated(unsafe) static let formatters: [DateFormatter] = [stamp] + [
         "yyyy-MM-dd HH:mm:ss.SSS Z",
         "yyyy-MM-dd HH:mm:ss.SS Z",
         "yyyy-MM-dd HH:mm:ss Z",
@@ -51,7 +51,7 @@ enum ReportDates {
 
     /// `2026-09-08 19:17:17.0000 +0900` — the header's spelling, and the one
     /// the classic report prints back.
-    static let stamp = make("yyyy-MM-dd HH:mm:ss.SSSS Z")
+    nonisolated(unsafe) static let stamp = make("yyyy-MM-dd HH:mm:ss.SSSS Z")
 
     /// `Fila-2026-09-08-191717.ips`. The name is stamped in the device's local
     /// time, so it is read back in the current zone — the formatter's default.

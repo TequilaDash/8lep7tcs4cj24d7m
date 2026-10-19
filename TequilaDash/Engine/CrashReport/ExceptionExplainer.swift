@@ -46,7 +46,7 @@ enum ExceptionExplainer {
         }
     }
 
-    private struct Rule {
+    private struct Rule: Sendable {
         let matches: (Signals) -> Bool
         let sentence: (Signals) -> String
     }
@@ -61,7 +61,7 @@ enum ExceptionExplainer {
 
     // Ordered: a termination namespace is a more specific answer than the
     // signal that carried it, so the kills come before the exceptions.
-    private static let rules: [Rule] = [
+    private nonisolated(unsafe) static let rules: [Rule] = [
         Rule(matches: { $0.namespace == "SPRINGBOARD" || $0.code == 0x8BAD_F00D }, sentence: { _ in
             "The system's watchdog killed the app because it took too long to launch, resume or quit — "
                 + "something blocked the main thread."

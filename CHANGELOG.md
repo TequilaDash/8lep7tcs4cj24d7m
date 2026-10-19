@@ -1,4 +1,9 @@
 # Changelog
+## [0.3.706] - 2026-10-20
+
+### 修复
+- 崩溃解析层并发守卫补齐：ExceptionExplainer.Rule 标 Sendable，rules 与 DateFormatter 缓存标 nonisolated(unsafe)（v0.3.704 CI 的 [#MutableGlobalVariable]）.
+
 ## [0.3.705] - 2026-10-20
 
 ### 新增
