@@ -461,6 +461,13 @@ struct DeviceSlimView: View {
                 errorText = nil
                 sizeNote = nil
             }
+            // v0.3.705：空间占用数字本身的不完整说明（usage 落地后取走一次，避免跨轮残留）.
+            // 与上面的 appRead 提示共用 sizeNote 通道，不另开状态.
+            if let usageIssue = DeviceSlimService.consumeUsageIssue() {
+                let count = usageIssue.components(separatedBy: " / ").count
+                let summary = "有 \(count) 类数据未能读取: \(usageIssue). 以下数字不含这些项."
+                sizeNote = sizeNote.map { $0 + " · " + summary } ?? summary
+            }
             await probeAvailability()
         } catch {
             errorText = "读取失败：\(error.localizedDescription)"

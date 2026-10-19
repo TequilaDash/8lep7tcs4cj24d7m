@@ -256,11 +256,21 @@ enum AppleAuthenticator {
         }
         guard errorCode == 0 else {
             switch errorCode {
-            case -20101, -22406: throw AppleAPIError.incorrectCredentials
+            // 2026-10-15 起「查无此 Apple ID」由 -20101 变为 -20970（对齐 SideInstaller
+            // a93da4697 的 Engine.swift credentialErrorCodes）；-20101/-22406 仍是密码错误。
+            case -20101, -20970, -22406: throw AppleAPIError.incorrectCredentials
             case -22421:
                 LoginLogger.shared.log("[失败] Apple 拒绝 Anisette(-22421): \(errorMessage)", category: .appleID)
                 throw AppleAPIError.customError(code: -22421, message: "Anisette 被 Apple 拒绝: \(errorMessage)")
             case -20209: throw AppleAPIError.accountLocked
+            // 2026-10-12 起 GSA 拒绝「登录客户端系统 ≠ 机器标识所用 ADI 库」的登录：
+            // 公共 Anisette 服务器多用 Android ADI 库，客户端标识却报 macOS → 必现 -80045。
+            // 判据收口对齐 SideInstaller d9c283190「Fix Apple ID sign-in failing with -80045」。
+            case -80045:
+                LoginLogger.shared.log("[失败] Apple 拒绝登录(-80045): \(errorMessage)", category: .appleID)
+                throw AppleAPIError.customError(
+                    code: -80045,
+                    message: "登录客户端系统与 Anisette 机器标识的 ADI 库不匹配.请在 Anisette 设置中调整客户端标识，或更换匹配的 Anisette 服务器.")
             default:
                 guard !errorMessage.isEmpty else { throw AppleAPIError.unknown }
                 throw AppleAPIError.customError(code: errorCode, message: errorMessage)
@@ -273,6 +283,15 @@ enum AppleAuthenticator {
     static func makeTwoFactorCodeRequest(url: URL, dsid: String, idmsToken: String, anisetteData: AnisetteData) -> URLRequest {
         let identityToken = "\(dsid):\(idmsToken)"
         let encodedIdentityToken = identityToken.data(using: .utf8)?.base64EncodedString() ?? ""
+
+        // gsa.apple.com/auth/*（受信任设备重发、短信/电话取码、验证码校验页）：
+        // 2026-10 起 Android 客户端标识会被这些页面直接回 403（不读身份头），
+        // Mac/Windows/iPhone 形态才进入身份校验；这些请求固定按 Mac 标识发送.
+        // 验证码提交走 GsService2/validate（非 /auth 页面），保留 Anisette 自带标识.
+        // 判据对齐 SideInstaller f6c03b3de「Bring back the 2FA code by text or phone call」.
+        let clientInfo = url.path.contains("/auth")
+            ? "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+            : anisetteData.deviceDescription
 
         let httpHeaders = [
             "Accept": "application/x-buddyml",
@@ -287,7 +306,7 @@ enum AppleAuthenticator {
             "X-Apple-I-MD-LU": anisetteData.localUserID,
             "X-Apple-I-MD-RINFO": "\(anisetteData.routingInfo)",
             "X-Mme-Device-Id": anisetteData.deviceUniqueIdentifier,
-            "X-MMe-Client-Info": anisetteData.deviceDescription,
+            "X-MMe-Client-Info": clientInfo,
             "X-Apple-I-Client-Time": dateFormatter.string(from: anisetteData.date),
             "X-Apple-Locale": anisetteData.locale.identifier,
             "X-Apple-I-TimeZone": anisetteData.timeZone.abbreviation() ?? "PST"
@@ -327,7 +346,10 @@ enum AppleAuthenticator {
         let verifyURL = URL(string: "https://gsa.apple.com/grandslam/GsService2/validate")!
 
         let request = makeTwoFactorCodeRequest(url: requestURL, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData)
-        _ = try await GrandSlamHTTP.data(for: request)
+        let (pageData, pageResponse) = try await GrandSlamHTTP.data(for: request)
+        if pageResponse.statusCode != 200 {
+            LoginLogger.shared.log("[失败] 受信任设备验证码请求页 HTTP \(pageResponse.statusCode): \(String(data: pageData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
+        }
 
         let verificationCode = try await withCheckedThrowingContinuation { continuation in
             Task {
@@ -366,7 +388,10 @@ enum AppleAuthenticator {
         request.httpMethod = "POST"
         let bodyXML = ["serverInfo": ["phoneNumber.id": "1"]] as [String: Any]
         request.httpBody = try PropertyListSerialization.data(fromPropertyList: bodyXML, format: .xml, options: 0)
-        _ = try await GrandSlamHTTP.data(for: request)
+        let (putData, putResponse) = try await GrandSlamHTTP.data(for: request)
+        if putResponse.statusCode != 200 {
+            LoginLogger.shared.log("[失败] 短信验证码请求页 HTTP \(putResponse.statusCode): \(String(data: putData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
+        }
 
         let verificationCode = try await withCheckedThrowingContinuation { continuation in
             Task {

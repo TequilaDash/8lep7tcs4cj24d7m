@@ -337,7 +337,7 @@ enum NiuwaStoreClient {
         /// · `IPADownloadCenter.Job.sinfBase64` 收下它（`start(...)` 的 `sinfBase64:` 参数，
         ///   由 `startNiuwaDownload`（`Views/I4StoreFreeView.swift`）传入）；
         /// · 下载落盘后、安装前，由 `IPADownloadCenter` 的 `PackageSINFWriter`
-        ///   把 base64 解码成 `Data`，**追加**写进包内
+        ///   把 base64 解码成 `Data`，写进包内
         ///   `Payload/<App>.app/SC_Info/<CFBundleExecutable>.sinf`。
         ///
         /// **它是什么**：base64 解出来是**标准 `.sinf` 容器**，不是别的包装格式 ——
@@ -345,10 +345,10 @@ enum NiuwaStoreClient {
         /// 正是 `.sinf` 的长度前缀 + tag 结构。所以它是「可以直接丢进 `SC_Info/` 的那份文件」，
         /// **不要再给它加任何包装/加密**。
         ///
-        /// **还剩一处没做**（留给下一个需要的人）：`PackageSINFWriter` 只能在条目**不存在**时追加 ——
-        /// 现有 ZIP 写入器（`vendor/ApplePackage/Supplement/ZipFoundationShim.swift`）**没有删除条目**的
-        /// 能力，所以「包内已有一份别的设备的 sinf、要替换掉」这种情形目前只会记日志跳过。
-        /// 真机上若是那种包，症状会是**装上了但启动崩 / installd 报解密失败**，而不是"缺少 sinf"。
+        /// **「包内已有别的设备的 sinf」已处理**：ZIP 写入器（`vendor/ApplePackage/Supplement/ZipFoundationShim.swift`）
+        /// 有 `removeEntry(with:)`（v0.3.546 新增）；`PackageSINFWriter` 遇到包内已有 sinf 时
+        /// **替换**成服务端下发的这份 —— v0.3.560 起走整包重写（`ApplePackageArchive.replaceEntries`），
+        /// v0.3.568 起写入包内全部 `SC_Info/*.sinf` 路径，不再记日志跳过。
         ///
         /// **历史**（为什么非要写回包里）：本项目两条安装链路的 sinf 都不是"传参数"进去的，
         /// 而是**从包里读**：

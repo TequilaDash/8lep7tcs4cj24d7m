@@ -138,6 +138,12 @@ struct NBStoreDetailView: View {
             ImageGalleryViewer(urls: target.urls, startIndex: target.index)
         }
         .task { await loadAll() }
+        // v0.3.705：三方版本目录的 3 分钟负缓存只有下拉刷新能立刻解除（fetch 成功才自清），
+        // 原来本页没有刷新入口，撞上负缓存即停在错误页且无法自救.
+        .refreshable {
+            AppStoreService.clearCatalogFailure(appId: trackID)
+            await loadAll()
+        }
     }
 
     // MARK: - 头部（图标 + 名称 + 开发者 + 价格）
@@ -477,6 +483,12 @@ struct NBStoreDetailView: View {
     ///
     /// v0.3.549：前面先插一步 **ID 解析**（下架记录带的是 NB 行号，不是 App Store ID）.
     private func loadAll() async {
+        // v0.3.705：先复位再取 —— 原来不复位任何 @State，detail 一旦被下架库内嵌 lookup 填上，
+        // loadDetail 的 ②③④ 跳与 loadVersions 的 errorText 清理都不会再执行，刷新等于重放旧结果.
+        detail = nil
+        detailErrorText = nil
+        versions = []
+        errorText = nil
         await resolveTrackIDIfNeeded()
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await loadDetail() }

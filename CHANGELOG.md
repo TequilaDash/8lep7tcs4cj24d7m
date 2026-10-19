@@ -1,4 +1,21 @@
 # Changelog
+## [0.3.705] - 2026-10-20
+
+### 新增
+- Apple ID 登录错误可执行提示：-20970 并入凭据错误（对齐 SideInstaller a93da4697）；新增 -80045 专项文案（登录客户端与 Anisette ADI 库不匹配）；错误 2160 停止流程并指向 account.apple.com 验证邮箱；/auth 二次验证页固定 Mac 客户端标识，恢复 Android 形态 Anisette 下短信取码（appleid-signin-fixes）.
+- Anisette 服务器一库一身份：provision 先验证再入库，记录身份配对来源；同库轮换保留身份；macOS/Windows ADI 服务器分类并放最后尝试；503 按设备计数、剩余全被拒提前结束（anisette-servers-identity）.
+- 需要隧道时按需拉起 LocalDevVPN：新增开关与 startWhenNeeded()，安装预检隧道不通时调用（localdevvpn-on-demand）.
+- 崩溃分析接入 Xrash 解析层：日志条目补大小与修改时间；识别 .ips.synced / .ips.ca.synced；结构化摘要（含异常解释）；按文件名搜索；单份分享（xrash-wiring）.
+- 崩溃日志负缓存自救：NB 详情页加下拉刷新并复位加载状态（对应 audit-nbstore F-02/F-03）.
+
+### 修复
+- 文档浏览类型判定降级时界面给一行事实提示（profile 通道读失败时标签偏保守）.
+- 设备瘦身空间占用、备份与重装恢复三处「数据不完整」信号接入界面（p2-13-hints）.
+ NiuwaStoreClient 注释订正：包内已有 sinf 时走整包重写替换，不再跳过（p2-14-niuwa）.
+
+### 校验
+swiftc -parse 14 个改动文件 PARSE_FAIL=0；precommit 17 组守卫命中 0.
+
 ## [0.3.704] - 2026-10-19
 
 ### 新增

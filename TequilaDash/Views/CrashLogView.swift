@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 崩溃分析：通过「配对文件 + LocalDevVPN」隧道读取本机崩溃 / 诊断日志
 /// （对应 iOS「设置 → 隐私与安全性 → 分析与改进」），支持查看内容、
+/// 结构化摘要（Xrash 解析）、按文件名搜索、单份分享，
 /// 批量选择（含全选）导出到本机与删除.
 struct CrashLogView: View {
     @State private var entries: [CrashLogService.Entry] = []
@@ -19,6 +20,15 @@ struct CrashLogView: View {
     @State private var busy = false
     /// 进度文本（如「3 / 12」）.
     @State private var progressText: String?
+    /// 行内搜索词（按文件名大小写不敏感匹配）.
+    @State private var searchText = ""
+    /// 行级分享：已拉取的单份日志文本与呈现开关.
+    @State private var shareText = ""
+    @State private var showShareSheet = false
+    @State private var shareLoading = false
+    /// 预览结构化摘要（ReportDecoder 解析失败为 nil）与摘要 / 原文切换.
+    @State private var previewAnalysis: String?
+    @State private var showRawPreview = false
     /// 明暗模式：进度遮罩卡投影走 `AppShadow.raised`，需显式传入.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -46,8 +56,15 @@ struct CrashLogView: View {
                                                   message: "设备上没有可读取的崩溃日志.",
                                                   icon: "doc.text"))
                 } else {
-                    ForEach(entries) { entry in
+                    ForEach(visibleEntries) { entry in
                         row(entry)
+                    }
+                    if !entries.isEmpty && visibleEntries.isEmpty {
+                        Text("没有匹配的日志.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
                     }
                 }
             } header: {
@@ -126,12 +143,33 @@ struct CrashLogView: View {
                         Text("（空文件）")
                             .foregroundColor(.secondary)
                     } else {
-                        ScrollView {
-                            Text(previewText)
-                                .font(.system(.footnote, design: .monospaced))
-                                .textSelection(.enabled)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(spacing: 0) {
+                            if previewAnalysis != nil {
+                                Picker("预览视图", selection: $showRawPreview) {
+                                    Text("摘要").tag(false)
+                                    Text("原文").tag(true)
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                            }
+                            if showRawPreview || previewAnalysis == nil {
+                                ScrollView {
+                                    Text(previewText)
+                                        .font(.system(.footnote, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .padding()
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            } else {
+                                ScrollView {
+                                    Text(previewAnalysis ?? "")
+                                        .font(.system(.footnote, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .padding()
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
                         }
                     }
                 }
@@ -155,6 +193,10 @@ struct CrashLogView: View {
             Text("删除后无法恢复.")
         }
         .toastHost()
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索日志文件名")
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: [shareText])
+        }
         .onAppear {
             if entries.isEmpty && errorMessage == nil { reload() }
         }
@@ -187,6 +229,51 @@ struct CrashLogView: View {
         .background(.bar)
     }
 
+    /// 搜索过滤后的条目（按文件名大小写不敏感匹配；搜索词为空即全部条目）.
+    private var visibleEntries: [CrashLogService.Entry] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return entries }
+        return entries.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    /// 文件行副标题：大小 + 修改时间（list 时随 afc_get_file_info 一并取回）.
+    private func rowDetail(_ entry: CrashLogService.Entry) -> String? {
+        guard !entry.isDirectory else { return nil }
+        var parts: [String] = [ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)]
+        if let modified = entry.modified {
+            parts.append(modified.formatted(date: .abbreviated, time: .shortened))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// 行级分享：拉取单份日志原文并交给系统分享面板.
+    private func share(_ entry: CrashLogService.Entry) {
+        guard !isEditing, !busy, !shareLoading, !entry.isDirectory else { return }
+        shareLoading = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let data = try service.pull(entry.path)
+                let text = String(data: data, encoding: .utf8)
+                    ?? String(data: data, encoding: .utf16)
+                    ?? ""
+                DispatchQueue.main.async {
+                    shareLoading = false
+                    if text.isEmpty {
+                        ToastCenter.shared.show("日志内容为空，无法分享.")
+                    } else {
+                        shareText = text
+                        showShareSheet = true
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    shareLoading = false
+                    ToastCenter.shared.show("无法打开：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     // MARK: - 行
 
     private func row(_ entry: CrashLogService.Entry) -> some View {
@@ -194,9 +281,17 @@ struct CrashLogView: View {
             Image(systemName: entry.isDirectory ? "folder.fill" : "doc.text.fill")
                 .foregroundColor(entry.isDirectory ? .blue : .secondary)
                 .frame(width: 28)
-            Text(entry.name)
-                .font(.subheadline)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                if let detail = rowDetail(entry) {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
             Spacer()
             if !isEditing && !entry.isDirectory {
                 Image(systemName: "chevron.right")
@@ -208,6 +303,16 @@ struct CrashLogView: View {
         .onTapGesture {
             guard !isEditing else { return }
             open(entry)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !entry.isDirectory {
+                Button {
+                    share(entry)
+                } label: {
+                    Label("分享", systemImage: "square.and.arrow.up")
+                }
+                .tint(.accentColor)
+            }
         }
     }
 
@@ -242,6 +347,8 @@ struct CrashLogView: View {
             return
         }
         previewEntry = entry
+        previewAnalysis = nil
+        showRawPreview = false
         previewText = ""
         previewLoading = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -249,8 +356,10 @@ struct CrashLogView: View {
                 let data = try service.pull(entry.path)
                 let text = String(data: data, encoding: .utf8)
                     ?? String(data: data, encoding: .utf16) ?? "（二进制内容，无法显示）"
+                let analysis = service.analyze(data: data, fileName: entry.name)
                 DispatchQueue.main.async {
                     previewText = text
+                    previewAnalysis = analysis
                     previewLoading = false
                 }
             } catch {
@@ -264,10 +373,12 @@ struct CrashLogView: View {
     }
 
     private func selectAll() {
-        if selection.count == entries.count {
-            selection.removeAll()
+        let visible = visibleEntries
+        let allSelected = !visible.isEmpty && visible.allSatisfy { selection.contains($0.id) }
+        if allSelected {
+            visible.forEach { selection.remove($0.id) }
         } else {
-            selection = Set(entries.map(\.id))
+            visible.forEach { selection.insert($0.id) }
         }
     }
 

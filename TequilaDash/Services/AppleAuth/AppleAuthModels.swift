@@ -154,7 +154,14 @@ enum AppleAPIError: Error, LocalizedError {
         case .accountLocked: return "Apple ID 已被锁定"
         case .sessionExpired:
             return "Apple 会话已过期（错误 1100）.请到「更多 → 设置 → Apple ID 账户」退出并重新登录；如果在 IPA 侧载页登录过同一账号，重新登录一次即可恢复."
-        case .customError(let code, let message): return "错误 \(code)：\(message)"
+        case .customError(let code, let message):
+            // 上游 612319dbf：developer error 2160 = 账号邮箱未验证，Apple 拒绝其使用开发者服务.
+            // 重试登录、更换 Anisette 服务器均无效；已保存的登录仍有效，停止流程并指向 account.apple.com.
+            // （上游在 rust 侧同时停止了重签循环；本项目登录路径本身单次尝试，无循环可停.）
+            if code == 2160 || message.lowercased().contains("developer error 2160") {
+                return "Apple 拒绝该账号使用开发者服务（错误 2160）：账号邮箱未验证.请先到 account.apple.com 验证邮箱；已保存的登录仍然有效，无需重新登录."
+            }
+            return "错误 \(code)：\(message)"
         }
     }
 

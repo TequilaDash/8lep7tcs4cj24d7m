@@ -846,6 +846,13 @@ final class IPADownloadCenter: ObservableObject {
                 LoginLogger.shared.log(
                     "[下载中心] 隧道预检未通过（\(LocalDevVPN.targetIP):49152），仍继续尝试安装：\(fileName).",
                     category: .download)
+                // 对齐上游 91fcb9e94：隧道不通时按需拉起 LocalDevVPN（深链连接后自动回本应用），
+                // 安装链仍由 createTunnel 的退避重试与安装看门狗承接，不新增等待.
+                if LocalDevVPN.startWhenNeeded() {
+                    LoginLogger.shared.log(
+                        "[下载中心] 已按需发起 LocalDevVPN 拉起，连接后自动返回继续安装：\(fileName).",
+                        category: .download)
+                }
             }
             if let sinfBase64 {
                 PackageSINFWriter.writeIfNeeded(sinfBase64: sinfBase64, ipaPath: path)

@@ -16,6 +16,8 @@ struct FileSharingAppsView: View {
     /// v0.3.364：渐进式类型标签——首屏不等 profile，后台算完一批回填一批
     @State private var appTypes: [String: AppType] = [:]
     @State private var typesSettled = false
+    /// v0.3.705：类型判定降级项（profile 通道读失败时非空），只用于一行提示.
+    @State private var typeContextIssues: [String] = []
     /// v0.3.270：Documents 容器大小（bundleId → 字节，后台懒算回填）
     @State private var docSizes: [String: Int64] = [:]
     @State private var computingDocs: Set<String> = []
@@ -47,6 +49,12 @@ struct FileSharingAppsView: View {
                             ForEach(FileSharingTypeClass.allCases) { type in
                                 Text(type.rawValue).tag(FileSharingTypeClass?.some(type))
                             }
+                        }
+                        if !typeContextIssues.isEmpty {
+                            // v0.3.705：profile 通道读失败时类型标签会偏保守，只陈述事实.
+                            Label("有 \(typeContextIssues.count) 项判定降级, 类型标签可能偏保守.", systemImage: "info.circle")
+                                .font(AppFont.footnote)
+                                .foregroundStyle(AppTheme.pending)
                         }
                     }
                     Section {
@@ -487,6 +495,7 @@ struct FileSharingAppsView: View {
             }
             // ② profile 上下文 + 分批判定（get_apps 字段 + profile）
             let context = FileSharingService.fetchAppTypeContext()
+            await MainActor.run { self.typeContextIssues = context.issues }
             let batchSize = 8
             var index = 0
             while index < workList.count {

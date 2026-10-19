@@ -25,6 +25,11 @@ final class CrashLogService {
         let name: String
         let path: String
         let isDirectory: Bool
+        /// 文件字节数（目录为 0）；list 走 AFCService.listDirectory 时已逐条
+        /// afc_get_file_info，带上这两个字段不产生额外 FFI 往返.
+        let size: Int64
+        /// 修改时间（AFC 秒级时间戳，取不到为 nil）.
+        let modified: Date?
         var id: String { path }
     }
 
@@ -166,13 +171,56 @@ final class CrashLogService {
 
     // MARK: - 列表 / 拉取 / 删除（AFC 视图）
 
+    /// 崩溃日志判据：`.ips` 及系统已同步形态 `.ips.synced` / `.ips.ca.synced`
+    /// （上游 Xrash 66 份真机样本中 52 份是 synced 形态，只认 `.ips` 会漏掉大多数）.
+    static func isCrashLogName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.hasSuffix(".ips")
+            || lower.hasSuffix(".ips.synced")
+            || lower.hasSuffix(".ips.ca.synced")
+    }
+
+    /// Xrash 结构化解析：把拉取到的日志交给 ReportDecoder，返回
+    /// 「摘要字段 + 一句话解释」文本；空文件 / 非文本等解析失败返回 nil，
+    /// 调用方退回原文预览.
+    func analyze(data: Data, fileName: String) -> String? {
+        guard let report = try? ReportDecoder.decode(data, fileName: fileName) else { return nil }
+        let execPath = report.crash?.process.path
+        var row = ReportDecoder.summary(path: fileName, byteCount: UInt64(data.count), modified: Date())
+        row = ReportDecoder.enrich(row, header: report.header,
+                                   executablePath: (execPath?.isEmpty == true) ? nil : execPath)
+        var lines: [String] = []
+        lines.append("Process: \(row.processName)")
+        if let bugType = row.bugType {
+            lines.append("Kind: \(row.kind.rawValue) (bug_type \(bugType))")
+        } else {
+            lines.append("Kind: \(row.kind.rawValue)")
+        }
+        lines.append("Date: \(row.date.formatted(date: .abbreviated, time: .standard))")
+        lines.append("Size: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))")
+        if let bundleID = row.bundleID { lines.append("Bundle ID: \(bundleID)") }
+        if let version = row.appVersion { lines.append("Version: \(version)") }
+        if let os = row.osVersion { lines.append("OS: \(os)") }
+        if let incident = row.incidentID { lines.append("Incident: \(incident)") }
+        if row.isSynced { lines.append("Synced: yes") }
+        lines.append("")
+        if let crash = report.crash {
+            lines.append(ReportExplainer.explanation(for: crash))
+        } else if let panic = report.panic {
+            lines.append(panic.panicString.split(separator: "\n").first.map(String.init) ?? "")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// 列出日志目录.`subdirectory` 为 nil 时列根目录
     /// （含 CrashReporter / DiagnosticLogs / Logs 等子目录，v0.2.127 起可进入）.
+    /// 列表本身不做后缀过滤，`.ips` / `.ips.synced` / `.ips.ca.synced` 均按原样返回
+    /// （是否算崩溃日志用 `isCrashLogName(_:)` 判定）.
     func list(subdirectory: String? = nil) throws -> [Entry] {
         try syncOnQueue {
             try withAfcClient { afc in
                 let list = try AFCService.listDirectory(client: afc, path: subdirectory ?? "/")
-                return list.map { Entry(name: $0.name, path: $0.path, isDirectory: $0.isDirectory) }
+                return list.map { Entry(name: $0.name, path: $0.path, isDirectory: $0.isDirectory, size: $0.size, modified: $0.modified) }
             }
         }
     }
@@ -191,14 +239,15 @@ final class CrashLogService {
         return entries.filter { !$0.isDirectory && $0.name.lowercased().hasPrefix("panic-full") }.count
     }
 
-    /// App / 系统守护进程的崩溃报告条数（不含 panic、不含资源与网络诊断）
+    /// App / 系统守护进程的崩溃报告条数（不含 panic、不含资源与网络诊断；
+    /// 后缀判据为 `isCrashLogName(_:)`，含 .ips.synced / .ips.ca.synced 形态）
     func appCrashReportCount() throws -> Int {
         let entries = try list()
         let excluded = ["diskwrites_resource", "wifilqmmetrics", "metric", "shutterbug", "jetsamevent"]
         return entries.filter { entry in
             guard !entry.isDirectory else { return false }
             let name = entry.name.lowercased()
-            guard name.hasSuffix(".ips") else { return false }
+            guard Self.isCrashLogName(name) else { return false }
             return !name.hasPrefix("panic-full") && !excluded.contains { name.contains($0) }
         }.count
     }

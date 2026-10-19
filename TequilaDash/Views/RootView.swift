@@ -218,6 +218,8 @@ struct SettingsForm: View {
     @State private var certTask: Task<Void, Never>?
     @State private var certError: String?
     @AppStorage("TunnelDeviceIP") private var tunnelIP: String = "10.7.0.1"
+    /// 对齐上游 91fcb9e94：需要隧道而未连接时自动拉起 LocalDevVPN.默认开.
+    @AppStorage(LocalDevVPN.autoStartKey) private var autoStartLocalDevVPN: Bool = true
     @AppStorage("AnisetteServer") private var anisetteServer: String = "https://ani.stikstore.app"
     /// v0.3.379：在线安装的清单 HTTPS 托管地址（留空则用公共临时托管）
     @AppStorage(OnlineInstallConfig.endpointKey) private var onlineInstallEndpoint: String = ""
@@ -351,11 +353,12 @@ struct SettingsForm: View {
                 }
             }
 
-            Section(header: Text("本地隧道"), footer: Text("必须与 LocalDevVPN 的隧道/设备 IP 一致.保持默认的 10.7.0.1，除非你修改过 LocalDevVPN.")) {
+            Section(header: Text("本地隧道"), footer: Text("必须与 LocalDevVPN 的隧道/设备 IP 一致.保持默认的 10.7.0.1，除非你修改过 LocalDevVPN.开启后，安装时隧道不通会自动拉起 LocalDevVPN.")) {
                 TextField("设备 IP（默认 10.7.0.1）", text: $tunnelIP)
                     .keyboardType(.numbersAndPunctuation)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
+                Toggle("需要隧道时拉起 LocalDevVPN", isOn: $autoStartLocalDevVPN)
             }
 
             Section(header: Text("配对文件")) {

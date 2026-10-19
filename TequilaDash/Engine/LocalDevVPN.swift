@@ -247,6 +247,47 @@ enum LocalDevVPN {
         }
     }
 
+    /// 对齐上游 91fcb9e94「LocalDevVPN: start it when the tunnel is needed, not at launch」：
+    /// 上游把「启动/回前台拉起」改为「需要隧道时拉起」（Engine.tunnelUp() + startsVPNWhenNeeded）.
+    /// 本仓没有启动期拉起，这里只落按需拉起的最小判据.
+    /// 「需要隧道时自动拉起 LocalDevVPN」开关的存储键.默认开，与上游 autoStartLocalDevVPN 一致.
+    static let autoStartKey = "TequilaDash.AutoStartLocalDevVPN"
+
+    /// 上次按需拉起的时间键.5 秒冷却内不重复拉起（对齐上游 tunnelUp() 的 handingOver 判据）.
+    private static let lastHandoverKey = "TequilaDash.LocalDevVPNLastHandover"
+
+    /// 「需要隧道时拉起」开关状态.未设置时默认 true.
+    static var autoStartWhenNeeded: Bool {
+        (UserDefaults.standard.object(forKey: autoStartKey) as? Bool) ?? true
+    }
+
+    /// 需要隧道而未连接时按需拉起 LocalDevVPN：深链 enableURL 连接后自动经 scheme 回本应用.
+    /// 仅当用户选择的隧道方式是 LocalDevVPN 且当前没有 utun 时生效；5 秒冷却内不重复拉起.
+    /// 返回 true = 已发起拉起（UIKit 调用统一派发主线程，可能在主队列异步执行）.
+    @discardableResult
+    static func startWhenNeeded() -> Bool {
+        guard autoStartWhenNeeded else { return false }
+        guard TunnelManager.selectedKind == .localDevVPN else { return false }
+        guard !isConnected else { return false }
+        if let last = UserDefaults.standard.object(forKey: lastHandoverKey) as? Date,
+           Date().timeIntervalSince(last) < 5 {
+            return false
+        }
+        let handOver = {
+            guard isInstalled else { return }
+            UserDefaults.standard.set(Date(), forKey: lastHandoverKey)
+            openOrInstall()
+        }
+        // isInstalled（canOpenURL）与 openOrInstall（UIApplication.shared.open）都是 UIKit 调用；
+        // 调用方可能在后台线程（安装预检跑在 Task.detached），统一派发主线程.
+        if Thread.isMainThread {
+            handOver()
+        } else {
+            DispatchQueue.main.async(execute: handOver)
+        }
+        return true
+    }
+
     /// 首个合格的点对点 utun 对端地址（= `utunPeerIPv4Candidates()` 的第一项）.
     /// 单地址版；蜂窝就绪轮询改走多候选 `isAnyCandidateReachable(timeout:)`.
     ///

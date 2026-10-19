@@ -108,7 +108,101 @@ final class AnisetteProvider {
         return text
     }
 
+    // MARK: - 服务器分类与顺序（对齐 SideInstaller 56ecbf823 / edb277cd1）
+
+    /// 已知运行 Apple macOS ADI 库的服务器主机（上游 macADIHosts）.
+    static let macADIHosts: Set<String> = ["mac-ani.jkcoxson.com", "new.ani.sidestore.io"]
+
+    /// 已知运行 Apple Windows ADI 库的服务器主机（上游 windowsADIHosts）.
+    static let windowsADIHosts: Set<String> = ["ani.jkcoxson.com", "win.ani.sidestore.io", "ani2.stikstore.app"]
+
+    /// 服务器运行的 ADI 库："mac" / "windows" / "android"（上游 AnisetteServer.library）.
+    /// 已知主机命中；否则按地址子串判（上游按列表显示名判 "mac adi" / "windows"，
+    /// 本仓内置列表条目是纯 URL、无显示名，退化为地址子串判据）；默认 android.
+    static func adiLibrary(of address: String) -> String {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let host = URL(string: trimmed)?.host?.lowercased() {
+            if macADIHosts.contains(host) { return "mac" }
+            if windowsADIHosts.contains(host) { return "windows" }
+        }
+        let key = trimmed.lowercased()
+        if key.contains("mac adi") { return "mac" }
+        if key.contains("windows") { return "windows" }
+        return "android"
+    }
+
+    /// 按「上报设备」计 Apple 的 503 拒绝次数（上游 AppleRefusals）：
+    /// mac 库服务器上报 Mac，其余（windows/android）上报 Windows PC.
+    static var refusalByDevice: [String: Int] = [:]
+
+    /// 清空 503 计数，进入取数流程时调用.
+    static func clearRefusalLog() { refusalByDevice.removeAll() }
+
+    static func deviceOf(_ address: String) -> String {
+        adiLibrary(of: address) == "mac" ? "mac" : "windows"
+    }
+
+    static func refusalCount(for address: String) -> Int { refusalByDevice[deviceOf(address)] ?? 0 }
+
+    /// 该地址上报的设备已被 Apple 拒绝 >=2 次（上游 rulesOut）.
+    static func isRefusalRuledOut(_ address: String) -> Bool { refusalCount(for: address) >= 2 }
+
+    /// 记录一次 Apple 拒绝.
+    static func recordRefusal(for address: String) {
+        refusalByDevice[deviceOf(address), default: 0] += 1
+    }
+
+    static func refusalTotal() -> Int { refusalByDevice.values.reduce(0, +) }
+
+    static func isRefusalError(_ error: Error) -> Bool { error.localizedDescription.contains("503") }
+
+    /// 剩余服务器（ordered 中 idx 之后）是否全部被拒（上游 endsSignIn 判据）.
+    static func allRemainingRuledOut(after idx: Int, ordered: [String]) -> Bool {
+        ordered.suffix(from: idx + 1).allSatisfy { isRefusalRuledOut($0) }
+    }
+
+    static func orderedIndex(of server: String, in ordered: [String]) -> Int {
+        ordered.firstIndex(of: server) ?? 0
+    }
+
+    /// 规范化服务器地址（去首尾空白/尾斜杠/小写），用于去重比较.
+    static func normalized(_ address: String) -> String {
+        var a = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        while a.hasSuffix("/") { a.removeLast() }
+        return a.lowercased()
+    }
+
+    /// 服务器尝试顺序（上游 candidates）：pick 优先，随后同库（非 android）、
+    /// windows、非 mac，mac 最后，全程去重.
+    static func orderedCandidates(pick: String, servers: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        func add(_ address: String) {
+            let a = address.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !a.isEmpty, seen.insert(normalized(a)).inserted { out.append(a) }
+        }
+        add(pick)
+        let pickLibrary = adiLibrary(of: pick)
+        if pickLibrary != "android" {
+            servers.filter { adiLibrary(of: $0) == pickLibrary }.forEach(add)
+        }
+        servers.filter { adiLibrary(of: $0) == "windows" }.forEach(add)
+        servers.filter { adiLibrary(of: $0) != "mac" }.forEach(add)
+        servers.forEach(add)
+        return out
+    }
+
+    /// 当前 adiPb 是经哪台服务器配出（一库一身份的配对记录；上游 anisette_slots
+    /// 的单身份形态：本仓 keychain 只存一份 identifier + adiPb）.
+    static func pairingServer() -> String? {
+        UserDefaults.standard.string(forKey: "AnisetteIdentityServer")
+    }
+
+    static func setIdentityServer(_ url: String) {
+        UserDefaults.standard.set(url, forKey: "AnisetteIdentityServer")
+    }
     private var clientInfo: String?
+
     private var userAgent: String?
     private var mdLu: String?
     private var deviceId: String?
@@ -134,6 +228,8 @@ final class AnisetteProvider {
         deviceId = nil
         keychain.delete("identifier")
         keychain.delete("adiPb")
+        // 身份销毁：清除一库一身份的配对记录（上游 Slots：服务器不再认这份身份）.
+        UserDefaults.standard.removeObject(forKey: "AnisetteIdentityServer")
         LoginLogger.shared.log("… AnisetteProvider 重置（identifier/adiPb 已清除）", category: .appleID)
     }
 
@@ -155,6 +251,8 @@ final class AnisetteProvider {
         mdLu = nil
         deviceId = nil
         keychain.delete("adiPb")
+        // 票据销毁：配对一并清除（上游 Slots：该服务器不再认这份身份）.
+        UserDefaults.standard.removeObject(forKey: "AnisetteIdentityServer")
         LoginLogger.shared.log("… Anisette 票据作废（保留 identifier，仅重新 provision）", category: .appleID)
     }
 
@@ -305,26 +403,46 @@ final class AnisetteProvider {
         UserDefaults.standard.string(forKey: "AnisetteServer") ?? "https://ani.stikstore.app"
     }
 
-    /// 切换到内置服务器列表中的下一个，并持久化到 `AnisetteServer`.
-    /// 返回切换后的地址；列表为空时返回 nil.
+    /// 切换到内置服务器列表中的下一个（按优先级顺序：同库 → windows → 非 mac → mac），
+    /// 并持久化到 `AnisetteServer`. 返回切换后的地址；列表为空时返回 nil.
     ///
     /// Swift 6：`MemoryLimitSettings.anisetteServers` 是主线程隔离的常量数组 ——
     /// 只在 `MainActor.run` 里取它（闭包无 self 捕获），其余逻辑留在调用方隔离域，
     /// 不再把 self 传进主 actor（修 sending 'self'）.
+    ///
+    /// 优先级顺序取自上游 `AnisetteServer.candidates`：先复用当前身份所在 ADI 库的
+    /// 服务器，再走 windows，macOS-ADI 服务器最后尝试.
     @discardableResult
     private func rotateServer() async -> String? {
         let servers = await MainActor.run { MemoryLimitSettings.anisetteServers }
         guard !servers.isEmpty else { return nil }
         let current = currentServer
+        let ordered = Self.orderedCandidates(pick: current, servers: servers)
         let next: String
-        if let idx = servers.firstIndex(of: current) {
-            next = servers[(idx + 1) % servers.count]
+        if let idx = ordered.firstIndex(of: current) {
+            next = ordered[(idx + 1) % ordered.count]
         } else {
-            next = servers[0]
+            // 当前服务器不在内置列表（用户自定义地址）：从优先级最高的内置服务器开始.
+            next = ordered.count > 1 ? ordered[1] : servers[0]
         }
         UserDefaults.standard.set(next, forKey: "AnisetteServer")
+        // 换服务器必须重取 client_info / user_agent（上游 set_url 清 client_info 缓存判据：
+        // 防 A 服务器的 client info 配到 B 服务器）；mdLu / deviceId 由 identifier 派生、
+        // 跨服务器稳定，保留.
+        clientInfo = nil
+        userAgent = nil
         LoginLogger.shared.log("… Anisette 服务器切换：\(current) → \(next)", category: .appleID)
         return next
+    }
+
+    /// 下一服务器与当前身份同库且 adiPb 仍有效 → 保留身份直接重试
+    /// （上游判据：同一 ADI 库的身份互通，换同库服务器不重配、不换 identifier）.
+    private func shouldKeepIdentity(for next: String?) -> Bool {
+        guard let next,
+              let paired = Self.pairingServer(),
+              Self.adiLibrary(of: next) == Self.adiLibrary(of: paired),
+              keychain.string(for: "adiPb") != nil else { return false }
+        return true
     }
 
     /// **带重试与服务器轮换的入口**，登录 / 团队列表等场景应优先调用它.
@@ -387,7 +505,20 @@ final class AnisetteProvider {
         let budget: TimeInterval = 75
         var lastError: Error?
         var attempt = 0
+        let servers = await MainActor.run { MemoryLimitSettings.anisetteServers }
+        let ordered = Self.orderedCandidates(pick: originalServer, servers: servers)
+        // 本次流程的 503 按「上报设备」计数（上游 AppleRefusals 判据），进循环前清零.
+        Self.clearRefusalLog()
         while attempt < maxAttempts {
+            // 跳过已被 Apple 拒绝两次的服务器（按上报设备计；上游 rulesOut）.
+            if Self.isRefusalRuledOut(currentServer) {
+                attempt += 1
+                let elapsed = Date().timeIntervalSince(started)
+                guard attempt < maxAttempts, elapsed < budget else { break }
+                LoginLogger.shared.log("… 跳过 Anisette 服务器 \(currentServer)（Apple 已拒绝其上报设备 \(Self.refusalCount(for: currentServer)) 次）", category: .appleID)
+                if await rotateServer() == nil { break }
+                continue
+            }
             do {
                 // v0.3.662（task-13 发现12）：**给单次取数加真正的硬超时**.
                 //
@@ -410,22 +541,32 @@ final class AnisetteProvider {
                 attempt += 1
                 let elapsed = Date().timeIntervalSince(started)
                 guard attempt < maxAttempts, elapsed < budget else { break }
-                // v0.2.119：只有 provisioning 阶段被 Apple/服务器拒绝（-45025 /
-                // -45003 / WebSocket 异常）才丢弃设备身份重新生成 identifier；
-                // get_headers / client_info 阶段失败只作废票据、保留 identifier ——
-                // 否则每失败一次就换一台"虚拟机器"，Apple 端视为多设备风控，
-                // 且 identifier 被清空后 isideload 的机器标识同步会断链，
-                // 两套实现状态分裂（v0.2.118 及之前三功能互斥的真凶）.
+                // 按「上报设备」记录 Apple 的 503 拒绝（上游 AppleRefusals）：
+                // Apple 对同一上报设备一视同仁地拒，两次后该设备对应的服务器全跳过.
+                if Self.isRefusalError(error) {
+                    Self.recordRefusal(for: currentServer)
+                    if Self.refusalTotal() >= 2,
+                       Self.allRemainingRuledOut(after: Self.orderedIndex(of: currentServer, in: ordered), ordered: ordered) {
+                        LoginLogger.shared.log("… Apple 已拒绝 \(Self.refusalTotal()) 次（503），剩余服务器均被跳过，停止重试", category: .appleID)
+                        break
+                    }
+                }
+                let next = await rotateServer()
                 let stage = lastFailureStage
                 if stage == nil || stage == "provision" {
                     // stage == nil：错误不是 fail() 抛出的（如 URLSession 超时），
                     // 无法判断身份是否可用，退回原行为（换身份重来）最稳.
                     reset()
+                } else if shouldKeepIdentity(for: next) {
+                    // 下一服务器与当前身份同库：adiPb 仍可用，保留身份直接重试
+                    // （上游判据：同一 ADI 库的身份互通，换同库服务器不重配）.
+                    clientInfo = nil
+                    userAgent = nil
+                    LoginLogger.shared.log("… 下一服务器与当前身份同库，保留 adiPb 直接重试", category: .appleID)
                 } else {
                     resetProvisioning()
                 }
                 LoginLogger.shared.log("[注意] Anisette 第 \(attempt)/\(maxAttempts) 次失败（阶段：\(stage ?? "未知")），换服务器重试", category: .appleID)
-                await rotateServer()
             }
         }
         // 全部失败：把服务器还原成用户原本配置的地址.
@@ -540,8 +681,10 @@ final class AnisetteProvider {
            let message = json["message"] as? String {
             LoginLogger.shared.log("[注意] get_headers 返回错误: \(message)", category: .appleID)
             if message.contains("-45061") {
+                // 跨库/过期身份被 Apple 拒收（-45061）：记录配对诊断后删除重配.
+                let paired = Self.pairingServer()
                 keychain.delete("adiPb")
-                LoginLogger.shared.log("… adiPb 已过期(-45061)，删除后重新 provision", category: .appleID)
+                LoginLogger.shared.log("… adiPb 已过期(-45061)，删除后重新 provision（当前：\(url?.absoluteString ?? "nil")，身份配对：\(paired ?? "无")）", category: .appleID)
                 return try await provision()
             }
             throw AppleAPIError.customError(code: -1, message: "Anisette 服务器: \(message)")
@@ -599,11 +742,16 @@ final class AnisetteProvider {
         }
         LoginLogger.shared.log("[完成] gsa lookup 拿到 mid 端点", category: .appleID)
         let adiPb = try await startProvisioningSession(startURL: startURL, endURL: endURL)
-        keychain.set(adiPb, for: "adiPb")
         guard let identifier = keychain.string(for: "identifier") else {
             throw fail("provision", "provision 后读取 identifier 失败")
         }
-        return try await fetchAnisetteV3(identifier: identifier, adiPb: adiPb)
+        // 先验证再入库（上游判据：配完先验证，烂服务器不会留下垃圾身份）.
+        let headers = try await fetchAnisetteV3(identifier: identifier, adiPb: adiPb)
+        keychain.set(adiPb, for: "adiPb")
+        // 一库一身份：记录当前服务器与这份 adiPb 的配对（同库服务器可复用该身份）.
+        Self.setIdentityServer(url?.absoluteString ?? "")
+        LoginLogger.shared.log("… Anisette 身份已配对当前服务器 \(url?.absoluteString ?? "nil")", category: .appleID)
+        return headers
     }
 
     private func startProvisioningSession(startURL: URL, endURL: URL) async throws -> String {

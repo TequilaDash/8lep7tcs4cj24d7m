@@ -237,6 +237,12 @@ struct ReclaimAppView: View {
                 Text("已保存到 TequilaDash → Backups")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                // v0.3.705：这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
+                if !result.skippedFiles.isEmpty {
+                    Label("\(result.skippedFiles.count) 个文件未能写入归档.", systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundColor(AppTheme.pending)
+                }
             }
         case .failed(let message):
             // 改用 AppErrorRow（info.circle + pending 橙 + TintedButtonStyle 的「重试」），
