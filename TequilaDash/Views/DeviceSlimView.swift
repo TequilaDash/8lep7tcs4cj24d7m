@@ -167,10 +167,7 @@ struct DeviceSlimView: View {
                     legendRow(slice)
                 }
             } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("正在读取空间占用…").font(.subheadline).foregroundStyle(.secondary)
-                }
+                AppLoadingRow(title: "正在读取空间占用…", level: .block)
             }
         } header: {
             HStack {
@@ -236,10 +233,7 @@ struct DeviceSlimView: View {
                 }
                 .padding(.vertical, 2)
             } else if isBusy {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(statusText).font(.footnote).foregroundStyle(.secondary)
-                }
+                AppLoadingRow(title: statusText, level: .block)
             } else {
                 HStack {
                     Text("已选 \(selectedItems.count) 项")

@@ -120,13 +120,8 @@ struct I4AdvancedView: View {
     }
 
     private var probingCard: some View {
-        HStack(spacing: 10) {
-            ProgressView().controlSize(.small)
-            Text("正在读取设备已装列表与沙盒状态…")
-                .font(AppFont.caption).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-        .appCard()
+        AppLoadingRow(title: "正在读取设备已装列表与沙盒状态…", level: .block)
+            .appCard()
     }
 
     // MARK: - 载体

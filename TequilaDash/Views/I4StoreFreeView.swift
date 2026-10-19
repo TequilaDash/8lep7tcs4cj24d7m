@@ -331,11 +331,7 @@ struct I4StoreFreeView: View {
     private var listSection: some View {
         if loading {
             Section {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("正在获取列表…").font(.subheadline).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 6)
+                AppLoadingRow(title: "正在获取列表…", level: .block)
             }
         } else if let errorText {
             Section {
@@ -391,10 +387,7 @@ struct I4StoreFreeView: View {
     private var searchSection: some View {
         if searching {
             Section {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("搜索中…").font(.subheadline).foregroundStyle(.secondary)
-                }
+                AppLoadingRow(title: "搜索中…", level: .block)
             }
         } else if source == .i4 {
             if searchResults.isEmpty {
@@ -447,10 +440,7 @@ struct I4StoreFreeView: View {
                 }
             } else if nbFetching {
                 Section {
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("正在取包…").font(.subheadline).foregroundStyle(.secondary)
-                    }
+                    AppLoadingRow(title: "正在取包…", level: .block)
                 }
             } else if !nbSearchResults.isEmpty {
                 Section("搜索结果 · \(nbSearchResults.count) 款") {

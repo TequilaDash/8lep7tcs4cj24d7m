@@ -36,11 +36,8 @@ struct JITEnableView: View {
         List {
             if isLoading && apps.isEmpty {
                 Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("正在枚举可启用 JIT 的应用…")
-                        Spacer()
-                    }
+                    // v0.3.700：整页/区块加载态收口到 AppLoadingRow（.block 档：圈略大 + 上下留白）.
+                    AppLoadingRow(title: "正在枚举可启用 JIT 的应用…", level: .block)
                 }
             } else if apps.isEmpty && !isLoading {
                 Section {
@@ -86,12 +83,8 @@ struct JITEnableView: View {
 
                 if isWorking {
                     Section {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text(progressText)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
+                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        AppLoadingRow(title: progressText, level: .block)
                     }
                 }
             }

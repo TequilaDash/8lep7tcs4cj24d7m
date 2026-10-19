@@ -1,4 +1,30 @@
 # Changelog
+## [0.3.700] - 2026-10-19
+
+### 加载态收口（第 1 批：12 个文件 / 18 处）
+
+- 新增共享组件 `AppLoadingRow(title:detail:level:centered:)` 的三档落地：`.inline`(默认, 列表行内一行) / `.block`(区块级, 圈 + 上下留白) / `.page`(整页, 大圈居中 + 上下 60pt 呼吸).
+- `AppFileBrowserView.swift:336` / `I4AdvancedView.swift:123` / `I4StoreFreeView.swift:334` / `:390` / `:443` / `BackupsListView.swift:715` / `CrashLogView.swift:33` / `DeviceSlimView.swift:170` / `:236` —— 9 处区块级加载行收口到 `.block`.
+- `BackupsListView.swift:391` / `CrashLogView.swift:122` / `LaunchAppsView.swift:40` / `PlistEditorView.swift:70` —— 4 处整页加载收口到 `.page`（`LaunchAppsView` 保留原 `.padding(.vertical, 40)` 外在留白口径）.
+- `JITEnableView.swift:38` / `:85` / `PurchaseHistoryView.swift:56` / `RingtonesView.swift:72` —— 4 处列表区段加载行收口到 `.block`.
+- `ReclaimAppView.swift:108` —— 与 `AppDetailView.swift:63-66` 同文案孪生句保持一致，用默认 `.inline`（同句文案不在两页出现一大一小）.
+- 界面文案一字未改（沿用原字符串）；`ProgressView` 的 `.controlSize(.small)` / `.scaleEffect(0.7)` 等手写修饰交由组件档位统一处理.
+
+### 订正（verify-699 核验产出）
+
+- `NBStoreDetailView.swift:447` 的 `chip()`：`.compact` 档默认字重是 `.semibold`，而原 `.font(.caption2)` 是 regular ⇒ 显式补 `weight: .regular`（影响 5 个调用点：价格 / 版本号 / 体积 / 两个日期位），v0.3.699 CHANGELOG「视觉零像素差」的自评据此收窄为「17 处等价 + 1 处订正」。
+- `Resources/Scripts/swift_view_state_derivation.py:93` 的豁免正则 `Text\(phase\.title\)` 因渲染写法改为 `SizePill(text: phase.title,` 而失效（v0.3.699 起 precommit 多出一条 WARN、豁免 9 → 8）⇒ 放宽为 `(?:Text\(|SizePill\(text:\s*)phase\.title`，WARN 归零。
+- v0.3.699 CHANGELOG 两处表述订正：`SizePill` 的 18 → 58 是词组出现次数（真实命中行 7 → 25）；批 6-C 的 13 个文件里 `I4MobileInstallView` 为 0 收编（仅加注释）。
+
+
+### 判定不改（已登记理由）
+
+- 按钮内小圈（`IPCCInstallView.swift:56`/`:134`、`IconCleanupView.swift:61`/`:128`）、`AsyncImage` 固定 frame 占位圈（`AppStoreDetailView.swift:232`/`:426`）、`KernelCacheView.swift` Form 值位与进度条、`SizePill` 等宽占位圈（`PurchaseHistoryView.swift:197`）、`.overlay` 忙碌遮罩（`PlistEditorView.swift:51`、`RingtonesView.swift:144`）与 `AppBusyOverlay` 体系.
+
+### 校验
+
+- `python Resources/Scripts/normalize_eol.py` → EXIT 0 · `python Resources/Scripts/swift_precommit_check.py .` → EXIT 0（16 组守卫，扫描 305 个 .swift，G1/G2/G3 命中 0）· WSL `/usr/bin/swiftc -parse` 12 个文件 → PARSE_FAIL=0.
+
 ## [0.3.699] - 2026-10-19
 
 ### 撤销：覆盖安装失败自动回滚（v0.3.696 整段撤回）
@@ -8,12 +34,12 @@
 - 历史记录保留：`02_审计与报告/修复记录/install-rollback-d.md` 末尾追加「撤销记录」一节（判据与真机清单不删，仅作历史）。
 - 教训已进永久规矩第 8 条：凡会改变设备状态或用户可见流程的功能性改动（安装 / 回滚 / 卸载链路、协议交互与目标主机、数据落盘与清理策略、新增自动行为），先出方案等审批再动手；纯 UI 收敛与明确 bug 修复不在此列。
 
-### Step 3 批 6-C：18 处手写胶囊收编到共享 `SizePill`（13 文件）
+### Step 3 批 6-C：18 处手写胶囊收编到共享 `SizePill`（13 文件；其中 I4MobileInstallView 为 0 收编，仅加注释）
 
 - `TequilaDash/Views/` 下 AppStoreAccountsView / AppStoreDetailView / AppStoreI4View / AppStoreVersionHistoryView / AppStoreView / BackupsListView / FileSharingAppsView / I4MobileInstallView / I4StoreFreeDetailView / NBStoreDetailView / ProfileConfigView / PurchaseHistoryView / TunnelHealthCheckView。
-- 每处逐项钉住档位 / 字重 / 水平垂直内边距 / 底色不透明度，视觉零像素差：`需重新登录` 等橙标走 `.compact + weight .regular + fillOpacity 0.15`；版本号胶囊走 `.tiny + semibold + 0.14`；其余按原值映射到 `regular / compact / tiny` 三档。
+- 每处逐项钉住档位 / 字重 / 水平垂直内边距 / 底色不透明度，17 处字号档 / 内边距 / 底色不透明度逐项等价（第 18 处 NBStoreDetailView chip() 的字重偏差已在 0.3.700 订正）：`需重新登录` 等橙标走 `.compact + weight .regular + fillOpacity 0.15`；版本号胶囊走 `.tiny + semibold + 0.14`；其余按原值映射到 `regular / compact / tiny` 三档。
 - 2 处刻意保留手写：`I4MobileInstallView.swift:451-454`（「推荐」用 `AppFont.captionEmphasis`，带 `design: .rounded`）与 `:605-607`（缓包计数用 `AppFont.numberSmall`，rounded + monospacedDigit）—— `SizePill` 三档无 design / 等宽覆盖项，强并会改字形并丢数字对齐；两处已加注释说明。
-- 度量断言：`Capsule()` 全仓 77 → 60；`SizePill` 命中行 18 → 58；`PackageChip(` 20 → 20 未变（定义仍在 `Views/Shared/ImportedPackageUI.swift`）。
+- 度量断言：`Capsule()` 全仓 77 → 60；`SizePill` 词组出现次数 18 → 58（真实命中行 7 → 25）；`PackageChip(` 20 → 20 未变（定义仍在 `Views/Shared/ImportedPackageUI.swift`）。
 - 报告：`02_审计与报告/修复记录/step3-b6d.md`。
 
 ## [0.3.698] - 2026-10-19

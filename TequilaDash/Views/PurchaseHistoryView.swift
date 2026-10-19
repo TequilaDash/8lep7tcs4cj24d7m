@@ -53,11 +53,8 @@ struct PurchaseHistoryView: View {
             List {
                 if loading {
                     Section {
-                        HStack(spacing: 10) {
-                            ProgressView().controlSize(.small)
-                            Text("读取已购列表…").font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 6)
+                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        AppLoadingRow(title: "读取已购列表…", level: .block)
                     }
                 } else if let errorText {
                     Section {

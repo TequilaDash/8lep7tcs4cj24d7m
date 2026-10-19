@@ -442,28 +442,25 @@ struct NBStoreDetailView: View {
 
     private func chip(_ text: String, _ tint: Color) -> some View {
         // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
-        // 字重与底色 12% 都走档位默认；原 `background(tint.opacity(0.12)) + clipShape(...)` 两段，
-        // 由组件内置的 `background(tint.opacity(0.12), in:)` 等价接管.
+        // 原字形是 `.font(.caption2)`（regular），`.compact` 档默认 semibold，故显式钉住 `weight: .regular`；
+        // 底色 12% 走档位默认（原 `background(tint.opacity(0.12)) + clipShape(...)` 两段由组件内置接管）.
         SizePill(text: text,
                  tint: tint,
-                 level: .compact)
+                 level: .compact,
+                 weight: .regular)
     }
 
     private var loadingSection: some View {
         Section {
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("正在读取版本列表…").font(.subheadline).foregroundStyle(.secondary)
-            }
+            // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+            AppLoadingRow(title: "正在读取版本列表…", level: .block)
         }
     }
 
     private var detailLoadingSection: some View {
         Section {
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("正在读取应用详情…").font(.subheadline).foregroundStyle(.secondary)
-            }
+            // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
+            AppLoadingRow(title: "正在读取应用详情…", level: .block)
         }
     }
 

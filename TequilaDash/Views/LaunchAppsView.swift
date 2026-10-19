@@ -38,12 +38,8 @@ struct LaunchAppsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if isLoading && apps.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView("正在枚举已安装应用…")
-                        Spacer()
-                    }
-                    .padding(.vertical, 40)
+                    // v0.3.700：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                    AppLoadingRow(title: "正在枚举已安装应用…", level: .page)
                 } else if apps.isEmpty && !isLoading {
                     if !hasPairing {
                         PairingGuideCard(showsBackground: false, note: "拉起应用还需要 LocalDevVPN 已连接.")

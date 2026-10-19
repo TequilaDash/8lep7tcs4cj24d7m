@@ -105,10 +105,8 @@ struct ReclaimAppView: View {
         Section(header: Text("访问权限")) {
             switch access.state {
             case .unknown, .checking:
-                HStack {
-                    ProgressView()
-                    Text("正在检查容器访问…").foregroundColor(.secondary)
-                }
+                // v0.3.700：与 AppDetailView「访问权限」Section 同文案同形态（默认 .inline）.
+                AppLoadingRow(title: "正在检查容器访问…")
             case .granted:
                 Label("容器可访问", systemImage: "checkmark.shield.fill")
                     .foregroundColor(.green)

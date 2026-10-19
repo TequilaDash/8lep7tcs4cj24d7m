@@ -67,7 +67,8 @@ struct PlistEditorView: View {
     @ViewBuilder
     private var content: some View {
         if vm.isLoading {
-            ProgressView("正在解析…")
+            // v0.3.700：整页加载态收口到 AppLoadingRow（.page 档）.
+            AppLoadingRow(title: "正在解析…", level: .page)
         } else if vm.errorMessage != nil {
             InfoActionCard(
                 icon: "info.circle",

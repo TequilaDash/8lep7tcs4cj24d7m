@@ -388,7 +388,7 @@ struct CustomRestoreSheet: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("正在加载应用列表…")
+                    AppLoadingRow(title: "正在加载应用列表…", level: .page)
                 } else if normalApps.isEmpty && guestApps.isEmpty {
                     Section {
                         InfoActionCard(
@@ -712,13 +712,8 @@ struct RestoreView: View {
     private var sandboxPickerSection: some View {
         switch vm.sandboxCandidates {
         case .none:
-            HStack(spacing: 8) {
-                ProgressView().scaleEffect(0.7)
-                Text("正在查找可用沙盒…")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal)
+            AppLoadingRow(title: "正在查找可用沙盒…", level: .block)
+                .padding(.horizontal)
         case .some(let candidates) where candidates.count > 1:
             VStack(alignment: .leading, spacing: 8) {
                 Text("选择恢复到哪个沙盒")

@@ -30,11 +30,7 @@ struct CrashLogView: View {
         List(selection: $selection) {
             Section {
                 if loading {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("正在连接崩溃日志服务…")
-                            .foregroundColor(.secondary)
-                    }
+                    AppLoadingRow(title: "正在连接崩溃日志服务…", level: .block)
                 } else if let errorMessage {
                     if PairingGate.isPairingError(errorMessage) {
                         PairingGuideCard(showsBackground: false, note: "崩溃分析还需要 LocalDevVPN 已连接.")
@@ -123,7 +119,7 @@ struct CrashLogView: View {
             NavigationStack {
                 Group {
                     if previewLoading {
-                        ProgressView("正在拉取日志…")
+                        AppLoadingRow(title: "正在拉取日志…", level: .page)
                     } else if previewText.isEmpty {
                         Text("（空文件）")
                             .foregroundColor(.secondary)

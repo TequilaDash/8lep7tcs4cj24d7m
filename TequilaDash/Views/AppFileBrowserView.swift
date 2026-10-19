@@ -333,7 +333,7 @@ struct AppFileBrowserView: View {
 
             if loading {
                 Section {
-                    HStack { Spacer(); ProgressView("正在加载…"); Spacer() }
+                    AppLoadingRow(title: "正在加载…", level: .block)
                         .listRowBackground(Color.clear)
                 }
             } else if noPermission {

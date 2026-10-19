@@ -69,11 +69,8 @@ struct RingtonesView: View {
 
             Section {
                 if loading {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("正在扫描铃声…")
-                            .foregroundColor(.secondary)
-                    }
+                    // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                    AppLoadingRow(title: "正在扫描铃声…", level: .block)
                 } else if ringtones.isEmpty {
                     AppStateSection(state: .empty(
                         "没有找到文件",

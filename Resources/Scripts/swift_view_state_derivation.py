@@ -90,8 +90,9 @@ ALLOW = [
      "工具栏按钮 Label，非 Job 状态行"),
     ("**/ModuleManagerView.swift", r'return "安装中"',
      "模块管理域自己的状态，与 Job 无关"),
-    ("**/AppStoreDetailView.swift", r'Text\(phase\.title\)',
-     "阶段胶囊 helper：phase.title 的渲染点（审计列为「平行来源·可疑 S3」，本轮不改 P1，保留并登记）"),
+    ("**/AppStoreDetailView.swift", r'(?:Text\(|SizePill\(text:\s*)phase\.title',
+     "阶段胶囊 helper：phase.title 的渲染点（审计列为「平行来源·可疑 S3」，本轮不改 P1，保留并登记）；"
+     "v0.3.700 起渲染写法由 Text(...) 改为 SizePill(text: ...)，正则同时匹配两种形态"),
     ("**/IPADownloadManager*.swift", r'failureStage == \.download',
      "失败**阶段**徽标（下载失败 / 安装失败），非状态行文案 —— displayStage 给不出该区分，有意保留"),
     ("**/AppStoreDetailView.swift", r'displayStage\s*!=\s*job\.phase\.title',
