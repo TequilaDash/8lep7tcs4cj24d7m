@@ -345,6 +345,17 @@ final class IPADownloadCenter: ObservableObject {
     /// 不并进 `runners` 的原因：`runners.count` 被 `pump()` 当作**并发下载槽**在用
     /// （`maxConcurrentDownloads`），AppleID 任务不走 `pump()`，混进去会干扰调度计数。
     private var appleIDControls: [UUID: IPADownloadControl] = [:]
+    /// D1 续（task-3）：**已经被 `cancel()` 取走**的 AppleID 产物路径，按 job id 索引。
+    ///
+    /// 为什么控制面之外还要单独留一份：`cancel()` 删完文件后会把控制面那份登记
+    /// `takeDestination()` **取走**（取走是刻意的 —— `<bundleID>-<version>.ipa` 这个文件名
+    /// 会被下一次下载复用，留着登记就可能删到用户新下的包）；而这次下载的 detached 任务
+    /// 还在跑，它收尾时若发现「任务已被删除」，控制面登记与 `appleIDControls[id]` 都已失效，
+    /// 就再也拼不出自己这一次的产物路径。于是「取消落在 `keep` → `dest` 的搬运窗口里
+    /// （`abort()` 那一刻 dest 还不存在）、随后注入 sinf 又失败」这一支留下的包没人认领。
+    /// 单独记一份，就是把那条路径留到收尾那一刻：成功 / 失败两条收尾都即用即删，
+    /// 不会越界到别人的下载。
+    private var appleIDTargets: [UUID: URL] = [:]
 
     /// v0.3.583：**安装看门狗的常量**（机制见 `installLocal`）。
     ///
@@ -624,6 +635,10 @@ final class IPADownloadCenter: ObservableObject {
                     let stagedDest = self.appleIDControls[id]?.takeDestination()
                     // 下载已结束（成功）→ 控制面使命完成，摘掉。
                     self.appleIDControls[id] = nil
+                    // D1 续（task-3）：取消那一刻留下的那份路径记录到这里也用完了 ——
+                    // 这一支要么写台账（下面的 `record`）、要么就地把 `stagedDest ?? dest`
+                    // 删掉。摘掉，免得随取消次数越积越多。
+                    self.appleIDTargets[id] = nil
                     // v0.3.583：若这期间用户点了「删除安装包」（job 已被 `cancel` 移除），
                     // **不要再写台账**，并把刚落盘的包删掉 —— 否则会留下一个「列表里看不到、
                     // 磁盘上还在」的孤儿文件（`cancel` 对「还没落地」的任务不会删文件）。
@@ -675,6 +690,10 @@ final class IPADownloadCenter: ObservableObject {
                     // 「本次调用可能已经落盘、但永远不会进台账」的那份产物。
                     let stagedDest = self.appleIDControls[id]?.takeDestination()
                     self.appleIDControls[id] = nil
+                    // D1 续（task-3）：控制面那份登记可能已经被 `cancel()` 取走（用户点
+                    // 「删除安装包」时取走是刻意的）；这条下载还在跑，此刻还认得本次产物路径的
+                    // 只剩取消时在中心留的那一份。取本地 let，供下面「任务已被删除」那支使用。
+                    let cancelledDest = self.appleIDTargets.removeValue(forKey: id)
                     // v0.3.583：用户点「删除安装包」会**先**把 job 从 `jobs` 移除、**再**取消底层
                     // task ⇒ 这里回调到达时 job 已不在。此时既无 job 可改，也不该写「下载失败」
                     // —— 用户主动取消不是失败（`abort()` 抛的是 `CancellationError`）。
@@ -685,7 +704,11 @@ final class IPADownloadCenter: ObservableObject {
                     // D1 的另一半：控制面那一侧的 `abort()` 只删得掉「它当时登记的那一份」，
                     // 之后重新落盘 / 注入过程中再产生的文件没人认领。
                     guard self.job(id) != nil else {
-                        if let orphan = stagedDest {
+                        // D1 续（task-3）：`stagedDest` 拿不到时退回「取消时留下的那份」——
+                        // 这正是 D1 剩下的最后一条可复现路径：cancel 落在搬运窗口里（`abort()`
+                        // 删空、`fileExists` 判否、任务行已移除）+ 注入 sinf 失败 ⇒
+                        // 包在磁盘上、列表里没有、台账里也没有（只能靠 `items()` 事后按「来源未知」扫出来）。
+                        if let orphan = stagedDest ?? cancelledDest {
                             try? FileManager.default.removeItem(at: orphan)
                             LoginLogger.shared.log(
                                 "[下载中心] AppleID 通道失败时任务已被删除，丢弃安装包 \(orphan.lastPathComponent).",
@@ -991,6 +1014,10 @@ final class IPADownloadCenter: ObservableObject {
             // 取走登记：`abort()` 已按它删过一次。删成功 ⇒ 这条路径不该再被任何人用；
             // 删失败（文件被占用）⇒ 文件还在，下面据此把「删除失败」报上去。
             appleIDTarget = c.takeDestination()
+            // D1 续（task-3）：取走的同时在中心留一份 —— 这条路径不只为下面那句
+            // `fileExists` 判据服务，还要留给这次下载的收尾：`abort()` 那一刻 dest
+            // 可能还没被搬出来（`keep` → `dest` 的搬运窗口），文件是之后才出现的。
+            appleIDTargets[id] = appleIDTarget
             appleIDControls[id] = nil
             resetSpeedWindow(id)
         }

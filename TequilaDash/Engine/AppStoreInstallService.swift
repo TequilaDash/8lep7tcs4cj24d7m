@@ -593,7 +593,16 @@ private final class IPAFileDownloader: NSObject, URLSessionDownloadDelegate {
 
     private func finish(_ result: Result<URL, Error>) {
         lock.lock()
-        guard !finished else { lock.unlock(); return }
+        guard !finished else {
+            lock.unlock()
+            // D1 续（task-3）：竞争失败 = 已经有人先一步收尾（`abort()` 或另一条回调）。
+            // 那次 `abort()` 只删得掉它**当时**看得见的东西：`keep` 是在 `didFinishDownloadingTo`
+            // 里从 `stagedPartial` 取出来的（所有权已转到本次调用手里），abort 再取就是 nil，
+            // 于是这份刚搬出来的整包既不会 `moveItem` 到 dest（`completion` 不会再执行），
+            // 也没人删 —— 永久留在 tmp 里。交给交上来的这一手自己删掉。
+            if case .success(let tmp) = result { try? FileManager.default.removeItem(at: tmp) }
+            return
+        }
         finished = true
         let s = session
         session = nil

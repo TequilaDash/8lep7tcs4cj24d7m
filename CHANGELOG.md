@@ -1,4 +1,19 @@
 # Changelog
+## [0.3.691] - 2026-10-19
+
+### 下载链路：取消落在搬运窗口时留下的整包不再无人认领（task-3 D1 续）
+
+- `TequilaDash/Engine/AppStoreInstallService.swift`：`IPAFileDownloader.finish(_:)` 的 `guard !finished`
+  竞争失败支补一次就地清理。竞争失败意味着已有回调先收尾，而那次 `abort()` 只删得掉它**当时**
+  看得见的东西 —— 整包已在 `didFinishDownloadingTo` 里从 `stagedPartial` 取出，所有权转到本次调用，
+  `abort()` 再取就是 nil，于是这份包既不会 `moveItem` 到 dest（`completion` 不会再执行），也没人删，
+  永久留在 tmp 里。现在交给交上来的这一手自己删掉。
+- `TequilaDash/Engine/IPADownloadCenter.swift`：新增 `private var appleIDTargets: [UUID: URL]`，
+  `cancel()` 取走控制面登记时在中心留一份，成功分支与失败收尾分支都即用即删。
+  补的是 D1 最后一条可复现路径：取消落在 `keep` → `dest` 的搬运窗口里（`abort()` 删空、
+  `fileExists` 判否、任务行已移除）随后注入 sinf 又失败 ⇒ 包在磁盘上、列表里没有、台账里也没有。
+  现在失败收尾用 `stagedDest ?? cancelledDest` 兜底删除。
+
 
 ## [0.3.690] - 2026-10-19
 
