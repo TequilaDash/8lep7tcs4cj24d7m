@@ -1,4 +1,10 @@
 # Changelog
+## [0.3.707] - 2026-10-20
+
+### 修复
+- AnisetteProvider.refusalByDevice 标 nonisolated(unsafe)（503 计数静态字典）.
+- ExceptionExplainer.Rule 去掉 Sendable（闭包存储属性无法 Sendable），rules 保持 nonisolated(unsafe).
+
 ## [0.3.706] - 2026-10-20
 
 ### 修复

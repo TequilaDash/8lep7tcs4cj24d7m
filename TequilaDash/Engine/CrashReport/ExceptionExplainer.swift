@@ -46,7 +46,7 @@ enum ExceptionExplainer {
         }
     }
 
-    private struct Rule: Sendable {
+    private struct Rule {
         let matches: (Signals) -> Bool
         let sentence: (Signals) -> String
     }

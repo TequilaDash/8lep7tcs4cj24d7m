@@ -133,7 +133,7 @@ final class AnisetteProvider {
 
     /// 按「上报设备」计 Apple 的 503 拒绝次数（上游 AppleRefusals）：
     /// mac 库服务器上报 Mac，其余（windows/android）上报 Windows PC.
-    static var refusalByDevice: [String: Int] = [:]
+    nonisolated(unsafe) static var refusalByDevice: [String: Int] = [:]
 
     /// 清空 503 计数，进入取数流程时调用.
     static func clearRefusalLog() { refusalByDevice.removeAll() }
