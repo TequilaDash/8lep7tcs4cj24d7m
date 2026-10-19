@@ -205,7 +205,7 @@ struct BatteryHealthView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(lpm ? "低电量模式开启" : "低电量模式关闭")
                     .font(AppFont.subheadlineEmphasis)
-                Text(lpm ? "系统正在省电，部分后台活动已暂停" : "正常用电模式")
+                Text(lpm ? "部分后台活动已暂停" : "正常用电模式")
                     .font(AppFont.caption)
                     .foregroundStyle(.secondary)
             }
@@ -303,8 +303,8 @@ struct BatteryHealthView: View {
             batteryCardRow("电池电流", info.instantAmperage.map { "\($0) mA" }, icon: "waveform.path.ecg")
             batteryCardRow("电池功率", info.batteryPowerMW.map { "\($0) mW" }, icon: "bolt.circle")
             batteryCardRow("电池温度", temperatureText(info), icon: "thermometer.medium")
-            batteryCardRow("电池处于警告水平", warnLevelText(info), icon: "info.circle")
-            batteryCardRow("电池处于临界水平", boolText(info.atCriticalLevel), icon: "exclamationmark.octagon")
+            batteryCardRow("警告水平", warnLevelText(info), icon: "info.circle")
+            batteryCardRow("临界水平", boolText(info.atCriticalLevel), icon: "exclamationmark.octagon")
         }
         .padding(.horizontal, AppMetrics.cardPadding)
         .background(
@@ -418,7 +418,7 @@ struct BatteryHealthView: View {
 
             if let err = errorText, PairingGate.isPairingError(err) {
                 // 独立卡片: 与全 App 其他功能页同一 PairingGuideCard 视觉
-                PairingGuideCard(note: "电池健康还需要 LocalDevVPN 已连接（远程隧道读取）.",
+                PairingGuideCard(note: "电池健康需已连接 LocalDevVPN（远程隧道读取）.",
                                  showChevron: true)
             }
         }

@@ -42,7 +42,7 @@ struct LaunchAppsView: View {
                     AppLoadingRow(title: "正在枚举已安装应用…", level: .page)
                 } else if apps.isEmpty && !isLoading {
                     if !hasPairing {
-                        PairingGuideCard(showsBackground: false, note: "拉起应用还需要 LocalDevVPN 已连接.")
+                        PairingGuideCard(showsBackground: false, note: "拉起应用需已连接 LocalDevVPN.")
                     } else {
                         // 空态 banner：与「空间回收」同款（`InfoActionCard` 白底圆角卡）.
                         InfoActionCard(
@@ -57,7 +57,7 @@ struct LaunchAppsView: View {
                     InfoActionCard(
                         icon: "magnifyingglass",
                         title: "没有匹配的应用",
-                        message: "换个名称或 Bundle ID 试试."
+                        message: "换名称或 Bundle ID 重试."
                     )
                     .appCard()
                 } else {
@@ -67,7 +67,7 @@ struct LaunchAppsView: View {
                     AppAdaptiveGrid(items: filteredApps, minimum: 92, spacing: 12) { app in
                         launchTile(app)
                     }
-                    Text("点击应用即将其在前台拉起（普通启动，不启用 JIT）.")
+                    Text("点击应用即前台拉起（普通启动，不启用 JIT）.")
                         .font(AppFont.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)

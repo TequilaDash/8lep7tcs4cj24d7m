@@ -245,7 +245,7 @@ final class RingtonesService: @unchecked Sendable {
         var root: [String: Any] = [:]
         if let data = existing, !data.isEmpty {
             guard let parsed = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
-                throw makeError("设备上的 Ringtones.plist 无法解析，为避免破坏现有铃声库已停止操作")
+                throw makeError("设备上的 Ringtones.plist 无法解析，已停止操作")
             }
             root = parsed
         }

@@ -104,7 +104,7 @@ final class CertificateManager: ObservableObject {
                 ? "已登录但 Swift 会话缺失（dsid/authToken 为空）"
                 : "尚未登录 Apple ID"
             LoginLogger.shared.log("[注意] 团队列表未发起：\(reason)")
-            let text = "\(reason).请到「更多 → 设置」重新登录 Apple ID."
+            let text = "\(reason).请到「更多 → 设置」重新登录."
             lastError = text
             teamState = .failed(text)
             return

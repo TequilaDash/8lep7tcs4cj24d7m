@@ -157,7 +157,7 @@ final class DeveloperCertStore: ObservableObject {
                     guard !blocked, revoked > 0 else {
                         throw AppleAPIError.customError(
                             code: 7460,
-                            message: "开发证书数量已达上限（7460）.未设置自动撤销证书，请手动撤销（更多 → 证书管理）")
+                            message: "开发证书数量已达上限（7460）.请手动撤销（更多 → 证书管理）")
                     }
                     certDER = try await AppleDeveloperAPI.submitSigningCertificate(
                         team: team, csrPEM: csrPem, machineName: machineName, session: session)

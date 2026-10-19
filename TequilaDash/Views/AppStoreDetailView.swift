@@ -178,7 +178,7 @@ struct AppStoreDetailView: View {
     /// 下架提示：这些条目 Apple 已经搜不到，页面信息来自下架库收录的快照。
     private var delistedSection: some View {
         Section {
-            Label("该应用已从 App Store 下架，此页信息来自下架库收录的快照.",
+            Label("已从 App Store 下架 · 信息来自下架库快照.",
                   systemImage: "info.circle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -716,7 +716,7 @@ struct InstallOptionsSheet: View {
                 option(icon: "key.fill",
                        tint: .orange,
                        title: "获取许可证",
-                       subtitle: "把该应用加入账号的授权列表",
+                       subtitle: "加入账号授权列表",
                        action: onAcquireLicense)
             }
             .padding(.horizontal, 16)

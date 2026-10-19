@@ -513,7 +513,7 @@ struct IPADownloadManagerView: View {
                         .font(AppFont.captionEmphasis)
                     guideRow("明文包", .secondary, "明文包未加密，可直接安装.")
                     guideRow("加密包 · 带 sinf", .secondary, "已校验：包内 sinf 结构完整，可直接安装.")
-                    guideRow("加密包 · 带 sinf（未校验）", .secondary, "存疑：sinf 存在，但未校验过结构（无记录，或格式未知）.")
+                    guideRow("加密包 · 带 sinf（未校验）", .secondary, "存疑：sinf 存在，未校验结构（无记录或格式未知）.")
                     guideRow("加密包 · 缺 sinf", .orange, "安装包缺失 sinf，需补 sinf.")
                     guideRow("加密包 · sinf 异常", .orange, "sinf 存在，但结构异常/未知可能无法安装.")
                     guideRow("未检测", .secondary, "尚未读到包内加密状态，重进本页会重新检测.")
@@ -540,7 +540,7 @@ struct IPADownloadManagerView: View {
                     .font(AppFont.subheadline)
             }
         } footer: {
-            Text("点开看每种标签的含义.")
+            Text("每种标签的含义.")
         }
     }
 

@@ -61,7 +61,7 @@ final class AFCService {
 
     private func createTunnel() throws -> TunnelHandles {
         guard FileManager.default.fileExists(atPath: pairingPath) else {
-            throw makeError("未检测到配对文件.请到「更多 → 配对文件导入」导入配对文件（需 LocalDevVPN + 开发者模式）.")
+            throw makeError("未检测到配对文件.请到「更多 → 配对文件导入」导入（需 LocalDevVPN + 开发者模式）.")
         }
 
         var pairingFile: OpaquePointer?

@@ -9,8 +9,6 @@ import Foundation
 enum AirliftTransportError: Error, LocalizedError, Sendable {
     /// 本 build 缺少 AirliftFFI 的读文件符号（补丁未生效 / 库未链接）.
     case unavailable
-    /// 未导入配对文件（或配对文件为空）.
-    case pairingRequired
     /// airlift 返回非 0，附原生错误信息.
     case failed(String)
 
@@ -18,8 +16,6 @@ enum AirliftTransportError: Error, LocalizedError, Sendable {
         switch self {
         case .unavailable:
             return "本 build 缺少 AirLift 文件访问支持."
-        case .pairingRequired:
-            return "请先导入配对文件并连接 LocalDevVPN，再修改通话录音提示音."
         case .failed(let reason):
             return "AirLift 操作失败：\(reason)"
         }
@@ -222,8 +218,9 @@ actor AirliftToneTransport {
             do {
                 return try readSync(path: path, pairingPath: pairingPath)
             } catch let error as AirliftTransportError {
-                // 只有 `.failed` 里判定为 AirTraffic 恢复类的才继续；`.unavailable` /
-                // `.pairingRequired` 是配置问题，重试没有意义.
+                // 只有 `.failed` 里判定为 AirTraffic 恢复类的才继续；`.unavailable` 是配置
+                // 问题，重试没有意义。配对缺失的真实抛出点：AirLiftExploit.swift:178 抛
+                // AirLiftError.pairingRequired（另一个枚举）.
                 guard case .failed(let rawReason) = error,
                       Self.isAirTrafficRecoveryFailure(rawReason) else {
                     throw error
@@ -265,7 +262,7 @@ actor AirliftToneTransport {
     /// 所以「已自动重试 N 次」里的 N 是 `attempts - 1`.
     private static func readFailureText(rawReason: String, attempts: Int) -> String {
         guard Self.isAirTrafficRecoveryFailure(rawReason) else { return rawReason }
-        return "设备侧文件搬运没在 20 秒内完成，通常是系统正忙.已自动重试 \(attempts - 1) 次仍失败时，请锁屏再解锁后重试."
+        return "设备侧文件搬运没在 20 秒内完成.已自动重试 \(attempts - 1) 次仍失败，请锁屏再解锁后重试."
     }
 
     private static func writeSync(files: [AirliftToneFile], directory: String, pairingPath: String) throws {

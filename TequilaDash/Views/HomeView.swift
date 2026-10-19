@@ -249,7 +249,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             AppSectionHeader("清理与优化", symbol: "sparkles", tint: AppModule.clean.tint)
             VStack(spacing: 0) {
-                navRow(title: "空间回收", subtitle: "扫描可清理的应用缓存",
+                navRow(title: "空间回收", subtitle: "扫描应用缓存",
                        icon: "internaldrive", tint: AppModule.clean.tint) {
                     SpaceReclaimView(appList: appList)
                         .navigationBarTitleDisplayMode(.inline)
@@ -418,7 +418,7 @@ struct HomeView: View {
                 DeviceInfoView()
             },
             HomeTool(id: "docs", icon: "folder.fill", title: "文档浏览",
-                     subtitle: "开启文件共享的 App 文档目录", tint: AppModule.download.tint) {
+                     subtitle: "文件共享 App 文档目录", tint: AppModule.download.tint) {
                 FileSharingAppsView()
             }
         ]

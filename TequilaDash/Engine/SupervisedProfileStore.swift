@@ -170,7 +170,7 @@ enum SupervisedProfileStore {
 
         var errorDescription: String? {
             switch self {
-            case .missingTemplate(let n): return "找不到模板文件：\(n).mobileconfig（请确认已随包打包）"
+            case .missingTemplate(let n): return "找不到模板文件：\(n).mobileconfig"
             case .corruptProfile(let n): return "描述文件已损坏，无法解析：\(n).mobileconfig"
             case .badURL: return "无法生成安装地址."
             }

@@ -158,19 +158,19 @@ enum I4PairingService {
             switch self {
             case .noCarrier(let ids):
                 return "设备上没有安装爱思移动端（候选 \(ids.count) 个：\(ids.joined(separator: ", "))），"
-                    + "高级功能由该 App 提供，无法写入."
+                    + "无法写入."
             case .markerBuildFailed(let reason):
                 return "构造授权标记失败：\(reason)"
             case .sandboxOpenFailed(let bundleId, let reason):
                 return "打不开 \(bundleId) 的 Documents 沙盒：\(reason)"
             case .carrierNotLaunched(let name, let bundleId):
-                return "\(name)（\(bundleId)）尚未启动过，没有数据容器；请先在设备上打开它一次，再回来重试."
+                return "\(name)（\(bundleId)）尚未启动过，没有数据容器；请先在设备上打开一次."
             case .writeFailed(let name, let reason):
                 return "写入 \(name) 失败：\(reason)"
             case .readBackMissing(let name):
                 return "写后读回失败：设备沙盒里不存在 \(name)，写入未生效."
             case .noPairingFile:
-                return "未检测到配对文件（Documents/\(rsdPairingFileName)），请先导入或生成配对文件."
+                return "未检测到配对文件（Documents/\(rsdPairingFileName)），请先导入或生成."
             case .pairTransportFailed(let reason):
                 return "现场配对传输失败：\(reason)"
             }

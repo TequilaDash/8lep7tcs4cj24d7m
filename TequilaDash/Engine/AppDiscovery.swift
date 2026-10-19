@@ -40,7 +40,7 @@ enum AppDiscoveryError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noPairingFile:
-            return "尚未导入配对文件.需要配对文件才能列出设备上的应用."
+            return "尚未导入配对文件."
         case .heartbeatFailed(let m):
             return "无法连接本地隧道：\(m).请将 LocalDevVPN 的设备 IP / 隧道 IP 保持默认（10.7.0.1），并使用 iPASide 生成的配对文件."
         case .enumerationFailed(let m):

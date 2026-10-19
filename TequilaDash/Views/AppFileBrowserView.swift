@@ -39,13 +39,19 @@ struct AppFileBrowserView: View {
     @State private var scope: Scope = .documents
     @State private var currentPath = "/Documents"
     @State private var entries: [AfcEntry] = []
-    @State private var sizes: [String: Int64] = [:]
     @State private var loading = true
     @State private var errorText: String?
     /// 当前活动的 AFC 会话
     @State private var afcClient: OpaquePointer?
     /// 完整容器会话（vend_container 成功才有；Documents 会话不足够时补）
     @State private var containerAfc: OpaquePointer?
+    /// 会话代次（U-1）：closeClient()/closeAll() 释放 AFC 句柄时 +1。异步路径据此判定句柄已失效：
+    /// 代次变了或 activeClient() 已为空 ⇒ 立刻 return，不再解引用旧指针。
+    @State private var sessionEpoch: Int = 0
+    /// U-1 延后释放：跨 await 使用会话句柄的在飞任务计数（进入 +1、退出 -1，均在 MainActor）。
+    @State private var inFlight: Int = 0
+    /// U-1 延后释放：closeAll() 在 inFlight > 0 时置位；最后一个在飞任务收尾时执行真正的释放。
+    @State private var pendingClose = false
     /// 本 scope 是否无权限（vend_container 失败）
     @State private var noPermission = false
     @State private var title = "Documents"
@@ -230,6 +236,9 @@ struct AppFileBrowserView: View {
     // MARK: 连接与列目录
     private func connectForScope() async {
         closeClient()
+        let epoch = sessionEpoch
+        beginInFlight()
+        defer { endInFlight() }
         loading = true
         noPermission = false
         errorText = nil
@@ -243,8 +252,11 @@ struct AppFileBrowserView: View {
                         let boxed = try await Task.detached(priority: .userInitiated) {
                             AFCClientBox(raw: try FileSharingService.openAppContainer(bundleId: bundleId))
                         }.value
+                        // U-1：代次变了说明期间 closeAll 已释放会话——本次新开的会话当场释放。
+                        guard sessionIsCurrent(epoch) else { afc_client_free(boxed.raw); return }
                         containerAfc = boxed.raw
                     } catch {
+                        guard sessionIsCurrent(epoch) else { return }
                         noPermission = true
                         entries = []
                         currentPath = scope.path
@@ -263,33 +275,39 @@ struct AppFileBrowserView: View {
                     let boxed = try await Task.detached(priority: .userInitiated) {
                         AFCClientBox(raw: try FileSharingService.openAppDocuments(bundleId: bundleId))
                     }.value
+                    // U-1：同 container 分支——代次变了则释放本次新开的会话，不写入状态。
+                    guard sessionIsCurrent(epoch) else { afc_client_free(boxed.raw); return }
                     afcClient = boxed.raw
                 }
                 currentPath = "/Documents"
                 await loadDir(path: "/Documents")
             }
         } catch {
+            guard sessionIsCurrent(epoch) else { return }
             errorText = error.localizedDescription
         }
     }
 
     private func loadDir(path: String) async {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         loading = true
         defer { loading = false }
         do {
+            // U-2：逐条 fileSize 已删——listDirectory 内部已对每条做一次 afc_get_file_info，
+            // AfcEntry 自带 size/modified，再调一次 fileSize 是同一路径的二次 stat（~7.5ms/条）.
+            // 该函数内部那次逐条 stat 仍在主线程，另案处理.
             let results = try FileSharingService.listDirectory(afc: client, path: path)
-            var sizeMap: [String: Int64] = [:]
-            for e in results where !e.isDirectory {
-                sizeMap[e.path] = FileSharingService.fileSize(afc: client, path: e.path) ?? 0
-            }
+            guard sessionIsCurrent(epoch) else { return }
             await MainActor.run {
                 currentPath = path
                 entries = results
-                sizes = sizeMap
                 errorText = nil
             }
         } catch {
+            guard sessionIsCurrent(epoch) else { return }
             await MainActor.run { errorText = error.localizedDescription; entries = [] }
         }
     }
@@ -302,6 +320,32 @@ struct AppFileBrowserView: View {
 
     private func activeClient() -> OpaquePointer? {
         scope.needsContainer ? (containerAfc ?? afcClient) : afcClient
+    }
+
+    /// U-1：需要句柄时现取，不跨 await 保存。代次已变（句柄已被释放）⇒ nil，调用方须立刻 return。
+    private func currentClient(_ epoch: Int) -> OpaquePointer? {
+        guard epoch == sessionEpoch else { return nil }
+        return activeClient()
+    }
+
+    /// U-1：await 之后重新校验代次；变了即放弃，不再触碰旧句柄。
+    private func sessionIsCurrent(_ epoch: Int) -> Bool {
+        epoch == sessionEpoch
+    }
+
+    /// U-1 延后释放：进入跨 await 的会话使用段（+1）。
+    private func beginInFlight() { inFlight += 1 }
+
+    /// U-1 延后释放：退出跨 await 的会话使用段（-1）。归零且存在待释放请求时，在此执行真正的释放。
+    private func endInFlight() {
+        inFlight -= 1
+        if inFlight <= 0 {
+            inFlight = 0
+            if pendingClose {
+                pendingClose = false
+                performCloseAll()
+            }
+        }
     }
 
     private func navigateUp() {
@@ -443,7 +487,10 @@ struct AppFileBrowserView: View {
     /// v0.3.219：打开条目——目录优先（isDirectory 可能误判，失败回退当文件），
     /// 修"文件夹点击进不去".
     private func openEntry(_ entry: AfcEntry) async {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         if entry.isDirectory {
             await loadDir(path: entry.path)
             return
@@ -451,6 +498,7 @@ struct AppFileBrowserView: View {
         // 标为文件但仍可能实为目录（AFC st_ifmt 判定失败）→ 尝试列
         do {
             let subs = try FileSharingService.listDirectory(afc: client, path: entry.path)
+            guard sessionIsCurrent(epoch) else { return }
             await MainActor.run {
                 currentPath = entry.path
                 entries = subs
@@ -460,6 +508,7 @@ struct AppFileBrowserView: View {
         } catch {
             // 确为文件 → 文本可编辑直接打开，否则显示信息
         }
+        guard sessionIsCurrent(epoch) else { return }
         if isEditableText(entry) {
             editingEntry = entry
         } else {
@@ -596,7 +645,10 @@ struct AppFileBrowserView: View {
 
     private func createItem() async {
         let name = trimmedCreateName
-        guard !name.isEmpty, let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard !name.isEmpty, let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         let finalName: String
         if createIsFolder {
             finalName = name
@@ -622,7 +674,10 @@ struct AppFileBrowserView: View {
     }
 
     private func doRename() async {
-        guard let t = renameTarget, let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let t = renameTarget, let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         let name = renameText.trimmingCharacters(in: .whitespaces)
         renameTarget = nil
         guard !name.isEmpty else { return }
@@ -638,7 +693,10 @@ struct AppFileBrowserView: View {
     }
 
     private func doDelete() async {
-        guard let t = deleteTarget, let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let t = deleteTarget, let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         deleteTarget = nil
         do {
             try FileSharingService.remove(afc: client, path: t.path, recursive: t.isDirectory)
@@ -651,7 +709,10 @@ struct AppFileBrowserView: View {
 
     /// v0.3.219：分享（文件下载到 tmp；文件夹递归下载成目录 → ShareSheet 分享）
     private func shareEntry(_ entry: AfcEntry) async {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         showToast("准备分享…")
         do {
             // Swift 6：OpaquePointer 非 Sendable → 经 AFCClientBox（@unchecked Sendable）传入
@@ -664,8 +725,10 @@ struct AppFileBrowserView: View {
                 try Self.downloadEntry(client: clientBox.raw, entry: entry, to: dest)
                 return dest
             }.value
+            guard sessionIsCurrent(epoch) else { return }
             await MainActor.run { shareItems = ShareItems(urls: [url]) }
         } catch {
+            guard sessionIsCurrent(epoch) else { return }
             showToast(error.localizedDescription)
         }
     }
@@ -684,24 +747,31 @@ struct AppFileBrowserView: View {
 
     /// v0.3.227：批量导出（流式下载不限大小 + 实时进度）→ TequilaDash Documents/文件导出浏览/
     private func exportSelected() {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard currentClient(epoch) != nil else { return }
         let picked = entries.filter { selectedPaths.contains($0.path) }
         guard !picked.isEmpty else { return }
         let count = picked.count
         Task {
-            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            beginInFlight()
+            defer { endInFlight() }
+            guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
             let destDir = docs.appendingPathComponent("文件导出浏览", isDirectory: true)
             try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
             var ok = 0, failed = 0
             for (idx, entry) in picked.enumerated() {
+                guard sessionIsCurrent(epoch) else { break }
                 await MainActor.run {
                     exportProgress = ExportProgress(name: entry.name, done: 0, total: 0,
                                                     index: idx + 1, count: count)
                 }
+                // U-1：句柄现取——上一轮 await 之后会话可能已被 closeAll 释放。
+                guard let client = currentClient(epoch) else { break }
                 do {
                     let dest = destDir.appendingPathComponent(entry.name)
                     try Self.exportEntry(client: client, entry: entry, to: dest) { name, done, total in
                         Task { await MainActor.run {
+                            guard sessionIsCurrent(epoch) else { return }
                             exportProgress = ExportProgress(name: name, done: done, total: total,
                                                             index: idx + 1, count: count)
                         }}
@@ -712,6 +782,7 @@ struct AppFileBrowserView: View {
                 }
             }
             let okR = ok, failR = failed
+            guard sessionIsCurrent(epoch) else { return }
             await MainActor.run {
                 exportProgress = nil
                 selectedPaths.removeAll()
@@ -736,6 +807,15 @@ struct AppFileBrowserView: View {
 
     private static func recursiveExport(client: OpaquePointer, srcDir: String, toDir: URL, prefix: String,
                                         progress: @escaping (String, Int64, Int64) -> Void) throws {
+        try recursiveExport(client: client, srcDir: srcDir, toDir: toDir, prefix: prefix,
+                            depth: 0, progress: progress)
+    }
+
+    /// U-6：同签名重载带深度上限（上限 64，与 FileService.countTree 的 maxNodes 同为遍历保护）。
+    private static func recursiveExport(client: OpaquePointer, srcDir: String, toDir: URL, prefix: String,
+                                        depth: Int,
+                                        progress: @escaping (String, Int64, Int64) -> Void) throws {
+        guard depth < 64 else { return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
             let target = toDir.appendingPathComponent(item.name)
@@ -743,7 +823,7 @@ struct AppFileBrowserView: View {
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
                 try recursiveExport(client: client, srcDir: item.path, toDir: target,
-                                    prefix: rel, progress: progress)
+                                    prefix: rel, depth: depth + 1, progress: progress)
             } else {
                 try FileSharingService.downloadFileStreaming(afc: client, path: item.path, to: target) { done, total in
                     progress(rel, done, total)
@@ -755,12 +835,19 @@ struct AppFileBrowserView: View {
     /// 递归下载目录（保结构）
     /// Swift 6：只被 `downloadEntry`（已 nonisolated）调用 → 同步 nonisolated。
     private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL) throws {
+        try recursiveDownload(client: client, srcDir: srcDir, toDir: toDir, depth: 0)
+    }
+
+    /// U-6：同签名重载带深度上限（上限 64）。
+    private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL,
+                                                      depth: Int) throws {
+        guard depth < 64 else { return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
             let target = toDir.appendingPathComponent(item.name)
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
-                try recursiveDownload(client: client, srcDir: item.path, toDir: target)
+                try recursiveDownload(client: client, srcDir: item.path, toDir: target, depth: depth + 1)
             } else {
                 let data = try FileSharingService.downloadFile(afc: client, path: item.path)
                 try data.write(to: target)
@@ -769,7 +856,10 @@ struct AppFileBrowserView: View {
     }
 
     private func download(_ entry: AfcEntry) async {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard let client = currentClient(epoch) else { return }
+        beginInFlight()
+        defer { endInFlight() }
         showToast("正在下载…")
         do {
             // Swift 6：同 shareEntry —— client 经 AFCClientBox 传入 Task.detached。
@@ -777,15 +867,17 @@ struct AppFileBrowserView: View {
             let data = try await Task.detached(priority: .userInitiated) {
                 try FileSharingService.downloadFile(afc: clientBox.raw, path: entry.path)
             }.value
+            guard sessionIsCurrent(epoch) else { return }
             // 存到本 App 文档目录
-            let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Downloads", isDirectory: true)
+            guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+            let dir = docs.appendingPathComponent("Downloads", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let safeName = (entry.name as NSString).lastPathComponent
             let dest = dir.appendingPathComponent("\(appName)-\(safeName)")
             try data.write(to: dest)
             showToast("已保存：\(dest.lastPathComponent)")
         } catch {
+            guard sessionIsCurrent(epoch) else { return }
             showToast(error.localizedDescription)
         }
     }
@@ -808,6 +900,8 @@ struct AppFileBrowserView: View {
     }
 
     private func closeClient() {
+        // U-1：释放句柄前先让代次失效，在飞的异步路径据此立刻放弃，不再解引用旧指针。
+        sessionEpoch += 1
         // 别名防御：containerAfc 与 afcClient 曾可能指向同一会话，这种状态下这里只解绑、
         // 不释放，交给 closeAll 统一释放，避免 double free。
         if let c = afcClient {
@@ -817,7 +911,16 @@ struct AppFileBrowserView: View {
         // containerAfc 保留（复用）——除非离开页面
     }
     private func closeAll() {
+        // U-1 延后释放：仍有跨 await 的任务在解引用会话句柄时不 free，只置待释放标志，
+        // 交给最后一个在飞任务（endInFlight）执行真正的释放，避免释放后指针仍被 detached 使用。
+        guard inFlight == 0 else { pendingClose = true; return }
+        performCloseAll()
+    }
+    /// U-1 延后释放：真正的释放（代次失效 + 释放两个会话），仅由 closeAll() 与 endInFlight() 调用。
+    private func performCloseAll() {
         closeClient()
+        // containerAfc 的释放同样以代次失效为前置（closeClient 已 +1，此处再 +1 幂等）。
+        sessionEpoch += 1
         if let c = containerAfc { afc_client_free(c); containerAfc = nil }
     }
 
@@ -831,15 +934,21 @@ struct AppFileBrowserView: View {
         selectedPaths.removeAll()
     }
     private func deleteSelected() {
-        guard let client = activeClient() else { return }
+        let epoch = sessionEpoch
+        guard currentClient(epoch) != nil else { return }
         let paths = Array(selectedPaths)
         Task {
+            beginInFlight()
+            defer { endInFlight() }
             var failed = 0
             for p in paths {
+                // U-1：句柄现取——本 Task 启动后才取，不跨 await 保存外层旧指针。
+                guard let client = currentClient(epoch) else { break }
                 do {
                     try FileSharingService.remove(afc: client, path: p, recursive: true)
                 } catch { failed += 1 }
             }
+            guard sessionIsCurrent(epoch) else { return }
             selectedPaths.removeAll()
             if failed == 0 {
                 showToast("已删除 \(paths.count) 项")
@@ -850,7 +959,8 @@ struct AppFileBrowserView: View {
         }
     }
     private func importUrls(_ urls: [URL]) {
-        guard let client = activeClient(), let url = urls.first else { return }
+        let epoch = sessionEpoch
+        guard currentClient(epoch) != nil, let url = urls.first else { return }
         // 大文件不许整读进内存：Data(contentsOf:) 会在读取时把整个文件摊到内存，导入几百 MB
         // 的视频 / ipa 时真机直接被 jetsam 杀掉（观感就是闪退）。与 downloadFile 同口径，
         // 上限 200MB；超限只提示、不读。
@@ -864,11 +974,17 @@ struct AppFileBrowserView: View {
         let dest = currentPath.hasSuffix("/") ? currentPath + name : currentPath + "/" + name
         showToast("正在导入…")
         Task {
+            beginInFlight()
+            defer { endInFlight() }
+            // U-1：句柄现取——本 Task 启动时会话可能已被 closeAll 释放。
+            guard let client = currentClient(epoch) else { return }
             do {
                 try FileSharingService.uploadFile(afc: client, data: data, to: dest)
+                guard sessionIsCurrent(epoch) else { return }
                 showToast("已导入 \(name)")
                 await loadDir(path: currentPath)
             } catch {
+                guard sessionIsCurrent(epoch) else { return }
                 showToast(error.localizedDescription)
             }
         }

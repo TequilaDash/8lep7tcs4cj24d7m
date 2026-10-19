@@ -280,14 +280,14 @@ struct TreasureBoxView: View {
                 onOpenGestalt()
             }
             AppSettingsRow(icon: "trash.slash", title: "顽固图标清理",
-                           keywords: ["删除装 App 失败残留的图标（含备份）"]) {
+                           keywords: ["删除安装失败残留图标（含备份）"]) {
                 AppHaptics.tap()
                 onOpenIconCleanup()
             }
             // 反激活设备：不可逆操作，安全闸（激活锁检测 + 不可跳过确认）在 ActivationView 里.
             // 图标用 `bolt.slash`（不用黄色感叹号，项目铁律）.
             AppSettingsRow(icon: "bolt.slash", title: "反激活设备",
-                           keywords: ["让设备回到激活界面（不可逆，需先关查找）"]) {
+                           keywords: ["回到激活界面（不可逆，需先关查找）"]) {
                 AppHaptics.tap()
                 onOpenDeactivate()
             }

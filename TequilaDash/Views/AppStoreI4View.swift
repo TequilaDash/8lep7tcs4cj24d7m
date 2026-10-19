@@ -118,7 +118,7 @@ struct AppStoreI4View: View {
         if apps.isEmpty {
             Section {
                 ContentUnavailableView("该榜单暂无数据", systemImage: "square.grid.2x2",
-                                       description: Text("接口已签名成功，但该 remd 未返回条目"))
+                                       description: Text("签名成功；remd 未返回条目"))
             }
         } else {
             Section("\(rank.title) · \(apps.count)") {
@@ -282,7 +282,7 @@ struct I4SpecialAppsView: View {
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                         .foregroundStyle(.secondary)
-                    Text("说明：服务端已接受签名请求，但该专题暂未返回应用条目.")
+                    Text("签名请求已接受；该专题未返回条目.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

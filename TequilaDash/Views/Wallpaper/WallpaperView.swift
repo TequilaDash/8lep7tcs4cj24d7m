@@ -18,8 +18,6 @@ struct WallpaperView: View {
     @State private var showExtractor = false
     @State private var showShareSheet = false
     @State private var extractedURL: URL?
-    /// 明暗模式：底部胶囊按钮的投影走 `AppShadow.card`（深色下为 .clear），需显式传入.
-    @Environment(\.colorScheme) private var colorScheme
 
     private let columns = Array(repeating: GridItem(.flexible()), count: UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2)
     private let handler = WallpaperHandler()
@@ -93,19 +91,7 @@ struct WallpaperView: View {
                     Button {
                         showImporter = true
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.doc")
-                            Text("导入 .tendies")
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.primary)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(AppSurface.card)
-                                .appCardShadow(colorScheme)
-                        )
+                        AppCapsuleLabel(title: "导入 .tendies", systemImage: "arrow.down.doc")
                     }
                     Spacer()
                 }

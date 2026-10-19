@@ -32,7 +32,7 @@ struct CertificateView: View {
         List {
             headerSection
             // v0.3.131：自动撤销（统一撤销接口的管控开关）+ 白名单（仅一个）、（白名单与 SideStore/AltStore 标识的证书放行）遇 7460 情况使用
-            Section(header: Text("自动撤销"), footer: Text("开启后，配额满会自动吊销旧证书.")) {
+            Section(header: Text("自动撤销"), footer: Text("配额满时自动吊销旧证书.")) {
                 Toggle("自动撤销证书", isOn: $certStore.autoRevokeEnabled)
                 TextField("白名单", text: $certStore.revokeWhitelist)
                     .autocapitalization(.none)
@@ -151,7 +151,7 @@ struct CertificateView: View {
             }
             Button("取消", role: .cancel) { pendingP12Data = nil }
         } message: {
-            Text("输入 p12 导出时设置的密码. 使用与主程序（LC/SideStore）相同的证书签名模块.")
+            Text("p12 导出时设置的密码.与主程序（LC/SideStore）同一签名模块.")
         }
         .alert("删除本地签名证书？", isPresented: $showRemoveCertConfirm) {
             Button("删除", role: .destructive) {
@@ -160,7 +160,7 @@ struct CertificateView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("仅删除本地签名证书文件（签名功能随之不可用），不向 Apple 吊销.证书仍占账号名额，需腾名额请用吊销功能.")
+            Text("仅删除本地证书文件（签名随之不可用），不向 Apple 吊销.证书仍占账号名额，腾名额请用吊销.")
         }
         .sheet(isPresented: $showLogin) {
             AppleIDLoginSheet()
@@ -182,7 +182,7 @@ struct CertificateView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将吊销已选的 \(selected.count) 张证书.用这些证书签名的应用会在所有设备上停止启动，且无法撤销.")
+            Text("将吊销已选 \(selected.count) 张证书.相关应用将在所有设备上停止启动，且无法撤销.")
         }
         .alert("吊销这张证书？", isPresented: Binding(
             get: { pendingRevoke != nil },
@@ -195,7 +195,7 @@ struct CertificateView: View {
             Button("取消", role: .cancel) { pendingRevoke = nil }
         } message: {
             if let cert = pendingRevoke {
-                Text("「\(cert.displayName)」将被吊销.已用该证书签名的应用会在所有设备上停止启动，且无法撤销.")
+                Text("「\(cert.displayName)」将被吊销.相关应用将在所有设备上停止启动，且无法撤销.")
             }
         }
     }
@@ -267,7 +267,7 @@ struct CertificateView: View {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。
                     // 这里确实是「空列表」：团队已加载成功、但账号下 0 个团队（不是错误态）。
                     AppStateSection(state: .empty("账号下没有可用团队",
-                                                  message: "登录的 Apple ID 名下还没有开发者团队，创建后重新加载即可.",
+                                                  message: "该 Apple ID 名下没有开发者团队；创建后重新加载.",
                                                   icon: "person.2.slash"))
                 } else {
                     Picker("选择团队", selection: $manager.selectedTeamID) {
@@ -303,7 +303,7 @@ struct CertificateView: View {
                 icon: "lock.fill",
                 iconTint: .blue,
                 title: "尚未登录",
-                message: "登录 Apple ID 后可查看账号开发证书并吊销失效证书.登录需两步验证，凭据仅存本机钥匙串."
+                message: "登录后可查看并吊销账号开发证书.登录需两步验证，凭据仅存本机钥匙串."
             )
         }
     }

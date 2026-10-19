@@ -246,11 +246,11 @@ struct SignSourceAppListView: View {
             // 两种「空」的语义不同：源本身 0 条（apps.isEmpty）vs 有数据但被搜索/筛选滤空。
             if apps.isEmpty {
                 AppStateSection(state: .empty("这个源里没有应用",
-                                              message: "该软件源当前没有返回任何应用条目.",
+                                              message: "该源没有返回任何应用条目.",
                                               icon: "tray.full"))
             } else {
                 AppStateSection(state: .empty("没有匹配的应用",
-                                              message: "试试换个关键词或筛选条件.",
+                                              message: "换个关键词或筛选条件.",
                                               icon: "magnifyingglass"))
             }
         }
@@ -389,7 +389,7 @@ struct SignSourceAppListView: View {
                 } header: {
                     Text("类型")
                 } footer: {
-                    Text("开启后隐藏网页 / 书签等深链、没有下载链接的条目，以及顶部公告.")
+                    Text("隐藏网页 / 书签等深链、无下载链接的条目，以及顶部公告.")
                 }
                 Section("排序") {
                     Picker("排序", selection: $sortFilter) {

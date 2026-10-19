@@ -118,6 +118,8 @@ struct LiquidGlassOrbView: View {
                 .font(.system(size: 56, weight: .bold, design: .rounded))
                 .contentTransition(.numericText())
                 .foregroundStyle(.white)
+                // 保留手写投影：白字在玻璃球上的文字投影（可读性垫底），非视图投影，
+                // 不属于卡片 / 浮层两级.
                 .shadow(color: .black.opacity(0.45), radius: 9, y: 1)
             Text("分")
                 .font(.footnote.weight(.semibold))

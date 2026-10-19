@@ -90,6 +90,8 @@ final class CopyFeedback: ObservableObject {
 
 struct CopyBanner: View {
     let message: String?
+    /// 明暗模式：底部提示条投影走 `AppShadow.raised`，需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack {
@@ -100,7 +102,7 @@ struct CopyBanner: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(.regularMaterial, in: Capsule())
-                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
+                    .appRaisedShadow(colorScheme)
                     .padding(.bottom, 72)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

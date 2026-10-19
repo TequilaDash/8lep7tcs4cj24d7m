@@ -175,7 +175,7 @@ struct AppStoreAccountsView: View {
         } header: {
             Text("已登录账号（\(accounts.count)）")
         } footer: {
-            Text("点账号 = 设为当前下载账号；长按 = 查已购列表").font(.caption2)
+            Text("点按设为当前账号；长按查已购").font(.caption2)
         }
     }
 
@@ -248,7 +248,7 @@ struct AppStoreAccountsView: View {
         } header: {
             Text("设备与认证")
         } footer: {
-            Text("设备标识是下载请求携带的身份；异常时可重置后重新登录下载.")
+            Text("设备标识用于下载请求；异常时可重置后重新登录.")
                 .font(.caption2)
         }
     }

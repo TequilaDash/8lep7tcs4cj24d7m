@@ -390,6 +390,8 @@ struct ConfigurationsView: View {
                 Capsule()
                     .fill(Color.white.opacity(0.6))
                     .frame(width: 145, height: 4)
+                    // 保留手写投影：1pt 描影贴合照片底，模拟 home indicator 的贴合投影，
+                    // 不属于卡片（`AppShadow.card`）/ 浮层（`AppShadow.raised`）两级.
                     .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
             }
             .frame(maxWidth: .infinity)

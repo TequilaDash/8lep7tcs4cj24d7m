@@ -21,7 +21,7 @@ enum MCMError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notMHA:
-            return "本进程未以 MobileHouseArrest 身份运行（MHA 分支未生效）."
+            return "本进程未以 MobileHouseArrest 身份运行."
         case .bridgeUnavailable:
             return "Containermanager 符号解析失败，当前 iOS 版本不支持."
         case .invalidIdentifier:

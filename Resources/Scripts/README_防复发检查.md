@@ -1,6 +1,6 @@
 # 防复发检查 · 约定与用法
 
-本目录的脚本是「**以后不会再有人犯同样的错**」的机制化守门人。目前九项检查，
+本目录的脚本是「**以后不会再有人犯同样的错**」的机制化守门人。目前十七项检查（口径 = `swift_precommit_check.py` 的 `CHECKS` 长度），
 统一入口：`swift_precommit_check.py`。
 
 > **⚠️ 仓库内 / 仓库外两份**
@@ -141,25 +141,16 @@ L4 是**组件契约探针**（tripwire）：只检查这两个不变量是否�
 
 ---
 
-### 3.9 `swift_bluetooth_pairing_guard.py` —— 蓝牙定位「免配对」（第 9 项检查）
+### 3.9 蓝牙定位「免配对」——守卫脚本未实现
 
-背景（用户原话）：「蓝牙模拟定位 … 有点脱裤子放屁了 … 我们好像强制要求需要配对连接 Localdev 才能」。
-结论（`研究_蓝牙定位免配对.md`）：**蓝牙链路本身不需要系统蓝牙配对，也不需要配对文件 / VPN 隧道**；
-旧实现却把「必须已导入配对文件」当成蓝牙下行的前置门控，用户在 B 机上被卡在「先配对」这一步。
-v0.3.594 去掉两层门控（`SpoofSession` 的 `guard hasPairing` + `BluetoothPanelView` 的警告段与按钮
-`.disabled`），改由 `LocationEngine.set` 如实报错。本脚本防止有人把门控加回蓝牙路径。
+本节的 `swift_bluetooth_pairing_guard.py` **不存在**（`Resources/Scripts/` 下无此文件，git 历史亦无），
+第 9 项检查从未落地，`swift_precommit_check.py` 的 CHECKS 里也没有它。
 
-| 规则 | 拦什么 |
-|---|---|
-| R1 | `SpoofSession` 体内出现 `guard hasPairing` |
-| R2 | `SpoofSession` 体内出现 `if !hasPairing`（另一种阻断写法） |
-| R3 | `BluetoothPanelView` 体内出现 `hasPairing`（警告段 / 按钮 `.disabled` 都不行） |
+现状（2026-10-19 实测）：`SpoofSession.swift` 仍有 4 处 `guard hasPairing`（:181 teleport / :198 applyRemoteCoordinate /
+:279 startJoystick / :338 followRoute），`Views/VirtualLocation/BluetoothPanelView.swift` 有 2 处
+（:37 与 :103，均为 `role == .receiver` 分支）。
 
-**为什么只扫蓝牙路径、不做全仓禁令**：`hasPairing` 在 JIT / 卸载 / 爱思高级功能 / 虚拟定位设置页里是
-**真需求**（那些功能确实依赖配对文件）⇒ 本脚本只扫 `SpoofSession` 与 `BluetoothPanelView` 两个类型体。
-匹配前剥离注释与字符串字面量（注释里会提到 `hasPairing`），行号不错位。
-三条规则在当前干净代码上 EXIT 0；正控实验（临时把 `guard hasPairing` 加回 `SpoofSession.teleport`）实测 R1 命中。
-
+本节描述的 R1/R2/R3 三条规则若落地，会命中上述 6 处。是否恢复门控、是否补写脚本，待定。
 ---
 
 ## 4. 当检查报红时怎么办（按优先级）

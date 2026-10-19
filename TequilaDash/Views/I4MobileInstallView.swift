@@ -253,7 +253,7 @@ struct I4MobileInstallView: View {
                 } else if let autoPick {
                     autoPickContent(autoPick)
                 } else {
-                    Text("设备信息不可用，无法给出本机推荐；可在下方 IPA 来源手动选择包体.")
+                    Text("设备信息不可用，无法给出推荐；请在 IPA 来源手动选包.")
                         .font(AppFont.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -510,7 +510,7 @@ struct I4MobileInstallView: View {
     private var customPackEntry: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("自定义包体").font(AppFont.subheadlineEmphasis)
-            Text("填入任意 IPA 直链（http / https），下载后按同一安装链路安装.")
+            Text("任意 IPA 直链（http / https），下载后走同一安装链路.")
                 .font(AppFont.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
@@ -650,7 +650,7 @@ struct I4MobileInstallView: View {
 
                 if installAction == nil {
                     Text("本页未接入安装动作：安装服务（I4MobileInstallService）按爱思做法，"
-                         + "用包内自带的 sinf 覆盖回包内再装，并在报告里写明用的是哪个账号的 sinf.")
+                         + "用包内自带 sinf 覆盖回包再装，报告写明所用账号的 sinf.")
                         .font(AppFont.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -792,7 +792,7 @@ struct I4MobileInstallView: View {
         downloadProgress = 0
         let missing = packStatuses.filter { !$0.cached && $0.warehouseAvailability.isAvailable }
         guard !missing.isEmpty else {
-            ipaMessage = "没有需要下载的包（未缓存且可用的包为空）."
+            ipaMessage = "没有需要下载的包."
             downloading = false
             return
         }
@@ -971,8 +971,8 @@ private struct I4MobileDownloadManagerView: View {
                 } header: {
                     Text("本页已下载（\(cached.count)）")
                 } footer: {
-                    Text("这里只显示「安装爱思移动端」页下载 / 导入的 IPA（Caches/I4MobileIPA）."
-                         + "App Store 商店、免登录商店、软件源下载的包不在此列，各自由其入口管理.")
+                    Text("只显示「安装爱思移动端」页下载 / 导入的 IPA（Caches/I4MobileIPA）."
+                         + "App Store、免登录商店、软件源的包不在此列.")
                 }
             }
             if let message {
@@ -994,7 +994,7 @@ private struct I4MobileDownloadManagerView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label("本页还没有下载任何 IPA", systemImage: "shippingbox")
                     .font(AppFont.subheadline)
-                Text("在「安装爱思移动端」页的「IPA 来源」里下载或手动导入后，会出现在这里.")
+                Text("「安装爱思移动端」页下载或手动导入的 IPA 会出现在这里.")
                     .font(AppFont.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

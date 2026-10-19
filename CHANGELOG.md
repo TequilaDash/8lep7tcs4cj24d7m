@@ -1,4 +1,24 @@
 # Changelog
+## [0.3.703] - 2026-10-19
+
+### 修复
+- 文档浏览返回时的 AFC 会话释放：新增在飞计数，任务未结束时延后释放，避免 `afc_client_free` 与在飞任务并发.
+- `AppFileBrowserView.loadDir` 删逐条 `fileSize` 二次 stat（`AFCService.listDirectory` 已带回 size/modified）.
+- `FileSharingService.verifiedSession` 整表丢弃的 `listDirectory` 改 `AFCService.listNames`；非目录分支改用已取回的 `entry.size`.
+- `FileService` 目录遍历加深度上限 64；`emptyDirectoryContentsBestEffort` 触顶计入既有 skipped.
+- `FileService.resolvedPath()`：根/子路径前缀比较前解析软链，防软链自环递归.
+- `FileSharingService.pairingPath` / `FileSharingAppsView` 的 `urls(...)[0]` 改 `.first ?? Documents` 兜底.
+- `AirliftToneTransport` 删从不抛出的 `pairingRequired` case 与文案.
+- Anisette 加固：guest fd 上限 4096 / 单次 IO 上限 8 MiB / 分配累计 384 MiB 告警 / 错误码基址改 -2000 / `anisette_core_uc` 两处失败分支补 `reset_shared_vm`.
+
+### 变更
+- 用户可见文案收短三批：Views 17 文件 43 处、Engine 16 文件 24 处（只删解释性成分，保留错误码 / 路径 / 字段名）.
+- 阴影 token 化 4 处改 `.appRaisedShadow`；新增共享组件 `AppCapsuleLabel`（卡片底胶囊），`WallpaperView` 底部导入胶囊收敛到它.
+- `Resources/Scripts/README_防复发检查.md`：检查项数改 17（口径 = `swift_precommit_check.py` 的 CHECKS 长度）；3.9 蓝牙小节标注守卫脚本从未落地并记录现状.
+
+### 校验
+- `normalize_eol.py` EXIT 0；`swift_precommit_check.py` 17 组全过（扫描 305 个 .swift，命中 0）；42 个改动 .swift `swiftc -parse` PARSE_FAIL=0.
+
 ## [0.3.702] - 2026-10-19
 
 ### 修复

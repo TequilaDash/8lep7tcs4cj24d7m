@@ -30,7 +30,7 @@ enum UninstallServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "尚未导入配对文件.请先在「设置」导入配对文件并开启 LocalDevVPN，再卸载应用."
+            return "尚未导入配对文件.请在「设置」导入并开启 LocalDevVPN."
         case .tunnelFailed(let m):
             return "连接本地隧道失败：\(m)"
         case .callFailed(let m):

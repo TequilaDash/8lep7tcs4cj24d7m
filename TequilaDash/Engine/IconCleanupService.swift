@@ -88,7 +88,7 @@ enum IconCleanupService {
         var errorDescription: String? {
             switch self {
             case .noPairingFile:
-                return "未检测到配对文件.请先导入配对文件（需 LocalDevVPN + 开发者模式）"
+                return "未检测到配对文件.请导入（需 LocalDevVPN + 开发者模式）"
             case .tunnelFailed(let m):
                 return "建立隧道失败：\(m)"
             case .connectFailed(let m):

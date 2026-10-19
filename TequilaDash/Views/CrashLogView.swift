@@ -19,6 +19,8 @@ struct CrashLogView: View {
     @State private var busy = false
     /// 进度文本（如「3 / 12」）.
     @State private var progressText: String?
+    /// 明暗模式：进度遮罩卡投影走 `AppShadow.raised`，需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     private let service = CrashLogService.shared
 
@@ -112,7 +114,7 @@ struct CrashLogView: View {
                 }
                 .padding(28)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(radius: 8)
+                .appRaisedShadow(colorScheme)
             }
         }
         .sheet(item: $previewEntry) { entry in

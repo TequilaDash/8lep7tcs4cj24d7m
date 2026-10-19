@@ -50,6 +50,8 @@ struct RingtonesView: View {
     @State private var renameText = ""
     @State private var shareItem: ShareURL?
     @StateObject private var player = RingtonePlayer()
+    /// 明暗模式：进度遮罩卡投影走 `AppShadow.raised`，需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     private let service = RingtonesService.shared
 
@@ -84,7 +86,7 @@ struct RingtonesView: View {
             } header: {
                 Text("铃声（/var/mobile/media）")
             } footer: {
-                Text("导入音频（mp3/wav/m4a，超 40 秒自动截取）后转为 .m4r 注册铃声库.到「设置 → 声音 → 铃声」查看，未立即出现可重启设备.")
+                Text("导入音频（mp3/wav/m4a，超 40 秒自动截取）转为 .m4r 注册铃声库.在「设置 → 声音 → 铃声」查看；未出现可重启设备.")
             }
         }
         .listStyle(.insetGrouped)
@@ -148,7 +150,7 @@ struct RingtonesView: View {
                 }
                 .padding(28)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(radius: 8)
+                .appRaisedShadow(colorScheme)
             }
         }
         .toastHost()
@@ -254,7 +256,7 @@ struct RingtonesView: View {
                 DispatchQueue.main.async {
                     busy = false
                     if let syncFailed {
-                        ToastCenter.shared.show("已导入并注册铃声 \(url.lastPathComponent)；媒体库刷新通知失败（\(syncFailed)）——若设置里未出现，重启设备即可")
+                        ToastCenter.shared.show("已导入并注册铃声 \(url.lastPathComponent)；媒体库刷新通知失败（\(syncFailed)）——未出现请重启设备")
                     } else {
                         ToastCenter.shared.show("已导入并注册到铃声库：\(url.lastPathComponent)（到「设置 → 声音 → 铃声」查看；未出现请重启设备）")
                     }

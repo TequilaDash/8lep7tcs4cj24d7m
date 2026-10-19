@@ -167,6 +167,14 @@ uint64_t PageAllocator::alloc(uint64_t bytes) {
     }
     uint64_t addr = base + offset;
     offset += aligned_size;
+    // 堆只增不减（hook_free 是空操作），累计量是判断这台 VM 还能跑多久的依据.
+    total_allocated += aligned_size;
+    if (!alloc_warn_logged && total_allocated >= kAllocWarnBytes) {
+        alloc_warn_logged = true;
+        LOG_UC("[Emulator] Allocation on 0x%llx reached %llu bytes (>= %llu); guest free() returns nothing here\n",
+               (unsigned long long)base, (unsigned long long)total_allocated,
+               (unsigned long long)kAllocWarnBytes);
+    }
     return addr;
 }
 
@@ -532,6 +540,17 @@ static void hook_open(EmulatorVM *vm) {
         while (uc_mem_read(vm->uc, path_ptr++, &c, 1) == UC_ERR_OK && c != '\0') path.push_back(c);
     }
 
+    // 表满时必须在宿主 open 之前拒绝：先开再发现没地方记，那个宿主 fd 就再也关不掉了.
+    if (vm->fd_map.size() >= kMaxGuestFds) {
+        int64_t rejected = -1;
+        uint32_t emfile = 24;   // EMFILE
+        uc_mem_write(vm->uc, vm->errno_addr, &emfile, sizeof(emfile));
+        LOG_UC("[Hook] open('%s') -> -1 (guest fd table full: %zu / %zu)\n",
+               path.c_str(), vm->fd_map.size(), (size_t)kMaxGuestFds);
+        uc_reg_write(vm->uc, UC_ARM64_REG_X0, &rejected);
+        return;
+    }
+
     int host_flags = linux_to_darwin_open_flags((int)flags);
     int host_fd = open(path.c_str(), host_flags, (mode_t)mode);
     int64_t guest_fd = -1;
@@ -571,12 +590,22 @@ static void hook_read(EmulatorVM *vm) {
     int64_t res = -1;
     auto it = vm->fd_map.find((int)guest_fd);
     if (it != vm->fd_map.end()) {
-        std::vector<uint8_t> tmp(count);
-        ssize_t bytes_read = read(it->second, tmp.data(), count);
-        if (bytes_read > 0) {
-            uc_mem_write(vm->uc, buf_ptr, tmp.data(), bytes_read);
+        // count 来自 guest 的 X2，直接拿它开 vector 等于让 guest 决定宿主的分配量.
+        // 超限按 EINVAL 拒绝，不做分块循环（分块会让 guest 看到部分成功）.
+        if (count > kMaxIoBytes) {
+            uint32_t einval = 22;   // EINVAL
+            uc_mem_write(vm->uc, vm->errno_addr, &einval, sizeof(einval));
+            LOG_UC("[Hook] read(fd=%lld, count=%llu) -> -1 (over kMaxIoBytes=%llu)\n",
+                   (long long)guest_fd, (unsigned long long)count, (unsigned long long)kMaxIoBytes);
+            res = -1;
+        } else {
+            std::vector<uint8_t> tmp(count);
+            ssize_t bytes_read = read(it->second, tmp.data(), count);
+            if (bytes_read > 0) {
+                uc_mem_write(vm->uc, buf_ptr, tmp.data(), bytes_read);
+            }
+            res = (int64_t)bytes_read;
         }
-        res = (int64_t)bytes_read;
     }
     uc_reg_write(vm->uc, UC_ARM64_REG_X0, &res);
 }
@@ -589,9 +618,18 @@ static void hook_write(EmulatorVM *vm) {
     int64_t res = -1;
     auto it = vm->fd_map.find((int)guest_fd);
     if (it != vm->fd_map.end()) {
-        std::vector<uint8_t> tmp(count);
-        uc_mem_read(vm->uc, buf_ptr, tmp.data(), count);
-        res = (int64_t)write(it->second, tmp.data(), count);
+        // 同 hook_read：count 由 guest 给，超限按 EINVAL 拒绝.
+        if (count > kMaxIoBytes) {
+            uint32_t einval = 22;   // EINVAL
+            uc_mem_write(vm->uc, vm->errno_addr, &einval, sizeof(einval));
+            LOG_UC("[Hook] write(fd=%lld, count=%llu) -> -1 (over kMaxIoBytes=%llu)\n",
+                   (long long)guest_fd, (unsigned long long)count, (unsigned long long)kMaxIoBytes);
+            res = -1;
+        } else {
+            std::vector<uint8_t> tmp(count);
+            uc_mem_read(vm->uc, buf_ptr, tmp.data(), count);
+            res = (int64_t)write(it->second, tmp.data(), count);
+        }
     }
     uc_reg_write(vm->uc, UC_ARM64_REG_X0, &res);
 }
@@ -1032,6 +1070,10 @@ static void import_callback_router(uc_engine *uc, uint64_t address, uint32_t siz
     }
     else if (name == "__android_log_print") hook_android_log_print(vm);
     else {
+        // 未实现的 import 静默返回 0，在 ADI 侧只表现为随机失败：0 在 libc 里往往是
+        // 合法返回值（指针与错误码混用），没有这行就看不出缺的是哪个符号.
+        // 不经 anisetteCoreLog 的开关，始终可见.
+        fprintf(stderr, "[Emulator] unimplemented import: %s\n", name.c_str());
 
         uint64_t ret = 0;
         uc_reg_write(vm->uc, UC_ARM64_REG_X0, &ret);
@@ -1419,7 +1461,8 @@ int32_t run_vm_procedure(EmulatorVM *vm, uint64_t proc_addr, const std::vector<u
     if (err != UC_ERR_OK || pc != kReturnAddress) {
         LOG_UC("[Emulator] Execution stopped with status %d: %s at PC=0x%llx (expected 0x%llx)\n",
                (int)err, uc_strerror(err), (unsigned long long)pc, (unsigned long long)kReturnAddress);
-        return -1000 - (int32_t)err;
+        // 见 kEmuErrorBase：模拟器自身的失败码与 ADI 域错误码分开.
+        return kEmuErrorBase - (int32_t)err;
     }
 
     uint32_t w0_val = 0;

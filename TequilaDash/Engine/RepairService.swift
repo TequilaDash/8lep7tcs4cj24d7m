@@ -163,7 +163,7 @@ enum RepairService {
             guard actual.caseInsensitiveCompare(expect) == .orderedSame else {
                 return .failure(.verifyPackage, code: "E2",
                     message: "安装包不完整（传输中损坏）.",
-                    suggestion: "删掉这个包，让发送方重新传一次（建议同一 Wi-Fi 下重传）.",
+                    suggestion: "删掉这个包，让发送方重传（同一 Wi-Fi 下）.",
                     details: log + ["sha256 期望 \(expect.prefix(16))… 实际 \(actual.prefix(16))…"])
             }
             note("sha256 校验通过")
@@ -219,7 +219,7 @@ enum RepairService {
             // 包内完全没有 sinf ⇒ 无源可补（本机不能凭空签发）→ E4
             return .failure(.checkSinf, code: "E4",
                 message: "这个安装包里没有解密授权（sinf），本机无法补齐.",
-                suggestion: "请对方分享原始加密包（而不是已重签 / 已处理的包）；或改用「同 Apple ID 正规重下」.",
+                suggestion: "请对方分享原始加密包；或改用「同 Apple ID 正规重下」.",
                 details: log)
         }
         note("包内已有 sinf（\(rawSinf.count) 字节）—— 按本线，直接用它（sinf 与设备无关）")
@@ -230,7 +230,7 @@ enum RepairService {
         // ── (6) sinf 自检（写入前，防垃圾件）─────────────────────────
         guard PackageSINFWriter.isStructurallyValidSinf(sinfData) else {
             return .failure(.validateSinf, code: "E5",
-                message: "包里的解密授权格式不合法，已拒绝写入（宁可装不上也不写坏包）.",
+                message: "包里的解密授权格式不合法，已拒绝写入.",
                 suggestion: "让对方重新分享一次原始包；持续失败请反馈日志.", details: log)
         }
         let parsed = parseSinf(sinfData)
@@ -303,7 +303,7 @@ enum RepairService {
             note("用户在安装前选择只修补、不安装（原件未动，产物已保留）")
             return RepairResult(status: .skipped, stage: .install, code: nil,
                 message: "已修补，未安装（产物已保留）.",
-                suggestion: "如需安装，可在「已修补」里进行.",
+                suggestion: "可在「已修补」里安装.",
                 details: log, sinf: nil,
                 repairedIPAPath: outputPath, repairedIPASha256: repairedSha)
         }
@@ -441,7 +441,7 @@ enum RepairService {
             note("用户在安装前选择只修补、不安装")
             return RepairResult(status: .skipped, stage: .install, code: nil,
                 message: "已修补，未安装（明文包无需修补，产物已保留）.",
-                suggestion: "如需安装，可在「已修补」里进行.",
+                suggestion: "可在「已修补」里安装.",
                 details: log, sinf: nil,
                 repairedIPAPath: outputPath, repairedIPASha256: repairedSha)
         }

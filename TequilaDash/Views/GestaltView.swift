@@ -20,6 +20,8 @@ struct GestaltView: View {
     @State private var backupFiles: [URL] = []
     /// v0.3.181：Apply 前自动备份的短提示
     @State private var applyBackupToast: String?
+    /// 明暗模式：toast 胶囊投影走 `AppShadow.raised`，需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
 
     enum GestaltPane: String, CaseIterable, Identifiable {
         case edit = "编辑"
@@ -146,7 +148,7 @@ struct GestaltView: View {
                         .background(
                             Capsule()
                                 .fill(Color(.secondarySystemBackground))
-                                .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+                                .appRaisedShadow(colorScheme)
                         )
                         .overlay(
                             Capsule().stroke(Color(.separator), lineWidth: 0.5)

@@ -77,7 +77,7 @@ struct AppStoreView: View {
                         .foregroundStyle(.green)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("免登录下载").font(.subheadline.weight(.medium))
-                        Text("不用 Apple ID、不用配置，点一下就装")
+                        Text("免 Apple ID、免配置、一键安装")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
@@ -114,7 +114,7 @@ struct AppStoreView: View {
                         .foregroundStyle(.purple)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AppStore 日志").font(.subheadline.weight(.medium))
-                        Text("只看 AppStore 板块（下载/安装）")
+                        Text("仅 AppStore 板块（下载/安装）")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }

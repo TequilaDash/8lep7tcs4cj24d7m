@@ -168,7 +168,8 @@ struct FileSharingAppsView: View {
         ToastCenter.shared.show("正在导出 \(targets.count) 个图标…")
         Task.detached(priority: .utility) {
             let discovery = AppDiscovery()
-            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents", isDirectory: true)
             let dir = docs.appendingPathComponent("AppIcons", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             var count = 0

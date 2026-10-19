@@ -1027,6 +1027,40 @@ struct SizePill: View {
     }
 }
 
+/// 图标 + 文案的卡片底胶囊（页面底部主胶囊，作为 `Button` 的 label 用）.
+///
+/// 度量取自原手写调用点（`WallpaperView` 底部「导入」胶囊）：`HStack(spacing: 6)` +
+/// `.subheadline.weight(.medium)` + 18 / 12 + `Capsule().fill(AppSurface.card)` + `appCardShadow`.
+/// 默认值即原值 ⇒ 渲染不变；两个内边距留作同构调用点收敛用.
+/// 注意：本组件只管「卡片底胶囊」，不是 `SizePill`（后者是 tint 12% 底的计数胶囊）.
+struct AppCapsuleLabel: View {
+    let title: String
+    /// 左侧 SF Symbol 名.
+    let systemImage: String
+    /// 横向内边距（默认 18）.
+    var horizontalPadding: CGFloat = 18
+    /// 纵向内边距（默认 12）.
+    var verticalPadding: CGFloat = 12
+    /// 明暗模式：投影走 `AppShadow.card`（深色为 .clear），需显式传入.
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundColor(.primary)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
+        .background(
+            Capsule()
+                .fill(AppSurface.card)
+                .appCardShadow(colorScheme)
+        )
+    }
+}
+
 /// 全宽发丝分隔线（TRApp 设置列表语言）：全宽、`0.5pt` 级细线.
 ///
 /// 对照规范 §1.4 / §③组件 5：TRApp 设置列表是**全宽行 + ~2px 发丝分隔**（行底 `#F1EFF3` /

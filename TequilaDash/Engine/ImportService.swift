@@ -198,7 +198,7 @@ enum ImportService {
             cleanupOwnFolder(folderURL)
             return .init(status: .rejected, code: "I5",
                          message: "这不是一个可安装的 IPA（缺 Payload/Info.plist）.",
-                         suggestion: "确认对方分享的是 .ipa 而不是别的文件（zip 改后缀也不行）.",
+                         suggestion: "确认对方分享的是 .ipa 而不是别的文件.",
                          record: nil, details: log)
         }
         note("包信息：\(ins.bundleIdentifier ?? "-") \(ins.bundleVersion ?? "-") · \(ins.summary)")
@@ -225,7 +225,7 @@ enum ImportService {
                     cleanupOwnFolder(folderURL)
                     return .init(status: .rejected, code: "I6",
                                  message: "安装包内含越界路径，已拒绝导入.",
-                                 suggestion: "让对方用未改动的原始包重传；本机不做「将就装」.",
+                                 suggestion: "让对方用未改动的原始包重传.",
                                  record: nil, details: log + ["越界条目：\(name)"])
                 }
             }

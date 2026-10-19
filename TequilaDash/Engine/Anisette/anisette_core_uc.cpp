@@ -114,6 +114,9 @@ static bool setup_vm_and_adi(
         uint64_t load_lib_ptr = get_vm_symbol_address(vm, kADISymbols.load_library);
         if (!load_lib_ptr) {
             out_err = "Required ADI setup symbol missing in VM";
+            // 同上：库与构造器都已经作用在这台 VM 上，但符号表不完整，
+            // 留着会让下一轮在同一个半初始化状态上再装一遍.
+            reset_shared_vm(vm);
             return false;
         }
 
@@ -121,6 +124,8 @@ static bool setup_vm_and_adi(
         // v0.3.662：堆/字符串写入失败时 write_string 返回 0，原来会拿 0 当路径指针传给 ADI.
         if (!lib_path_vm) {
             out_err = "Emulator heap exhausted while staging library path";
+            // 堆已满，这台 VM 的地址空间不可再用；整个丢弃，下一轮重建.
+            reset_shared_vm(vm);
             return false;
         }
         LOG_UC("[AnisetteKit - UC] Step 1: Calling ADILoadLibraryWithPath (0x%llx, path=\"%s\")...\n",

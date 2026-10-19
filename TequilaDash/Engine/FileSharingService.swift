@@ -111,6 +111,10 @@ enum FileSharingService {
         NSError(domain: "FileSharing", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
+    /// 文档树递归深度上限（与 DeviceSlimService.snapshotMaxDepth 同口径 64）.
+    /// 触顶时该层目录不展开，计数进 limitSkipped（见 computeDocumentsSize）.
+    private static let treeMaxDepth = 64
+
     /// 把 FFI 错误对象转成 NSError —— 与 AFCService.error(from:fallback:) 同款.
     ///
     /// 为什么必须有这一层：FFI 返回的是 `IdeviceFfiError*`，里面带 `code` 和 `message`。
@@ -1005,9 +1009,13 @@ enum FileSharingService {
 
     /// vend 之后验活：列一次 Documents 目录，列不通即认为 vend 实际被拒（应答被底层丢弃）。
     /// 失败时释放该 AFC 并抛出**能指明原因**的错误，绝不让调用方拿到一个用不了的句柄.
+    ///
+    /// 验活只需「列得通」：走 `AFCService.listNames`（一次 `afc_list_directory`，
+    /// 成本与条目数基本无关）而**不**走 `listDirectory` —— 后者对每个条目各发一次
+    /// `afc_get_file_info`（实测 ~7.5ms/条），而本处调用把整表结果丢掉，纯按条目数付费.
     private static func verifiedSession(afc: OpaquePointer, bundleId: String) throws -> OpaquePointer {
         do {
-            _ = try listDirectory(afc: afc, path: appDocumentsPath)
+            _ = try AFCService.listNames(client: afc, path: appDocumentsPath)
         } catch {
             afc_client_free(afc)
             throw makeError("\(bundleId) 的 Documents 打不开（house_arrest 未授到沙盒）.")
@@ -1046,17 +1054,34 @@ enum FileSharingService {
     /// v0.3.270：计算指定 App Documents 容器的总大小（字节）.
     /// 每次新建 house_arrest 隧道 + AFC 递归遍历求和（Documents 树通常较小）.
     /// 调用方放后台线程、逐 App 串行（避免同时开多条隧道抢占）.
+    /// 递归深度上限 treeMaxDepth：触顶时已展开部分照常返回，未展开的目录数记日志.
     static func computeDocumentsSize(bundleId: String) throws -> Int64 {
         let afc = try openAppDocuments(bundleId: bundleId)
         defer { afc_client_free(afc) }
-        return try documentsSizeRecursively(afc: afc, path: appDocumentsPath)
+        let measured = try documentsSizeRecursively(afc: afc, path: appDocumentsPath)
+        if measured.limitSkipped > 0 {
+            LoginLogger.shared.log(
+                "[文件共享] \(bundleId) 目录深度触顶（上限 \(treeMaxDepth) 层）："
+                + "\(measured.limitSkipped) 个目录未展开，文档大小按已展开部分计")
+        }
+        return measured.bytes
     }
 
-    private static func documentsSizeRecursively(afc: OpaquePointer, path: String) throws -> Int64 {
+    /// 返回 (bytes, limitSkipped)：limitSkipped = 因深度触顶未展开的目录数.
+    private static func documentsSizeRecursively(
+        afc: OpaquePointer, path: String, depth: Int = 0
+    ) throws -> (bytes: Int64, limitSkipped: Int) {
         var total: Int64 = 0
+        var limitSkipped = 0
         for entry in try listDirectory(afc: afc, path: path) {
             if entry.isDirectory {
-                total += try documentsSizeRecursively(afc: afc, path: entry.path)
+                if depth + 1 > treeMaxDepth {
+                    limitSkipped += 1
+                    continue
+                }
+                let sub = try documentsSizeRecursively(afc: afc, path: entry.path, depth: depth + 1)
+                total += sub.bytes
+                limitSkipped += sub.limitSkipped
             } else {
                 // v0.3.666：**不把「量不到」当 0**.
                 //
@@ -1064,13 +1089,17 @@ enum FileSharingService {
                 // 唯独这里是 `?? 0` —— 同一种失败两种待遇。结果是容器总大小静默少算，
                 // 而调用方（「设备瘦身」的 docSize 通道）拿到的是一个看起来完整的数字.
                 // 拿不准就说拿不准：让失败照常抛出，由上层按「没量到」处理.
-                guard let one = fileSize(afc: afc, path: entry.path) else {
+                //
+                // 大小直接取 listDirectory 已随条目取回的 entry.size，**不再**对同一路径
+                // 二次 afc_get_file_info（同一份元数据的第二次 round-trip，实测 ~7.5ms/条）.
+                // 读不出时 listDirectory 已置 -1（未知）⇒ 这里照旧抛出，不把「量不到」当 0.
+                guard entry.size >= 0 else {
                     throw makeError("读取文件大小失败：\(entry.path)")
                 }
-                total += one
+                total += entry.size
             }
         }
-        return total
+        return (total, limitSkipped)
     }
 
     /// v0.3.270：字节 → MB 可读文本（保留 2 位小数，与爱思格式一致）.
@@ -1308,8 +1337,8 @@ enum FileSharingService {
         }
         defer { afc_file_info_free(&info) }
         // v0.3.666：**错误对象要释放**，否则每量一个读不出的文件就泄漏一个
-        // IdeviceFfiError。`documentsSizeRecursively`（:1001-1011）会对容器里
-        // 每个文件调一次本函数，容器一大就是成百上千次.
+        // IdeviceFfiError。列表路径（`listDirectory`）已随条目取回 size，
+        // 不再逐条调本函数；它现在只服务「按路径单独量大小」的入口.
         guard rc == nil else {
             if let rc { idevice_error_free(rc) }
             return nil
@@ -1327,8 +1356,9 @@ enum FileSharingService {
         }
     }
     static func pairingPath() -> String {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("pairingFile.plist").path
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents", isDirectory: true)
+        return docs.appendingPathComponent("pairingFile.plist").path
     }
     /// v0.3.378：建隧道入口——过**闸门**（`tunnelGate`），并把「排队等待」记下来
     /// （threadDictionary，供 runGated 把排队时长从执行时长里剥离）.

@@ -47,6 +47,11 @@ final class FileService {
 
     private let fm = FileManager.default
 
+    /// Deepest directory level any recursive walk in this service expands.
+    /// Matches DeviceSlimService.snapshotMaxDepth (64) so the trim pass and the
+    /// container browser share one depth budget.
+    private static let treeMaxDepth = 64
+
     // MARK: - Metadata
 
     func exists(at path: String) -> Bool {
@@ -277,14 +282,19 @@ final class FileService {
 
     /// Empty a folder, skipping files that refuse to delete (common under Caches).
     /// Recurses so one locked file does not keep the rest. Never follows a path
-    /// that standardizes outside `path`.
+    /// that resolves outside `path`, and never descends more than `maxDepth`
+    /// levels below `path`; a subtree left unexpanded at the cap counts as one
+    /// skipped entry in the caller-visible total.
     @discardableResult
-    func emptyDirectoryContentsBestEffort(at path: String) -> Int {
-        emptyDirectoryContentsBestEffort(at: path, stayingUnder: (path as NSString).standardizingPath)
+    func emptyDirectoryContentsBestEffort(at path: String, maxDepth: Int = FileService.treeMaxDepth) -> Int {
+        emptyDirectoryContentsBestEffort(
+            at: path, stayingUnder: resolvedPath(path), depth: 0, maxDepth: maxDepth)
     }
 
-    private func emptyDirectoryContentsBestEffort(at path: String, stayingUnder root: String) -> Int {
-        let std = (path as NSString).standardizingPath
+    private func emptyDirectoryContentsBestEffort(
+        at path: String, stayingUnder root: String, depth: Int, maxDepth: Int
+    ) -> Int {
+        let std = resolvedPath(path)
         guard std == root || std.hasPrefix(root + "/") else { return 1 }
         guard isDirectory(at: path) else { return 0 }
         let children: [FileItem]
@@ -295,7 +305,7 @@ final class FileService {
         }
         var skipped = 0
         for child in children {
-            let childStd = (child.path as NSString).standardizingPath
+            let childStd = resolvedPath(child.path)
             guard childStd == root || childStd.hasPrefix(root + "/") else {
                 skipped += 1
                 continue
@@ -304,7 +314,12 @@ final class FileService {
                 try deleteItem(at: child.path)
             } catch {
                 if child.kind == .directory {
-                    skipped += emptyDirectoryContentsBestEffort(at: child.path, stayingUnder: root)
+                    if depth + 1 > maxDepth {
+                        skipped += 1
+                        continue
+                    }
+                    skipped += emptyDirectoryContentsBestEffort(
+                        at: child.path, stayingUnder: root, depth: depth + 1, maxDepth: maxDepth)
                     do {
                         try deleteItem(at: child.path)
                     } catch {
@@ -316,6 +331,13 @@ final class FileService {
             }
         }
         return skipped
+    }
+
+    /// Symlink-resolved absolute path. `standardizingPath` only folds `..`, so a
+    /// link pointing back up the tree passed the "stays under root" prefix check
+    /// and the removal walk recursed without end.
+    private func resolvedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
     /// Next unused path in `directory` for `preferredName` (`foo.txt` → `foo 2.txt`).
@@ -388,14 +410,18 @@ final class FileService {
         }
     }
 
-    /// Recursive inventory of a directory. Stops after `maxNodes` entries.
-    func countTree(at path: String, maxNodes: Int = 20000) throws -> (files: Int, directories: Int, bytes: Int64) {
+    /// Recursive inventory of a directory. Stops after `maxNodes` entries or
+    /// `maxDepth` levels below `path`. `limitSkipped` counts the directories left
+    /// unexpanded at the depth cap, so a truncated walk is never reported as whole.
+    func countTree(at path: String, maxNodes: Int = 20000, maxDepth: Int = FileService.treeMaxDepth)
+        throws -> (files: Int, directories: Int, bytes: Int64, limitSkipped: Int) {
         var files = 0
         var directories = 0
         var bytes: Int64 = 0
         var nodes = 0
+        var limitSkipped = 0
 
-        func walk(_ current: String) throws {
+        func walk(_ current: String, depth: Int) throws {
             if nodes >= maxNodes { return }
             let entries = try list(directory: current)
             for entry in entries {
@@ -403,8 +429,12 @@ final class FileService {
                 if nodes > maxNodes { return }
                 if entry.isDirectory {
                     directories += 1
+                    if depth + 1 > maxDepth {
+                        limitSkipped += 1
+                        continue
+                    }
                     do {
-                        try walk(entry.path)
+                        try walk(entry.path, depth: depth + 1)
                     } catch {
                         // Locked cache folders must not zero the whole parent size.
                     }
@@ -415,8 +445,8 @@ final class FileService {
             }
         }
 
-        try walk(path)
-        return (files, directories, bytes)
+        try walk(path, depth: 0)
+        return (files, directories, bytes, limitSkipped)
     }
 
     // MARK: - Helpers

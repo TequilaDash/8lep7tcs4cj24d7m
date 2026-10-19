@@ -196,7 +196,7 @@ final class SpoofSession: ObservableObject {
     /// 与 B 机侧的回环抑制都仍然成立.
     func applyRemoteCoordinate(_ coordinate: CLLocationCoordinate2D) {
         guard hasPairing else {
-            lastError = "信号端需要配对文件才能应用坐标.请在「设置 → 配对文件」导入后重试."
+            lastError = "信号端需要配对文件.请在「设置 → 配对文件」导入后重试."
             return
         }
         pin = coordinate

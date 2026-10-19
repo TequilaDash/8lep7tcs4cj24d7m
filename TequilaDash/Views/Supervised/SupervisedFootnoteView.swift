@@ -27,6 +27,8 @@ struct SupervisedFootnoteView: View {
                     Capsule()
                         .fill(Color.white.opacity(0.6))
                         .frame(width: 145, height: 4)
+                        // 保留手写投影：与 ConfigurationsView 同构，1pt 描影贴合照片底，
+                        // 不属于卡片 / 浮层两级.
                         .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
                 }
                 .frame(maxWidth: .infinity)
