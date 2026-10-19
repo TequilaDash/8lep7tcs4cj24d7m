@@ -1,19 +1,27 @@
 # -*- coding: utf-8 -*-
 """提交前自检 —— 把本仓现有的「防复发」脚本一次跑完。
 
-现有十项检查（都在本目录）：
-  1) swift_top_level_type_collision.py  —— 顶层类型重名普查（因 CI 炸过才写）
-  2) swift_view_state_derivation.py     —— 视图层「下载状态文案」推导检查（本轮新增）
-  3) swift_nb_offsale_guard.py          —— NB 下架取包链路（回退 / code=7 / 界面内部码）
-  4) swift_tunnel_availability_guard.py —— 隧道可用性门控（Shadowrocket 不得用 canOpenURL 挡路）
-  5) swift_tunnel_jump_target_guard.py  —— 隧道跳转目标 Surge/Loon（scheme surge:///start、loon://on + 白名单）
-  6) swift_theme_blue_guard.py          —— 主题「两套蓝」防复发（trAccent 复现 / accent 非自适应）
-  7) swift_i4_advanced_guard.py         —— 「开启高级功能」入口防复发（不得退回写死免责声明）
-  8) swift_layout_motion_guard.py       —— 布局与动效防复发（手写等宽网格 / 手搓按压 / 品牌渐变越界）
- 10) swift_delisted_download_guard.py   —— 已购/下架下载链路（三 media kind / storefront 轮询 / 搜索回落 / 目录查不到不中止）
- 11) swift_searchbar_guard.py          —— 搜索框显示模式（滚动容器页用 `.always` 必须同时给顶部让位）
- 12) swift_cellular_tunnel_guard.py    —— Cellular隧道支持（默认关 / 接线不断 / 快捷指令调用在位且名可自定义 / 无 Wi-Fi 硬信念文案）
- 13) swift_airlift_guard.py            —— 禁用通话录音走 airlift（移植件齐备 / FFI 符号 / 目标主机自适应 / 不经 bad_query / 写后校验 / 无「依赖 Mac」错误结论）
+现有十七项检查（都在本目录）：
+ 1) swift_top_level_type_collision.py  —— 顶层类型重名普查（因 CI 炸过才写）
+ 2) swift_view_state_derivation.py     —— 视图层「下载状态文案」推导检查（唯一支持 --strict 的旧检查）
+ 3) swift_nb_offsale_guard.py          —— NB 下架取包链路（回退 / code=7 / 界面内部码）
+ 4) swift_tunnel_availability_guard.py —— 隧道可用性门控（Shadowrocket 不得用 canOpenURL 挡路）
+ 5) swift_tunnel_jump_target_guard.py  —— 隧道跳转目标 Surge/Loon（scheme surge:///start、loon://on + 白名单）
+ 6) swift_theme_blue_guard.py          —— 主题「两套蓝」防复发（trAccent 复现 / accent 非自适应）
+ 7) swift_i4_advanced_guard.py         —— 「开启高级功能」入口防复发（不得退回写死免责声明）
+ 8) swift_layout_motion_guard.py       —— 布局与动效防复发（手写等宽网格 / 手搓按压 / 品牌渐变越界）
+ 9) swift_delisted_download_guard.py   —— 已购/下架下载链路（三 media kind / storefront 轮询 / 搜索回落 / 目录查不到不中止）
+10) swift_searchbar_guard.py           —— 搜索框显示模式（滚动容器页用 `.always` 必须同时给顶部让位）
+11) swift_cellular_tunnel_guard.py     —— Cellular 隧道支持（默认关 / 接线不断 / 快捷指令调用在位且名可自定义 / 无 Wi-Fi 硬信念文案）
+12) swift_anisette_contract_guard.py   —— 本机 Anisette 开关判据契约（remoteFallbackReason 文案映射不得反向）
+13) swift_objc_bridge_guard.py         —— ObjC 桥接调用口径 + ForEach 身份键 + ObjC 选择器歧义
+14) swift_airlift_guard.py             —— 禁用通话录音走 airlift（移植件齐备 / FFI 符号 / 目标主机自适应 / 不经 bad_query / 写后校验）
+15) swift_version_sync_guard.py        —— 版本号三处同步防复发（project.yml 三个 target + Resources/Info.plist）
+16) swift_ui_copy_guard.py             —— 界面文案硬规则防复发（中文句号 / 警告三角符号 / 星形装饰 / 全宽实心色 banner）
+17) swift_hex_parse_guard.py           —— hex 解析口径防复发（前导正号 / 奇数长度 / 空串三防；参考 BigInt.swift:52）
+
+段数口径：**CHECKS 的长度就是唯一口径**，本清单只是给人看的索引（2026-10-19 之前本清单
+曾漏记第 9/14/15/16 项、并写成「现有十项」）。改动 CHECKS 后请同步本清单。
 
 为什么合并成「一个入口」而不是「一个脚本」：
   两项检查的**输入、口径、退出码**都独立，各自的报告/豁免表也各管一摊；把逻辑塞进
@@ -22,7 +30,7 @@
 
 用法：
     python swift_precommit_check.py [仓库根，默认 .] [--strict]
-    （仓库根 = 含 TequilaDash/ 的那一层，即 P1_TequilaDash_宿主仓库）
+    （仓库根 = 含 TequilaDash/ 的那一层）
 退出码：0 = 全部通过；1 = 有任一检查失败；2 = 参数/路径错误。
 """
 import os
@@ -69,6 +77,7 @@ CHECKS = [
     ("禁用通话录音走 airlift 防复发", "swift_airlift_guard.py", False),
     ("版本号三处同步防复发", "swift_version_sync_guard.py", False),
     ("界面文案硬规则防复发", "swift_ui_copy_guard.py", False),
+    ("hex 解析口径防复发", "swift_hex_parse_guard.py", True),
 ]
 
 

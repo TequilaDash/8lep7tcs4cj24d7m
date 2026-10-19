@@ -278,9 +278,13 @@ struct AnisetteServersView: View {
             }
         }
         if let error = oda.lastError {
-            Text(error)
-                .font(.footnote)
-                .foregroundColor(AppTheme.danger)
+            // v0.3.697 起：整行错误行统一到 AppErrorRow（info.circle + AppTheme.pending）.
+            // 旧写法是自造的红字 footnote，与 v0.3.683 收口的 28 处同形，
+            // 且与其它页面的错误行外观不一致. 取色按 DesignSystem.swift 的文档判据：
+            // 引擎下载 / 移除失败是可恢复问题（上面的按钮可再触发一次），
+            // 用 pending 橙而不是 danger 红. 不传 retry —— 同区块的
+            // 「下载 ADI 引擎」/「移除」按钮就是同义重试入口.
+            AppErrorRow(message: error)
         }
     }
 
