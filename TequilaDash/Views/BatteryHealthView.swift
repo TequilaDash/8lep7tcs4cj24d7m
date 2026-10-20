@@ -188,7 +188,7 @@ struct BatteryHealthView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                        .fill(AppSurface.inner)
+                        .fill(AppSurface.card)
                 )
             }
         }

@@ -29,7 +29,7 @@ struct TunnelLogView: View {
     var body: some View {
         LogConsoleView(
             lines: lines,
-            title: "隧道与蜂窝日志",
+            title: "隧道日志",
             onClear: {
                 // 只清「隧道蜂窝」这一类：不能调无参 clear()，那会穿透清掉全部板块的历史日志。
                 LoginLogger.shared.clear(categories: Set(categories))
@@ -37,7 +37,7 @@ struct TunnelLogView: View {
             },
             // 不传 onDone：本页是 `MoreView` 的 `NavigationLink` push 出来的，
             // 系统返回按钮已经在做同一件事，再加「完成」就是两个等价按钮。
-            clearConfirmTitle: "确定清空隧道与蜂窝日志？"
+            clearConfirmTitle: "确定清空隧道日志？"
         )
         .task {
             refresh()

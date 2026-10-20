@@ -81,9 +81,21 @@ struct CrashLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
+                // v0.3.712（用户报）：非编辑态必须能看到「返回上一级目录」的向上箭头。
+                // 原先它在 else 分支里，与刷新按钮同槽，某些 iOS 版本会把第二个图标挤掉。
                 if isEditing {
                     Button("全选") { selectAll() }
                 } else {
+                    if currentDir != nil {
+                        Button {
+                            currentDir = nil
+                            reload()
+                        } label: {
+                            Image(systemName: "arrow.up.left")
+                        }
+                        .accessibilityLabel("返回上一级目录")
+                        .disabled(busy)
+                    }
                     Button {
                         reload()
                     } label: {
@@ -91,15 +103,6 @@ struct CrashLogView: View {
                     }
                     .accessibilityLabel("刷新")
                     .disabled(busy)
-                    if currentDir != nil {
-                        Button {
-                            currentDir = nil
-                            reload()
-                        } label: {
-                            Image(systemName: "arrow.up")
-                        }
-                        .accessibilityLabel("返回根目录")
-                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {

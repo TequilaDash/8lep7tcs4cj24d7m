@@ -319,7 +319,7 @@ struct FileSharingAppsView: View {
         } label: {
             capsuleLabel(text, tint: tint)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
     }
 
     /// v0.3.291：安装来源详情。（原 Archive 深读通道在 iOS 27 已失效——

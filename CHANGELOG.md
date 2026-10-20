@@ -1,4 +1,15 @@
 # Changelog
+## [0.3.712] - 2026-10-20
+
+### 修复
+- 隧道日志页标题「隧道与蜂窝日志」在导航栏被截断显示为「隧道与蜂窝…」：标题与清空确认文案改为「隧道日志」（`TequilaDash/Views/TunnelLogView.swift`）.
+- 崩溃分析缺少返回上一级目录的入口：`arrow.up` 排在刷新按钮之后被系统挤掉，改 `arrow.up.left` 并前置（`TequilaDash/Views/CrashLogView.swift`）.
+- 文档浏览点击行内胶囊后整行永久保持按压灰色：行内按钮由 `.buttonStyle(.plain)` 改 `.borderless`，不再参与列表行的选中态（`TequilaDash/Views/FileSharingAppsView.swift`）.
+- 电池健康指标格浅色模式下底色与页面底色同色导致「卡片消失」：`.fill(AppSurface.inner)` 改 `.fill(AppSurface.card)`（`TequilaDash/Views/BatteryHealthView.swift:191`）.
+
+### 校验
+- `normalize_eol.py` EXIT 0 · `swift_precommit_check.py .` EXIT 0（17 组守卫，命中 0，扫 324 个 .swift）· WSL `swiftc -parse` 4 个改动文件 EXIT 0.
+
 ## [0.3.711] - 2026-10-20
 
 ### 修复
