@@ -1,4 +1,9 @@
 # Changelog
+## [0.3.709] - 2026-10-20
+
+### 变更
+- ZipFoundationShim.removeEntry 文档示例补注：产线已无 removeEntry 调用点（PackageSINFWriter 走 replaceEntries，v0.3.568），仅订正注释.
+
 ## [0.3.708] - 2026-10-20
 
 ### 修复

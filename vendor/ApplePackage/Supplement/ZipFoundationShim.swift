@@ -132,6 +132,9 @@ public final class ApplePackageArchive {
     /// try archive.addEntry(with: path, …)
     /// try archive.flush()
     /// ```
+    ///
+    /// v0.3.568 起 `PackageSINFWriter` 改走 `replaceEntries(with:data:)`（整包重写），
+    /// `removeEntry` 在产线上已无调用点；要替换条目请直接用 `replaceEntries`.
     public func removeEntry(with path: String) {
         entries.removeAll { $0.path == path }
     }
