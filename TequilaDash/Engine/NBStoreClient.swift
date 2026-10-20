@@ -54,7 +54,8 @@ enum NBStoreClient {
     ///
     /// 原先是写死的 `hosts[0]`，注释却写「首个可用的」—— 但**没有任何探测逻辑**：
     /// 首条不通时整个 NB 源不可用，且日志里看不出换过 host。
-    /// 现在改成「当前命中下标」，由 `noteHostFailure()` 在请求失败时推进，
+    /// 现在改成「当前命中下标」，由 `noteHostFailure()` 在请求失败时推进
+    /// （F-12：该函数原先只写在这段注释里、从未实现 —— 坏 host 每次仍被优先），
     /// `noteHostSuccess()` 在成功时锁定 —— 一次进程内不会反复在坏 host 上重试。
     private static let hostLock = NSLock()
     /// 上次成功的 host 下标 —— 下一次请求从它开始试。
@@ -84,6 +85,18 @@ enum NBStoreClient {
     private static func noteHostSuccess(_ ok: String) {
         hostLock.withLock {
             if let idx = hosts.firstIndex(of: ok) { hostIndex = idx }
+        }
+    }
+
+    /// 请求失败：把起点推进到下一个 host（F-12）—— 失败过的 host 不再被下一次请求优先.
+    ///
+    /// 只在「当前起点就是它」时推进一格：并发请求各自推进会把下标来回拨；起点之后
+    /// 依序失败时逐格跟进，4 条全挂时绕回原点（全坏时无从优选）。安全性同
+    /// `noteHostSuccess`，全部读写都在 `hostLock.withLock { }` 内.
+    private static func noteHostFailure(_ bad: String) {
+        hostLock.withLock {
+            guard let idx = hosts.firstIndex(of: bad), idx == min(hostIndex, hosts.count - 1) else { return }
+            hostIndex = (idx + 1) % hosts.count
         }
     }
 
@@ -524,12 +537,17 @@ enum NBStoreClient {
         }
     }
 
-    /// 把取包抛出的错误归类成 `PackageFailure`；**不是 `code=7` 就回 nil**（交调用方原样处理）。
+    /// 把取包抛出的错误归类成 `PackageFailure`；`code=7` 与总超时归类，其余回 nil（交调用方原样处理）。
     ///
     /// 界面侧统一走这里，避免每个页面各自判 `code=7` 时漏判（详情页就曾漏判、把
     /// `未获取到数据（7）` 原样弹给用户）。
     static func packageFailure(from error: Error) -> PackageFailure? {
-        guard case StoreError.server(let code, let message) = error, code == "7" else { return nil }
+        guard case StoreError.server(let code, let message) = error else { return nil }
+        // F-04：`withTotalTimeout` 抛的是 `code=timeout`，不是 7 —— 原判据直接回 nil，
+        // 调用方回落成「…：总超时 25s（timeout）」把内部码弹给用户；超时与「上游忙」
+        // 同为可重试故障，归 `.upstreamBusy`.
+        if code == "timeout" { return .upstreamBusy }
+        guard code == "7" else { return nil }
         return isUpstreamBusy(message) ? .upstreamBusy : .notInLibrary
     }
 
@@ -705,6 +723,8 @@ enum NBStoreClient {
                 break
             } catch {
                 lastError = error
+                // F-12：失败也记账 —— 坏 host 不再每次都被优先重试.
+                noteHostFailure(base)
                 LoginLogger.shared.log("\(logTag) host \(base) 失败：\(error.localizedDescription)", category: .appStore)
             }
         }
@@ -934,6 +954,10 @@ enum NBStoreClient {
 
         var sawStable7 = false
         var lastOtherError: StoreError?
+        // F-01：`lastOtherError` 一份承载两种语义 —— 「稳定 code=7（库里没包）」与「瞬时错误」，
+        // 而函数尾只看 `sawStable7` ⇒ 链上任意一次瞬时错误都被 code=7 掩盖成 nil（= 库里没包）。
+        // 瞬时错误单独记一份，尾部先分流上抛（返回值类型不变，仍 `NBPackage?`）。
+        var lastTransientError: StoreError?
         var requests = 0
         // v0.3.597：候选**惰性补** —— 主版本/内嵌候选都试完仍未命中时，才调 `fallbackProvider`
         // 去 bilin 补（见 `offSalePackage`）。主版本能命中 ⇒ 整次 bilin（实测 ~1.4s、限流紧）全省。
@@ -968,7 +992,10 @@ enum NBStoreClient {
                     break attempt   // code=0 但没有 url —— 当作这一版没包，换下一个。
                 } catch let e as StoreError {
                     guard case .server(let code, let message) = e, code == "7" else {
+                        // F-01：非 code=7（HTTP / 解码 / 加解密 / 其它服务端码 / 总超时）＝ 瞬时错误，
+                        // 单独记一份，尾部优先上抛。
                         lastOtherError = e
+                        lastTransientError = e
                         break attempt
                     }
                     if isUpstreamBusy(message) {
@@ -977,6 +1004,7 @@ enum NBStoreClient {
                         // 原来在此直接 `throw`，一次抽风就废掉整条回退链（本该走到后面某步命中，
                         // 却当场把「请稍后重试」甩给用户）。记下来继续试，全链都没命中再抛（见函数尾）。
                         lastOtherError = e
+                        lastTransientError = e
                         if i + 1 < tries.count {
                             LoginLogger.shared.log("\(logTag) appVerId=\(vid) 上游临时故障"
                                                    + "（\(truncate(message))），仍试下一个"
@@ -1003,6 +1031,7 @@ enum NBStoreClient {
                     break attempt
                 } catch {
                     lastOtherError = .network(error.localizedDescription)
+                    lastTransientError = lastOtherError
                     break attempt
                 }
             }
@@ -1028,7 +1057,9 @@ enum NBStoreClient {
                 }
             }
         }
-        // 全试完：遇到过稳定 code=7 ⇒ 库里没包（回 nil）；否则把最后一次错误抛出去（提示重试）。
+        // 全试完：先分流 —— 链上出现过瞬时错误（HTTP / 解码 / 网络 / 总超时 / code=7 上游忙）就上抛，
+        // 提示重试；`nil` 只保留「全程只遇到稳定 code=7」一种语义（库里没包）。
+        if let transient = lastTransientError { throw transient }
         if sawStable7 || lastOtherError == nil { return nil }
         // ND-04：原来是 `throw lastOtherError!` —— 靠上一行的 `lastOtherError == nil` 兜住，
         // 当前不可达；但这是**状态耦合**（改一下上面的 return 条件就变成崩溃面），换成显式解包零成本。
@@ -1052,16 +1083,22 @@ enum NBStoreClient {
     ///   - country: 区域（`cn` / `us` / `hk`）。
     ///   - fallbackCandidates: 可选回退版本号（**新→旧**）。**默认空 = 不回退** ——
     ///     详情页是「用户明确点了某个版本」，按他点的那个取，不擅自换版本。
+    ///   - 总超时：25s（F-08，与 `offSalePackage` 同口径）——超时抛 `code=timeout`，
+    ///     由 `packageFailure(from:)` 归类成 `.upstreamBusy`.
     static func packageByVersion(appID: String,
                                  appVerId: String,
                                  bundleID: String = "",
                                  country: String = "cn",
                                  fallbackCandidates: [String] = []) async throws -> NBPackage? {
-        try await packageWithFallback(appID: appID,
-                                      primaryVerID: appVerId,
-                                      embeddedCandidates: fallbackCandidates,
-                                      bundleID: bundleID,
-                                      country: country)
+        // F-08：详情页「获取某一版」原来没有总超时 —— 最坏 2 发 × 15s（maxRequests
+        // 上限下更久），期间页面只有一个不可取消的 ProgressView.
+        try await withTotalTimeout(seconds: 25) {
+            try await packageWithFallback(appID: appID,
+                                          primaryVerID: appVerId,
+                                          embeddedCandidates: fallbackCandidates,
+                                          bundleID: bundleID,
+                                          country: country)
+        }
     }
 
     /// 上报下载（NB 客户端在下载时调，用于它自己的统计；移植时可省）。
@@ -1269,10 +1306,19 @@ enum NBStoreClient {
     /// 「下架」在 App Store 里**就是搜不到的**（Apple 的 search/RSS 只回在架应用）——
     /// 实测 `term=stikdebug&country=us` 回的是 TestFlight / GitHub / Debug Anywhere 那批
     /// **在架**应用，恰好是用户截图里看到的错误结果。下架库只有 NB 服务端有.
+    /// F-06：入口套 25s 总超时 —— 4 条 host 各 15s，最坏 60s；详情页首屏要先等它
+    /// 解析 ID 才能查版本。与 `offSalePackage` 的 25s 同口径；超时抛
+    /// `StoreError.server(code: "timeout", …)`，由 `packageFailure(from:)` 归类.
     static func searchOffSaleApp(keyword: String) async throws -> [OffSaleApp] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { return [] }
+        return try await withTotalTimeout(seconds: 25) {
+            try await searchOffSaleAppBody(keyword: kw)
+        }
+    }
 
+    /// `searchOffSaleApp` 的实现体（总超时外壳见上；实现原样搬入，不再单独判空）.
+    private static func searchOffSaleAppBody(keyword kw: String) async throws -> [OffSaleApp] {
         let obj = try await perform(path: "/nb/app-downgrade",
                                     method: "searchOffSaleApp",
                                     params: ["kw": kw])

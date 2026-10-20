@@ -372,16 +372,26 @@ struct PendingRepairPage: View {
         resultText = nil
         Task {
             var ok = 0
+            var degraded = 0
             var failed = 0
+            var issues: [String] = []
             for (idx, p) in targets.enumerated() {
                 guard viewActive else { break }
                 flowProgress = (current: idx + 1, total: targets.count)
                 flowCaption = "正在修补：\(p.name)"
-                guard let path = p.originalPath else { failed += 1; continue }
+                guard let path = p.originalPath else {
+                    failed += 1
+                    issues.append("\(p.name)：没有原件路径，未修补.")
+                    continue
+                }
                 let rebuilt: ImportRecord? = await Task.detached(priority: .userInitiated) {
                     ImportService.rebuildRecord(forOriginalAt: path)
                 }.value
-                guard let rec = rebuilt else { failed += 1; continue }
+                guard let rec = rebuilt else {
+                    failed += 1
+                    issues.append("\(p.name)：读不出包信息，未修补.")
+                    continue
+                }
 
                 let r = await ImportService.handOffToRepair(
                     rec,
@@ -394,12 +404,27 @@ struct PendingRepairPage: View {
                 // `.skipped`（用户选择「只修补、不安装」）是**正常结束**且产物已生成，同样适用；
                 // 原实现把它归进 else 报成失败，与 `RepairService` 的语义相反.
                 ImportService.deleteOriginalAfterRepairSuccess(rec)
+
+                // 状态按 `RepairResult.Status` 逐条分流，不合并：
+                // · `.ok` / `.skipped`：成功（后者是用户选「只修补、不安装」，产物已生成，正常结束）；
+                // · `.degraded`：已修补并安装，但本机**没能做**启动自检（E11）—— 不是成功；
+                // · `.failed`：流程未走通；其中启动自检未通过（E9/E10）产物**已落盘**，同样不是成功.
+                // 非成功项按包名 + `message` / `suggestion` 逐条列出，不再只报计数
+                //（见 02_审计与报告/修复记录/audit-engine-p0.md R1 / R2）。
                 if r.status == .ok || r.status == .skipped {
                     droppedIds.insert(p.id)   // 修补成功的包不再属于「待修补」，从本地列表扣掉
                     dropFromQueue(p.name)     // 回写主界面队列 ⇒ 计数同帧降
                     ok += 1
                 } else {
-                    failed += 1
+                    if r.status == .degraded { degraded += 1 } else { failed += 1 }
+                    issues.append("\(p.name)：\(r.message)")
+                    if !r.suggestion.isEmpty { issues.append("　\(r.suggestion)") }
+                    // 产物已落盘的（E9 / E10 / 降级）包已属于「已修补」：从待修补队列扣掉，
+                    // 否则重进本页仍会列出这个已经产出 repaired.ipa 的包.
+                    if let product = r.repairedIPAPath, FileManager.default.fileExists(atPath: product) {
+                        droppedIds.insert(p.id)
+                        dropFromQueue(p.name)
+                    }
                 }
             }
             busy = false
@@ -407,7 +432,11 @@ struct PendingRepairPage: View {
             flowCaption = nil
             selected.removeAll()
             selecting = false
-            resultText = "修补完成：成功 \(ok) 个，失败 \(failed) 个."
+            var summary = "修补完成：成功 \(ok) 个"
+            if degraded > 0 { summary += "，已安装但未做启动自检 \(degraded) 个" }
+            summary += "，失败 \(failed) 个."
+            if !issues.isEmpty { summary += "\n" + issues.joined(separator: "\n") }
+            resultText = summary
             reload()
         }
     }

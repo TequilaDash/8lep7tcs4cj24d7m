@@ -89,12 +89,19 @@ struct RepairResult {
         case ledger          // (10) 台账
         case launchCheck     // (11) 实装实跑启动自检
     }
-    enum Status: String { case ok, failed, skipped, needsUserChoice }
+    /// 修补结果状态。
+    /// · `ok`：流程走通且（若开了自检）自检通过；
+    /// · `degraded`：已修补并安装，但本机**没能做**启动自检（探针不可用，E11）—— 与 `ok` 刻意分开，
+    ///   否则「没做自检」会被调用页与文案当成「自检通过」；
+    /// · `failed`：流程未走通；**注意**启动自检未通过（E9/E10）也落这里，此时产物已落盘、仍可导出；
+    /// · `skipped`：用户选择「只修补、不安装」（产物已生成，正常结束）；
+    /// · `needsUserChoice`：需用户抉择（当前无生产点）。
+    enum Status: String { case ok, failed, skipped, needsUserChoice, degraded }
 
     let status: Status
     /// 成功 = 最后完成的 stage；失败 = 卡在哪个 stage
     let stage: Stage
-    /// 机器可读原因码（E1…E10）
+    /// 机器可读原因码（E1…E11；E11 = 已修补并安装但未做启动自检）
     let code: String?
     /// 一句人话
     let message: String
@@ -356,6 +363,9 @@ enum RepairService {
         // ── (11) 实装实跑、逐层定位阻断 ─────────────────────────────
         // 安装返回成功 ≠ 能跑（形态 B：装得上、启动崩）。
         var launchStage: RepairResult.Stage = .ledger
+        // 启动自检的结果必须落进 status：E9/E10 若只当附加字段带出，调用页按 status 计数会把
+        // 「装上了但一启动就退出」报成成功（见 02_审计与报告/修复记录/audit-engine-p0.md R1）。
+        var launchStatus: RepairResult.Status = .ok
         var launchCode: String? = nil
         var launchMsg = "修补并安装完成."
         var launchSuggest = "若首次启动异常退出，说明包内授权不属于本机登录的 Apple ID，请反馈日志."
@@ -368,21 +378,25 @@ enum RepairService {
                 launchMsg = "修补、安装、启动自检均通过."
                 launchSuggest = "如使用中仍有异常，请反馈日志."
             case .neverAppeared:
-                launchStage = .launchCheck; launchCode = "E10"
+                launchStage = .launchCheck; launchStatus = .failed; launchCode = "E10"
                 launchMsg = "安装完成，但应用启动后没能运行起来."
                 launchSuggest = "请手动点一次图标看看；若仍打不开，请把包退回并用你自己的 Apple ID 正规下载."
             case .crashed:
-                launchStage = .launchCheck; launchCode = "E9"
+                launchStage = .launchCheck; launchStatus = .failed; launchCode = "E9"
                 launchMsg = "装上了，但一启动就退出（包内授权不属于本机登录的 Apple ID）."
                 launchSuggest = "这是别人的授权装到你设备上的典型表现，本功能无法修复；请用你自己的 Apple ID 正规下载."
             case .unavailable:
-                launchStage = .launchCheck
-                note("proc.list / 拉起应用不可用，跳过实装实跑自检（降级：仅安装成功）")
+                // 探针不可用 ⇒ 自检**没做**，不等于「自检通过」：status 落 .degraded、code 落 E11，
+                // 文案不再说「完成」，否则用户看到的与真成功一模一样（audit-engine-p0.md R2）。
+                launchStage = .launchCheck; launchStatus = .degraded; launchCode = "E11"
+                launchMsg = "已修补并安装，未能做启动自检（本机进程探测不可用）."
+                launchSuggest = "请手动打开一次确认能否运行；若打不开请反馈日志."
+                note("proc.list / 拉起应用不可用，跳过实装实跑自检（降级：仅安装成功，未做自检）")
             }
         }
 
         return RepairResult(
-            status: .ok, stage: launchStage, code: launchCode,
+            status: launchStatus, stage: launchStage, code: launchCode,
             message: launchMsg, suggestion: launchSuggest,
             details: log,
             sinf: SinfInfo(length: sinfData.count, format: parsed.format,
@@ -469,6 +483,9 @@ enum RepairService {
 
         // 实装实跑自检（与加密包分支一致）：安装返回成功 ≠ 能跑。
         var launchStage: RepairResult.Stage = .ledger
+        // 与加密包分支同一口径：自检结果必须落进 status，否则调用页会把「启动即退」报成成功
+        // （见 02_审计与报告/修复记录/audit-engine-p0.md R1）。
+        var launchStatus: RepairResult.Status = .ok
         var launchCode: String? = nil
         var launchMsg = "安装完成（明文包，无需修补）."
         var launchSuggest = "如使用中仍有异常，请反馈日志."
@@ -481,20 +498,24 @@ enum RepairService {
                 launchMsg = "安装、启动自检均通过（明文包，无需修补）."
                 launchSuggest = "如使用中仍有异常，请反馈日志."
             case .neverAppeared:
-                launchStage = .launchCheck; launchCode = "E10"
+                launchStage = .launchCheck; launchStatus = .failed; launchCode = "E10"
                 launchMsg = "安装完成，但应用启动后没能运行起来."
                 launchSuggest = "请手动点一次图标看看；若仍打不开，请把包退回并重新获取."
             case .crashed:
-                launchStage = .launchCheck; launchCode = "E9"
+                launchStage = .launchCheck; launchStatus = .failed; launchCode = "E9"
                 launchMsg = "装上了，但一启动就退出."
                 launchSuggest = "请用你自己的 Apple ID 正规下载；若持续失败请反馈日志."
             case .unavailable:
-                launchStage = .launchCheck
-                note("proc.list / 拉起应用不可用，跳过实装实跑自检（降级：仅安装成功）")
+                // 探针不可用 ⇒ 自检**没做**，不等于通过：落 .degraded + E11，文案不再说「完成」
+                // （audit-engine-p0.md R2）。
+                launchStage = .launchCheck; launchStatus = .degraded; launchCode = "E11"
+                launchMsg = "已安装，未能做启动自检（本机进程探测不可用）."
+                launchSuggest = "请手动打开一次确认能否运行；若打不开请反馈日志."
+                note("proc.list / 拉起应用不可用，跳过实装实跑自检（降级：仅安装成功，未做自检）")
             }
         }
 
-        return RepairResult(status: .ok, stage: launchStage, code: launchCode,
+        return RepairResult(status: launchStatus, stage: launchStage, code: launchCode,
             message: launchMsg, suggestion: launchSuggest,
             details: log, sinf: nil,
             repairedIPAPath: outputPath, repairedIPASha256: repairedSha)

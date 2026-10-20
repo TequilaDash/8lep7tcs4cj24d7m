@@ -511,16 +511,26 @@ struct ImportedListPage: View {
         resultText = nil
         Task {
             var ok = 0
+            var degraded = 0
             var failed = 0
+            var issues: [String] = []
             for (idx, p) in targets.enumerated() {
                 guard viewActive else { break }
                 flowProgress = (current: idx + 1, total: targets.count)
                 flowCaption = "正在修补：\(p.name)"
-                guard let path = p.originalPath else { failed += 1; continue }
+                guard let path = p.originalPath else {
+                    failed += 1
+                    issues.append("\(p.name)：没有原件路径，未修补.")
+                    continue
+                }
                 let rebuilt: ImportRecord? = await Task.detached(priority: .userInitiated) {
                     ImportService.rebuildRecord(forOriginalAt: path)
                 }.value
-                guard let rec = rebuilt else { failed += 1; continue }
+                guard let rec = rebuilt else {
+                    failed += 1
+                    issues.append("\(p.name)：读不出包信息，未修补.")
+                    continue
+                }
 
                 let r = await ImportService.handOffToRepair(
                     rec,
@@ -533,10 +543,16 @@ struct ImportedListPage: View {
                 // `.skipped`（用户选择「只修补、不安装」）是**正常结束**且产物已生成，同样适用；
                 // 原实现把它归进 else 报成失败，与 `RepairService` 的语义相反.
                 ImportService.deleteOriginalAfterRepairSuccess(rec)
+
+                // 与「待修补」页同一口径（见 02_审计与报告/修复记录/audit-engine-p0.md R1 / R2）：
+                // `.ok` / `.skipped` 才算成功；`.degraded`（已安装但本机没做启动自检，E11）与
+                // `.failed` 里的 E9 / E10 都不是成功，真实结果按包名 + `message` / `suggestion` 列出.
                 if r.status == .ok || r.status == .skipped {
                     ok += 1
                 } else {
-                    failed += 1
+                    if r.status == .degraded { degraded += 1 } else { failed += 1 }
+                    issues.append("\(p.name)：\(r.message)")
+                    if !r.suggestion.isEmpty { issues.append("　\(r.suggestion)") }
                 }
             }
             busy = false
@@ -544,7 +560,11 @@ struct ImportedListPage: View {
             flowCaption = nil
             selected.removeAll()
             selecting = false
-            resultText = "修补完成：成功 \(ok) 个，失败 \(failed) 个."
+            var summary = "修补完成：成功 \(ok) 个"
+            if degraded > 0 { summary += "，已安装但未做启动自检 \(degraded) 个" }
+            summary += "，失败 \(failed) 个."
+            if !issues.isEmpty { summary += "\n" + issues.joined(separator: "\n") }
+            resultText = summary
             reload()
         }
     }

@@ -1,4 +1,22 @@
 # Changelog
+## [0.3.711] - 2026-10-20
+
+### 修复
+- R1/R2（RepairService）：新增 `degraded` 状态与 E9/E10/E11 原因码，「启动自检不可用」不再伪装成已修补.
+- R3（DeviceInfoService）：`dictFromPlist` 改 `throws`，解析失败不再折成空字典；新增 `lockdownError` 通道.
+- R4（DeviceInfoService）：越狱检测三类失败分别抛出原因，不再一律折成「未越狱」；DeviceInfoView 失败时显示「读取失败」.
+- X-2（IPADownloadLibrary）：`record()` 覆盖同名条目前保留旧条目的 `sinfBase64`.
+- F-01（NBStoreClient）：网络瞬时失败不再吞成「库里没包」，改在末尾抛出最后一条瞬时错误.
+- F-04（NBStoreClient）：`timeout` 归为 `upstreamBusy`，不再外泄内部码.
+- F-05（NBStoreDetailView）：详情拉取失败有提示并可重试.
+- F-06（NBStoreClient / DetailView）：搜索与版本列表 25 秒总超时；加载行两态文案.
+- F-08（NBStoreClient）：`packageByVersion` 套 25 秒总超时.
+- F-09（NBStoreDetailView）：`trackID` 只被唯一同名命中覆盖.
+- F-12（NBStoreClient）：主机连续失败时推进起点一格，:57-58 注释改真.
+
+### 校验
+- `normalize_eol.py` EXIT 0 · `swift_precommit_check.py` EXIT 0（17 组守卫）· WSL `swiftc -parse` 9 个改动文件 EXIT 0.
+
 ## [0.3.710] - 2026-10-20
 
 ### 撤销（用户驳回）

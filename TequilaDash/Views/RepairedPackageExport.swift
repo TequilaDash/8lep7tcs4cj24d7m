@@ -56,8 +56,21 @@ struct RepairedPackageExportSection: View {
             return "尚未修补. 先完成修补后，这里可以导出修补后的安装包."
         }
         switch r.status {
-        case .failed, .needsUserChoice:
+        case .needsUserChoice:
             return "修补未完成，没有可导出的安装包. 请先解决上方问题后重新修补."
+        case .failed:
+            // 启动自检未通过（E9/E10）也落 .failed，但那时产物已落盘、仍可导出：
+            // 只有产物确实不存在才说「没有可导出的安装包」。
+            guard let path = r.repairedIPAPath, FileManager.default.fileExists(atPath: path) else {
+                return "修补未完成，没有可导出的安装包. 请先解决上方问题后重新修补."
+            }
+            return "导出的是修补后的安装包 repaired.ipa；启动自检未通过，装到设备上可能一启动就退出."
+        case .degraded:
+            // 产物已落盘，但本机没能做启动自检：可导出，状态与真成功分开说。
+            guard let path = r.repairedIPAPath, FileManager.default.fileExists(atPath: path) else {
+                return "修补未完成，没有可导出的安装包. 请先完成修补."
+            }
+            return "导出的是修补后的安装包 repaired.ipa；本机没能做启动自检，装到设备上能否运行未经验证."
         case .ok, .skipped:
             guard let path = r.repairedIPAPath else {
                 return "修补未完成，没有可导出的安装包. 请先完成修补."

@@ -20,6 +20,9 @@ struct DeviceInfoModel {
     var systemVersion: String      // iOS 26.x
     var productionDevice: String?  // ProductionSOC bool → "是/否"
     var jailbroken: Bool?           // afc /bin 是否非空
+    /// v0.3.711（R4）：越狱检测失败的原因（nil = 检测成功，此时 `jailbroken` 才可信）.
+    /// 三个 guard 失败分别对应 -50 隧道句柄 / -51 AFC 连接 / -52 读 /bin 失败。
+    var jailbrokenError: String?
     var deviceName: String?         // lockdown DeviceName
     var deviceColor: String?         // lockdown DeviceColor
     var wiFiAddress: String?         // lockdown WiFiAddress
@@ -133,6 +136,8 @@ struct DeviceInfoModel {
     /// v0.3.661：**「0 次」与「读不到」必须能区分** —— 前者是设备真的没有 panic，
     /// 后者是没配对文件 / VPN 没开 / 服务不可用 / 列目录失败。原先两者都是 `nil`，
     /// UI 一律显示「—」，用户无从判断该去修哪一步（这就是「错误折叠」）。
+    /// v0.3.711（R3）：lockdown 整棵字典读取/解析失败的原因（nil = 读取成功，此时 `raw` 才可信）.
+    var lockdownError: String?
     var crashLogCountError: String?
     var raw: [String: Any] = [:]
 }
@@ -196,9 +201,20 @@ enum DeviceInfoService {
         let sharedAdapter = sharedTunnel?.adapter
         let sharedHandshake = sharedTunnel?.handshake
 
-        let lockdown = (try? Self.lockdownFullDictOrFallback(sharedAdapter, sharedHandshake)) ?? [:]
+        // v0.3.711（R3）：lockdown 整棵字典读失败要留原因。原先 try? ?? [:] 让
+        // 「隧道没建起来 / 解析崩了」与「设备返回的就是空」同值，下游 iCloudSignedIn 之类
+        // 由「字典非空」推出的结论会直接把失败显示成「未开启」。
+        var lockdown: [String: Any] = [:]
+        var lockdownError: String?
+        do { lockdown = try Self.lockdownFullDictOrFallback(sharedAdapter, sharedHandshake) }
+        catch { lockdownError = error.localizedDescription }
         let region = Self.parseRegion(lockdown["RegionInfo"] as? String)
-        let isJailbroken = (try? Self.isacJailbroken()) ?? nil
+        // v0.3.711（R4）：区分「确实未越狱」与「读不到」—— 原先 try? 把三种失败折成 nil，
+        // 界面显示「未越狱」，与「就是没越狱」同值。
+        var isJailbroken: Bool?
+        var jailbrokenError: String?
+        do { isJailbroken = try Self.isacJailbroken() }
+        catch { jailbrokenError = error.localizedDescription }
         let productionSOC = lockdown["ProductionSOC"] as? Bool
 
         // MobileGestalt（iOS ≥17.4 已被 Apple 废弃 → 基本恒为 nil，仅留作老系统回退）
@@ -314,6 +330,7 @@ enum DeviceInfoService {
             systemVersion: systemVersion,
             productionDevice: productionSOC.map { $0 ? "是" : "否" },
             jailbroken: isJailbroken,
+            jailbrokenError: jailbrokenError,
             deviceName: lockdown["DeviceName"] as? String,
             deviceColor: lockdown["DeviceColor"] as? String,
             wiFiAddress: lockdown["WiFiAddress"] as? String,
@@ -406,6 +423,7 @@ enum DeviceInfoService {
             activationLockEnabled: activationLock,
             iCloudSignedIn: iCloudSignedIn,
             crashLogCount: crashCount,
+            lockdownError: lockdownError,
             crashLogCountError: crashCountError,
             raw: lockdown.merging(itunes) { a, _ in a }
         )
@@ -547,7 +565,7 @@ enum DeviceInfoService {
             throw NSError(domain: "DeviceInfo", code: -12, userInfo: [NSLocalizedDescriptionKey: "GetValue 失败"])
         }
         defer { plist_free(node) }
-        return Self.dictFromPlist(node)
+        return try Self.dictFromPlist(node)
     }
 
     static func lockdownDomainDict(_ domain: String) throws -> [String: Any] {
@@ -569,7 +587,7 @@ enum DeviceInfoService {
             throw NSError(domain: "DeviceInfo", code: -22, userInfo: [NSLocalizedDescriptionKey: "GetValue 失败"])
         }
         defer { plist_free(node) }
-        return Self.dictFromPlist(node)
+        return try Self.dictFromPlist(node)
     }
 
     /// v0.3.322：读 lockdown 的**单个键**（`lockdownd_get_value` 的 key 参数此前恒传 nil）。
@@ -629,7 +647,7 @@ enum DeviceInfoService {
             throw NSError(domain: "DeviceInfo", code: -12, userInfo: [NSLocalizedDescriptionKey: "GetValue 失败"])
         }
         defer { plist_free(node) }
-        return Self.dictFromPlist(node)
+        return try Self.dictFromPlist(node)
     }
 
     /// 用已建好的隧道读某个 lockdown 域
@@ -649,7 +667,7 @@ enum DeviceInfoService {
             throw NSError(domain: "DeviceInfo", code: -22, userInfo: [NSLocalizedDescriptionKey: "GetValue 失败"])
         }
         defer { plist_free(node) }
-        return Self.dictFromPlist(node)
+        return try Self.dictFromPlist(node)
     }
 
     /// 用已建好的隧道读 lockdown 的单个键
@@ -717,27 +735,50 @@ enum DeviceInfoService {
         return try lockdownValue(domain: domain, key: key, adapter: adapter, handshake: handshake)
     }
 
-    private static func dictFromPlist(_ node: plist_t) -> [String: Any] {
+    /// v0.3.711（R3）：改成 throws —— 两条失败路径（plist_to_bin 失败 / 反序列化失败）原先都返回 `[:]`，
+    /// 与「设备上这个域确实是空的」完全同值，调用方无法区分「读到了空域」和「读到了但解析崩了」。
+    /// 现在失败即抛错，由上层 do/catch 记出原因（与 crashLogCountError 同型）。
+    private static func dictFromPlist(_ node: plist_t) throws -> [String: Any] {
         var binPtr: UnsafeMutablePointer<CChar>?
         var binLen: UInt32 = 0
         guard plist_to_bin(node, &binPtr, &binLen) == PLIST_ERR_SUCCESS,
-              let binPtr, binLen > 0 else { return [:] }
+              let binPtr, binLen > 0 else {
+            throw NSError(domain: "DeviceInfo", code: -40,
+                          userInfo: [NSLocalizedDescriptionKey: "lockdown 节点转二进制 plist 失败"])
+        }
         defer { plist_mem_free(binPtr) }
-        return (try? PropertyListSerialization.propertyList(
-            from: Data(bytes: binPtr, count: Int(binLen)), options: [], format: nil) as? [String: Any]) ?? [:]
+        guard let dict = try? PropertyListSerialization.propertyList(
+            from: Data(bytes: binPtr, count: Int(binLen)), options: [], format: nil) as? [String: Any] else {
+            throw NSError(domain: "DeviceInfo", code: -41,
+                          userInfo: [NSLocalizedDescriptionKey: "lockdown 二进制 plist 反序列化失败"])
+        }
+        return dict
     }
 
     /// 越狱检测（iDescriptor utils.rs:497-502：afc list_dir ../../../../bin 非空）
+    ///
+    /// v0.3.711（R4）：三条失败路径原先一律 `return false`，被界面显示成确定的「未越狱」
+    /// —— 与「隧道没连上 / 权限不足」混为一谈。现在分别抛出 -50 / -51 / -52，
+    /// 由调用方区分「确实未越狱」与「读不到」。
     static func isacJailbroken() throws -> Bool {
         var tunnel = try makeTunnel()
         defer { tunnel.free() }
-        guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else { return false }
+        guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
+            throw NSError(domain: "DeviceInfo", code: -50,
+                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：隧道句柄不可用"])
+        }
         var afc: OpaquePointer?
-        guard afc_client_connect_rsd(adapter, handshake, &afc) == nil, let afc else { return false }
+        guard afc_client_connect_rsd(adapter, handshake, &afc) == nil, let afc else {
+            throw NSError(domain: "DeviceInfo", code: -51,
+                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：AFC 服务连接失败"])
+        }
         defer { afc_client_free(afc) }
         var entries: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
         var count = 0
-        guard afc_list_directory(afc, "/bin", &entries, &count) == nil else { return false }
+        guard afc_list_directory(afc, "/bin", &entries, &count) == nil else {
+            throw NSError(domain: "DeviceInfo", code: -52,
+                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：读取 /bin 目录失败"])
+        }
         defer {
             if let entries {
                 for i in 0..<count {

@@ -63,6 +63,9 @@ struct NBStoreDetailView: View {
 
     @State private var versions: [NBStoreClient.NBVersion] = []
     @State private var loading = true
+    /// F-06：首屏第一阶段是「按名字反查 App Store ID」（下架库搜索，25s 封顶）——
+    /// 加载行文案随阶段切换，不再全程显示「正在读取版本列表…」.
+    @State private var resolvingID = false
     @State private var errorText: String?
     @State private var showAllVersions = false
     /// 正在取包的那一行（存 `externalIdentifier`，同一时刻只允许一行在取）
@@ -120,6 +123,9 @@ struct NBStoreDetailView: View {
                 if let notes = d.releaseNotes, !notes.isEmpty { releaseSection(d, notes) }
             } else if detailLoading {
                 detailLoadingSection
+            } else if let detailErrorText {
+                // F-05：详情拉取失败原来只赋值不渲染 —— 页面静默少一块.
+                errorSection(detailErrorText)
             }
             idSection
             if loading {
@@ -459,7 +465,9 @@ struct NBStoreDetailView: View {
     private var loadingSection: some View {
         Section {
             // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
-            AppLoadingRow(title: "正在读取版本列表…", level: .block)
+            // F-06：反查 ID 与读取版本列表分两态说明.
+            AppLoadingRow(title: resolvingID ? "正在解析 App Store ID…" : "正在读取版本列表…",
+                          level: .block)
         }
     }
 
@@ -510,12 +518,19 @@ struct NBStoreDetailView: View {
         // 已经是纯数字 → 就是 App Store ID，不用解析.
         if !sid.isEmpty, sid.allSatisfy({ $0.isNumber }) { return }
         guard let hint = displayName, !hint.isEmpty else { return }
+        resolvingID = true
+        defer { resolvingID = false }
         do {
             let hits = try await NBStoreClient.searchOffSaleApp(keyword: hint)
-            let match = hits.first { $0.displayName.caseInsensitiveCompare(hint) == .orderedSame } ?? hits.first
-            if let real = match?.storeID, !real.isEmpty {
+            // F-09：只认「唯一同名命中」—— 原来是 `?? hits.first`，名字不完全同名时
+            // 直接拿第一条，trackID 被换成另一个 App 的 ID（版本列表与包都跟着错）.
+            let sameName = hits.filter { $0.displayName.caseInsensitiveCompare(hint) == .orderedSame }
+            if sameName.count == 1, let only = sameName.first, let real = only.storeID, !real.isEmpty {
                 LoginLogger.shared.log("[NB详情] 解析 App Store ID：「\(hint)」→ \(real)", category: .appStore)
                 trackID = real
+            } else {
+                LoginLogger.shared.log("[NB详情] 下架库同名命中 \(sameName.count) 条（共 \(hits.count) 条），不覆盖 trackID",
+                                       category: .appStore)
             }
         } catch {
             LoginLogger.shared.log("[NB详情] 解析 App Store ID 失败：\(error.localizedDescription)",
@@ -628,9 +643,16 @@ struct NBStoreDetailView: View {
         do {
             versions = try await NBStoreClient.versionList(trackID: trackID)
         } catch {
-            // 同取包：`code=7` 走面向用户文案，不外泄内部码。
-            errorText = NBStoreClient.packageFailure(from: error)?.userMessage
-                ?? "读取版本列表失败：\(error.localizedDescription)"
+            // F-04：NB 侧错误照旧走 `packageFailure(from:)`（内部码不外泄）；
+            // `versionList` 的数据源是 AppStoreService，抛的是 `AppStoreError` ——
+            // 它的 `errorDescription` 本就是面向用户的整句，直接用，不再套前缀。
+            if let failure = NBStoreClient.packageFailure(from: error) {
+                errorText = failure.userMessage
+            } else if let storeError = error as? AppStoreError {
+                errorText = storeError.errorDescription ?? "读取版本列表失败"
+            } else {
+                errorText = "读取版本列表失败：\(error.localizedDescription)"
+            }
         }
         loading = false
     }

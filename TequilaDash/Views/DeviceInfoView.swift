@@ -177,7 +177,11 @@ struct DeviceInfoView: View {
                   value: [info.region, info.regionName].compactMap { $0 }.joined(separator: " "),
                   sensitive: false),
             .init(id: 8, label: "激活状态", value: activationText(info.activationState), sensitive: false),
-            .init(id: 9, label: "越狱状态", value: info.jailbroken.map { $0 ? "已越狱" : "未越狱" }, sensitive: false),
+                        // v0.3.711（R4）：检测失败时明说「读取失败」，不再伪装成「未越狱」
+            .init(id: 9, label: "越狱状态",
+                  value: info.jailbroken.map { $0 ? "已越狱" : "未越狱" }
+                      ?? (info.jailbrokenError.map { _ in "读取失败" }),
+                  sensitive: false),
             // 本机状态来自 com.apple.fmip.IsAssociated；「精准查询」走 Apple 官网（爱思同款入口）
             .init(id: 10, label: "激活锁 (ID锁)",
                   value: info.activationLockEnabled.map { $0 ? "已开启" : "未开启" },

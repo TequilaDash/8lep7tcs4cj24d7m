@@ -341,6 +341,9 @@ final class IPADownloadLibrary: @unchecked Sendable {
             // 台账没完整读出来时**不写盘**：否则会把没读到的条目当成「不存在」而覆盖掉。
             guard load.writable else { logReadOnly(load.note); notifyWriteRejected(load.userReason); return }
             var index = load.items
+            // v0.3.711（X-2）：removeAll 之前先把旧条目捞出来 —— 下面 makeItem 现场重造的条目
+            // 构造参数里没有 sinfBase64（恒 nil），若在 removeAll 之后才想起保 sinf，旧值已经没了。
+            let oldItem = index.first { $0.fileName == name }
             index.removeAll { $0.fileName == name }
             var item = makeItem(fileName: name)
             item.displayName = displayName
@@ -355,6 +358,11 @@ final class IPADownloadLibrary: @unchecked Sendable {
             // v0.3.413（D8 B）：sinf 也落台账 —— 同样只在真拿到时覆盖，别把已有的抹成 nil。
             // 这是「重装不用重下」的关键：`installLocal` 会从这里读回来写进包内。
             if let sinfBase64, !sinfBase64.isEmpty { item.sinfBase64 = sinfBase64 }
+            // v0.3.711（X-2）：本次没拿到 sinf 时回填旧条目的 —— 否则再次下载（或爱思源 /
+            // 瘦身这些不传 sinfBase64 的 record 调用）会把唯一副本抹成 nil，之后
+            // `installLocal` 读回 nil 就跳过写回，重装必失败。上次写回成功过的包不受此影响
+            //（makeItem 的 extractSINF 会从包内现读 hasSINF），这里保的是「还没写进包内」的副本。
+            if item.sinfBase64 == nil { item.sinfBase64 = oldItem?.sinfBase64 }
             index.append(item)
             saveIndex(index)
         }
