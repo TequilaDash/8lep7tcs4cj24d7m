@@ -164,7 +164,7 @@ struct BackupsListView: View {
                     } label: {
                         Label("分享", systemImage: "square.and.arrow.up")
                     }
-                    .tint(.blue)
+                    .tint(AppTheme.accent)
                 }
             }
         }
@@ -259,7 +259,7 @@ private struct BackupRow: View {
                             // 原 `background(Color.orange.opacity(0.15)) + clipShape(...)` 两段，
                             // 由组件内置的 `background(tint.opacity(fillOpacity), in:)` 等价接管.
                             SizePill(text: "容器",
-                                     tint: .orange,
+                                     tint: AppTheme.pending,
                                      level: .compact,
                                      fillOpacity: 0.15)
                         }
@@ -298,7 +298,7 @@ private struct BackupRow: View {
                 case .appNotInstalled(_, let appName):
                     Label("\(appName) 未安装", systemImage: "app.badge.checkmark.fill")
                         .font(.footnote)
-                        .foregroundColor(.orange)
+                        .foregroundColor(AppTheme.pending)
                 case .invalidArchive(let message):
                     // v0.3.682：行内错误统一走 AppErrorRow（info.circle + pending 橙），
                     // 不再用红色八角叉 —— 归档读不出来通常是可恢复问题（文件损坏 / 隧道中断）.
@@ -497,7 +497,7 @@ struct CustomRestoreSheet: View {
                             // 原 `background(Color.orange.opacity(0.15)) + clipShape(...)` 两段，
                             // 由组件内置的 `background(tint.opacity(fillOpacity), in:)` 等价接管.
                             SizePill(text: "容器",
-                                     tint: .orange,
+                                     tint: AppTheme.pending,
                                      level: .compact,
                                      fillOpacity: 0.15)
                         }
@@ -583,7 +583,7 @@ struct RestoreView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 48))
-                            .foregroundColor(.green)
+                            .foregroundColor(AppTheme.success)
                         Text("恢复完成")
                             .font(.headline)
                         Text("已恢复 \(result.filesRestored) 个文件到 \(result.targetApp.name)")
@@ -673,7 +673,7 @@ struct RestoreView: View {
                     ForEach(warnings, id: \.self) { warning in
                         Label(warning, systemImage: "info.circle")
                             .font(.footnote)
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppTheme.pending)
                     }
                     Text("将覆盖 Documents、Library 和 tmp 中现有的同名文件.Keychain 数据不会被恢复.")
                         .font(.footnote)

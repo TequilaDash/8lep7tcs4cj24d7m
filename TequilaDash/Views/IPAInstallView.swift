@@ -158,7 +158,7 @@ struct IPAInstallView: View {
                             Text("下载")
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .controlSize(.small)
                     .disabled(ipaLink.isEmpty || isRunning || isDownloading)
                 }
@@ -369,7 +369,7 @@ struct IPAInstallView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
                 .controlSize(.large)
                 .disabled(isRunning || ipaURL == nil
                           || (!service.isSignedIn && (appleID.isEmpty || password.isEmpty)))

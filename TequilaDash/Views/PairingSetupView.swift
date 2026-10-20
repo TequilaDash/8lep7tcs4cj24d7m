@@ -36,7 +36,7 @@ struct PairingSetupView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Image(systemName: "network.badge.shield.half.filled")
                     .font(.system(size: 48))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(AppTheme.categoryDevice)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
 
@@ -60,7 +60,7 @@ struct PairingSetupView: View {
                     Label("导入配对文件", systemImage: "doc.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
                 .controlSize(.large)
                 .padding(.horizontal)
 
@@ -70,7 +70,7 @@ struct PairingSetupView: View {
                     Label("从剪贴板粘贴配对文件", systemImage: "doc.on.clipboard")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                 .controlSize(.large)
                 .padding(.horizontal)
 
@@ -94,7 +94,7 @@ struct PairingSetupView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Label("iOS 27 无线配对（无需电脑）", systemImage: "wifi")
                             .font(.headline)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.categoryDevice)
 
                         Text("iOS 27 支持无线配对，且配对码会直接显示在 App 内（而不是系统通知）.点击「开始无线配对」后，在另一台设备的 设置 › 隐私与安全性 › 开发者模式 中选择「与 TequilaDash 配对」，并把此处显示的配对码输入到该设备即可完成.")
                             .font(.subheadline)
@@ -106,7 +106,7 @@ struct PairingSetupView: View {
                             Label("开始无线配对", systemImage: "lock.iphone")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
                         .controlSize(.large)
                     }
                     .padding(16)
@@ -299,7 +299,7 @@ struct PairingSetupView: View {
                     Button("关闭") {
                         cancelWirelessPairing()
                     }
-                    .buttonStyle(TintedButtonStyle())
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                 } else if let name = wirelessDeviceName {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
@@ -313,16 +313,16 @@ struct PairingSetupView: View {
                         cancelWirelessPairing()
                         viewModel.reload()
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
                 } else if let pin = wirelessPin {
                     VStack(spacing: 10) {
                         Image(systemName: "lock.iphone")
                             .font(.system(size: 40))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.categoryDevice)
                         Text("请输入配对码").font(.headline)
                         Text(pin)
                             .font(.system(size: 44, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.categoryDevice)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
                             .background(

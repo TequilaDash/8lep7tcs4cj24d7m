@@ -30,14 +30,14 @@ struct PiPKeepAliveView: View {
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(service.isPiPActive ? Color.green : Color.secondary)
+                            .fill(service.isPiPActive ? AppTheme.success : Color.secondary)
                             .frame(width: 8, height: 8)
                         Text(
                             service.isPiPActive
                                 ? (service.isHidden ? "画中画运行中 · 已隐藏（后台保活生效）" : "画中画运行中 · 后台保活生效")
                                 : "画中画未启动")
                             .font(.subheadline)
-                            .foregroundColor(service.isPiPActive ? .green : .secondary)
+                            .foregroundColor(service.isPiPActive ? AppTheme.success : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -68,7 +68,7 @@ struct PiPKeepAliveView: View {
                         }
                     }
                 }
-                .tint(.blue)
+                .tint(AppTheme.accent)
 
                 // 隐藏 / 显示（原版 0.1pt 技巧——缩 preferredContentSize 到不可见）
                 if service.isPiPActive {
@@ -129,14 +129,14 @@ struct PiPKeepAliveView: View {
                         Text("强制 \(highRefresh.maxFPS)Hz 高刷")
                     }
                 }
-                .tint(.blue)
+                .tint(AppTheme.switchOnTint)
                 HStack {
                     Text("实测帧率")
                         .foregroundColor(.secondary)
                     Spacer()
                 Text(highRefresh.isRunning ? "\n(highRefresh.measuredFPS) FPS" : "—")
                         .font(.body.monospacedDigit())
-                        .foregroundColor(highRefresh.measuredFPS >= 100 ? .green : .primary)
+                        .foregroundColor(highRefresh.measuredFPS >= 100 ? AppTheme.success : .primary)
                 }
             } header: {
                 Text("全局高刷")

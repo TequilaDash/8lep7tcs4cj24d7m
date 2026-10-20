@@ -74,7 +74,7 @@ struct AppStoreView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppTheme.categoryDownload)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("免登录下载").font(.subheadline.weight(.medium))
                         Text("免 Apple ID、免配置、一键安装")
@@ -96,7 +96,7 @@ struct AppStoreView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "person.2.badge.gearshape.fill")
                         .font(.title3)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppTheme.categoryStore)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("账号管理").font(.subheadline.weight(.medium))
                         Text("多账号 / 退出登录")
@@ -111,7 +111,7 @@ struct AppStoreView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.title3)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(AppTheme.categorySettings)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AppStore 日志").font(.subheadline.weight(.medium))
                         Text("仅 AppStore 板块（下载/安装）")
@@ -292,7 +292,7 @@ struct AppStoreView: View {
                                 .foregroundStyle(genre == g ? Color.white : Color.primary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(genre == g ? Color.blue : Color(.tertiarySystemFill), in: Capsule())
+                                .background(genre == g ? AppTheme.categoryStore : Color(.tertiarySystemFill), in: Capsule())
                         }
                         .buttonStyle(.plain)
                     }
@@ -427,7 +427,7 @@ struct AppStoreView: View {
             if let rank {
                 Text("\(rank)")
                     .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(rank <= 3 ? Color.orange : Color.secondary)
+                    .foregroundStyle(rank <= 3 ? AppTheme.pending : Color.secondary)
                     .frame(width: 22, alignment: .center)
             }
             iconView(app, size: 54)
@@ -443,12 +443,12 @@ struct AppStoreView: View {
                     if let r = app.ratingText {
                         Label(r, systemImage: "star.fill")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppTheme.pending)
                             .labelStyle(.titleAndIcon)
                     }
                     Text(app.priceText)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(app.priceText == "免费" ? Color.green : Color.blue)
+                        .foregroundStyle(app.priceText == "免费" ? AppTheme.success : AppTheme.categoryStore)
                 }
             }
             Spacer(minLength: 6)

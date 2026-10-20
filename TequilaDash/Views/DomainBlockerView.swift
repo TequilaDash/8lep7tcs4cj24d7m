@@ -60,7 +60,7 @@ struct DomainBlockerView: View {
                     } label: {
                         Text(presets.contains { $0.enabled } ? "全部关闭" : "全部开启")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.accent)
                     }
                 }
             } footer: {
@@ -111,7 +111,7 @@ struct DomainBlockerView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.success)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("已生成描述文件")
                                 .font(.subheadline.weight(.semibold))
@@ -168,7 +168,7 @@ struct DomainBlockerView: View {
 
                 Image(systemName: "doc.badge.plus")
                     .font(.system(size: 40, weight: .medium))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.accent)
             }
 
             VStack(spacing: 6) {

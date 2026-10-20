@@ -35,7 +35,7 @@ struct KernelCacheView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "cpu.fill")
                             .font(.title3)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.accent)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(deviceIdentifier) · iOS \(systemVersion)")
                                 .font(.subheadline.weight(.semibold))
@@ -69,7 +69,7 @@ struct KernelCacheView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .tint(.blue)
+                    .tint(AppTheme.accent)
                     .disabled(isRunning || selectedFirmware == nil)
                 }
                 .padding(.vertical, 2)
@@ -159,7 +159,7 @@ struct KernelCacheView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.title3)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(AppTheme.accent)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("分享下载的文件")
                                     .font(.subheadline.weight(.semibold))

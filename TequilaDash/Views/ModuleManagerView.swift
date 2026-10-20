@@ -87,7 +87,7 @@ struct ModuleManagerView: View {
                                 Text("立即恢复内置模块")
                             }
                         }
-                        .tint(.blue)
+                        .tint(AppTheme.categoryStore)
                     } footer: {
                         Text("内置模块被卸载后想恢复时点此（清空卸载记录并重新安装内置模块）.")
                     }
@@ -105,7 +105,7 @@ struct ModuleManagerView: View {
                                 Text("检测并修复容器路径变更")
                             }
                         }
-                        .tint(.orange)
+                        .tint(AppTheme.pending)
                     } header: {
                         Text("数据路径修复")
                     } footer: {
@@ -304,13 +304,13 @@ struct ModuleManagerView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(running ? Color.green : Color.secondary)
+                    .fill(running ? AppTheme.success : Color.secondary)
                     .frame(width: 8, height: 8)
                 Text(running
                      ? "后台运行中\(runner.runningProcesses[module.id].map { " (pid \($0))" } ?? "")"
                      : (module.autoStart == true || module.binary?.autoStart == true) ? "自启动待命" : "未运行")
                     .font(.footnote)
-                    .foregroundColor(running ? .green : .secondary)
+                    .foregroundColor(running ? AppTheme.success : .secondary)
                 Spacer()
                 if running {
                     if runner.webURL(for: module) != nil {
@@ -322,7 +322,7 @@ struct ModuleManagerView: View {
                                 .font(.footnote.weight(.medium))
                         }
                         .buttonStyle(.bordered)
-                        .tint(.blue)
+                        .tint(AppTheme.categoryStore)
                     }
                     // v0.3.159：停止等模块功能全部由「执行」菜单（actions 声明）承载，
                     // 宿主不再内置停止按钮——动作语义完全由模块决定
@@ -363,7 +363,7 @@ struct ModuleManagerView: View {
                     }
                 ))
                 .labelsHidden()
-                .tint(.blue)
+                .tint(AppTheme.switchOnTint)
             }
 
             // 版本 / 作者（灰字两行）
@@ -383,7 +383,7 @@ struct ModuleManagerView: View {
             if module.isHotfixModule || module.isBinaryModule {
                 Label("签名已验证", systemImage: "checkmark.seal.fill")
                     .font(.caption)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
             }
 
             // v1.3：模块被阻断（缺宿主能力 / 宿主版本太老）—— 装载期就明说原因，
@@ -396,7 +396,7 @@ struct ModuleManagerView: View {
                 Label(module.blockingIssues.joined(separator: "；") + "（请升级 TequilaDash）",
                       systemImage: "info.circle")
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppTheme.pending)
             }
 
             // 二进制模块运行区（自启动服务）
@@ -797,8 +797,8 @@ struct ModuleInstallSheet: View {
     }
 
     private func color(for line: String) -> Color {
-        if line.hasPrefix("!") { return .red }
-        if line.hasPrefix("[完成]") { return .green }
+        if line.hasPrefix("!") { return AppTheme.danger }
+        if line.hasPrefix("[完成]") { return AppTheme.success }
         return .primary
     }
 }

@@ -126,12 +126,12 @@ struct I4MobileInstallView: View {
     }
 
     /// 头部信息胶囊（机型 / 系统 / 包体缓存数）：浅色底 + 主 / 次字色.
-    /// 页面头部不再是深色 banner ⇒ 胶囊底改语义浅灰，符号用强调色，文字用次字色.
+    /// 页面头部不再是深色 banner ⇒ 胶囊底改语义浅灰，符号用签名模块色，文字用次字色.
     private func heroChip(_ symbol: String, _ text: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.categorySign)
                 .appSymbol()
             Text(text)
                 .font(AppFont.numberSmall)
@@ -192,7 +192,7 @@ struct I4MobileInstallView: View {
 
     private var deviceInfoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("设备信息", "iphone", AppTheme.accent)
+            sectionHeader("设备信息", "iphone", AppTheme.categorySign)
 
             VStack(spacing: 0) {
                 if loading {
@@ -207,7 +207,7 @@ struct I4MobileInstallView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
                 } else if let info {
-                    infoRow("iphone", AppTheme.accent, "机型", info.deviceName ?? info.modelName)
+                    infoRow("iphone", AppTheme.categorySign, "机型", info.deviceName ?? info.modelName)
                     rowDivider
                     infoRow("internaldrive", AppTheme.trRecoverable, "容量 / 颜色",
                             capacityColorText(info) ?? "未知")
@@ -215,7 +215,7 @@ struct I4MobileInstallView: View {
                     infoRow("barcode", AppTheme.trSuccess, "序列号",
                             info.serialNumber ?? "未知", mono: true)
                     rowDivider
-                    infoRow("gear", AppTheme.accent, "系统版本",
+                    infoRow("gear", AppTheme.categorySign, "系统版本",
                             "iOS \(info.systemVersion)", mono: true)
                 }
             }
@@ -244,7 +244,7 @@ struct I4MobileInstallView: View {
     /// 全部落空时显示「无可用包体」并附逐档轨迹（说明为什么落不到包体）.
     private var autoPickSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("本机推荐", "wand.and.stars", AppTheme.accent)
+            sectionHeader("本机推荐", "wand.and.stars", AppTheme.categorySign)
 
             VStack(alignment: .leading, spacing: 12) {
                 if picking {
@@ -268,8 +268,8 @@ struct I4MobileInstallView: View {
     private func autoPickContent(_ pick: I4MobileInstallService.AutoPick) -> some View {
         if let pack = pick.pack {
             HStack(alignment: .top, spacing: 12) {
-                // 推荐包体用品牌强调色图标底（与设备信息行的图标底同一语言）.
-                AppRowIcon(systemName: "wand.and.stars", tint: AppTheme.accent,
+                // 推荐包体用签名模块色图标底（与设备信息行的图标底同一语言）.
+                AppRowIcon(systemName: "wand.and.stars", tint: AppTheme.categorySign,
                            symbolSize: 16, frameSize: 34)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(pack.fileName) · \(pack.expectedBundleId) \(pack.expectedVersion)")
@@ -289,7 +289,7 @@ struct I4MobileInstallView: View {
                     } label: {
                         Text("安装推荐包").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .disabled(installingPackId != nil || downloading || importing)
                 } else {
                     Button {
@@ -298,7 +298,7 @@ struct I4MobileInstallView: View {
                     } label: {
                         Text("下载并安装推荐包").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .disabled(downloading || importing || installingPackId != nil)
                 }
             }
@@ -335,7 +335,7 @@ struct I4MobileInstallView: View {
     /// 安装消费的就是这里落盘的 IPA.
     private var ipaSourceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("IPA 来源", "shippingbox", AppTheme.accent)
+            sectionHeader("IPA 来源", "shippingbox", AppTheme.categorySign)
 
             VStack(alignment: .leading, spacing: AppSpacing.row) {
                 warehouseSourceLine
@@ -368,7 +368,7 @@ struct I4MobileInstallView: View {
                     } label: {
                         Text("下载全部").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .disabled(downloading || importing || !hasAnyDownloadable)
 
                     Button {
@@ -377,7 +377,7 @@ struct I4MobileInstallView: View {
                     } label: {
                         Text("手动导入").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .disabled(downloading || importing)
                 }
 
@@ -424,7 +424,7 @@ struct I4MobileInstallView: View {
                         Image(systemName: "doc.on.doc").font(AppFont.caption)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.categorySign)
                     Spacer(minLength: 0)
                 }
             }
@@ -449,10 +449,10 @@ struct I4MobileInstallView: View {
                         // 强并入会改字形，故保留手写胶囊，内边距 6 / 1 与底色 12% 原样.
                         Text("推荐")
                             .font(AppFont.captionEmphasis)
-                            .foregroundStyle(AppTheme.accent)
+                            .foregroundStyle(AppTheme.categorySign)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1)
-                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                            .background(AppTheme.categorySign.opacity(0.12), in: Capsule())
                     }
                 }
                 Text(ipaStatusText(status))
@@ -469,7 +469,7 @@ struct I4MobileInstallView: View {
                     } label: {
                         Text("安装").font(AppFont.caption)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .controlSize(.small)
                     .disabled(installingPackId != nil || downloading)
                 }
@@ -480,7 +480,7 @@ struct I4MobileInstallView: View {
                 } label: {
                     Text("下载").font(AppFont.caption)
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                 .controlSize(.small)
                 .disabled(downloading || importing)
             }
@@ -500,10 +500,10 @@ struct I4MobileInstallView: View {
         .padding(.vertical, 10)
     }
 
-    /// 包体图标着色：已缓存=成功色；可下载=强调色；来源不可用=次级灰.
+    /// 包体图标着色：已缓存=成功色；可下载=签名模块色；来源不可用=次级灰.
     private func packTint(_ status: I4MobileInstallService.PackStatus) -> Color {
         if status.cached { return AppTheme.trSuccess }
-        return status.warehouseAvailability.isAvailable ? AppTheme.accent : .secondary
+        return status.warehouseAvailability.isAvailable ? AppTheme.categorySign : .secondary
     }
 
     /// 「自定义包体」入口：填任意 IPA 直链 ⇒ 加入列表 ⇒ 走同一下载链路 ⇒ 逐个可安装.
@@ -526,7 +526,7 @@ struct I4MobileInstallView: View {
                 } label: {
                     Text("粘贴").font(AppFont.caption)
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                 .controlSize(.small)
                 .disabled(downloading || importing)
             }
@@ -536,7 +536,7 @@ struct I4MobileInstallView: View {
             } label: {
                 Text("添加并下载").frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
             .disabled(downloading || importing
                       || customURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -592,7 +592,7 @@ struct I4MobileInstallView: View {
             I4MobileDownloadManagerView(installAction: installAction)
         } label: {
             HStack(spacing: 12) {
-                AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.accent,
+                AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.categoryDownload,
                            symbolSize: 18, frameSize: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("下载管理").font(AppFont.subheadlineEmphasis).foregroundStyle(.primary)
@@ -629,7 +629,7 @@ struct I4MobileInstallView: View {
 
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("安装状态", "arrow.down.circle", AppTheme.accent)
+            sectionHeader("安装状态", "arrow.down.circle", AppTheme.categorySign)
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
@@ -686,12 +686,12 @@ struct I4MobileInstallView: View {
             } label: {
                 Text("开启高级功能").frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
         case .installing:
             Button { } label: {
                 Text("正在安装…").frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
             .disabled(true)
         default:
             Button {
@@ -700,7 +700,7 @@ struct I4MobileInstallView: View {
             } label: {
                 Text(isFailed ? "重试" : "开始安装").frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
             .disabled(installAction == nil)
         }
     }
@@ -723,7 +723,7 @@ struct I4MobileInstallView: View {
     private var stageTint: Color {
         switch stage {
         case .idle: return .secondary
-        case .installing: return AppTheme.accent
+        case .installing: return AppTheme.categorySign
         case .succeeded: return AppTheme.trSuccess
         case .failed: return AppTheme.trDanger
         }
@@ -1025,7 +1025,7 @@ private struct I4MobileDownloadManagerView: View {
                         Text("安装").font(AppFont.caption)
                     }
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
                 .controlSize(.small)
                 .disabled(installingId != nil)
             }

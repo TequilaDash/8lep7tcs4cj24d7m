@@ -12,8 +12,9 @@ import UIKit
 /// 2. **一律连续圆角**（`RoundedCornerStyle.continuous`）：卡片 `AppRadius.card`、图标块
 ///    `AppRadius.appIcon`、行内图标底 `AppRadius.icon`；不要直角、不要纯方。
 /// 3. **按钮一律「半透明着色 + 发丝描边」**（`TintedButtonStyle`）：主行动用
-///    `TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button)`，次要动作用默认号。
-///    不用纯蓝实底，**也不用全宽深色渐变实底**（见硬规则 7）。
+///    `TintedButtonStyle(tint: 该页模块色, radius: AppRadius.button)`，模块色取 `AppModule.xxx.tint`；
+///    不属任何功能模块的页面退回 `AppTheme.accent`，次要动作用默认号。不用纯蓝实底，
+///    **也不用全宽深色渐变实底**（见硬规则 7）。
 /// 4. 界面文案一律英文句点 `.`，不用中文句号，不用符号化标记 / 星形符号。
 /// 5. **设置类列表用全宽行 + 发丝分隔**（`AppSettingsRow` + `AppHairline`），**不要套 16 圆角卡片**
 ///    （TRApp 设置页实测：行底 / 分隔线均全宽 0–828px；规范 §1.4 / §③组件 5）。
@@ -195,7 +196,7 @@ enum AppTheme {
     // ── ① 模块色（一个功能模块一个颜色）──
     //
     // 取值口径：浅色用中深饱和（在浅背景上有对比），深色用同色相**提亮版**（在深背景上不糊）.
-    // 用法：`AppRowIcon(tint:)` / `SizePill(tint:)` / 标题强调；只作用于紧凑控件.
+    // 用法：`AppRowIcon(tint:)` / `SizePill(tint:)` / 标题强调 / 页面主行动按钮（`TintedButtonStyle(tint:)`）.
 
     /// 清理与优化模块色（青绿）.
     static let categoryClean = Color(UIColor { trait in

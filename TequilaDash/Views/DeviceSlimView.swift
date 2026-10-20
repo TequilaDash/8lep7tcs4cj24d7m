@@ -116,7 +116,7 @@ struct DeviceSlimView: View {
             if let sizeNote {
                 Section {
                     Label(sizeNote, systemImage: "info.circle")
-                        .font(.footnote).foregroundStyle(.orange)
+                        .font(.footnote).foregroundStyle(AppTheme.pending)
                 }
             }
         }
@@ -146,7 +146,7 @@ struct DeviceSlimView: View {
         Section {
             if let usage {
                 HStack(spacing: 14) {
-                    Image(systemName: "iphone.gen3").font(.title2).foregroundStyle(.blue)
+                    Image(systemName: "iphone.gen3").font(.title2).foregroundStyle(AppTheme.categoryClean)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(usage.deviceName).font(.headline)
                         Text(usage.capacityText).font(.caption).foregroundStyle(.secondary)
@@ -207,9 +207,9 @@ struct DeviceSlimView: View {
         Section {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(.orange).font(.footnote)
+                    .foregroundStyle(AppTheme.pending).font(.footnote)
                 Text("瘦身前请备份好重要数据，谨防数据丢失")
-                    .font(.footnote).foregroundStyle(.orange)
+                    .font(.footnote).foregroundStyle(AppTheme.pending)
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 2)
@@ -243,7 +243,7 @@ struct DeviceSlimView: View {
                     Spacer(minLength: 0)
                     Text("可释放 \(DeviceSlimService.formatBytes(selectedBytes)) 空间")
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(selectedBytes > 0 ? .red : .secondary)
+                        .foregroundStyle(selectedBytes > 0 ? AppTheme.danger : .secondary)
                         .monospacedDigit()
                 }
 
@@ -251,16 +251,9 @@ struct DeviceSlimView: View {
                     confirmClean = true
                 } label: {
                     Text(phase == .finished ? "再次瘦身" : "开始瘦身")
-                        .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selectedItems.isEmpty ? Color.gray.opacity(0.35) : Color.blue)
-                        )
-                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryClean, radius: AppRadius.button))
                 .disabled(selectedItems.isEmpty)
 
                 Button {
@@ -272,7 +265,7 @@ struct DeviceSlimView: View {
 
             if let resultText {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(AppTheme.success)
                     Text(resultText).font(.footnote)
                     Spacer(minLength: 0)
                 }
@@ -306,7 +299,7 @@ struct DeviceSlimView: View {
                         Label("重装选中的 \(reinstallTargets.count) 款（可清理 \(DeviceSlimService.formatBytes(reinstallDocBytes))）",
                               systemImage: "arrow.triangle.2.circlepath")
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.danger)
                     }
                 }
                 // 有「确认缺失」或「没查成」的行时给出重检入口（不是爱思有、是免越狱下网络会抖）
@@ -317,7 +310,7 @@ struct DeviceSlimView: View {
                         Label(probingAvailability ? "正在检测…" : "重新检测可重装性",
                               systemImage: "arrow.clockwise")
                             .font(.subheadline)
-                            .foregroundStyle(probingAvailability ? Color.secondary : Color.blue)
+                            .foregroundStyle(probingAvailability ? Color.secondary : AppTheme.categoryClean)
                     }
                     .disabled(probingAvailability)
                 }
@@ -334,7 +327,7 @@ struct DeviceSlimView: View {
                 // v0.3.708：**独立的说明行**，不并进上面那句 —— 上面那句已被源可用性
                 // 占了三个分号分支，把文档未知也塞进去会让两种原因混成一句.
                 if let docUnknownNote {
-                    Text(docUnknownNote).font(.caption2).foregroundStyle(.orange)
+                    Text(docUnknownNote).font(.caption2).foregroundStyle(AppTheme.pending)
                 }
             }
         }
@@ -359,7 +352,7 @@ struct DeviceSlimView: View {
 
     private func groupHeader(_ group: DeviceSlimService.Group) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: group.kind.icon).font(.caption).foregroundStyle(.blue)
+            Image(systemName: group.kind.icon).font(.caption).foregroundStyle(AppTheme.categoryClean)
             Text(group.kind.rawValue)
             Spacer(minLength: 0)
             if group.kind == .bigApps {
@@ -383,7 +376,7 @@ struct DeviceSlimView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: on ? "checkmark.square.fill" : "square")
-                    .font(.body).foregroundStyle(on ? .blue : .secondary)
+                    .font(.body).foregroundStyle(on ? AppTheme.categoryClean : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.subheadline).lineLimit(1)
                     if let detail = item.detail {
@@ -410,7 +403,7 @@ struct DeviceSlimView: View {
             HStack(spacing: 10) {
                 Image(systemName: actionable ? (on ? "checkmark.square.fill" : "square") : "square")
                     .font(.body)
-                    .foregroundStyle(actionable ? (on ? .blue : .secondary) : Color.gray.opacity(0.35))
+                    .foregroundStyle(actionable ? (on ? AppTheme.categoryClean : .secondary) : AppTheme.unselected)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.subheadline).lineLimit(1).foregroundStyle(.primary)
                     HStack(spacing: 6) {
@@ -421,11 +414,11 @@ struct DeviceSlimView: View {
                              ? "文档 \(DeviceSlimService.formatBytes(item.docSize))"
                              : "文档未量到")
                         if item.sourceAvailable == false {
-                            Text("资源缺失无法重装").foregroundStyle(.orange)
+                            Text("资源缺失无法重装").foregroundStyle(AppTheme.pending)
                         } else if probingAvailability && item.sourceAvailable == nil {
                             Text("检测中…").foregroundStyle(.secondary)
                         } else if item.isRisky {
-                            Text("谨慎选择").foregroundStyle(.red)
+                            Text("谨慎选择").foregroundStyle(AppTheme.danger)
                         } else if item.sourceAvailable == nil {
                             Text("源里未查到，可重试").foregroundStyle(.secondary)
                         }

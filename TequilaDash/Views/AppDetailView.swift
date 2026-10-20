@@ -66,10 +66,10 @@ struct AppDetailView: View {
                     AppLoadingRow(title: "正在检查容器访问…")
                 case .granted:
                     Label("容器可访问", systemImage: "checkmark.shield.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(AppTheme.success)
                 case .denied(let reason):
                     Label(reason, systemImage: "xmark.shield.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(AppTheme.danger)
                 }
             }
 
@@ -126,7 +126,7 @@ struct AppDetailView: View {
                     confirmReset = true
                 } label: {
                     Label("重置应用数据", systemImage: "trash.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(AppTheme.danger)
                 }
                 .disabled(!access.isGranted || isResetting)
             }
@@ -165,7 +165,7 @@ struct AppDetailView: View {
                         // 硬规则 1：不用黄色感叹号。改用 info.circle（语义一致）。
                         Label("另有 \(appBackups.unreadableCount) 个归档无法读取", systemImage: "info.circle")
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppTheme.pending)
                     }
                 }
             }
@@ -282,7 +282,7 @@ struct AppDetailView: View {
         case .done(let result):
             VStack(alignment: .leading, spacing: 4) {
                 Label("备份完成", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
                 Text("\(result.fileCount) 个文件 · \(formatBytes(result.totalBytes))")
                     .font(.caption)
                     .foregroundColor(.secondary)

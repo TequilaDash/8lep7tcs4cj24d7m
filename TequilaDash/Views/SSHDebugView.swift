@@ -51,7 +51,7 @@ struct SSHDebugView: View {
                             }
                             .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
                         .disabled(draftPassword.count < 6)
                         if let err = formError {
                             // v0.3.683：区块级错误行统一到 AppErrorRow.

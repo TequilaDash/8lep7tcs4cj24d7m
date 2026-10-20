@@ -127,7 +127,7 @@ extension IPADownloadManagerView {
                     .font(AppFont.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.orange)
+            .foregroundStyle(AppTheme.pending)
         } else if job.phase == .done {
             // v0.3.398：已完成的条目不该挂一个灰「暂停」（点不动、也没意义）。
             // 用**同宽占位**（`.hidden()`）而不是直接不渲染 —— 否则后面的「删除安装包」「提取链接」
@@ -148,7 +148,7 @@ extension IPADownloadManagerView {
                     .font(AppFont.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(job.canPause ? Color.blue : Color.secondary)
+            .foregroundStyle(job.canPause ? AppTheme.categoryDownload : Color.secondary)
             .disabled(!job.canPause)
         }
     }
@@ -171,7 +171,7 @@ extension IPADownloadManagerView {
                     .font(AppFont.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.red)
+            .foregroundStyle(AppTheme.danger)
             Spacer(minLength: 0)
             // 还没拿到直链时按钮置灰（例如刚入队、或该来源确实不给直链）
             let hasLink = !(job.remoteURL ?? "").isEmpty
@@ -182,7 +182,7 @@ extension IPADownloadManagerView {
                     .font(AppFont.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(hasLink ? Color.teal : Color.secondary)
+            .foregroundStyle(hasLink ? AppTheme.categoryClean : Color.secondary)
             .disabled(!hasLink)
         }
     }
@@ -218,10 +218,10 @@ extension IPADownloadManagerView {
     /// （台账侧是字符串、不是枚举，见 `IPADownloadItem.source`）。同一函数 ⇒ 两侧口径一致。
     /// 非枚举占位来源（「来源未知」/「本地」，见 `IPADownloadLibrary`）与任何未知值统一回落次级色。
     func sourceTint(_ raw: String) -> Color {
-        if raw == IPADownloadCenter.Source.i4Free.rawValue { return .blue }
-        if raw == IPADownloadCenter.Source.niuwa.rawValue { return .orange }
-        if raw == IPADownloadCenter.Source.nb.rawValue { return .indigo }
-        if raw == IPADownloadCenter.Source.thirdPartySource.rawValue { return .purple }
+        if raw == IPADownloadCenter.Source.i4Free.rawValue { return AppTheme.categoryDownload }
+        if raw == IPADownloadCenter.Source.niuwa.rawValue { return AppTheme.pending }
+        if raw == IPADownloadCenter.Source.nb.rawValue { return AppTheme.categoryDevice }
+        if raw == IPADownloadCenter.Source.thirdPartySource.rawValue { return AppTheme.categorySign }
         // Apple ID / 来源未知 / 本地 / 任何未知值 —— 中性次级色（不抢眼，但仍在场）。
         return .secondary
     }
@@ -250,8 +250,8 @@ extension IPADownloadManagerView {
                         .font(AppFont.subheadlineEmphasis)
                         .lineLimit(2)
                     HStack(spacing: 6) {
-                        if let v = item.version { PackageChip(text: "v\(v)", tint: .blue) }
-                        PackageChip(text: item.sizeText, tint: .green)
+                        if let v = item.version { PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload) }
+                        PackageChip(text: item.sizeText, tint: AppTheme.success)
                     }
                     // v0.3.363：包类型从胶囊同行里挪到**独立一行**。
                     // 原来和两个胶囊挤同一个 HStack，空间不够时被压成竖排窄列
@@ -345,8 +345,8 @@ extension IPADownloadManagerView {
                         .frame(minWidth: 40)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background((isFailed ? Color.red : Color.blue).opacity(0.14), in: Capsule())
-                        .foregroundStyle(isFailed ? Color.red : Color.blue)
+                        .background((isFailed ? AppTheme.danger : AppTheme.categoryDownload).opacity(0.14), in: Capsule())
+                        .foregroundStyle(isFailed ? AppTheme.danger : AppTheme.categoryDownload)
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
@@ -369,7 +369,7 @@ extension IPADownloadManagerView {
             } label: {
                 Label("降级安装", systemImage: "arrow.down.circle")
             }
-            .tint(.orange)
+            .tint(AppTheme.pending)
         }
         // 长按安装包 → 「查看图标 / 提取图标」。菜单项与该行 `iconView` 用**同一个**图标地址；
         // 没有图标（地址为空）时整组置灰，不让用户点下去才发现没图可看.
@@ -444,7 +444,7 @@ extension IPADownloadManagerView {
     /// v0.3.568：`sinf 异常`（有 sinf 但结构写坏了）同样装不上，一并着色。
     func kindTint(_ item: IPADownloadItem) -> Color {
         guard item.isEncrypted == true else { return .secondary }
-        return (item.hasSINF != true || item.sinfStructurallyValid == false) ? .orange : .secondary
+        return (item.hasSINF != true || item.sinfStructurallyValid == false) ? AppTheme.pending : .secondary
     }
 
     /// 图例的一行：标签原文按列表里的着色，下面一句人话解释.

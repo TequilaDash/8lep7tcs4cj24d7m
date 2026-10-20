@@ -1,4 +1,22 @@
 # Changelog
+## [0.3.713] - 2026-10-20
+
+### 新增
+- 崩溃分析接入 Xrash 解析层的结构化视图：新增 `TequilaDash/Views/CrashReport/` 7 个文件，摘要分区（异常 / 终止 / 崩溃线程 / 镜像 / 设备与进程 / 签名）、线程与帧列表（崩溃线程置顶并默认展开）、寄存器网格（pc/lr/sp/fp 高亮 + 注解）、Jetsam / Resource / Panic 专卡、同簇归组视图. 解析失败退回原纯文本分支（`CrashLogView.swift`、`CrashReportAnalysisView.swift`）.
+- 崩溃列表新增类型徽标与同簇 `×N` 徽标，工具栏 `square.3.layers.3d` 进入归组视图；归组需显式点击，单次上限 60 份（`CrashLogView.swift`、`CrashReportCluster.swift`)
+
+### 变更
+- 主行动按钮不再统一用 accent：25 处按所属功能模块取色（签名类 14 处 `categorySign`、高级类 4 处 `categoryAdvanced`、配对与调试 4 处 `categoryDevice`、健康检查 2 处 `categoryHealth`、下载 1 处 `categoryDownload`）. App 级入口闸门 `LimitsDisclaimer.swift:31` 保持 accent. 硬规则 3 的表述同步改为「tint 取该页模块色，不属任何功能模块退回 accent」（`TequilaDash/Views/DesignSystem.swift:14-17`、`:199`）.
+- 两处全宽实底白字按钮改为 `TintedButtonStyle`：`DeviceSlimView.swift`「开始瘦身」取 `categoryClean`、`AppStoreDetailView.swift`「获取/购买」取 `categoryStore`. 禁用态由手写三元改由样式的 `isEnabled` 分支承担.
+- 界面硬编码调色板色收口：13 个文件 107 处、12 个文件 41 处改为 `AppTheme` / `AppSurface` 语义 token. 保留 `Color.black` 遮罩、`Color.white`/`.primary` 前景、`.secondary`、`Color.clear` 与 UIKit 动态色.
+- 分类筛选胶囊（`AppStoreView.swift`）与「删除选中」（`AppExpiryView.swift`）保留实底：前者实底是选中态指示器，后者非全宽且为破坏性确认.
+
+### 回退
+- 撤销 v0.3.694 引入的 `run_sync_ffi`（`rust/idevice-ffi/src/lib.rs` -38 行）：全仓零调用点，`run_sync` 与 `run_sync_local` 未动. 依据 2026-10-20 面板审批 4/4 驳回.
+
+### 校验
+- `normalize_eol.py` EXIT 0（45 文件与基线一致）· `swift_precommit_check.py .` EXIT 0（17 组守卫，命中 0，扫 331 个 .swift）· WSL `swiftc -parse` 43 个改动 .swift FAIL_TOTAL=0 · `swift_theme_blue_guard.py --selftest` 9 例全 OK
+
 ## [0.3.712] - 2026-10-20
 
 ### 修复

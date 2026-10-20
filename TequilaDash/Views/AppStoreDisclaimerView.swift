@@ -33,7 +33,7 @@ struct AppStoreDisclaimerView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.pending)
                     Text("使用前须知")
                         .font(.headline)
                 }
@@ -72,7 +72,7 @@ struct AppStoreDisclaimerView: View {
                             .font(.body.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
-                            .background(Color.blue, in: Capsule())
+                            .background(AppTheme.accent, in: Capsule())
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)

@@ -63,7 +63,7 @@ struct AppStoreDetailView: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: isFavorite ? "star.fill" : "star")
-                            .foregroundStyle(isFavorite ? .yellow : .secondary)
+                            .foregroundStyle(isFavorite ? AppTheme.warning : .secondary)
                         if favoriteCount > 1 {
                             Text("\(favoriteCount)")
                                 .font(.caption2.monospacedDigit())
@@ -90,7 +90,7 @@ struct AppStoreDetailView: View {
                     // 有进行中的任务时带小圆点
                     Image(systemName: center.activeJobs.isEmpty
                           ? "arrow.down.circle" : "arrow.down.circle.fill")
-                        .foregroundStyle(center.activeJobs.isEmpty ? Color.secondary : Color.blue)
+                        .foregroundStyle(center.activeJobs.isEmpty ? Color.secondary : AppTheme.categoryDownload)
                 }
             }
         }
@@ -200,10 +200,10 @@ struct AppStoreDetailView: View {
                         HStack(spacing: 8) {
                             Text(item.priceText)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(item.priceText == "免费" ? Color.green : Color.blue)
+                                .foregroundStyle(item.priceText == "免费" ? AppTheme.success : AppTheme.categoryStore)
                             if let r = item.ratingText {
                                 Label(r, systemImage: "star.fill")
-                                    .font(.caption).foregroundStyle(.orange)
+                                    .font(.caption).foregroundStyle(AppTheme.pending)
                             }
                             if let c = item.ratingCount {
                                 Text("(\(c.formattedCount))")
@@ -312,8 +312,8 @@ struct AppStoreDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(job.phase == .failed
-                                     ? Color.orange
-                                     : (job.canPause ? Color.blue : Color.secondary))
+                                     ? AppTheme.pending
+                                     : (job.canPause ? AppTheme.categoryDownload : Color.secondary))
                     // 失败态**必须可点**（否则又回到「显示暂停但点不动」那种死状态）
                     .disabled(job.phase != .failed && !job.canPause)
 
@@ -340,7 +340,7 @@ struct AppStoreDetailView: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.danger)
 
                     Spacer(minLength: 0)
 
@@ -352,7 +352,7 @@ struct AppStoreDetailView: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.categoryDownload)
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -382,12 +382,12 @@ struct AppStoreDetailView: View {
 
     private func phaseTint(_ phase: IPADownloadCenter.Phase) -> Color {
         switch phase {
-        case .downloading: return .blue
-        case .installing:  return .orange
-        case .paused:      return .gray
+        case .downloading: return AppTheme.categoryDownload
+        case .installing:  return AppTheme.categorySign
+        case .paused:      return AppTheme.unselected
         case .waiting:     return .secondary
-        case .done:        return .green
-        case .failed:      return .red
+        case .done:        return AppTheme.success
+        case .failed:      return AppTheme.danger
         }
     }
 
@@ -397,13 +397,9 @@ struct AppStoreDetailView: View {
             showInstallOptions = true
         } label: {
             Text(item.priceText == "免费" ? "获取" : "购买 \(item.priceText)")
-                .font(.body.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.blue, in: Capsule())
-                .foregroundStyle(.white)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryStore, radius: AppRadius.button))
     }
 
     // MARK: 截图
@@ -704,17 +700,17 @@ struct InstallOptionsSheet: View {
 
             VStack(spacing: 10) {
                 option(icon: "person.crop.circle.badge.checkmark",
-                       tint: .blue,
+                       tint: AppTheme.categoryStore,
                        title: "使用已登录 AppleID 安装",
                        subtitle: appleIDSubtitle,
                        action: onAppleID)
                 option(icon: "bolt.fill",
-                       tint: .green,
+                       tint: AppTheme.success,
                        title: "从爱思源快速安装",
                        subtitle: "免登录，服务端已签名",
                        action: onI4)
                 option(icon: "key.fill",
-                       tint: .orange,
+                       tint: AppTheme.pending,
                        title: "获取许可证",
                        subtitle: "加入账号授权列表",
                        action: onAcquireLicense)
@@ -779,7 +775,7 @@ struct AppleIDPickerSheet: View {
                         HStack(spacing: 10) {
                             Image(systemName: "person.crop.circle.fill")
                                 .font(.title3)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(AppTheme.categoryStore)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(account.email).font(.subheadline)
                                 Text("store \(account.store)")

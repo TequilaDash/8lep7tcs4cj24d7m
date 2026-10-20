@@ -34,7 +34,7 @@ struct AppStoreI4View: View {
                                         .font(.subheadline.weight(rank == r ? .semibold : .regular))
                                         .foregroundStyle(rank == r ? Color.white : Color.primary)
                                         .padding(.horizontal, 12).padding(.vertical, 6)
-                                        .background(rank == r ? Color.blue : Color(.tertiarySystemFill), in: Capsule())
+                                        .background(rank == r ? AppTheme.accent : Color(.tertiarySystemFill), in: Capsule())
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -126,7 +126,7 @@ struct AppStoreI4View: View {
                     HStack(spacing: 12) {
                         Text("\(idx + 1)")
                             .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(idx < 3 ? Color.orange : Color.secondary)
+                            .foregroundStyle(idx < 3 ? AppTheme.pending : Color.secondary)
                             .frame(width: 22)
                         AsyncImage(url: URL(string: iconURL(a))) { phase in
                             if case .success(let img) = phase { img.resizable().scaledToFit() }

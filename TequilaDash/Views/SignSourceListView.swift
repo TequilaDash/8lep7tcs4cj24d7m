@@ -162,7 +162,7 @@ struct SignSourceListView: View {
         Section {
             InfoActionCard(
                 icon: "shippingbox",
-                iconTint: .purple,
+                iconTint: AppTheme.categorySign,
                 title: "还没有添加软件源",
                 message: "点右上角 + 添加软件源，软件源内容由第三方提供，请自行确认源的合法性与有效性.",
                 actionTitle: "添加软件源",
@@ -212,13 +212,13 @@ struct SignSourceListView: View {
             } label: {
                 Label("复制", systemImage: "doc.on.doc")
             }
-            .tint(.indigo)
+            .tint(AppTheme.categoryDevice)
             Button {
                 update(source)
             } label: {
                 Label("更新", systemImage: "arrow.clockwise")
             }
-            .tint(.blue)
+            .tint(AppTheme.accent)
             // 删除是破坏性操作，排在最后
             Button(role: .destructive) {
                 remove(source)
@@ -248,8 +248,8 @@ struct SignSourceListView: View {
             ),
             emptyStyle: IconPlaceholderStyle(
                 icon: "shippingbox.fill",
-                tint: .purple,
-                background: Color.purple.opacity(0.12)
+                tint: AppTheme.categorySign,
+                background: AppTheme.categorySign.opacity(0.12)
             ),
             keepsPlaceholderBehindImage: false
         )

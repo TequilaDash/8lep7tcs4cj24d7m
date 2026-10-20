@@ -220,14 +220,14 @@ struct HomeView: View {
             Text(scoreSubtitle)
                 .font(AppFont.footnote)
                 .foregroundStyle(.secondary)
-            // 立即体检：淡蓝底按钮（**不是纯蓝实底**），圆角对齐 TRApp 大按钮（12）。
+            // 立即体检：淡底按钮（**不是纯蓝实底**），圆角对齐 TRApp 大按钮（12）；取体检模块绿，与目标页同色。
             NavigationLink {
                 HealthCheckView(score: $securityScore)
             } label: {
                 Label("立即体检", systemImage: "stethoscope")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryHealth, radius: AppRadius.button))
         }
         .padding(16)
         .frame(maxWidth: .infinity)

@@ -2,8 +2,11 @@ import SwiftUI
 
 /// 崩溃分析：通过「配对文件 + LocalDevVPN」隧道读取本机崩溃 / 诊断日志
 /// （对应 iOS「设置 → 隐私与安全性 → 分析与改进」），支持查看内容、
-/// 结构化摘要（Xrash 解析）、按文件名搜索、单份分享，
-/// 批量选择（含全选）导出到本机与删除.
+/// Xrash 式分区分析（摘要 / 线程 / 镜像 / 经典全文 / 原文）、按文件名搜索、
+/// 单份分享、批量选择（含全选）导出到本机与删除.
+///
+/// 写域说明：本文件只做列表与拉取；解析在 Engine/CrashReport/（原样搬入，只读），
+/// 显示组件在 Views/CrashReport/.
 struct CrashLogView: View {
     @State private var entries: [CrashLogService.Entry] = []
     @State private var currentDir: String?
@@ -26,9 +29,18 @@ struct CrashLogView: View {
     @State private var shareText = ""
     @State private var showShareSheet = false
     @State private var shareLoading = false
-    /// 预览结构化摘要（ReportDecoder 解析失败为 nil）与摘要 / 原文切换.
-    @State private var previewAnalysis: String?
-    @State private var showRawPreview = false
+    /// 预览用的解析结果（ReportDecoder 失败为 nil，退回原文文本）.
+    @State private var previewReport: Report?
+    /// 崩溃签名缓存（文件路径 → 签名），由「聚类」扫描填充.
+    @State private var signatures: [String: String] = [:]
+    /// 扫描后的分组结果.
+    @State private var clusters: [CrashCluster] = []
+    /// 路径 → 同签名份数（行尾 ×N 徽标用，随 clusters 一起重建）.
+    @State private var clusterCountByPath: [String: Int] = [:]
+    /// 单次聚类扫描的上限份数（AFC 逐份拉取，超过后按名称取前 N 份）.
+    private let clusterScanLimit = 60
+    /// 聚类结果页呈现开关.
+    @State private var showClusters = false
     /// 明暗模式：进度遮罩卡投影走 `AppShadow.raised`，需显式传入.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -105,7 +117,16 @@ struct CrashLogView: View {
                     .disabled(busy)
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if !entries.isEmpty && !busy {
+                    Button {
+                        clusterCrashes()
+                    } label: {
+                        Image(systemName: "square.3.layers.3d")
+                    }
+                    .accessibilityLabel("按崩溃签名聚类")
+                    .disabled(isEditing)
+                }
                 if !entries.isEmpty && !busy {
                     Button(isEditing ? "完成" : "选择") {
                         withAnimation { isEditing.toggle() }
@@ -142,37 +163,18 @@ struct CrashLogView: View {
                 Group {
                     if previewLoading {
                         AppLoadingRow(title: "正在拉取日志…", level: .page)
+                    } else if let report = previewReport {
+                        CrashReportAnalysisView(report: report, rawText: previewText)
                     } else if previewText.isEmpty {
                         Text("（空文件）")
                             .foregroundColor(.secondary)
                     } else {
-                        VStack(spacing: 0) {
-                            if previewAnalysis != nil {
-                                Picker("预览视图", selection: $showRawPreview) {
-                                    Text("摘要").tag(false)
-                                    Text("原文").tag(true)
-                                }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal)
-                                .padding(.top, 8)
-                            }
-                            if showRawPreview || previewAnalysis == nil {
-                                ScrollView {
-                                    Text(previewText)
-                                        .font(.system(.footnote, design: .monospaced))
-                                        .textSelection(.enabled)
-                                        .padding()
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            } else {
-                                ScrollView {
-                                    Text(previewAnalysis ?? "")
-                                        .font(.system(.footnote, design: .monospaced))
-                                        .textSelection(.enabled)
-                                        .padding()
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
+                        ScrollView {
+                            Text(previewText)
+                                .font(.system(.footnote, design: .monospaced))
+                                .textSelection(.enabled)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
@@ -181,6 +183,19 @@ struct CrashLogView: View {
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("完成") { previewEntry = nil }
+                    }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showClusters) {
+            NavigationStack {
+                CrashClusterListView(clusters: clusters) { entry in
+                    showClusters = false
+                    open(entry)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("完成") { showClusters = false }
                     }
                 }
             }
@@ -249,6 +264,31 @@ struct CrashLogView: View {
         return parts.joined(separator: " · ")
     }
 
+    /// 行尾徽标：类型（按文件名判型，ReportFileName，不读文件内容）+ 同签名份数.
+    @ViewBuilder
+    private func rowBadge(_ entry: CrashLogService.Entry) -> some View {
+        if CrashLogService.isCrashLogName(entry.name) {
+            let kind = ReportFileName(entry.name).kind
+            HStack(spacing: 4) {
+                if let count = clusterCountByPath[entry.path], count > 1 {
+                    SizePill(text: "×\(count)", tint: AppTheme.pending, level: .tiny)
+                }
+                SizePill(text: CrashFormat.kindLabel(kind),
+                         tint: kindTint(kind),
+                         level: .tiny)
+            }
+        }
+    }
+
+    /// 类型配色：崩溃 / 内核走 danger，内存 / 卡死走 pending，其余 accent.
+    private func kindTint(_ kind: ReportKind) -> Color {
+        switch kind {
+        case .crash, .panic: return AppTheme.danger
+        case .jetsam, .hang: return AppTheme.pending
+        case .resource, .analytics, .other: return AppTheme.accent
+        }
+    }
+
     /// 行级分享：拉取单份日志原文并交给系统分享面板.
     private func share(_ entry: CrashLogService.Entry) {
         guard !isEditing, !busy, !shareLoading, !entry.isDirectory else { return }
@@ -297,6 +337,7 @@ struct CrashLogView: View {
             }
             Spacer()
             if !isEditing && !entry.isDirectory {
+                rowBadge(entry)
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -324,6 +365,10 @@ struct CrashLogView: View {
     private func reload() {
         loading = true
         errorMessage = nil
+        // 切目录 / 删除后旧签名失效，行徽标一并清空.
+        signatures.removeAll()
+        clusters = []
+        clusterCountByPath = [:]
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let list = try service.list(subdirectory: currentDir)
@@ -350,8 +395,7 @@ struct CrashLogView: View {
             return
         }
         previewEntry = entry
-        previewAnalysis = nil
-        showRawPreview = false
+        previewReport = nil
         previewText = ""
         previewLoading = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -359,11 +403,23 @@ struct CrashLogView: View {
                 let data = try service.pull(entry.path)
                 let text = String(data: data, encoding: .utf8)
                     ?? String(data: data, encoding: .utf16) ?? "（二进制内容，无法显示）"
-                let analysis = service.analyze(data: data, fileName: entry.name)
+                // 解析走 Engine/CrashReport（ReportDecoder），失败退回原文文本.
+                let report = try? ReportDecoder.decode(data, fileName: entry.name)
+                // 全部 let，避免可变局部量被并发闭包捕获.
+                let crashSnapshot = report?.crash
+                let signature = crashSnapshot.flatMap { crash in
+                    let value = ReportExplainer.signature(of: crash)
+                    return value.isEmpty ? nil : value
+                }
                 DispatchQueue.main.async {
                     previewText = text
-                    previewAnalysis = analysis
+                    previewReport = report
                     previewLoading = false
+                    if let signature {
+                        signatures[entry.path] = signature
+                        clusters = CrashClusterBuilder.build(signatures: signatures, entries: entries)
+                        clusterCountByPath = CrashClusterBuilder.counts(byPath: clusters)
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -382,6 +438,55 @@ struct CrashLogView: View {
             visible.forEach { selection.remove($0.id) }
         } else {
             visible.forEach { selection.insert($0.id) }
+        }
+    }
+
+    /// 逐份「拉取 → 解析 → 取签名」（无 UI、无实例状态，后台队列调用）.
+    /// 局部可变字典留在本函数内，不跨并发闭包.
+    private static func scanSignatures(_ targets: [CrashLogService.Entry],
+                                       progress: (Int, Int) -> Void) -> [String: String] {
+        let service = CrashLogService.shared
+        var found: [String: String] = [:]
+        for (offset, entry) in targets.enumerated() {
+            progress(offset + 1, targets.count)
+            guard let data = try? service.pull(entry.path),
+                  let report = try? ReportDecoder.decode(data, fileName: entry.name),
+                  let crash = report.crash else { continue }
+            let signature = ReportExplainer.signature(of: crash)
+            if !signature.isEmpty { found[entry.path] = signature }
+        }
+        return found
+    }
+
+    /// 批量聚类：逐份拉取 → ReportDecoder 解析 → ReportExplainer 签名，再按签名归组.
+    /// AFC 每份都是一次 open/read/close 往返，因此只扫当前目录下可见的崩溃日志，上限 clusterScanLimit 份.
+    private func clusterCrashes() {
+        guard !busy else { return }
+        let targets = visibleEntries
+            .filter { !$0.isDirectory && CrashLogService.isCrashLogName($0.name) }
+            .prefix(clusterScanLimit)
+        guard !targets.isEmpty else {
+            ToastCenter.shared.show("当前目录没有崩溃日志.")
+            return
+        }
+        busy = true
+        progressText = "0 / \(targets.count)"
+        let scanned = Array(targets)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = CrashLogView.scanSignatures(scanned) { step, total in
+                DispatchQueue.main.async { progressText = "\(step) / \(total)" }
+            }
+            DispatchQueue.main.async {
+                busy = false
+                for (path, signature) in found { signatures[path] = signature }
+                clusters = CrashClusterBuilder.build(signatures: signatures, entries: entries)
+                clusterCountByPath = CrashClusterBuilder.counts(byPath: clusters)
+                if clusters.isEmpty {
+                    ToastCenter.shared.show("未能解析出崩溃签名.")
+                } else {
+                    showClusters = true
+                }
+            }
         }
     }
 

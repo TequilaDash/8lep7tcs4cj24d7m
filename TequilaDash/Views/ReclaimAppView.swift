@@ -109,10 +109,10 @@ struct ReclaimAppView: View {
                 AppLoadingRow(title: "正在检查容器访问…")
             case .granted:
                 Label("容器可访问", systemImage: "checkmark.shield.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
             case .denied(let reason):
                 Label(reason, systemImage: "xmark.shield.fill")
-                    .foregroundColor(.red)
+                    .foregroundColor(AppTheme.danger)
             }
         }
     }
@@ -230,7 +230,7 @@ struct ReclaimAppView: View {
         case .done(let result):
             VStack(alignment: .leading, spacing: 4) {
                 Label("备份完成", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
                 Text("\(result.fileCount) 个文件 · \(ReclaimService.formatBytes(result.totalBytes))")
                     .font(.caption)
                     .foregroundColor(.secondary)

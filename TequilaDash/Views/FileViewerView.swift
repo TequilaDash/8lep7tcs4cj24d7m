@@ -32,7 +32,7 @@ struct FileViewerView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "info.circle")
                         .font(.largeTitle)
-                        .foregroundColor(.orange)
+                        .foregroundColor(AppTheme.pending)
                     Text(error)
                         .multilineTextAlignment(.center)
                         .padding()
@@ -376,10 +376,10 @@ struct TextFileEditorView: View {
             if vm.truncated {
                 Text("文件大于 2 MB，仅显示前 2 MB 且以只读方式打开.")
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppTheme.pending)
                     .padding(8)
                     .frame(maxWidth: .infinity)
-                    .background(Color.orange.opacity(0.12))
+                    .background(AppTheme.pending.opacity(0.12))
             }
             TextEditor(text: $vm.text)
                 .font(.system(size: 13, design: .monospaced))

@@ -282,7 +282,7 @@ struct AppExpiryView: View {
                     showExporter = true
                 } label: {
                     Image(systemName: "square.and.arrow.down")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppTheme.accent)
                 }
                 .buttonStyle(.borderless)
 
@@ -291,7 +291,7 @@ struct AppExpiryView: View {
                     showRemoveConfirm = true
                 } label: {
                     Image(systemName: "trash")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppTheme.danger)
                 }
                 .buttonStyle(.borderless)
             }
@@ -324,7 +324,7 @@ struct AppExpiryView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(selectedUUIDs.isEmpty ? Color.gray : Color.red))
+                    .background(Capsule().fill(selectedUUIDs.isEmpty ? AppTheme.unselected : AppTheme.danger))
             }
             .disabled(selectedUUIDs.isEmpty)
             .buttonStyle(.plain)

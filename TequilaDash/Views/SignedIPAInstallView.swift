@@ -26,7 +26,7 @@ struct SignedIPAInstallView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "app.badge.checkmark")
                             .font(.title3)
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppTheme.categorySign)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("已签名 IPA 安装")
                                 .font(.subheadline.weight(.semibold))
@@ -43,7 +43,7 @@ struct SignedIPAInstallView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .tint(.blue)
+                    .tint(AppTheme.categorySign)
                     .disabled(busy)
                 }
                 .padding(.vertical, 4)
@@ -84,14 +84,14 @@ struct SignedIPAInstallView: View {
                     } label: {
                         Label("在线安装", systemImage: "arrow.down.circle.fill")
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppTheme.categorySign)
 
                     Button {
                         self.install(mode: .upgrade)
                     } label: {
                         Label("覆盖升级 / 降级安装", systemImage: "arrow.up.arrow.down.circle")
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppTheme.categorySign)
                 } header: {
                     Label("执行安装", systemImage: "hammer")
                 } footer: {

@@ -630,12 +630,12 @@ struct SignSourceAppListView: View {
     /// 版本 / 大小 / 日期 —— 一行放不下由 `ChipFlow` 整块换行（与 `I4StoreFreeView` 同款）。
     private func chips(_ app: SignSourceApp) -> [ChipItem] {
         var out: [ChipItem] = []
-        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: .blue)) }
+        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: AppTheme.categorySign)) }
         if let s = app.size, s > 0 {
-            out.append(ChipItem(text: IPADownloadLibrary.sizeText(Int64(s)), tint: .green))
+            out.append(ChipItem(text: IPADownloadLibrary.sizeText(Int64(s)), tint: AppTheme.success))
         }
         if let d = formattedVersionDate(app.versionDate) {
-            out.append(ChipItem(text: d, tint: .orange))
+            out.append(ChipItem(text: d, tint: AppTheme.pending))
         }
         return out
     }
@@ -725,7 +725,7 @@ struct SignSourceAppListView: View {
                         .font(.body)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(job.canPause ? Color.blue : Color.secondary)
+                .foregroundStyle(job.canPause ? AppTheme.categoryDownload : Color.secondary)
                 .disabled(!job.canPause)
                 Button {
                     // 按**实际结果**提示：台账只读 / 文件被占用时删除被拒，不能默默当成功
@@ -761,8 +761,8 @@ struct SignSourceAppListView: View {
                 Text("解锁")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color.orange.opacity(0.16), in: Capsule())
-                    .foregroundStyle(.orange)
+                    .background(AppTheme.pending.opacity(0.16), in: Capsule())
+                    .foregroundStyle(AppTheme.pending)
             }
             .buttonStyle(.plain)
             .disabled(!unlockable)
@@ -788,8 +788,8 @@ struct SignSourceAppListView: View {
                 Text("跳转")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color.teal.opacity(0.16), in: Capsule())
-                    .foregroundStyle(.teal)
+                    .background(AppTheme.categoryClean.opacity(0.16), in: Capsule())
+                    .foregroundStyle(AppTheme.categoryClean)
             }
             .buttonStyle(.plain)
         }

@@ -29,7 +29,7 @@ struct HealthCheckView: View {
                         Label("重新体检", systemImage: "arrow.clockwise")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryHealth, radius: AppRadius.button))
                 }
             }
             .padding(.horizontal, AppTheme.pageInset)
@@ -53,7 +53,7 @@ struct HealthCheckView: View {
                     .stroke(Color(.systemGray5), lineWidth: 8)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .stroke(AppTheme.categoryHealth, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.25), value: progress)
                 VStack(spacing: 2) {

@@ -30,7 +30,7 @@ struct ProfileInstallView: View {
                 } label: {
                     Label("导入描述文件", systemImage: "doc.badge.plus")
                 }
-                .foregroundColor(.blue)
+                .foregroundColor(AppTheme.accent)
             } header: {
                 Text("描述文件管理")
             } footer: {
@@ -46,7 +46,7 @@ struct ProfileInstallView: View {
                     ForEach(profiles, id: \.self) { name in
                         HStack(spacing: 12) {
                             Image(systemName: "shield.lefthalf.filled")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppTheme.accent)
                                 .frame(width: 28)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(name)
@@ -71,7 +71,7 @@ struct ProfileInstallView: View {
                             .disabled(busy)
                             .buttonStyle(.bordered)
                             .controlSize(.small)
-                            .tint(.blue)
+                            .tint(AppTheme.accent)
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {

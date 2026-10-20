@@ -282,15 +282,15 @@ struct TunnelHealthCheckView: View {
     private func statusIcon(_ row: TunnelHealthViewModel.Row) -> some View {
         if let satisfied = row.satisfied {
             if satisfied {
-                Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.title3)
+                Image(systemName: "checkmark.circle.fill").foregroundColor(AppTheme.success).font(.title3)
             } else if row.optional {
                 // 可选项失败不阻塞主流程：橙色减号，与 SideStore 的呈现一致.
-                Image(systemName: "minus.circle.fill").foregroundColor(.orange).font(.title3)
+                Image(systemName: "minus.circle.fill").foregroundColor(AppTheme.pending).font(.title3)
             } else {
-                Image(systemName: "xmark.circle.fill").foregroundColor(.red).font(.title3)
+                Image(systemName: "xmark.circle.fill").foregroundColor(AppTheme.danger).font(.title3)
             }
         } else {
-            Image(systemName: "questionmark.circle.fill").foregroundColor(.gray).font(.title3)
+            Image(systemName: "questionmark.circle.fill").foregroundColor(AppTheme.unselected).font(.title3)
         }
     }
 }

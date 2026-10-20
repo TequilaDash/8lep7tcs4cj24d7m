@@ -313,15 +313,15 @@ struct ConfigurationsView: View {
             HStack(spacing: 10) {
                 switch access {
                 case .readWrite:
-                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(AppTheme.success)
                     Text("可读写")
                         .font(.subheadline)
                 case .readable:
-                    Image(systemName: "eye.fill").foregroundColor(.orange)
+                    Image(systemName: "eye.fill").foregroundColor(AppTheme.pending)
                     Text("可读取（写入受系统限制）")
                         .font(.subheadline)
                 case .restricted:
-                    Image(systemName: "lock.fill").foregroundColor(.red)
+                    Image(systemName: "lock.fill").foregroundColor(AppTheme.danger)
                     Text("受限")
                         .font(.subheadline)
                 }
@@ -346,7 +346,7 @@ struct ConfigurationsView: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppTheme.accent)
                         .frame(width: 30, height: 30)
                         .background(AppSurface.card)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -456,7 +456,7 @@ struct ConfigurationsView: View {
             if !supervisedToolsEnabled {
                 InfoActionCard(
                     icon: "lock.shield",
-                    iconTint: .orange,
+                    iconTint: AppTheme.pending,
                     title: "未检测到监督模式",
                     message: "以下工具通过“描述文件”方式调整设备，无需越狱或漏洞，但要求设备处于监督模式（通常用 Nugget 开启）.未监督时不可使用.",
                     actionTitle: "如何开启？",
@@ -487,7 +487,7 @@ struct ConfigurationsView: View {
                 if supervisedToolsEnabled {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.caption)
-                        .foregroundColor(.green)
+                        .foregroundColor(AppTheme.success)
                 } else {
                     Button {
                         supervisedToolsEnabled = SupervisedProfileStore.isSupervised()

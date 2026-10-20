@@ -160,7 +160,7 @@ struct PairingInstallView: View {
                     Text("写入")
                 }
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
             .controlSize(.small)
             .disabled(isBusy)
         }

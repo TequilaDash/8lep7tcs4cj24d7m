@@ -227,7 +227,7 @@ struct CertificateView: View {
                             Text("登录 Apple ID")
                         }
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
                     .controlSize(.regular)
                 }
             }
@@ -520,8 +520,7 @@ struct CertificateView: View {
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.danger))
                 .controlSize(.regular)
                 .disabled(revoking || manager.isWorking || manager.revokingID != nil)
             }

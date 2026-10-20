@@ -223,7 +223,7 @@ struct AFCBrowserView: View {
     private func row(_ entry: AFCService.Entry) -> some View {
         HStack(spacing: 12) {
             Image(systemName: entry.isDirectory ? "folder.fill" : "doc.fill")
-                .foregroundColor(entry.isDirectory ? .blue : .secondary)
+                .foregroundColor(entry.isDirectory ? AppTheme.accent : .secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
@@ -262,20 +262,20 @@ struct AFCBrowserView: View {
             } label: {
                 Label("重命名", systemImage: "pencil")
             }
-            .tint(.orange)
+            .tint(AppTheme.pending)
             Button {
                 activeSheet = .move(entry)
             } label: {
                 Label("移动", systemImage: "arrow.right.square")
             }
-            .tint(.blue)
+            .tint(AppTheme.accent)
             if !entry.isDirectory {
                 Button {
                     download(entry)
                 } label: {
                     Label("导出", systemImage: "square.and.arrow.up")
                 }
-                .tint(.green)
+                .tint(AppTheme.success)
             }
         }
     }

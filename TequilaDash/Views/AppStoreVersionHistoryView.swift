@@ -193,7 +193,7 @@ struct AppStoreVersionHistoryView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
                     // 字重 `.medium` 与底色 15% 用覆盖项钉住（`.compact` 默认 `.semibold` / 12%）.
                     SizePill(text: "当前",
-                             tint: .green,
+                             tint: AppTheme.success,
                              level: .compact,
                              weight: .medium,
                              fillOpacity: 0.15)
@@ -232,7 +232,7 @@ struct AppStoreVersionHistoryView: View {
                             .font(.caption2.weight(.medium))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.accent)
                 }
             }
             if v.externalVersionID != nil, !isCurrent {
@@ -242,7 +242,7 @@ struct AppStoreVersionHistoryView: View {
                     Text("下载此版本").font(.caption.weight(.medium))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.blue)
+                .foregroundStyle(AppTheme.accent)
             }
         }
         .padding(.vertical, 3)

@@ -80,7 +80,7 @@ struct AppStoreAccountsView: View {
                 Text("未选择（没有已登录账号）").font(.subheadline).foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 12) {
-                    AppRowIcon(systemName: "person.crop.circle.fill", tint: .green,
+                    AppRowIcon(systemName: "person.crop.circle.fill", tint: AppTheme.success,
                                symbolSize: 18, frameSize: 34)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(current).font(.subheadline.weight(.medium)).lineLimit(1)
@@ -89,7 +89,7 @@ struct AppStoreAccountsView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.success)
                 }
                 .padding(.vertical, 2)
             }
@@ -128,7 +128,7 @@ struct AppStoreAccountsView: View {
             }
             ForEach(accounts, id: \.email) { a in
                 HStack(spacing: 12) {
-                    AppRowIcon(systemName: "person.fill", tint: .blue, symbolSize: 16, frameSize: 32)
+                    AppRowIcon(systemName: "person.fill", tint: AppTheme.categoryStore, symbolSize: 16, frameSize: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(a.email).font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary).lineLimit(1)
@@ -140,12 +140,12 @@ struct AppStoreAccountsView: View {
                         // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
                         // 字重原为 default（即 `.regular`）、底色 15% 用覆盖项钉住（`.compact` 默认 `.semibold` / 12%）.
                         SizePill(text: "需重新登录",
-                                 tint: .orange,
+                                 tint: AppTheme.pending,
                                  level: .compact,
                                  weight: .regular,
                                  fillOpacity: 0.15)
                     } else if a.email == current {
-                        Image(systemName: "checkmark").foregroundStyle(.green).font(.caption)
+                        Image(systemName: "checkmark").foregroundStyle(AppTheme.success).font(.caption)
                     }
                 }
                 .padding(.vertical, 2)

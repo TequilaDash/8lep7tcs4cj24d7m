@@ -471,7 +471,7 @@ def main():
     print("G5 无 `.borderedProminent` + `.tint(AppTheme.accent)` 实底按钮：OK")
     print("G6 无 `Color.blue.opacity(...)` 淡底：OK")
     print("G7 无 `BrandProminentButtonStyle` 全宽深色实底按钮：OK")
-    print("G8 多色板新增色自适应（8 模块色 / 4 表面层 / accentSoft / accentBorder）：OK")
+    print("G8 多色板新增色自适应（9 模块色 / 4 表面层 / accentSoft / accentBorder）：OK")
     print("G9 无 `.borderedProminent` + 写死蓝 `.tint(.blue)` 同链实底按钮：OK")
     print("命中：0")
     return 0
