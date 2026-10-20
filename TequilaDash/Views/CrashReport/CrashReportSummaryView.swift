@@ -137,7 +137,7 @@ struct CrashReportSummaryView: View {
                     CrashRowSeparator()
                     CrashFactRow(label: "指示符", value: indicator, wraps: true)
                 }
-                for reason in termination.reasons {
+                ForEach(Array(termination.reasons.enumerated()), id: \.offset) { _, reason in
                     CrashRowSeparator()
                     CrashFactRow(label: "描述", value: reason, wraps: true)
                 }

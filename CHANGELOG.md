@@ -1,4 +1,16 @@
 # Changelog
+## [0.3.714] - 2026-10-20
+
+### 修复
+
+- CrashReportSummaryView.terminationCard: ViewBuilder 内的 for reason in termination.reasons 改为 ForEach(Array(...enumerated()), id: \.offset). CI 报 closure containing control flow statement cannot be used with result builder ViewBuilder（v0.3.713 引入，本机 swiftc -parse 查不出）.
+
+### 校验
+
+- normalize_eol.py 与 swift_precommit_check.py（17 组）EXIT 0；WSL swiftc -parse 该文件 EXIT 0.
+- 真编译以 CI 判决为准.
+
+
 ## [0.3.713] - 2026-10-20
 
 ### 新增
