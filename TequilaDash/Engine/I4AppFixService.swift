@@ -82,6 +82,8 @@ enum I4AppFixService {
         case writeTimedOut(String, TimeInterval)
         /// 写后读回时设备上不存在该文件 —— 写入未生效，不静默.
         case readBackMissing(String)
+        /// 点查元数据失败（隧道断开 / 权限 / 服务不可用）—— 与「设备上不存在」是两种事实，不静默.
+        case statUnreadable(String, String)
         /// plist 构造失败.
         case plistBuildFailed(String)
 
@@ -95,6 +97,8 @@ enum I4AppFixService {
                 return "写入 \(path) 超时（\(Int(seconds)) 秒），已放弃等待."
             case .readBackMissing(let path):
                 return "写后读回失败：设备上不存在 \(path)，写入未生效."
+            case .statUnreadable(let path, let reason):
+                return "读不出 \(path) 的元数据（不代表该文件不存在）：\(reason)."
             case .plistBuildFailed(let reason):
                 return "构造 i4tool2.acc plist 失败：\(reason)"
             }
@@ -202,11 +206,23 @@ enum I4AppFixService {
     // MARK: - ② 读回设备上现有的 i4tool2.acc
 
     /// 读设备上现有的 `/iTunes_Control/iTunes/i4tool2.acc` 并解析.
-    /// 文件不存在返回 `nil`（不是错误）；读失败（隧道/权限）**抛错**，不静默.
+    ///
+    /// ## `nil` 的语义（严格限定）
+    /// 只有「stat 成功且确认该路径不存在」才返回 `nil` —— 即设备**如实回答**了「没有这个文件」.
+    /// 其余读不出元数据的情形（隧道断开 / 权限 / 服务不可用）**抛错**，不折成 `nil`：
+    /// `statFile` 对「不存在」与「读不出」都返回错误，二者由 `StatResult.unreadable` 区分
+    /// （判据见 `AFCService.statFile`）. 读文件本身失败同样抛错（`AFCService.readFile` 原样上抛）.
     static func readExistingAcc() throws -> AccContent? {
         // 先点查存在性：`statFile` 是单条 `afc_get_file_info`，不受 AFC 根沙盒挡住（见 AFCService 注释）.
         let stat = try AFCService.shared.batch { client in
             AFCService.statFile(client: client, path: accAFCPath)
+        }
+        // 读不出元数据 ⇒ 抛真实原因. 旧实现此处直接 return nil，
+        // 写后读回分支于是抛出 readBackMissing「设备上不存在」，把隧道/权限原因换成了不存在结论.
+        if stat.unreadable {
+            LoginLogger.shared.log("[i4修复] 读不出 \(accAFCPath) 的元数据：\(stat.describe)",
+                                   category: .i4Fix)
+            throw I4FixError.statUnreadable(accAFCPath, stat.describe)
         }
         guard stat.exists else {
             LoginLogger.shared.log("[i4修复] 设备上不存在 \(accAFCPath)（stat: \(stat.describe)）",
@@ -300,7 +316,8 @@ enum I4AppFixService {
     ///   - installedApps: 已安装应用列表，用于检测本机是否装了爱思代理 App（读者）.
     /// - Returns: `Report`（含读回内容与逐条事实）.
     /// - Throws: 身份读取失败、必填键缺失（`allowWrite == true` 时）、plist 构造失败、
-    ///   AFC 写入失败（3 次都失败）、写后读回失败. 失败**必抛**，绝不静默.
+    ///   AFC 写入失败（3 次都失败）、写后读回失败、读不出元数据（`statUnreadable`）.
+    ///   失败**必抛**，绝不静默.
     /// - Note: 可取消 —— 每次尝试前与重试间隔前检查 `Task.isCancelled`，取消时抛 `CancellationError`.
     static func repair(allowWrite: Bool = true,
                        installedApps: [InstalledApp] = []) async throws -> Report {

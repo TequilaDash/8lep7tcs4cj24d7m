@@ -411,6 +411,12 @@ final class AFCService {
         let ifmt: String?
         let linkTarget: String?
         let describe: String
+        /// 元数据读不出（隧道断开 / 权限 / 服务不可用）时为 true.
+        ///
+        /// 「不存在」与「读不出」是两种事实：afc_get_file_info 对二者都返回错误，
+        /// 旧实现把两种都折成 exists=false ⇒ 调用方无法区分.
+        /// 判据：exists=false 且 unreadable=false 才是「确认不存在」.
+        let unreadable: Bool
     }
 
     /// 查一条路径的元数据（`afc_get_file_info`）.
@@ -432,9 +438,15 @@ final class AFCService {
             let code = e.pointee.code
             let message = e.pointee.message.map { String(cString: $0) } ?? ""
             idevice_error_free(e)
+            // 「确认不存在」的判据沿用全仓既有口径（SSHFileProvider.ffiError：NoSuchFile / NotFound）.
+            // Rust 侧 message 是 IdeviceError 的 Debug 名，对象不存在时为 Afc(ObjectNotFound)（实测 code=106）；
+            // 其余（PermDenied、连接已断、服务不可用）都是「读不出」，不是「不存在」.
+            let confirmedAbsent = message.contains("NoSuchFile") || message.contains("NotFound")
+            let reason = message.isEmpty ? "code=\(code)" : "\(message) code=\(code)"
             return StatResult(exists: false, size: 0, isDirectory: false,
                               ifmt: nil, linkTarget: nil,
-                              describe: "失败 code=\(code) \(message)")
+                              describe: (confirmedAbsent ? "不存在 " : "失败 ") + reason,
+                              unreadable: !confirmedAbsent)
         }
         let ifmt = info.st_ifmt.map { String(cString: $0) }
         let linkTarget = info.st_link_target.map { String(cString: $0) }
@@ -445,7 +457,8 @@ final class AFCService {
         if let linkTarget { text += " st_link_target=\(linkTarget)" }
         return StatResult(exists: true, size: size,
                           isDirectory: ifmt == "S_IFDIR", ifmt: ifmt,
-                          linkTarget: linkTarget, describe: text)
+                          linkTarget: linkTarget, describe: text,
+                          unreadable: false)
     }
 
     static func readFile(client: OpaquePointer, path: String) throws -> Data {

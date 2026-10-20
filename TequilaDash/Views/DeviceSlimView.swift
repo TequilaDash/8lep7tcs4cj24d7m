@@ -69,6 +69,8 @@ struct DeviceSlimView: View {
     /// 源里确认缺失的款数（用来决定要不要显示「重新检测」）
     private var missingSourceCount: Int { bigAppItems.filter { $0.sourceAvailable == false }.count }
     private var unknownSourceCount: Int { bigAppItems.filter { $0.sourceAvailable == nil }.count }
+    /// v0.3.708：文档大小**未量到**的款数（`docSize` 按 0 占位，不是真的 0）.
+    private var docUnknownCount: Int { bigAppItems.filter { !$0.docSizeKnown }.count }
     private var reinstallDocBytes: Int64 {
         reinstallTargets.reduce(0) { $0 + $1.docSize }
     }
@@ -329,6 +331,11 @@ struct DeviceSlimView: View {
         } footer: {
             if !group.items.isEmpty, group.kind == .bigApps {
                 Text(bigAppsFooter).font(.caption2)
+                // v0.3.708：**独立的说明行**，不并进上面那句 —— 上面那句已被源可用性
+                // 占了三个分号分支，把文档未知也塞进去会让两种原因混成一句.
+                if let docUnknownNote {
+                    Text(docUnknownNote).font(.caption2).foregroundStyle(.orange)
+                }
             }
         }
     }
@@ -338,6 +345,16 @@ struct DeviceSlimView: View {
         if missingSourceCount > 0 { text += "；\(missingSourceCount) 款源里没有包" }
         if unknownSourceCount > 0 { text += "；\(unknownSourceCount) 款未检测成功" }
         return text
+    }
+
+    /// v0.3.708：文档大小未量到的说明（nil = 全部已量到）.
+    ///
+    /// 这些款是按「文档大小未知」收进列表的：它们可能本来不到 500 MB，
+    /// 也可能文档很重、只是本轮没量到 —— 数字栏显示「文档 —」，这里给出原因.
+    private var docUnknownNote: String? {
+        docUnknownCount > 0
+            ? "\(docUnknownCount) 款文档大小未量到，按「文档 —」显示，未计入应用大小阈值判定"
+            : nil
     }
 
     private func groupHeader(_ group: DeviceSlimService.Group) -> some View {
@@ -399,7 +416,10 @@ struct DeviceSlimView: View {
                     HStack(spacing: 6) {
                         Text("应用 \(DeviceSlimService.formatBytes(item.appSize))")
                         Text("·")
-                        Text("文档 \(DeviceSlimService.formatBytes(item.docSize))")
+                        // v0.3.708：未量到时显示「文档未量到」，不把占位 0 显示成 0.00 B.
+                        Text(item.docSizeKnown
+                             ? "文档 \(DeviceSlimService.formatBytes(item.docSize))"
+                             : "文档未量到")
                         if item.sourceAvailable == false {
                             Text("资源缺失无法重装").foregroundStyle(.orange)
                         } else if probingAvailability && item.sourceAvailable == nil {
@@ -414,7 +434,9 @@ struct DeviceSlimView: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Text(DeviceSlimService.formatBytes(item.docSize))
+                Text(item.docSizeKnown
+                     ? DeviceSlimService.formatBytes(item.docSize)
+                     : "—")
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
             .padding(.vertical, 2)
@@ -451,8 +473,12 @@ struct DeviceSlimView: View {
             //   ② 「应用大小不可用」= 列表有数据、只是没有精确大小 →
             //      橙色提示（不是错误），「应用」分片偏小 / 「较大应用」判不出.
             switch DeviceSlimService.consumeAppReadIssue() {
-            case "应用读取超时":
-                errorText = "应用读取超时"
+            // v0.3.708：**不能精确匹配**. 产出端（DeviceSlimService.readAppsForSlim）
+            // 写的是「应用读取超时，请稍后重试」，精确等于「应用读取超时」永不成立 ——
+            // 超时会被下面 `case let note?` 折成橙色说明，丢掉这里专为它准备的
+            // 错误态 + 「重试」（AppErrorRow 的 retry 会 invalidateAppReadCache 后重扫）.
+            case let issue? where issue.hasPrefix("应用读取超时"):
+                errorText = issue
                 sizeNote = nil
             case let note?:
                 errorText = nil
@@ -463,15 +489,22 @@ struct DeviceSlimView: View {
             }
             // v0.3.705：空间占用数字本身的不完整说明（usage 落地后取走一次，避免跨轮残留）.
             // 与上面的 appRead 提示共用 sizeNote 通道，不另开状态.
-            if let usageIssue = DeviceSlimService.consumeUsageIssue() {
-                let count = usageIssue.components(separatedBy: " / ").count
-                let summary = "有 \(count) 类数据未能读取: \(usageIssue). 以下数字不含这些项."
-                sizeNote = sizeNote.map { $0 + " · " + summary } ?? summary
-            }
+            // v0.3.708：抽成方法 —— usageIssue 只在 apply 里取走一次（与刚落地的 usage /
+            // groups 同一份快照），runScan 不再重复消费，数字与说明同源.
+            mergeUsageIssueNote()
             await probeAvailability()
         } catch {
             errorText = "读取失败：\(error.localizedDescription)"
         }
+    }
+
+    /// v0.3.708：取走「本轮数字不完整」的原因并追加到 sizeNote（取走即清零，只显示最后一次）.
+    /// 只在 apply 里调用 —— 与刚落地的 usage / groups 同一份快照，数字与说明同源.
+    private func mergeUsageIssueNote() {
+        guard let usageIssue = DeviceSlimService.consumeUsageIssue() else { return }
+        let count = usageIssue.components(separatedBy: " / ").count
+        let summary = "有 \(count) 类数据未能读取: \(usageIssue). 以下数字不含这些项."
+        sizeNote = sizeNote.map { $0 + " · " + summary } ?? summary
     }
 
     /// 回填「免登录源里有没有」——决定「较大应用」能不能勾选重装（爱思同款判定）
@@ -525,6 +558,10 @@ struct DeviceSlimView: View {
         statusText = "正在扫描设备…"
         errorText = nil
         resultText = nil
+        // v0.3.708：**sizeNote 一起清** —— 它是「上一轮数字不完整」的说明，且会被下一轮
+        // apply 里的 usageIssue 追加（consumeUsageIssue 取走即清零，只保留最后一次）；
+        // 不清就会让旧快照的说明挂在新快照的数字旁边.
+        sizeNote = nil
         do {
             let snap = try await Task.detached(priority: .userInitiated) {
                 try DeviceSlimService.buildSnapshot { message in
@@ -536,6 +573,14 @@ struct DeviceSlimView: View {
             phase = .ready
             errorText = "扫描失败：\(error.localizedDescription)"
         }
+    }
+
+    /// v0.3.708：把「本次动作自身的失败」并到已有的 errorText 上，不覆盖.
+    /// 重扫会把上一句 errorText 清掉、也可能写入新的（扫描失败 / 应用读取超时），
+    /// 动作失败原因不能因此消失 —— 两句都留着.
+    private func mergeErrorText(_ text: String) -> String {
+        guard let existing = errorText, !existing.isEmpty else { return text }
+        return existing + "\n" + text
     }
 
     private func startClean() {
@@ -550,15 +595,20 @@ struct DeviceSlimView: View {
                         Task { @MainActor in statusText = "正在删除 \(index)/\(total)…" }
                     }
                 }.value
+                // v0.3.708：**先重扫，再把结果文案落地**. runScan 会清掉 resultText /
+                // errorText（避免上一轮的结果与这一轮的新数字并列），写在它前面的文案
+                // 在同一帧就被清掉 —— 用户做完瘦身一句确认都看不到.
+                await runScan(force: true)
+                phase = .finished
                 // v0.3.661：把「未能统计大小」单独说出来。
                 // 这些条目已删成功但删前量不到字节数，若并进 freed 会显示成「已释放 0 字节」，
                 // 用户会以为没生效而反复清理 —— 必须与「0 字节」区分开。
                 resultText = "本次共释放空间 \(DeviceSlimService.formatBytes(result.freed))"
                     + (result.unmeasured > 0 ? "（另有 \(result.unmeasured) 项已删除但未能统计大小）" : "")
                     + (result.failures.isEmpty ? "" : "（\(result.failures.count) 项失败）")
-                errorText = result.failures.isEmpty ? nil : result.failures.prefix(3).joined(separator: "\n")
-                phase = .finished
-                await runScan(force: true)
+                if !result.failures.isEmpty {
+                    errorText = mergeErrorText(result.failures.prefix(3).joined(separator: "\n"))
+                }
             } catch {
                 phase = .ready
                 errorText = "瘦身失败：\(error.localizedDescription)"
@@ -579,17 +629,26 @@ struct DeviceSlimView: View {
             let result = await DeviceSlimService.reinstall(items: targets) { @Sendable p in
                 Task { @MainActor in reinstallProgress = p }
             }
-            if result.ok.isEmpty && !result.failures.isEmpty {
-                errorText = result.failures.prefix(3).joined(separator: "\n")
-            } else {
-                resultText = "已重装 \(result.ok.count) 款"
-                    + (result.failures.isEmpty ? "" : "（\(result.failures.count) 款失败）")
-                errorText = result.failures.isEmpty ? nil : result.failures.prefix(3).joined(separator: "\n")
-            }
+            // v0.3.708：**先重扫，再落地文案**（同 startClean）—— 写在 runScan 前面的
+            // resultText / errorText 会被它清掉.
             reinstallSelection.removeAll()
             reinstallProgress = nil
-            phase = .finished
             await runScan(force: true)
+            phase = .finished
+            // v0.3.708（R8）：**卸载成功、装回失败**的款单独说 —— 它们此刻已经不在设备上，
+            // 与「源里没有包」「安装包不可用」（原应用仍在）不是同一种后果：用户要的是
+            // 「手动重装」，不是「重试」.
+            let gone = result.uninstalledOnly
+            let failed = result.failures
+            if result.ok.isEmpty && !failed.isEmpty && gone.isEmpty {
+                errorText = mergeErrorText(failed.prefix(3).joined(separator: "\n"))
+            } else {
+                resultText = "已重装 \(result.ok.count) 款"
+                    + (gone.isEmpty ? "" : "；\(gone.count) 款已卸载但未能装回（需手动重装）")
+                    + (failed.isEmpty ? "" : "（\(failed.count) 款失败）")
+                let detail = (failed + gone).prefix(3).joined(separator: "\n")
+                if !detail.isEmpty { errorText = mergeErrorText(detail) }
+            }
         }
     }
 }

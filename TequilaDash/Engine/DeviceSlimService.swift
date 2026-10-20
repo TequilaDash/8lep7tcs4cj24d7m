@@ -91,6 +91,13 @@ enum DeviceSlimService {
         // 较大应用专用
         var appSize: Int64 = 0
         var docSize: Int64 = 0
+        /// v0.3.708：`docSize` 是**量到的**还是**按 0 占位**的.
+        ///
+        /// 旧写法把「还没量到 / 量失败」一律按 0 计入 `total`，于是文档很重的应用
+        ///（微信、游戏）会被 `total > bigAppThreshold` 静默跳过；而进了列表的那批
+        /// 又把文档显示成一个确定的 `0.00 B` —— 两者在界面上都无法分辨.
+        /// false = 本轮未量到：界面显示「文档 —」，且不参与阈值跳过判定.
+        var docSizeKnown: Bool = true
         var version: String = ""
         var ipaFileName: String?   // 免登录下载库里已有的包（nil = 本地没有）
         /// 免登录源里能不能下到（nil = 还没探测）—— 恢复爱思的「资源缺失无法重装」判定
@@ -120,6 +127,12 @@ enum DeviceSlimService {
     struct ReinstallResult {
         var ok: [String] = []
         var failures: [String] = []
+        /// v0.3.708：**卸载已成功、装回失败**的应用.
+        ///
+        /// 与 `failures` 分开：这些应用此刻**已经不在设备上**（`UninstallService.uninstall`
+        /// 的 non-throwing return 即卸载成功），与「源里没找到包」「安装包不可用」
+        ///（设备上原应用仍在）的自救动作完全不同 —— 用户必须手动重装.
+        var uninstalledOnly: [String] = []
     }
 
     /// 重装阶段（进度条文案）
@@ -253,14 +266,16 @@ enum DeviceSlimService {
         return snap
     }
 
-    /// v0.3.694：**扫描上限**（防性能悬崖）. 本函数从 "/" 穷举，每访问一个目录就是
-    /// 一次 AFCService.listDirectory —— 设备上目录上万时会把 AFC 通道长时间占满，
-    /// 「设备瘦身」页一直转圈，别的功能也拿不到通道；而旧实现**没有任何上限**，
-    /// 顶不顶得住完全取决于设备实际目录数（事先不可知）.
-    /// 现在给「已展开目录数」和「深度」各设一个远高于真实用量、但能兜住的硬上限；
-    /// 触顶不静默截断，而是记数并让界面标注「本轮数字只是下界」.
-    private static let snapshotMaxDepth = 64
-    private static let snapshotMaxDirectories = 20_000
+    /// **扫描上限**（v0.3.694 引入，2026-10-20 按用户批复核改为不设限）.
+    /// 本函数从 "/" 穷举，每访问一个目录就是一次 AFCService.listDirectory.
+    /// v0.3.694 曾给「已展开目录数」和「深度」设硬上限；用户审批 3/4 驳回，
+    /// 现两个常量均为 Int.max（等于不设限）. 触顶代码路径与 limitSkipped 计数保留，
+    /// 真机若出现性能问题再议.
+    // 用户 2026-10-20 驳回深度上限（面板审批 3/4）：改回 Int.max（不设限）. 
+    private static let snapshotMaxDepth = Int.max
+    // 用户 2026-10-20 驳回目录数上限（面板审批 3/4）：上限改回 Int.max（不设限），
+    // 触顶路径与 limitSkipped 计数保留，真机若出现性能问题再议.
+    private static let snapshotMaxDirectories = Int.max
 
     /// **单次遍历**媒体分区：同时算出空间占用各分区、缓存项、临时项、日志项.
     static func buildSnapshot(progress: ((String) -> Void)? = nil) throws -> Snapshot {
@@ -930,9 +945,14 @@ enum DeviceSlimService {
             // 现在把"文档大小未知"的应用条数写进日志，让漏判可被看见.
             let measuredDoc = app.docSize ?? cachedDocSize(app.bundleId)
             let docSize = measuredDoc ?? 0
-            if measuredDoc == nil { unmeasuredDocCount += 1 }
+            let docSizeKnown = measuredDoc != nil
+            if !docSizeKnown { unmeasuredDocCount += 1 }
             let total = appSize + docSize
-            guard total > bigAppThreshold else { continue }
+            // v0.3.708：**文档大小未知的应用不参与阈值跳过判定**.
+            // 未知时 `total` 只是下界（= 应用本体），照旧 `guard total > 阈值` 会把
+            // 文档很重的应用（微信、游戏）静默跳过 —— 上面那行注释指的正是它.
+            // 现在未知的一律先收进候选，由 `docSizeKnown` 让界面把「文档」显示成「—」.
+            if docSizeKnown, total <= bigAppThreshold { continue }
             var available: Bool? = nil
             if byBundle[app.bundleId] != nil {
                 available = true
@@ -941,7 +961,8 @@ enum DeviceSlimService {
             }
             out.append(Item(id: app.bundleId, name: app.name,
                             detail: nil, bytes: total, kind: .bigApps, deletable: false,
-                            appSize: appSize, docSize: docSize, version: app.version,
+                            appSize: appSize, docSize: docSize, docSizeKnown: docSizeKnown,
+                            version: app.version,
                             ipaFileName: byBundle[app.bundleId]?.fileName,
                             sourceAvailable: available,
                             isRisky: riskyBundleIds.contains(app.bundleId)))
@@ -1085,12 +1106,22 @@ enum DeviceSlimService {
                 // ② 卸载 → 装回
                 report(.installing, 0.6)
                 try UninstallService.shared.uninstall(bundleId: item.id)
-                try await AppStoreInstallService.installLocalIPA(
-                    localPath,
-                    progress: { p in
-                        DispatchQueue.main.async { report(.installing, 0.6 + p * 0.4) }
-                    },
-                    onLog: { LoginLogger.shared.log("[瘦身] \($0)", category: .i4Store) })
+                // v0.3.708：卸载之后的失败**另记一类** —— 这一步成功即设备上已无此应用，
+                // 与上面「源里没有包」「安装包不可用」（原应用还在）不是同一种后果，
+                // 折进同一个 failures 会让用户以为只是「没装上」.
+                do {
+                    try await AppStoreInstallService.installLocalIPA(
+                        localPath,
+                        progress: { p in
+                            DispatchQueue.main.async { report(.installing, 0.6 + p * 0.4) }
+                        },
+                        onLog: { LoginLogger.shared.log("[瘦身] \($0)", category: .i4Store) })
+                } catch {
+                    result.uninstalledOnly.append(
+                        "\(item.name)：已卸载但未能装回（\(error.localizedDescription)）"
+                    )
+                    continue
+                }
                 IPADownloadLibrary.shared.markInstalled(fileName: fileName)
                 result.ok.append(item.name)
             } catch {

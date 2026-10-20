@@ -724,15 +724,18 @@ struct AppFileBrowserView: View {
             // Swift 6：OpaquePointer 非 Sendable → 经 AFCClientBox（@unchecked Sendable）传入
             // Task.detached（同一指针，沿用本文件既有模式，句柄线程归属不变）。
             let clientBox = AFCClientBox(raw: client)
-            let url = try await Task.detached(priority: .userInitiated) {
-                let tmp = FileManager.default.temporaryDirectory
-                let safeName = (entry.name as NSString).lastPathComponent
-                let dest = tmp.appendingPathComponent("share-\(UUID().uuidString.prefix(6))-\(safeName)")
-                try Self.downloadEntry(client: clientBox.raw, entry: entry, to: dest)
-                return dest
+            let tmp = FileManager.default.temporaryDirectory
+            let safeName = (entry.name as NSString).lastPathComponent
+            let dest = tmp.appendingPathComponent("share-\(UUID().uuidString.prefix(6))-\(safeName)")
+            // R14：detached 闭包只回传截断计数（Int，Sendable）；路径在主线程先算好。
+            let truncated = try await Task.detached(priority: .userInitiated) { () -> Int in
+                var count = 0
+                try Self.downloadEntry(client: clientBox.raw, entry: entry, to: dest, truncated: &count)
+                return count
             }.value
             guard sessionIsCurrent(epoch) else { return }
-            await MainActor.run { shareItems = ShareItems(urls: [url]) }
+            if truncated > 0 { showToast("\(truncated) 项因层级过深未导出.") }
+            await MainActor.run { shareItems = ShareItems(urls: [dest]) }
         } catch {
             guard sessionIsCurrent(epoch) else { return }
             showToast(error.localizedDescription)
@@ -742,10 +745,13 @@ struct AppFileBrowserView: View {
     ///
     /// Swift 6：本方法只做 FFI + FileManager，不碰任何 UI 状态，且只在 `shareEntry` 的
     /// `Task.detached` 里调用 → 显式 `nonisolated`，不被 View 的 MainActor 推断隔离。
-    private nonisolated static func downloadEntry(client: OpaquePointer, entry: AfcEntry, to dest: URL) throws {
+    ///
+    /// R14：`truncated` 回传触顶（层级 > 64）未导出的子树个数，调用方据此提示，不再静默计成功。
+    private nonisolated static func downloadEntry(client: OpaquePointer, entry: AfcEntry, to dest: URL,
+                                                  truncated: inout Int) throws {
         if entry.isDirectory {
             try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-            try recursiveDownload(client: client, srcDir: entry.path, toDir: dest)
+            try recursiveDownload(client: client, srcDir: entry.path, toDir: dest, truncated: &truncated)
         } else {
             try FileSharingService.downloadFileStreaming(afc: client, path: entry.path, to: dest) { _, _ in }
         }
@@ -764,7 +770,7 @@ struct AppFileBrowserView: View {
             guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
             let destDir = docs.appendingPathComponent("文件导出浏览", isDirectory: true)
             try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-            var ok = 0, failed = 0
+            var ok = 0, failed = 0, truncated = 0
             for (idx, entry) in picked.enumerated() {
                 guard sessionIsCurrent(epoch) else { break }
                 await MainActor.run {
@@ -775,7 +781,8 @@ struct AppFileBrowserView: View {
                 guard let client = currentClient(epoch) else { break }
                 do {
                     let dest = destDir.appendingPathComponent(entry.name)
-                    try Self.exportEntry(client: client, entry: entry, to: dest) { name, done, total in
+                    var skipped = 0
+                    try Self.exportEntry(client: client, entry: entry, to: dest, truncated: &skipped) { name, done, total in
                         Task { await MainActor.run {
                             guard sessionIsCurrent(epoch) else { return }
                             exportProgress = ExportProgress(name: name, done: done, total: total,
@@ -783,27 +790,31 @@ struct AppFileBrowserView: View {
                         }}
                     }
                     ok += 1
+                    truncated += skipped
                 } catch {
                     failed += 1
                 }
             }
-            let okR = ok, failR = failed
+            let okR = ok, failR = failed, truncR = truncated
             guard sessionIsCurrent(epoch) else { return }
             await MainActor.run {
                 exportProgress = nil
                 selectedPaths.removeAll()
-                showToast("已导出 \(okR) 项 → 文件导出浏览" + (failR > 0 ? "（\(failR) 项失败）" : ""))
+                showToast("已导出 \(okR) 项 → 文件导出浏览"
+                          + (failR > 0 ? "（\(failR) 项失败）" : "")
+                          + (truncR > 0 ? "（\(truncR) 项因层级过深未导出）" : ""))
             }
         }
     }
 
     /// 单条目导出（文件流式 / 文件夹递归流式），progress 回调（相对名, 已完成字节, 总字节）
     private static func exportEntry(client: OpaquePointer, entry: AfcEntry, to dest: URL,
+                                    truncated: inout Int,
                                     progress: @escaping (String, Int64, Int64) -> Void) throws {
         if entry.isDirectory {
             try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
             try recursiveExport(client: client, srcDir: entry.path, toDir: dest,
-                                prefix: entry.name, progress: progress)
+                                prefix: entry.name, truncated: &truncated, progress: progress)
         } else {
             try FileSharingService.downloadFileStreaming(afc: client, path: entry.path, to: dest) { done, total in
                 progress(entry.name, done, total)
@@ -812,16 +823,19 @@ struct AppFileBrowserView: View {
     }
 
     private static func recursiveExport(client: OpaquePointer, srcDir: String, toDir: URL, prefix: String,
+                                        truncated: inout Int,
                                         progress: @escaping (String, Int64, Int64) -> Void) throws {
         try recursiveExport(client: client, srcDir: srcDir, toDir: toDir, prefix: prefix,
-                            depth: 0, progress: progress)
+                            depth: 0, truncated: &truncated, progress: progress)
     }
 
     /// U-6：同签名重载带深度上限（上限 64，与 FileService.countTree 的 maxNodes 同为遍历保护）。
+    /// R14：触顶不再静默丢弃 —— 计一个 truncated（按被跳过的子树计），由调用方汇总进提示。
     private static func recursiveExport(client: OpaquePointer, srcDir: String, toDir: URL, prefix: String,
                                         depth: Int,
+                                        truncated: inout Int,
                                         progress: @escaping (String, Int64, Int64) -> Void) throws {
-        guard depth < 64 else { return }
+        guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
             let target = toDir.appendingPathComponent(item.name)
@@ -829,7 +843,7 @@ struct AppFileBrowserView: View {
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
                 try recursiveExport(client: client, srcDir: item.path, toDir: target,
-                                    prefix: rel, depth: depth + 1, progress: progress)
+                                    prefix: rel, depth: depth + 1, truncated: &truncated, progress: progress)
             } else {
                 try FileSharingService.downloadFileStreaming(afc: client, path: item.path, to: target) { done, total in
                     progress(rel, done, total)
@@ -840,20 +854,24 @@ struct AppFileBrowserView: View {
 
     /// 递归下载目录（保结构）
     /// Swift 6：只被 `downloadEntry`（已 nonisolated）调用 → 同步 nonisolated。
-    private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL) throws {
-        try recursiveDownload(client: client, srcDir: srcDir, toDir: toDir, depth: 0)
+    private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL,
+                                                      truncated: inout Int) throws {
+        try recursiveDownload(client: client, srcDir: srcDir, toDir: toDir, depth: 0, truncated: &truncated)
     }
 
     /// U-6：同签名重载带深度上限（上限 64）。
+    /// R14：触顶计一个 truncated 并回传，调用方据此提示（不再静默丢弃整棵子树）。
     private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL,
-                                                      depth: Int) throws {
-        guard depth < 64 else { return }
+                                                      depth: Int,
+                                                      truncated: inout Int) throws {
+        guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
             let target = toDir.appendingPathComponent(item.name)
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
-                try recursiveDownload(client: client, srcDir: item.path, toDir: target, depth: depth + 1)
+                try recursiveDownload(client: client, srcDir: item.path, toDir: target, depth: depth + 1,
+                                       truncated: &truncated)
             } else {
                 let data = try FileSharingService.downloadFile(afc: client, path: item.path)
                 try data.write(to: target)
