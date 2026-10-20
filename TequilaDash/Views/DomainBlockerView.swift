@@ -74,7 +74,7 @@ struct DomainBlockerView: View {
                         .autocorrectionDisabled()
                         .onSubmit { addCustomDomain() }
                     Button("添加") { addCustomDomain() }
-                        .buttonStyle(TintedButtonStyle())
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySettings))
                         .controlSize(.small)
                         .disabled(customInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 }

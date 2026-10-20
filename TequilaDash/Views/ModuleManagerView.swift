@@ -321,8 +321,7 @@ struct ModuleManagerView: View {
                             Label("WebUI", systemImage: "globe")
                                 .font(.footnote.weight(.medium))
                         }
-                        .buttonStyle(.bordered)
-                        .tint(AppTheme.categoryStore)
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryStore))
                     }
                     // v0.3.159：停止等模块功能全部由「执行」菜单（actions 声明）承载，
                     // 宿主不再内置停止按钮——动作语义完全由模块决定

@@ -31,10 +31,10 @@ struct PairingGuideCard: View {
             NavigationLink(destination: NavigationLazyView(PairingSetupView(viewModel: viewModel))) {
                 HStack(spacing: 8) {
                     Image(systemName: "key.horizontal")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppTheme.categoryDevice)
                     Text("去导入配对文件")
                         .font(.callout)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppTheme.categoryDevice)
                     Spacer()
                     if showChevron {
                         Image(systemName: "chevron.right")

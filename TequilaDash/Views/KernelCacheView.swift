@@ -67,9 +67,8 @@ struct KernelCacheView: View {
                             Label("下载当前系统 KernelCache", systemImage: "arrow.down.circle.fill")
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                     .controlSize(.small)
-                    .tint(AppTheme.accent)
                     .disabled(isRunning || selectedFirmware == nil)
                 }
                 .padding(.vertical, 2)

@@ -180,13 +180,14 @@ struct PendingRepairPage: View {
                                    subtitle: selectedSizeText,
                                    primaryTitle: "修补（\(selected.count)）",
                                    primaryDisabled: selected.isEmpty || busy,
+                                   primaryTint: AppTheme.categorySign,
                                    primaryAction: { alert = .batchRepair(count: selected.count) }) {
                         // 待修补页的「移除」= 仅从列表移除（移到 Imports/.removed/），不删安装包。
                         // 这里**不提供在线安装**：待修补的包还没有修补产物。
                         Button("移除（\(selected.count)）") {
                             alert = .remove(items: selectedPackages)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                         .disabled(selected.isEmpty || busy)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))

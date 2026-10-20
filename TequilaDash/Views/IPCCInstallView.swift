@@ -99,7 +99,7 @@ struct IPCCInstallView: View {
                                 detailRecord = record
                             } label: {
                                 Image(systemName: "doc.text.magnifyingglass")
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(AppTheme.accent)
                             }
                             .accessibilityLabel("查看日志")
                         }
@@ -139,7 +139,7 @@ struct IPCCInstallView: View {
                     }
                 }
                 .disabled(commCenterBusy)
-                .foregroundColor(.blue)
+                .foregroundColor(AppTheme.categoryDevice)
             } header: {
                 Text("蜂窝网络维护")
             } footer: {

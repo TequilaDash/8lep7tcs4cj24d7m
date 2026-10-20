@@ -29,6 +29,8 @@ struct BatchActionBar<Actions: View>: View {
     let subtitle: String?
     let primaryTitle: String
     let primaryDisabled: Bool
+    /// 主按钮 tint. 默认 AppTheme.accent；各页按模块色传入（v0.3.715）.
+    var primaryTint: Color = AppTheme.accent
     let primaryAction: () -> Void
     let actions: () -> Actions
 
@@ -36,12 +38,14 @@ struct BatchActionBar<Actions: View>: View {
          subtitle: String? = nil,
          primaryTitle: String,
          primaryDisabled: Bool = false,
+         primaryTint: Color = AppTheme.accent,
          primaryAction: @escaping () -> Void,
          @ViewBuilder actions: @escaping () -> Actions) {
         self.selectedCount = selectedCount
         self.subtitle = subtitle
         self.primaryTitle = primaryTitle
         self.primaryDisabled = primaryDisabled
+        self.primaryTint = primaryTint
         self.primaryAction = primaryAction
         self.actions = actions
     }
@@ -61,7 +65,7 @@ struct BatchActionBar<Actions: View>: View {
             actions()
             Button(primaryTitle, action: primaryAction)
                 .disabled(primaryDisabled)
-                .buttonStyle(TintedButtonStyle())
+                .buttonStyle(TintedButtonStyle(tint: primaryTint))
         }
         .padding()
         .padding(.bottom, 18)
@@ -76,11 +80,13 @@ extension BatchActionBar where Actions == EmptyView {
          subtitle: String? = nil,
          primaryTitle: String,
          primaryDisabled: Bool = false,
+         primaryTint: Color = AppTheme.accent,
          primaryAction: @escaping () -> Void) {
         self.selectedCount = selectedCount
         self.subtitle = subtitle
         self.primaryTitle = primaryTitle
         self.primaryDisabled = primaryDisabled
+        self.primaryTint = primaryTint
         self.primaryAction = primaryAction
         self.actions = { EmptyView() }
     }

@@ -41,9 +41,8 @@ struct SignedIPAInstallView: View {
                     } label: {
                         Label("选择已签名 IPA 文件", systemImage: "doc.badge.plus")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .controlSize(.small)
-                    .tint(AppTheme.categorySign)
                     .disabled(busy)
                 }
                 .padding(.vertical, 4)

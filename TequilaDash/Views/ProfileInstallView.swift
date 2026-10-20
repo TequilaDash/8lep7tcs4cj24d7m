@@ -69,9 +69,8 @@ struct ProfileInstallView: View {
                                 }
                             }
                             .disabled(busy)
-                            .buttonStyle(.bordered)
+                            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                             .controlSize(.small)
-                            .tint(AppTheme.accent)
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {

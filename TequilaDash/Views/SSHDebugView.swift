@@ -26,7 +26,7 @@ struct SSHDebugView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Label("首次使用请设置 SSH 密码", systemImage: "key.fill")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppTheme.categoryDevice)
                         SecureField("密码（至少 6 位）", text: $draftPassword)
                             .textFieldStyle(.roundedBorder)
                         SecureField("确认密码", text: $draftConfirm)
@@ -99,7 +99,7 @@ struct SSHDebugView: View {
                         Text("Debug 模式（随 App 启动）")
                     }
                 }
-                .tint(.blue)
+                .tint(AppTheme.switchOnTint)
                 .disabled(!service.canStart)
             } footer: {
                 Text("开启后每次启动 App 自动拉起 SSH 服务（延迟 1.5 秒避开启动高峰），无需手动启动，可随时无线连接排查日志.")
@@ -118,7 +118,7 @@ struct SSHDebugView: View {
                         Text(service.isRunning ? "停止 SSH 服务" : "启动 SSH 服务")
                     }
                 }
-                .tint(.blue)
+                .tint(AppTheme.categoryDevice)
                 .disabled(!service.canStart)
 
                 Button {

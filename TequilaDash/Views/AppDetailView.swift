@@ -350,7 +350,7 @@ private struct AppBackupRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
         }
         .padding(.vertical, 4)
     }

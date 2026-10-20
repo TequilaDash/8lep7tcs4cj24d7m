@@ -1,4 +1,25 @@
 # Changelog
+## [0.3.715] - 2026-10-20
+
+### 变更
+
+- 按钮按模块取色收尾：全仓 30 处 TintedButtonStyle 显式传 tint，移除 21 处 .borderedProminent / .buttonStyle(.bordered) 与 6 处 .tint(.blue) / .tint(AppTheme.accent) / .foregroundStyle(.white).
+- 取色口径：主行动按钮用该页模块色（AppModule.xxx.tint）；破坏性操作用 AppTheme.danger；不属任何功能模块的 App 级闸门保留 AppTheme.accent.
+- 归属：categorySign 14（证书 / 签名安装 / 批量修补与覆盖安装）、categoryDevice 8（配对 / 隧道 / 备份 / 存储 / 内核缓存 / 应用详情）、categoryAdvanced 4、categoryHealth 2、categoryClean 3、categoryStore 1、categoryDownload 1、categorySettings 1、categoryTreasure 2.
+- BatchActionBar（Views/Shared/BatchActionBar.swift）新增 var primaryTint: Color = AppTheme.accent，两个 init 各加同名参数，主按钮改 TintedButtonStyle(tint: primaryTint)；ImportedListPage / PendingRepairPage / RepairedListPage 三处传 categorySign.
+- I4StoreFreeRows.swift:424 爱思行「获取」胶囊由 AppTheme.accent 改 AppTheme.categoryDownload，与同列 NB 行 :54 同色.
+- DesignSystem.swift 硬规则 3 与模块色注释同步：主行动按钮 tint 取该页模块色，不再写死 AppTheme.accent.
+
+### 修复
+
+- CrashLogView.swift:446 scanSignatures 标 private nonisolated static func：它被 View 协议推断为 MainActor，却在 clusterCrashes() 的 DispatchQueue.global(qos: .userInitiated).async 里同步调用（v0.3.713 CI warning #ActorIsolatedCall）.
+- CrashLogView.swift:96-97 注释内两处中文句号改英文句点.
+- CrashLogService.swift 删除 analyze(data:fileName:)（32 行）：v0.3.713 崩溃分析改走 Engine/CrashReport 结构化解析后零调用点.
+
+### 校验
+
+- normalize_eol.py EXIT 0（34 文件与基线一致）· swift_precommit_check.py EXIT 0（17 组守卫，命中 0，扫描 331 个 .swift）· WSL /opt/swift-6.4.1/usr/bin/swiftc -parse 34 个改动 .swift FAIL_TOTAL=0.
+
 ## [0.3.714] - 2026-10-20
 
 ### 修复

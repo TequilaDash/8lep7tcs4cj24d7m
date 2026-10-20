@@ -42,7 +42,7 @@ struct AppleIDLoginSheet: View {
                                 }
                             } label: {
                                 Image(systemName: "clock.arrow.circlepath")
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(AppTheme.accent)
                             }
                         }
                     }
@@ -60,7 +60,7 @@ struct AppleIDLoginSheet: View {
                             showPassword.toggle()
                         } label: {
                             Image(systemName: showPassword ? "eye.slash" : "eye")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppTheme.accent)
                         }
                         .buttonStyle(.borderless)
                     }

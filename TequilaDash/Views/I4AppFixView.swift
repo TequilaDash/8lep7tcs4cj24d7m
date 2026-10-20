@@ -85,7 +85,7 @@ struct I4AppFixView: View {
                         .font(AppFont.subheadline)
                     Spacer()
                     Button("打开") { LocalDevVPN.openOrInstall() }
-                        .buttonStyle(TintedButtonStyle())
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                         .controlSize(.small)
                 }
             }

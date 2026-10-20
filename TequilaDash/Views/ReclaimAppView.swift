@@ -194,7 +194,7 @@ struct ReclaimAppView: View {
             Button("回收") {
                 vm.confirmReclaim = true
             }
-            .buttonStyle(TintedButtonStyle())
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryClean))
         }
         .padding()
         .background(.bar)

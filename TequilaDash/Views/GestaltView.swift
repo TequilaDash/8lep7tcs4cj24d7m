@@ -212,7 +212,7 @@ struct GestaltView: View {
                             Button("Load MobileGestalt") {
                                 model.load()
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryTreasure))
                         }
                         Text(model.statusMessage)
                             .font(.caption)
@@ -278,7 +278,7 @@ struct GestaltView: View {
                         Button("恢复") {
                             model.restore(from: url)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryTreasure))
                         .font(.caption)
                         Button(role: .destructive) {
                             try? FileManager.default.removeItem(at: url)

@@ -93,8 +93,8 @@ struct CrashLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                // v0.3.712（用户报）：非编辑态必须能看到「返回上一级目录」的向上箭头。
-                // 原先它在 else 分支里，与刷新按钮同槽，某些 iOS 版本会把第二个图标挤掉。
+                // v0.3.712（用户报）：非编辑态必须能看到「返回上一级目录」的向上箭头.
+                // 原先它在 else 分支里，与刷新按钮同槽，某些 iOS 版本会把第二个图标挤掉.
                 if isEditing {
                     Button("全选") { selectAll() }
                 } else {
@@ -232,7 +232,7 @@ struct CrashLogView: View {
                 Label("导出", systemImage: "square.and.arrow.down")
             }
             .disabled(selection.isEmpty || busy)
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySettings))
 
             Button(role: .destructive) {
                 confirmDelete = true
@@ -240,7 +240,7 @@ struct CrashLogView: View {
                 Label("删除", systemImage: "trash")
             }
             .disabled(selection.isEmpty || busy)
-            .buttonStyle(.bordered)
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.danger))
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -443,8 +443,8 @@ struct CrashLogView: View {
 
     /// 逐份「拉取 → 解析 → 取签名」（无 UI、无实例状态，后台队列调用）.
     /// 局部可变字典留在本函数内，不跨并发闭包.
-    private static func scanSignatures(_ targets: [CrashLogService.Entry],
-                                       progress: (Int, Int) -> Void) -> [String: String] {
+    private nonisolated static func scanSignatures(_ targets: [CrashLogService.Entry],
+                                        progress: (Int, Int) -> Void) -> [String: String] {
         let service = CrashLogService.shared
         var found: [String: String] = [:]
         for (offset, entry) in targets.enumerated() {

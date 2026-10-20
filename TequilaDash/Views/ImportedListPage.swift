@@ -169,6 +169,7 @@ struct ImportedListPage: View {
                                    subtitle: selectedSizeText,
                                    primaryTitle: "修补（\(selected.count)）",
                                    primaryDisabled: selected.isEmpty || busy,
+                                   primaryTint: AppTheme.categorySign,
                                    primaryAction: { alert = .batchRepair(count: selected.count) }) {
                         // 底栏批量条**不提供在线安装**：在线安装是单包 OTA 通道（`itms-services` 清单
                         // 一次只服务一个包），多选批量语义不成立 —— 它只在行内 `.swipeActions` 提供
@@ -178,7 +179,7 @@ struct ImportedListPage: View {
                         Button("删除（\(selected.count)）", role: .destructive) {
                             alert = .remove(items: selectedPackages)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: AppTheme.danger))
                         .disabled(selected.isEmpty || busy)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))

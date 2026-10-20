@@ -206,7 +206,7 @@ struct CertificateView: View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    AppRowIcon(systemName: "checkmark.seal.fill", tint: .blue, symbolSize: 20, frameSize: 40)
+                    AppRowIcon(systemName: "checkmark.seal.fill", tint: AppTheme.categorySign, symbolSize: 20, frameSize: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("证书管理")
                             .font(.headline)
@@ -301,7 +301,7 @@ struct CertificateView: View {
         Section {
             InfoActionCard(
                 icon: "lock.fill",
-                iconTint: .blue,
+                iconTint: AppTheme.categorySign,
                 title: "尚未登录",
                 message: "登录后可查看并吊销账号开发证书.登录需两步验证，凭据仅存本机钥匙串."
             )
@@ -314,7 +314,7 @@ struct CertificateView: View {
         Section {
             InfoActionCard(
                 icon: "checkmark.seal",
-                iconTint: .blue,
+                iconTint: AppTheme.categorySign,
                 title: "没有证书",
                 message: "这个 Apple ID 下没有可吊销的 iOS 开发证书."
             )
@@ -408,7 +408,7 @@ struct CertificateView: View {
             } label: {
                 Label("加入白名单", systemImage: "checkmark.seal")
             }
-            .tint(.blue)
+            .tint(AppTheme.accent)
         }
     }
 
@@ -432,7 +432,7 @@ struct CertificateView: View {
                 if selecting {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(isSelected ? Color.blue : Color.secondary)
+                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.unselected)
                         .onTapGesture {
                             if isSelected {
                                 selected.remove(cert.id)
@@ -444,7 +444,7 @@ struct CertificateView: View {
                 }
                 Image(systemName: "seal.fill")
                     .font(.title3)
-                    .foregroundStyle(cert.isExpired ? Color.orange : Color.blue)
+                    .foregroundStyle(cert.isExpired ? AppTheme.pending : AppTheme.success)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(cert.displayName)

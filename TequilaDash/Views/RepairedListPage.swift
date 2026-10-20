@@ -192,16 +192,17 @@ struct RepairedListPage: View {
                        subtitle: selectedSizeText,
                        primaryTitle: "覆盖安装（\(selected.count)）",
                        primaryDisabled: batchPrimaryDisabled,
+                       primaryTint: AppTheme.categorySign,
                        primaryAction: { runOverwriteInstall(selectedPackages) }) {
             HStack(spacing: 8) {
                 // 「删除安装包」：批量入口（左滑是单条入口）。破坏性操作，先二次确认。
                 Button("删除（\(selected.count)）", role: .destructive) {
                     pendingDelete = DeleteConfirm(items: selectedPackages)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.danger))
                 .disabled(selected.isEmpty || busy)
                 Button("导出（\(selected.count)）") { exportSelection() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .disabled(selected.isEmpty || busy)
             }
         }

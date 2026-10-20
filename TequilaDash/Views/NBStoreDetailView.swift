@@ -342,7 +342,7 @@ struct NBStoreDetailView: View {
                             .font(.caption.weight(.medium))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(job.canPause ? Color.blue : Color.secondary)
+                    .foregroundStyle(job.canPause ? AppTheme.categoryDownload : Color.secondary)
                     .disabled(!job.canPause)
 
                     Button {

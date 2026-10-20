@@ -118,7 +118,7 @@ struct ProcessManagerView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(.blue)
+                .tint(AppTheme.categoryDevice)
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
@@ -128,7 +128,7 @@ struct ProcessManagerView: View {
                     }
                 } label: {
                     Image(systemName: viewModel.memoryWatchEnabled ? "gauge.with.needle" : "gauge")
-                        .foregroundColor(viewModel.memoryWatchEnabled ? .blue : .secondary)
+                        .foregroundColor(viewModel.memoryWatchEnabled ? AppTheme.categoryDevice : .secondary)
                 }
                 .accessibilityLabel(viewModel.memoryWatchEnabled ? "关闭内存监控" : "开启内存监控")
             }
@@ -186,10 +186,10 @@ private struct ProcessRow: View {
                 Spacer()
                 Text(process.memoryDisplay ?? "—")
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(process.memoryDisplay != nil ? .white : .secondary)
+                    .foregroundColor(process.memoryDisplay != nil ? AppTheme.categoryDevice : .secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(process.memoryDisplay != nil ? Color.blue : Color.secondary.opacity(0.15)))
+                    .background(Capsule().fill(process.memoryDisplay != nil ? AppTheme.categoryDevice.opacity(0.12) : Color.secondary.opacity(0.15)))
                 Text("PID \(process.pid)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -213,9 +213,8 @@ private struct ProcessRow: View {
                             Image(systemName: ProcessControlAction.resume.systemImage)
                                 .font(.title3)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: ProcessControlAction.resume.tint))
                         .controlSize(.small)
-                        .tint(ProcessControlAction.resume.tint)
                         .labelStyle(.iconOnly)
                         .disabled(isBusy)
 
@@ -225,9 +224,8 @@ private struct ProcessRow: View {
                             Image(systemName: ProcessControlAction.pause.systemImage)
                                 .font(.title3)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: ProcessControlAction.pause.tint))
                         .controlSize(.small)
-                        .tint(ProcessControlAction.pause.tint)
                         .labelStyle(.iconOnly)
                         .disabled(isBusy)
 
@@ -242,9 +240,8 @@ private struct ProcessRow: View {
                                     .font(.title3)
                             }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TintedButtonStyle(tint: isConfirming ? AppTheme.success : ProcessControlAction.kill.tint))
                         .controlSize(.small)
-                        .tint(isConfirming ? .green : ProcessControlAction.kill.tint)
                         // 固定 .titleOnly：确认态 label 是 Label（只出文字「确认结束」），
                         // 非确认态 label 是 Image（labelStyle 对 Image 无效，照常显图标）.
                         // 不能写三元 `isConfirming ? .titleOnly : .iconOnly`——两种

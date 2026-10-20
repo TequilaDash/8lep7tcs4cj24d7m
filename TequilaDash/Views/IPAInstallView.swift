@@ -96,7 +96,7 @@ struct IPAInstallView: View {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        AppRowIcon(systemName: "arrow.down.app.fill", tint: .blue, symbolSize: 20, frameSize: 40)
+                        AppRowIcon(systemName: "arrow.down.app.fill", tint: AppTheme.categorySign, symbolSize: 20, frameSize: 40)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("IPA 侧载")
                                 .font(.headline)
@@ -180,7 +180,7 @@ struct IPAInstallView: View {
                 } else {
                     ForEach(savedIPAs) { item in
                         HStack(spacing: 12) {
-                            AppRowIcon(systemName: "shippingbox.fill", tint: .blue)
+                            AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.categoryDownload)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
                                     .font(.subheadline.weight(.medium))
@@ -275,7 +275,7 @@ struct IPAInstallView: View {
                         } label: {
                             // 图标 = 当前显示状态：eye=明文可见，eye.slash=已隐藏
                             Image(systemName: showPassword ? "eye" : "eye.slash")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppTheme.accent)
                         }
                         .buttonStyle(.borderless)
                     }

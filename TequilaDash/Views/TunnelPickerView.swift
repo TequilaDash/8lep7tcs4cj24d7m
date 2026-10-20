@@ -99,7 +99,7 @@ struct TunnelPickerView: View {
             Button(actionTitle(kind)) {
                 Task { await runAction(kind) }
             }
-            .buttonStyle(TintedButtonStyle())
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
             // 动作仍按可用性门控：能选中，但不假装能开启.
             .disabled(!avail.isAvailable)
         }

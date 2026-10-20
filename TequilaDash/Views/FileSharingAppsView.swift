@@ -236,7 +236,7 @@ struct FileSharingAppsView: View {
                 // v0.3.363：尺寸拆成两行，给每个胶囊整行宽度 → 文本 2 行换行，不出现省略号
                 HStack(spacing: 5) {
                     if !app.version.isEmpty {
-                        tappableCapsule("v\(app.version)", tint: .blue, app: app)
+                        tappableCapsule("v\(app.version)", tint: AppTheme.accent, app: app)
                     }
                     tappableCapsule("应用 \(FileSharingService.formatMB(app.appSize))", tint: .green, app: app)
                 }
@@ -246,7 +246,7 @@ struct FileSharingAppsView: View {
             }
             Spacer()
             if app.supportsFileSharing {
-                Image(systemName: "doc.text.fill").foregroundStyle(.blue)
+                Image(systemName: "doc.text.fill").foregroundStyle(AppTheme.categoryDownload)
             } else {
                 Text("未开启")
                     .font(.caption2)
@@ -275,7 +275,7 @@ struct FileSharingAppsView: View {
     private func typeTint(_ app: FileSharingApp) -> Color {
         guard let type = typeClass(app) else { return .secondary }   // 识别中 → 灰
         switch type {
-        case .appStorePersonal: return .blue
+        case .appStorePersonal: return AppTheme.accent
         case .appStoreShared:   return .purple
         case .development:      return .green
         case .enterprise:       return .orange

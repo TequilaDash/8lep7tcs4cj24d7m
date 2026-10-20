@@ -180,38 +180,6 @@ final class CrashLogService {
             || lower.hasSuffix(".ips.ca.synced")
     }
 
-    /// Xrash 结构化解析：把拉取到的日志交给 ReportDecoder，返回
-    /// 「摘要字段 + 一句话解释」文本；空文件 / 非文本等解析失败返回 nil，
-    /// 调用方退回原文预览.
-    func analyze(data: Data, fileName: String) -> String? {
-        guard let report = try? ReportDecoder.decode(data, fileName: fileName) else { return nil }
-        let execPath = report.crash?.process.path
-        var row = ReportDecoder.summary(path: fileName, byteCount: UInt64(data.count), modified: Date())
-        row = ReportDecoder.enrich(row, header: report.header,
-                                   executablePath: (execPath?.isEmpty == true) ? nil : execPath)
-        var lines: [String] = []
-        lines.append("Process: \(row.processName)")
-        if let bugType = row.bugType {
-            lines.append("Kind: \(row.kind.rawValue) (bug_type \(bugType))")
-        } else {
-            lines.append("Kind: \(row.kind.rawValue)")
-        }
-        lines.append("Date: \(row.date.formatted(date: .abbreviated, time: .standard))")
-        lines.append("Size: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))")
-        if let bundleID = row.bundleID { lines.append("Bundle ID: \(bundleID)") }
-        if let version = row.appVersion { lines.append("Version: \(version)") }
-        if let os = row.osVersion { lines.append("OS: \(os)") }
-        if let incident = row.incidentID { lines.append("Incident: \(incident)") }
-        if row.isSynced { lines.append("Synced: yes") }
-        lines.append("")
-        if let crash = report.crash {
-            lines.append(ReportExplainer.explanation(for: crash))
-        } else if let panic = report.panic {
-            lines.append(panic.panicString.split(separator: "\n").first.map(String.init) ?? "")
-        }
-        return lines.joined(separator: "\n")
-    }
-
     /// 列出日志目录.`subdirectory` 为 nil 时列根目录
     /// （含 CrashReporter / DiagnosticLogs / Logs 等子目录，v0.2.127 起可进入）.
     /// 列表本身不做后缀过滤，`.ips` / `.ips.synced` / `.ips.ca.synced` 均按原样返回

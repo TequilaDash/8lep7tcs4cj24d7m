@@ -51,7 +51,7 @@ extension I4StoreFreeView {
                 Button("获取") {
                     Task { await startNBDownload(trackID: trackID, package: package) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
                 .controlSize(.small)
             }
         }
@@ -384,7 +384,7 @@ extension I4StoreFreeView {
                         .font(.body)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(job.canPause ? Color.blue : Color.secondary)
+                .foregroundStyle(job.canPause ? AppTheme.categoryDownload : Color.secondary)
                 .disabled(!job.canPause)
                 Button {
                     // 按**实际结果**提示：台账只读 / 文件被占用时删除被拒，不能默默当成功
@@ -421,8 +421,8 @@ extension I4StoreFreeView {
                 Text("获取")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(AppTheme.accent.opacity(0.14), in: Capsule())
-                    .foregroundStyle(AppTheme.accent)
+                    .background(AppTheme.categoryDownload.opacity(0.14), in: Capsule())
+                    .foregroundStyle(AppTheme.categoryDownload)
             }
             .buttonStyle(.plain)
         }

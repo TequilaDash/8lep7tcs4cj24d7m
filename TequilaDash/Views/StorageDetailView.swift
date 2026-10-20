@@ -173,7 +173,7 @@ struct StorageDetailView: View {
             } label: {
                 Text("重试").frame(maxWidth: .infinity)
             }
-            .buttonStyle(TintedButtonStyle())
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
         }
         .padding(AppMetrics.cardPadding)
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)

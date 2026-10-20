@@ -293,7 +293,7 @@ private struct BackupRow: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                     .controlSize(.regular)
                 case .appNotInstalled(_, let appName):
                     Label("\(appName) 未安装", systemImage: "app.badge.checkmark.fill")
@@ -590,7 +590,7 @@ struct RestoreView: View {
                             .font(.subheadline)
                             .multilineTextAlignment(.center)
                         Button("完成") { dismiss() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                     }
                     .padding()
                 case .failed(let message):
@@ -691,7 +691,7 @@ struct RestoreView: View {
                     Text("恢复备份")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                 .controlSize(.large)
                 .padding(.horizontal)
                 .disabled(

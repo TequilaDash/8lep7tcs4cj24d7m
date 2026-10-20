@@ -203,7 +203,7 @@ struct ImportView: View {
                     Button("导入") {
                         requestImport([url])
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
                     .controlSize(.small)
                     .disabled(importing)
                 }

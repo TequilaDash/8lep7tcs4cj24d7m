@@ -410,7 +410,7 @@ struct BatteryHealthView: View {
                     AppHaptics.tap()
                     Task { await load() }
                 }
-                .buttonStyle(TintedButtonStyle())
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryHealth))
                 .controlSize(.small)
             }
             .padding(AppMetrics.cardPadding)

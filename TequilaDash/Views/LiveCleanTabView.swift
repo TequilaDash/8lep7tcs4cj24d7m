@@ -248,7 +248,7 @@ struct LiveCleanTabView: View {
                 vm.confirmBatch = true
             }
             .disabled(vm.selected.isEmpty || bytes == 0)
-            .buttonStyle(TintedButtonStyle())
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryClean))
         }
         .padding()
         .padding(.bottom, 18)
