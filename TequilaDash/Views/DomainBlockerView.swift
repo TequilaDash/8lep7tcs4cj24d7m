@@ -20,8 +20,6 @@ struct DomainBlockerView: View {
     @State private var didGenerate = false
     @State private var shareTarget: ShareTarget?
     @State private var errorAlert: DomainBlockerAlert?
-    /// 明暗模式：卡片投影走 `AppShadow.card`（深色下为 .clear），需显式传入.
-    @Environment(\.colorScheme) private var colorScheme
 
     init() {
         let store = DomainBlockerStore.shared
@@ -186,19 +184,7 @@ struct DomainBlockerView: View {
             Button {
                 generate()
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.down.doc")
-                    Text("生成描述文件")
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.primary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(AppSurface.card)
-                        .appCardShadow(colorScheme)
-                )
+                AppCapsuleLabel(title: "生成描述文件", systemImage: "arrow.down.doc")
             }
         }
         .frame(maxWidth: .infinity)

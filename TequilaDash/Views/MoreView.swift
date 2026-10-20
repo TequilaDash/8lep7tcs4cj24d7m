@@ -10,9 +10,11 @@ import SwiftUI
 /// - **功能入口改 inset-grouped 卡片分组**（分段标题 + 连续圆角卡片），行 =
 ///   连续圆角图标底 + **17pt semibold** 标题 + **13pt footnote** 副标题 + 右 chevron
 ///   （走 `AppLayout.swift` 的共享 `AppNavRow`，与主页同一实现；分隔线全宽贯通）.
-/// - **强调色**统一到 `AppTheme.accent`（亮 `#005493` / 暗 `#76D6FF`，自适应）.
+/// - **强调色**统一到 `AppTheme.accent`（亮 `#005493` / 暗 `#76D6FF`，自适应）；分组取色走组级
+///   模块色（`AppModule.<模块>.tint`，健康模块无 case 故直取 `AppTheme.categoryHealth`；与
+///   `HomeView` 同口径：标题竖条 + 组内图标底同色）.
 /// - 图标 `.hierarchical` 分层渲染；工具栏动作补触觉 `AppHaptics.tap()`.
-/// - **布局**：分段标题统一用 `AppSectionHeader`（品牌色竖条 + 主标题）；「设备工具」6 项平级工具
+/// - **布局**：分段标题统一用 `AppSectionHeader`（组级模块色竖条 + 主标题）；「设备工具」6 项平级工具
 ///   改用 **2 列卡片网格**（`AppCardGrid` + `AppGridTile`，布局 B），其余分组仍走全宽行（布局 A）.
 ///
 /// ⚠️ 仅改样式：`isVisible(_:)` 热补丁过滤、`NavigationLazyView(item.destination)` 懒加载、
@@ -50,24 +52,25 @@ struct MoreView: View {
     }
 
     /// 分组定义（v0.3.29：22 个功能 → 7 个逻辑分区）.
-    /// 每项 =（分段标题, 分段 SF Symbol, 脚注, **是否网格**, 条目）.
+    /// 每项 =（分段标题, 分段 SF Symbol, 脚注, **是否网格**, 组级模块色, 条目）.
     ///
     /// `isGrid` 显式写在分组定义里，不再靠「标题字符串属于某个集合」反查 —— 改标题不会静默退回
     /// 全宽行，读定义处即知该组用哪种布局（布局 B 网格 / 布局 A 全宽行）.
-    private var sections: [(header: String, symbol: String, footer: String?, isGrid: Bool, items: [MoreItem])] {
+    private var sections: [(header: String, symbol: String, footer: String?, isGrid: Bool,
+                            tint: Color, items: [MoreItem])] {
         [
             // v0.3.412：漏洞利用 —— 置顶的普通导航行，点进去是二级选择页。
-            ("漏洞利用", "ladybug.fill", nil, false, [
+            ("漏洞利用", "ladybug.fill", nil, false, AppModule.advanced.tint, [
                 MoreItem("exploit", "ladybug.fill", "漏洞利用",
                          "选择使用的漏洞利用",
                          ExploitSelectionView()),
             ]),
-            ("配对文件", "key.horizontal", "重置 / 更换配对文件后重新导入", false, [
+            ("配对文件", "key.horizontal", "重置 / 更换配对文件后重新导入", false, AppModule.sign.tint, [
                 MoreItem("pairing-import", "key.horizontal", "配对文件导入",
                          "文件导入 / 剪贴板 / 无线配对",
                          PairingSetupView(viewModel: appList)),
             ]),
-            ("设备工具", "wrench.and.screwdriver", "需要配对文件 + LocalDevVPN 隧道", true, [
+            ("设备工具", "wrench.and.screwdriver", "需要配对文件 + LocalDevVPN 隧道", true, AppModule.device.tint, [
                 MoreItem("virtual-location", "location.fill", "虚拟定位",
                          "地图定位模拟 / 轨迹",
                          VirtualLocationView()),
@@ -87,7 +90,7 @@ struct MoreView: View {
                          "局域网无线连接诊断",
                          SSHDebugView()),
             ]),
-            ("应用安装", "arrow.down.app.fill", "签名、安装与下载", false, [
+            ("应用安装", "arrow.down.app.fill", "签名、安装与下载", false, AppModule.download.tint, [
                 MoreItem("ipa-install", "arrow.down.app.fill", "IPA 侧载",
                          "签名安装 IPA",
                          IPAInstallView()),
@@ -101,7 +104,7 @@ struct MoreView: View {
                          "写入其它侧载工具，复用配对身份",
                          PairingInstallView()),
             ]),
-            ("文件管理", "folder.fill", nil, false, [
+            ("文件管理", "folder.fill", nil, false, AppModule.clean.tint, [
                 MoreItem("file-browser", "folder.fill", "文件浏览器",
                          "浏览编辑设备文件",
                          FileBrowserRootView(appList: appList)),
@@ -109,7 +112,7 @@ struct MoreView: View {
                          "AFC 文件浏览 / 导入导出文件",
                          AFCBrowserView()),
             ]),
-            ("个性化", "paintbrush.fill", nil, false, [
+            ("个性化", "paintbrush.fill", nil, false, AppModule.treasure.tint, [
                 MoreItem("wallpaper", "photo.fill.on.rectangle.fill", "壁纸",
                          "导入壁纸包",
                          WallpaperView()),
@@ -120,7 +123,7 @@ struct MoreView: View {
                          "导入 / 导出铃声",
                          RingtonesView()),
             ]),
-            ("系统工具", "gearshape.2.fill", nil, false, [
+            ("系统工具", "gearshape.2.fill", nil, false, AppModule.settings.tint, [
                 MoreItem("app-expiry", "calendar.badge.clock", "预置描述管理",
                          "过期描述管理（.mobileprovision）",
                          AppExpiryView()),
@@ -146,7 +149,7 @@ struct MoreView: View {
                          "静音通话录音提示音",
                          CallRecordingToneView()),
             ]),
-            ("账户与安全", "lock.shield.fill", nil, false, [
+            ("账户与安全", "lock.shield.fill", nil, false, AppModule.store.tint, [
                 MoreItem("certificates", "checkmark.seal.fill", "证书管理",
                          "管理开发证书",
                          CertificateView()),
@@ -157,7 +160,7 @@ struct MoreView: View {
                          "提高内存上限",
                          IncreaseMemoryView()),
             ]),
-            ("数据与诊断", "chart.bar.doc.horizontal", nil, false, [
+            ("数据与诊断", "chart.bar.doc.horizontal", nil, false, AppTheme.categoryHealth, [
                 MoreItem("backups", "externaldrive.fill.badge.timemachine", "备份",
                          "备份恢复管理",
                          BackupsListView(appList: appList)),
@@ -250,21 +253,23 @@ struct MoreView: View {
 
     // MARK: - 分组渲染（两种布局：网格 / 全宽行）
 
-    /// 单个功能分组：分段标题（`AppSectionHeader`，带品牌色竖条）+ 内容 + 可选脚注.
+    /// 单个功能分组：分段标题（`AppSectionHeader`，带组级模块色竖条）+ 内容 + 可选脚注.
     /// 内容按分组自带的 `isGrid` 二选一：卡片网格（布局 B）或全宽行（布局 A）.
     /// 热补丁把整组都隐藏时不渲染该组（避免只剩一个空标题）.
     @ViewBuilder
-    private func moreSection(_ section: (header: String, symbol: String, footer: String?, isGrid: Bool, items: [MoreItem])) -> some View {
+    private func moreSection(_ section: (header: String, symbol: String, footer: String?, isGrid: Bool,
+                                         tint: Color, items: [MoreItem])) -> some View {
         let items = section.items.filter(isVisible)
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                AppSectionHeader(section.header, symbol: section.symbol)
+                AppSectionHeader(section.header, symbol: section.symbol, tint: section.tint)
                 if section.isGrid {
                     AppCardGrid(items: items, columns: 2) { item in
                         NavigationLink {
                             NavigationLazyView(item.destination)
                         } label: {
-                            AppGridTile(icon: item.icon, title: item.title, subtitle: item.subtitle)
+                            AppGridTile(icon: item.icon, title: item.title, subtitle: item.subtitle,
+                                        tint: section.tint)
                         }
                         .appPressable()
                     }
@@ -274,7 +279,8 @@ struct MoreView: View {
                             NavigationLink {
                                 NavigationLazyView(item.destination)
                             } label: {
-                                AppNavRow(icon: item.icon, title: item.title, subtitle: item.subtitle)
+                                AppNavRow(icon: item.icon, title: item.title,
+                                          subtitle: item.subtitle, tint: section.tint)
                             }
                             .buttonStyle(.plain)
                             // 末行不附分隔线（组尾）

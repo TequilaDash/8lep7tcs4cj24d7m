@@ -1,4 +1,18 @@
 # Changelog
+## [0.3.716] - 2026-10-20
+
+### 变更
+- `MoreView` 九个分组改走组级模块色：`sections` 元组新增 `tint` 字段，`AppSectionHeader` / `AppGridTile` / `AppNavRow` 三处消费，与 `HomeView` 同口径. 漏洞利用 `AppModule.advanced`、配对文件 `sign`、设备工具 `device`、应用安装 `download`、文件管理 `clean`、个性化 `treasure`、系统工具 `settings`、账户与安全 `store`、数据与诊断 `AppTheme.categoryHealth`（`AppModule` 无 `.health` case）.
+- `DomainBlockerView` 底部「生成描述文件」手写胶囊收编为 `AppCapsuleLabel`，并删掉该文件内已无其它用途的 `@Environment(\.colorScheme)`.
+
+### 校验
+- `normalize_eol.py` 与 `swift_precommit_check.py`（17 组守卫）EXIT 0；`swiftc -parse` 两个改动文件 rc=0、error 0.
+- 真编译以 CI 为准：元组新增字段与三处实参需类型匹配，`-parse` 不校验.
+
+### 订正（verify-715 核验产出）
+
+- v0.3.715 的「归属」行计数有误，实为本次新增 30 处显式 tint 的构成：categoryDevice 9、categorySign 4、categoryClean 3、categorySettings 2、categoryTreasure 2、categoryHealth 1、categoryStore 1、categoryDownload 1、AppTheme.danger 3、ProcessManagerView 三元 3、BatchActionBar primaryTint 1. 原文写的 categorySign 14 与 categoryAdvanced 4 是「全仓现存」计数（categoryAdvanced 四处全在 v0.3.713 既有），不属于本次改动. 取色动作本身无漏、无顶掉既有站点：父提交 35 + 本次 30 = 全仓 65. 代码未改，仅订正文案.
+
 ## [0.3.715] - 2026-10-20
 
 ### 变更
