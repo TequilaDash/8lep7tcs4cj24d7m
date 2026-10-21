@@ -244,7 +244,7 @@ struct TunnelHealthCheckView: View {
                                         // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.tiny` 档（caption2 + 6 / 1）；
                                         // 水平内边距 5（非档位默认 6）、字重 `.medium`、底色 15%（默认 12%）三项均用覆盖项钉住.
                                         SizePill(text: "P2P",
-                                                 tint: AppTheme.accent,
+                                                 tint: AppTheme.categorySettings,
                                                  level: .tiny,
                                                  horizontalPadding: 5,
                                                  weight: .medium,

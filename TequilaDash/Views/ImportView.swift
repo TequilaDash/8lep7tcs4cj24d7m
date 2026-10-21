@@ -146,7 +146,7 @@ struct ImportView: View {
         Section {
             HStack(spacing: 12) {
                 AppRowIcon(systemName: "square.and.arrow.down.on.square",
-                           tint: AppTheme.accent, symbolSize: 26, frameSize: 54)
+                           tint: AppTheme.categoryDownload, symbolSize: 26, frameSize: 54)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("共享转换")
                         .font(.title3.weight(.semibold))
@@ -203,7 +203,7 @@ struct ImportView: View {
                     Button("导入") {
                         requestImport([url])
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
                     .controlSize(.small)
                     .disabled(importing)
                 }
@@ -259,7 +259,7 @@ struct ImportView: View {
                 ImportedListPage()
             } label: {
                 entryRow(title: "已导入", count: packages.count,
-                         symbol: "tray.and.arrow.down", tint: AppTheme.accent)
+                         symbol: "tray.and.arrow.down", tint: AppTheme.categoryDownload)
             }
         } footer: {
             Text("点一行进入二级页：查看、选择、修补、移除.")

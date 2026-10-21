@@ -270,7 +270,7 @@ struct I4StoreFreeView: View {
                 IPADownloadManagerView(filterSource: [.i4Free, .niuwa, .nb])
             } label: {
                 HStack(spacing: 12) {
-                    AppRowIcon(systemName: "shippingbox.fill", tint: .blue,
+                    AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.categoryDownload,
                                symbolSize: 18, frameSize: 34)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("下载管理").font(.subheadline.weight(.medium))

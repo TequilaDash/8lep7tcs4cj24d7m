@@ -393,6 +393,7 @@ struct CustomRestoreSheet: View {
                     Section {
                         InfoActionCard(
                             icon: "app.dashed",
+                            iconTint: AppTheme.categoryDevice,
                             title: "未找到可恢复的目标应用",
                             message: "请到「更多 → 配对文件导入」导入配对文件并扫描到 LiveContainer."
                         )

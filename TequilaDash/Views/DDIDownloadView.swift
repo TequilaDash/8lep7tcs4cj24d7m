@@ -16,6 +16,7 @@ struct DDIDownloadView: View {
             Section {
                 InfoActionCard(
                     icon: "iphone.and.arrow.forward",
+                    iconTint: AppTheme.categoryDownload,
                     title: "开发者镜像",
                     message: "下载 Xcode 个性化 DDI 镜像（Image.dmg、BuildManifest.plist、TrustCache）到 TequilaDash 的 Documents/DDI 目录，完成后自动打包为 DMG.zip，文件可用于侧载调试工具挂载 DDI.",
                     actionTitle: state.isRunning ? "下载中…" : "重新下载",

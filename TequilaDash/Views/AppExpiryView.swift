@@ -201,7 +201,7 @@ struct AppExpiryView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Image(systemName: "app.fill")
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.categorySettings)
                 Text(entry.name)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -227,7 +227,7 @@ struct AppExpiryView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Image(systemName: "doc.badge.clock")
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.categorySettings)
                 Text(group.appName)
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.leading)

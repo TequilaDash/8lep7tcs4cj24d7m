@@ -29,7 +29,7 @@ struct PairingInstallView: View {
         List {
             Section {
                 HStack(spacing: 12) {
-                    AppRowIcon(systemName: "tray.and.arrow.down.fill", tint: .blue, symbolSize: 20, frameSize: 40)
+                    AppRowIcon(systemName: "tray.and.arrow.down.fill", tint: AppTheme.categoryDownload, symbolSize: 20, frameSize: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("配置导入")
                             .font(.headline)
@@ -96,7 +96,7 @@ struct PairingInstallView: View {
                 Section {
                     InfoActionCard(
                         icon: "questionmark.app.dashed",
-                        iconTint: .blue,
+                        iconTint: AppTheme.categoryDownload,
                         title: "未找到支持的应用",
                         message: "请先在设备上安装 SideStore、LiveContainer、Feather 或 StikDebug 等应用，再重新扫描."
                     )
@@ -140,7 +140,7 @@ struct PairingInstallView: View {
     private func targetRow(_ target: PairingInstallService.InstalledTarget) -> some View {
         let installing = installingID == target.id
         return HStack(spacing: 12) {
-            AppRowIcon(systemName: "app.dashed", tint: .blue)
+            AppRowIcon(systemName: "app.dashed", tint: AppTheme.categoryDownload)
             VStack(alignment: .leading, spacing: 2) {
                 Text(target.name)
                     .font(.subheadline.weight(.semibold))

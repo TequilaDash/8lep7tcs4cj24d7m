@@ -82,7 +82,7 @@ struct FileBrowserRootView: View {
 
         var body: some View {
             HStack(alignment: .center, spacing: 12) {
-                AppRowIcon(systemName: icon, tint: AppTheme.accent, symbolSize: 20, frameSize: 36)
+                AppRowIcon(systemName: icon, tint: AppTheme.categoryClean, symbolSize: 20, frameSize: 36)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)

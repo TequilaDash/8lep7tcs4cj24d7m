@@ -461,7 +461,7 @@ struct AppStoreView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                     // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                     SizePill(text: app.priceText == "免费" ? "获取" : app.priceText,
-                             tint: AppTheme.accent,
+                             tint: AppTheme.categoryStore,
                              level: .regular,
                              fillOpacity: 0.14)
                 }
@@ -498,7 +498,7 @@ struct AppStoreView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
                     // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                     SizePill(text: "已购",
-                             tint: AppTheme.accent,
+                             tint: AppTheme.categoryStore,
                              level: .compact,
                              fillOpacity: 0.14)
                 }
@@ -516,7 +516,7 @@ struct AppStoreView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                     // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                     SizePill(text: "下载",
-                             tint: AppTheme.accent,
+                             tint: AppTheme.categoryStore,
                              level: .regular,
                              fillOpacity: 0.14)
                 }

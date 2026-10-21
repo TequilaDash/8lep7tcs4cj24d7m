@@ -184,7 +184,7 @@ struct StorageDetailView: View {
     private func sectionCard<Content: View>(title: String, icon: String,
                                            @ViewBuilder _ body: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AppSectionHeader(title, symbol: icon)
+            AppSectionHeader(title, symbol: icon, tint: AppTheme.categoryDevice)
                 .padding(.bottom, 10)
             body()
         }

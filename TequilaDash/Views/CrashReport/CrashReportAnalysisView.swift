@@ -65,6 +65,7 @@ struct CrashReportAnalysisView: View {
         case .threads:
             if let crash = report.crash {
                 CrashSectionCard(title: "线程", systemImage: "point.3.connected.trianglepath.dotted",
+                                 tint: AppTheme.categorySettings,
                                  trailing: AnyView(CrashBadge(text: "\(crash.threads.count) 个",
                                                               level: .tiny))) {
                     CrashThreadsPanel(crash: crash)
@@ -82,12 +83,13 @@ struct CrashReportAnalysisView: View {
         case .images:
             if let crash = report.crash {
                 CrashSectionCard(title: "二进制镜像", systemImage: "square.stack.3d.up",
+                                 tint: AppTheme.categorySettings,
                                  trailing: AnyView(CrashBadge(text: "\(crash.images.count)",
                                                               level: .tiny))) {
                     CrashImagesPanel(images: crash.images)
                 }
                 if let cache = crash.sharedCache {
-                    CrashSectionCard(title: "共享缓存", systemImage: "square.stack") {
+                    CrashSectionCard(title: "共享缓存", systemImage: "square.stack", tint: AppTheme.categorySettings) {
                         VStack(alignment: .leading, spacing: AppSpacing.tight) {
                             CrashFactRow(label: "基址", value: CrashFormat.paddedHex(cache.base),
                                          monospaced: true)
@@ -105,11 +107,11 @@ struct CrashReportAnalysisView: View {
                     .foregroundStyle(.secondary)
             }
         case .classic:
-            CrashSectionCard(title: "经典崩溃报告", systemImage: "doc.plaintext") {
+            CrashSectionCard(title: "经典崩溃报告", systemImage: "doc.plaintext", tint: AppTheme.categorySettings) {
                 CrashMonoBlock(text: ReportRenderer.crashText(report))
             }
         case .raw:
-            CrashSectionCard(title: "原始文件", systemImage: "doc") {
+            CrashSectionCard(title: "原始文件", systemImage: "doc", tint: AppTheme.categorySettings) {
                 CrashMonoBlock(text: rawText)
             }
         }

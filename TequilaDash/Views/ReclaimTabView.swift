@@ -116,6 +116,7 @@ struct ReclaimTabView: View {
                 Section {
                     InfoActionCard(
                         icon: "internaldrive",
+                        iconTint: AppTheme.categoryClean,
                         title: "扫描应用缓存与临时文件",
                         message: "扫描会测量每个应用的缓存与临时文件占用.在你确认回收之前，不会删除任何内容.",
                         actionTitle: "立即扫描",
@@ -188,10 +189,10 @@ struct ReclaimTabView: View {
         return HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(AppTheme.accent.opacity(0.14))
+                    .fill(AppTheme.categoryClean.opacity(0.14))
                 Image(systemName: "leaf.arrow.circlepath")
                     .font(.system(size: 26))
-                    .foregroundColor(AppTheme.accent)
+                    .foregroundColor(AppTheme.categoryClean)
             }
             .frame(width: 50, height: 50)
             VStack(alignment: .leading, spacing: 3) {
@@ -200,7 +201,7 @@ struct ReclaimTabView: View {
                     .foregroundColor(.secondary)
                 Text(ReclaimService.formatBytes(total))
                     .font(.title2.bold())
-                    .foregroundColor(AppTheme.accent)
+                    .foregroundColor(AppTheme.categoryClean)
                 Text("来自 \(count) 个应用的安全缓存")
                     .font(.caption)
                     .foregroundColor(.secondary)

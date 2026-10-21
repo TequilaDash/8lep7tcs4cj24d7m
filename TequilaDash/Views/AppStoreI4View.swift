@@ -147,7 +147,7 @@ struct AppStoreI4View: View {
                             // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                             // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                             SizePill(text: "获取",
-                                     tint: AppTheme.accent,
+                                     tint: AppTheme.categoryStore,
                                      level: .regular,
                                      fillOpacity: 0.14)
                         }
@@ -314,7 +314,7 @@ struct I4SpecialAppsView: View {
                                 // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                                 // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                                 SizePill(text: "获取",
-                                         tint: AppTheme.accent,
+                                         tint: AppTheme.categoryStore,
                                          level: .regular,
                                          fillOpacity: 0.14)
                             }

@@ -153,7 +153,7 @@ struct CrashReportSummaryView: View {
     // MARK: Application Specific Information
 
     private func applicationInfoCard(_ lines: [String]) -> some View {
-        CrashSectionCard(title: "应用附加信息", systemImage: "text.append",
+        CrashSectionCard(title: "应用附加信息", systemImage: "text.append", tint: AppTheme.categorySettings,
                          trailing: AnyView(CrashBadge(text: "\(lines.count)", level: .tiny))) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
@@ -172,7 +172,7 @@ struct CrashReportSummaryView: View {
     // MARK: 回溯
 
     private func backtraceCard(_ frames: [Frame], images: [BinaryImage], title: String) -> some View {
-        CrashSectionCard(title: title, systemImage: "list.number",
+        CrashSectionCard(title: title, systemImage: "list.number", tint: AppTheme.categorySettings,
                          trailing: AnyView(CrashBadge(text: "\(frames.count) 帧", level: .tiny))) {
             CrashFrameList(frames: frames, images: images, startIndex: 0, limit: 12)
         }
@@ -203,7 +203,7 @@ struct CrashReportSummaryView: View {
     // MARK: 设备与进程
 
     private func deviceCard(_ crash: CrashReport) -> some View {
-        CrashSectionCard(title: "设备与进程", systemImage: "iphone") {
+        CrashSectionCard(title: "设备与进程", systemImage: "iphone", tint: AppTheme.categorySettings) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashFactRow(label: "机型",
                              value: crash.device.model ?? "—")
@@ -254,7 +254,7 @@ struct CrashReportSummaryView: View {
     // MARK: 镜像
 
     private func imagesCard(_ crash: CrashReport) -> some View {
-        CrashSectionCard(title: "二进制镜像", systemImage: "square.stack.3d.up",
+        CrashSectionCard(title: "二进制镜像", systemImage: "square.stack.3d.up", tint: AppTheme.categorySettings,
                          trailing: AnyView(CrashBadge(text: "\(crash.images.count)", level: .tiny))) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashFactRow(label: "数量", value: "\(crash.images.count)")
@@ -269,7 +269,7 @@ struct CrashReportSummaryView: View {
     }
 
     private func vmSummaryCard(_ summary: String) -> some View {
-        CrashSectionCard(title: "虚拟内存摘要", systemImage: "memory") {
+        CrashSectionCard(title: "虚拟内存摘要", systemImage: "memory", tint: AppTheme.categorySettings) {
             CrashMonoBlock(text: summary, lines: 8)
         }
     }
@@ -277,7 +277,7 @@ struct CrashReportSummaryView: View {
     // MARK: 签名
 
     private func signatureCard(_ crash: CrashReport) -> some View {
-        CrashSectionCard(title: "崩溃签名", systemImage: "number") {
+        CrashSectionCard(title: "崩溃签名", systemImage: "number", tint: AppTheme.categorySettings) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashMonoBlock(text: ReportExplainer.signature(of: crash), lines: 4)
                 Text("同签名的报告属同一缺陷，可在「聚类」中批量归组.")
@@ -291,7 +291,7 @@ struct CrashReportSummaryView: View {
     // MARK: 报告元数据
 
     private var factsCard: some View {
-        CrashSectionCard(title: "报告字段", systemImage: "info.circle") {
+        CrashSectionCard(title: "报告字段", systemImage: "info.circle", tint: AppTheme.categorySettings) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashFactRow(label: "Incident",
                              value: report.header.incidentID ?? "—", monospaced: true)

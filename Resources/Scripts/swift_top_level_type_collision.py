@@ -22,9 +22,24 @@ DECL = re.compile(
     r'(struct|class|enum|actor|protocol)\s+([A-Za-z_][A-Za-z0-9_]*)', re.M)
 
 
+# 一次性探针目录：仓库根下的 .tmp* / scratch / _build / .build 不参与普查。
+# 这些目录里的一次性 .swift 会声明顶层 AppTheme / AppSettingsRow 之类撞真身名字，
+# 让全员红对全仓误报（2026-10-21 实测）.
+SKIP_DIRS = {".build", "_build", "scratch"}
+
+
+
+def _skip(dirpath, root):
+    name = os.path.basename(dirpath)
+    if name in SKIP_DIRS or name.startswith(".tmp") or name.startswith("_tmp"):
+        return True
+    return os.path.abspath(dirpath) == os.path.abspath(root) and False
+
+
 def scan(root):
     owners = collections.defaultdict(list)
-    for dirpath, _dirs, files in os.walk(root):
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not _skip(os.path.join(dirpath, d), root)]
         for f in files:
             if not f.endswith(".swift"):
                 continue

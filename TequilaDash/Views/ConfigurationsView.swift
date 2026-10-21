@@ -468,7 +468,7 @@ struct ConfigurationsView: View {
             ForEach(SupervisedProfileStore.Profile.allCases) { profile in
                 NavigationLink(destination: supervisedDestination(for: profile)) {
                     HStack(spacing: 12) {
-                        AppRowIcon(systemName: profile.systemImage)
+                        AppRowIcon(systemName: profile.systemImage, tint: AppTheme.categoryHealth)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(profile.displayName)
                                 .font(.subheadline)

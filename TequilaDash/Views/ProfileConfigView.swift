@@ -176,7 +176,7 @@ struct ProfileConfigView: View {
                 HStack(spacing: 8) {
                     if selectionMode {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(isSelected ? .blue : .secondary)
+                            .foregroundStyle(isSelected ? AppTheme.accent : .secondary)
                     }
                     Text(p.name).font(.subheadline.weight(.medium))
                         .lineLimit(2)
@@ -192,7 +192,7 @@ struct ProfileConfigView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.tiny` 档（caption2 + 6 / 1）；
                     // 底色原为 10%（非档位默认 12%），用 `fillOpacity` 覆盖.
                     SizePill(text: p.isProvisioning ? "预置描述" : (p.type ?? "配置描述"),
-                             tint: AppTheme.accent,
+                             tint: AppTheme.categorySettings,
                              level: .tiny,
                              fillOpacity: 0.10)
                     if let team = p.teamName, !team.isEmpty {

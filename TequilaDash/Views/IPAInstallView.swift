@@ -96,7 +96,7 @@ struct IPAInstallView: View {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        AppRowIcon(systemName: "arrow.down.app.fill", tint: AppTheme.categorySign, symbolSize: 20, frameSize: 40)
+                        AppRowIcon(systemName: "arrow.down.app.fill", tint: AppTheme.categoryDownload, symbolSize: 20, frameSize: 40)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("IPA 侧载")
                                 .font(.headline)
@@ -158,7 +158,7 @@ struct IPAInstallView: View {
                             Text("下载")
                         }
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign))
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
                     .controlSize(.small)
                     .disabled(ipaLink.isEmpty || isRunning || isDownloading)
                 }

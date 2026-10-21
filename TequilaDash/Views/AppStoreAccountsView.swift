@@ -195,7 +195,7 @@ struct AppStoreAccountsView: View {
                     // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                     // 原竖直内边距 4（非档位默认 5）与字重 `.medium` 用覆盖项钉住，12% 底与档位默认一致.
                     SizePill(text: "重登",
-                             tint: AppTheme.accent,
+                             tint: AppTheme.categoryStore,
                              level: .regular,
                              verticalPadding: 4,
                              weight: .medium)

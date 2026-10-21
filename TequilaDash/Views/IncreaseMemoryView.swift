@@ -234,7 +234,7 @@ private struct AppRowView: View {
         HStack(spacing: 10) {
             Button(action: onToggleSelection) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .secondary)
+                    .foregroundColor(isSelected ? AppTheme.accent : .secondary)
                     .imageScale(.large)
             }
             .buttonStyle(.borderless)

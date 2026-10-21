@@ -433,7 +433,7 @@ struct NiuwaStoreDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(app.name).font(.headline).lineLimit(2)
                     HStack(spacing: 6) {
-                        if let v = app.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: .blue, horizontalPadding: 5) }
+                        if let v = app.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload, horizontalPadding: 5) }
                         PackageChip(text: region.title, tint: .orange, horizontalPadding: 5)
                     }
                 }

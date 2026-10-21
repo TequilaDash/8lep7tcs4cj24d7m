@@ -115,6 +115,7 @@ struct I4AppFixView: View {
         Section {
             InfoActionCard(
                 icon: "wrench.and.screwdriver.fill",
+                iconTint: AppTheme.categoryHealth,
                 title: "修复应用弹窗闪退",
                 message: "写入设备授权文件，修复爱思源应用的弹窗闪退.确认后才会写入，可随时重试.",
                 actionTitle: "开始修复",

@@ -199,7 +199,7 @@ struct PurchaseHistoryView: View {
                 // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                 // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
                 SizePill(text: "下载",
-                         tint: AppTheme.accent,
+                         tint: AppTheme.categoryStore,
                          level: .regular,
                          fillOpacity: 0.14)
             }
@@ -253,10 +253,10 @@ struct PurchaseHistoryView: View {
         let letter = String((app.name.isEmpty ? app.bundleId : app.name).prefix(1)).uppercased()
         return ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(AppTheme.accent.opacity(0.14))
+                .fill(AppTheme.categoryStore.opacity(0.14))
             Text(letter.isEmpty ? "?" : letter)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.categoryStore)
         }
         .frame(width: 36, height: 36)
     }

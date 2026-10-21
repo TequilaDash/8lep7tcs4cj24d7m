@@ -1,4 +1,27 @@
 # Changelog
+## [0.3.717] - 2026-10-21
+
+### 变更
+
+- 调用点显式传模块色，共 34 个 Views 文件：
+  - I4MobileInstallView 按块分色 14 处（设备信息 / 本机推荐 / IPA 来源 / 安装状态）
+  - TreasureBoxView 7 行入口逐行取模块色（Gestalt 百宝箱 / 图标清理 清洁 / 反激活 danger / 软件源 签名 / 爱思修复 健康 / 高级功能 高级 / 爱思移动端 下载）
+  - ReclaimTabView / ReclaimAppView 6 处 accent -> categoryClean；5 张模块主提示卡补 InfoActionCard iconTint
+  - StorageDetailView / LaunchAppsView / ConfigurationsView / DeviceInfoSections / FileBrowserRootView / ImportView / IPAInstallView / LimitsDisclaimer 共 14 处
+  - SizePill 10 处 accent -> 模块色（AppStore 族 categoryStore / 白名单 categorySign / 配置与 P2P categorySettings）
+  - 裸 systemBlue 11 处 -> categoryDownload（I4StoreFree 族 / IPADownload 族 / PairingInstall）
+  - CrashReport 分析页 8 张卡补 tint: categorySettings
+- AppExpiryView / ProfileConfigView / IncreaseMemoryView 的裸 .blue 统一为 AppTheme.accent
+
+### 基建
+
+- Resources/Scripts/swift_top_level_type_collision.py：普查跳过 .tmp*/_tmp*/scratch/_build/.build，避免并行期一次性探针文件撞名连坐全仓门禁
+- .gitignore：新增 /.tmp_*/ 与 /scratch/
+
+### 校验
+
+- normalize_eol EXIT 0；swift_precommit_check EXIT 0（17 组守卫，命中 0，扫 331 个 .swift）；WSL swiftc -parse 全部通过
+- CI 真编译为准：本机 -parse 查不出类型错与并发违例
 ## [0.3.716] - 2026-10-20
 
 ### 变更

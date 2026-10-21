@@ -151,7 +151,7 @@ struct ReclaimAppView: View {
         Section(header: Text("容器内容"), footer: Text("浏览或备份该应用的 Documents、Library 与 tmp.备份保存到「文件 → 我的iPhone → TequilaDash → Backups」，不含 Keychain.请先关闭 \(app.name) 以获得一致快照.")) {
             NavigationLink(destination: FileBrowserView(app: app)) {
                 Label("浏览文件", systemImage: "folder.fill")
-                    .foregroundColor(AppTheme.accent)
+                    .foregroundColor(AppTheme.categoryClean)
             }
             .disabled(!access.isGranted)
 
@@ -163,7 +163,7 @@ struct ReclaimAppView: View {
                     title: "\(app.name) · Bundle"
                 )) {
                     Label("浏览 Bundle", systemImage: "shippingbox.fill")
-                        .foregroundColor(AppTheme.accent)
+                        .foregroundColor(AppTheme.categoryClean)
                 }
                 .disabled(!access.isGranted)
             }
@@ -172,7 +172,7 @@ struct ReclaimAppView: View {
                 backup.start(app: app, isContainerApp: true, iconData: guestIcon)
             } label: {
                 Label("备份数据", systemImage: "externaldrive.fill.badge.plus")
-                    .foregroundColor(AppTheme.accent)
+                    .foregroundColor(AppTheme.categoryClean)
             }
             .disabled(!access.isGranted || backup.isBusy)
 

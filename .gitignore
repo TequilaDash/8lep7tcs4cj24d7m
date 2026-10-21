@@ -54,3 +54,5 @@ _fw_out/
 # 从 module-esc 仓库拷来）—— 不重复入库，只保留说明文件
 TequilaDash/Modules/*
 !TequilaDash/Modules/README.md
+/.tmp_*/
+/scratch/

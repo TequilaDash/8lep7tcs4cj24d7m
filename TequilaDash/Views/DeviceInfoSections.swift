@@ -128,7 +128,7 @@ struct DeviceInfoSectionCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: section.icon)
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.categorySettings)
                     .appSymbol()
                 Text(section.title).font(AppFont.headline)
             }
@@ -158,7 +158,7 @@ struct DeviceInfoTextCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.categorySettings)
                     .appSymbol()
                 Text(title).font(AppFont.headline)
             }
@@ -200,7 +200,7 @@ struct DeviceInfoRawCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "list.bullet.rectangle")
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.categorySettings)
                         .appSymbol()
                     Text("设备原始数据（\(values.count) 项）").font(AppFont.headline)
                 }
@@ -220,7 +220,7 @@ struct StorageDetailLinkCard: View {
             StorageDetailView()
         } label: {
             HStack(spacing: 12) {
-                AppRowIcon(systemName: "internaldrive.fill", tint: AppTheme.accent, symbolSize: 17, frameSize: 32)
+                AppRowIcon(systemName: "internaldrive.fill", tint: AppTheme.categoryDevice, symbolSize: 17, frameSize: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("硬盘详情").font(AppFont.subheadlineEmphasis)
                     Text("闪存颗粒 / 控制器 / 擦写参数").font(AppFont.footnote).foregroundStyle(.secondary)

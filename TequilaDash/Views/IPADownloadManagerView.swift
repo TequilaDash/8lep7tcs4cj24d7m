@@ -469,7 +469,7 @@ struct IPADownloadManagerView: View {
     private var summarySection: some View {
         Section {
             HStack(spacing: 12) {
-                AppRowIcon(systemName: "shippingbox.fill", tint: .blue, symbolSize: 20, frameSize: 40)
+                AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.categoryDownload, symbolSize: 20, frameSize: 40)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("本地安装包")
                         .font(AppFont.subheadlineEmphasis)

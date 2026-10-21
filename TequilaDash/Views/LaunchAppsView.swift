@@ -63,7 +63,8 @@ struct LaunchAppsView: View {
                 } else {
                     AppSectionHeader("全部应用",
                                      subtitle: "共 \(filteredApps.count) 个",
-                                     symbol: "app.grid.3x3")
+                                     symbol: "app.grid.3x3",
+                                     tint: AppModule.device.tint)
                     AppAdaptiveGrid(items: filteredApps, minimum: 92, spacing: 12) { app in
                         launchTile(app)
                     }

@@ -139,6 +139,7 @@ struct LiveCleanTabView: View {
                     Section {
                         InfoActionCard(
                             icon: "shippingbox",
+                            iconTint: AppTheme.categoryClean,
                             title: "扫描 LiveContainer",
                             message: "清理 LiveContainer 内安装的应用的缓存与临时文件.确认清理前不会删除任何内容.",
                             actionTitle: "扫描 LiveContainer",

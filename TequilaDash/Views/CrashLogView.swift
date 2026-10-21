@@ -322,7 +322,7 @@ struct CrashLogView: View {
     private func row(_ entry: CrashLogService.Entry) -> some View {
         HStack(spacing: 12) {
             Image(systemName: entry.isDirectory ? "folder.fill" : "doc.text.fill")
-                .foregroundColor(entry.isDirectory ? .blue : .secondary)
+                .foregroundColor(entry.isDirectory ? AppTheme.accent : .secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)

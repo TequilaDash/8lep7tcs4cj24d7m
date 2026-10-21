@@ -256,8 +256,7 @@ struct TreasureBoxView: View {
     /// 故本区**不套** `pageInset`（分隔线全宽），仅分组标题单独加 `pageInset` 与卡片左缘对齐；
     /// 标题与首行之间另加一条全宽 `AppHairline` 作组首规则.
     ///
-    /// ⚠️ `AppSettingsRow` 图标恒用 `AppTheme.accent`（统一蓝 `#005493` / `#76D6FF`），**不接**行级 tint ⇒ 原先
-    /// `trRecoverable` / `trDanger` / `trSuccess` 的语义着色统一为 accent（TRApp 设置行即单色图标）.
+    /// `AppSettingsRow` 自 v0.3.643 起接行级 `iconTint`（默认 `AppTheme.accent`），本区各行按自身语义传色.
     private var itemsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
@@ -275,53 +274,67 @@ struct TreasureBoxView: View {
             AppHairline()
             // v0.3.441：Gestalt 入口。右侧 chevron 表示「可进入」.
             AppSettingsRow(icon: "gearshape.2.fill", title: "Gestalt 编辑",
-                           keywords: ["查询 / 修改 MobileGestalt 键值（含备份）"]) {
-                AppHaptics.tap()
-                onOpenGestalt()
-            }
+                           keywords: ["查询 / 修改 MobileGestalt 键值（含备份）"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenGestalt()
+                           },
+                           iconTint: AppTheme.categoryTreasure)
             AppSettingsRow(icon: "trash.slash", title: "顽固图标清理",
-                           keywords: ["删除安装失败残留图标（含备份）"]) {
-                AppHaptics.tap()
-                onOpenIconCleanup()
-            }
+                           keywords: ["删除安装失败残留图标（含备份）"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenIconCleanup()
+                           },
+                           iconTint: AppTheme.categoryClean)
             // 反激活设备：不可逆操作，安全闸（激活锁检测 + 不可跳过确认）在 ActivationView 里.
             // 图标用 `bolt.slash`（不用黄色感叹号，项目铁律）.
             AppSettingsRow(icon: "bolt.slash", title: "反激活设备",
-                           keywords: ["回到激活界面（不可逆，需先关查找）"]) {
-                AppHaptics.tap()
-                onOpenDeactivate()
-            }
+                           keywords: ["回到激活界面（不可逆，需先关查找）"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenDeactivate()
+                           },
+                           iconTint: AppTheme.danger)
             // 软件源管理：添加 / 管理第三方软件源。进源列表页后，右上角另有「软件源下载管理」入口.
             AppSettingsRow(icon: "shippingbox.circle.fill", title: "软件源管理",
-                           keywords: ["添加 / 管理第三方软件源"]) {
-                AppHaptics.tap()
-                onOpenSignSource()
-            }
+                           keywords: ["添加 / 管理第三方软件源"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenSignSource()
+                           },
+                           iconTint: AppTheme.categorySign)
             // 爱思应用修复安装：把爱思 9.0 的「修复应用」入口移植过来.
             // 设备级一键修复（照爱思：无应用选择、无台账），经 AFC 写设备 i4tool2.acc + 读回校验，
             // 不含联网授权（详见 I4AppFixView 顶部注释）.
             AppSettingsRow(icon: "bandage.fill", title: "爱思应用修复安装",
-                           keywords: ["重写爱思授权凭据 · 仅爱思源应用"]) {
-                AppHaptics.tap()
-                onOpenI4Fix()
-            }
+                           keywords: ["重写爱思授权凭据 · 仅爱思源应用"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenI4Fix()
+                           },
+                           iconTint: AppTheme.categoryHealth)
             // 开启高级功能：把爱思「开启高级功能」从安装对话框里**拆出来**做成独立入口（用户原话
             // 「这个是单独一个功能」）。真写设备端爱思移动端沙盒的授权标记（8es1421dg.be），
             // pair.config / RTD.cfg 构造不出会如实说明（详见 I4AdvancedView / I4PairingService）.
             AppSettingsRow(icon: "lock.shield.fill", title: "开启高级功能",
-                           keywords: ["写爱思移动端沙盒的配对 / 授权文件"]) {
-                AppHaptics.tap()
-                onOpenI4Advanced()
-            }
+                           keywords: ["写爱思移动端沙盒的配对 / 授权文件"],
+                           action: {
+                               AppHaptics.tap()
+                               onOpenI4Advanced()
+                           },
+                           iconTint: AppTheme.categoryAdvanced)
             // 安装爱思移动端：把爱思 9.0 的「安装爱思移动端」对话框移植过来.
             // 内嵌 IPA 是 FairPlay 加密包（cryptid=1），装前有诚实提示（见 I4MobileInstallView）.
             // 末行不附发丝分隔（组尾）.
             AppSettingsRow(icon: "arrow.down.app.fill", title: "安装爱思移动端",
                            keywords: ["爱思 9.0 移动端安装向导（加密包，可能装不上）"],
-                           showsSeparator: false) {
-                AppHaptics.tap()
-                onOpenMobileInstall()
-            }
+                           showsSeparator: false,
+                           action: {
+                               AppHaptics.tap()
+                               onOpenMobileInstall()
+                           },
+                           iconTint: AppTheme.categoryDownload)
         }
     }
 }

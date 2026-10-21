@@ -454,7 +454,7 @@ struct CertificateView: View {
                             // Step 3 批 6-B：手写胶囊收编到共享 `SizePill` 的 `.compact` 档
                             // （caption2 + 6 / 2）。字重原为 `.bold`、底色原为 15%，均用覆盖项钉住.
                             SizePill(text: "白名单",
-                                     tint: AppTheme.accent,
+                                     tint: AppTheme.categorySign,
                                      level: .compact,
                                      weight: .bold,
                                      fillOpacity: 0.15)
