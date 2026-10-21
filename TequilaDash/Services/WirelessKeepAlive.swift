@@ -3,14 +3,14 @@
 //  TequilaDash
 //
 //  无线配对期间的后台保活调度器.
-//  组合静默音频与位置更新两种机制，并申请 beginBackgroundTask
-//  以延长 App 进入后台后的存活时间，避免 Bonjour 广播被系统回收.
+//  组合静默音频与位置更新，并申请 beginBackgroundTask
+//  延长后台存活时间，避免 Bonjour 广播被系统回收.
 //
 
 import UIKit
 
-// Swift 6：beginBackgroundTask 的到期回调是主线程闭包，且调用点（PairingSetupView）
-// 全部在主线程 —— 把整个类收敛到 @MainActor，self 不再跨隔离（修 sending 'self'）.
+// Swift 6：beginBackgroundTask 到期回调与调用点（PairingSetupView）均在主线程，
+// 整个类收敛到 @MainActor（修 sending 'self'）.
 @MainActor
 final class WirelessKeepAlive {
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid

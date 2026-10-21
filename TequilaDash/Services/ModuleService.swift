@@ -603,19 +603,19 @@ final class ModuleService {
 
         // 热补丁 / 二进制模块必须携带官方签名（signature.sig = 对 module.json 的 ed25519 签名 base64 文本）
         if module.isHotfixModule || module.isBinaryModule {
-            log?("- 热补丁/二进制模块：验证官方签名…")
+            log?("- 热补丁/二进制模块：验证官方签名")
             let sigB64 = extractedFiles[manifestDir + "signature.sig"]
                 .flatMap { String(data: $0, encoding: .utf8) }?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !sigB64.isEmpty else {
-                log?("- 签名文件查找 key：\(manifestDir)signature.sig")
+                log?("- 签名文件路径：\(manifestDir)signature.sig")
                 log?("- zip 内已知文件：\(extractedFiles.keys.sorted().joined(separator: ", "))")
                 log!("! 签名缺失")
-                throw ModuleError.badSpec("热补丁/二进制模块签名缺失——zip 内未找到 \(manifestDir)signature.sig")
+                throw ModuleError.badSpec("签名缺失：zip 内未找到 \(manifestDir)signature.sig")
             }
             guard HotfixService.verifySignature(manifestData: mData, signatureB64: sigB64) else {
-                log!("! 签名校验失败（签名文件存在但与官方公钥不匹配）")
-                throw ModuleError.badSpec("热补丁/二进制模块签名校验失败——仅接受 TequilaDash 官方签名")
+                log!("! 签名校验失败（与官方公钥不匹配）")
+                throw ModuleError.badSpec("签名校验失败：仅接受 TequilaDash 官方签名")
             }
             log?("- 签名验证 [完成]")
         }
@@ -630,7 +630,7 @@ final class ModuleService {
                 || module.isBinaryModule
                 || module.isLuaModule
                 || module.hasNativeUI else {
-            throw ModuleError.badSpec("模块未声明任何 action，也没有 binary / lua / ui 入口")
+            throw ModuleError.badSpec("模块未声明 action，也无 binary / lua / ui 入口")
         }
         // 校验动作声明（v0.3.159：type 自由——非 signal 一律走通用桥调用，语义由模块决定；
         // 只校验字段完备性：signal 需 process，桥调用需 symbol）
@@ -654,7 +654,7 @@ final class ModuleService {
         if FileManager.default.fileExists(atPath: dest.path) {
             // v0.3.93 升级导入：data/ 原位保留（用户数据库/配置在里面），
             // 只清掉 data/ 以外的旧内容，再把新版本逐项并入——不做暂存/还原.
-            log?("- 检测到旧版本，覆盖升级（data/ 原位保留）")
+            log?("- 检测到旧版本，覆盖升级（保留 data/）")
             let fm = FileManager.default
             for item in try fm.contentsOfDirectory(atPath: dest.path) where item != "data" {
                 try fm.removeItem(at: dest.appendingPathComponent(item))
@@ -806,7 +806,7 @@ final class ModuleService {
 
         guard !matched.isEmpty else {
             throw ModuleError.processNotFound(
-                "设备进程列表中未找到「\(procName)」（系统守护进程可能对宿主不可见）")
+                "进程列表中未找到「\(procName)」（系统守护进程可能不可见）")
         }
 
         var killed: [String] = []
@@ -822,9 +822,9 @@ final class ModuleService {
             }
         }
 
-        var summary = "已下发 \(sigName(sig)) → \(killed.count) 个进程"
+        var summary = "已下发 \(sigName(sig)) → \(killed.count) 进程"
         if !killed.isEmpty { summary += "：\(killed.joined(separator: "、"))" }
-        if !failed.isEmpty { summary += "；失败 \(failed.count)：\(failed.joined(separator: "、"))" }
+        if !failed.isEmpty { summary += "，失败 \(failed.count)：\(failed.joined(separator: "、"))" }
         return summary
     }
 
@@ -838,8 +838,8 @@ final class ModuleService {
         // 码 21 = `IdeviceError::ServiceNotFound`（`errors.rs` 用 `format!("{:?}")` 生成 message，
         // 所以弹窗里会看到裸枚举名）。domain 判定兜底 message 为空的情形。
         if ns.domain == "ProcessManager", ns.code == 21 || raw.contains("ServiceNotFound") {
-            return "\(phase)失败：设备的进程服务（app_service）未广播，且 DVT 回退通道也不可用."
-                + "请确认 LocalDevVPN 已连接后重试；若持续失败，重启设备通常可恢复."
+            return "\(phase)失败：进程服务（app_service）未广播，DVT 回退通道也不可用."
+                + "请确认 LocalDevVPN 已连接后重试."
         }
         return "\(phase)失败：\(raw)"
     }

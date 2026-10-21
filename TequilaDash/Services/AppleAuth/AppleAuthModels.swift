@@ -145,21 +145,21 @@ enum AppleAPIError: Error, LocalizedError {
         switch self {
         case .unknown: return "未知错误"
         case .invalidParameters: return "参数无效"
-        case .badServerResponse: return "Apple 服务器返回了意外的响应"
+        case .badServerResponse: return "Apple 服务器响应异常"
         case .incorrectCredentials: return "Apple ID 或密码错误"
         case .requiresTwoFactorAuthentication: return "需要两步验证"
         case .incorrectVerificationCode: return "验证码错误或已过期"
-        case .authenticationHandshakeFailed: return "与 Apple 服务器的认证握手失败"
+        case .authenticationHandshakeFailed: return "认证握手失败"
         case .invalidAnisetteData: return "Anisette 数据无效或已过期"
         case .accountLocked: return "Apple ID 已被锁定"
         case .sessionExpired:
-            return "Apple 会话已过期（错误 1100）.请到「更多 → 设置 → Apple ID 账户」退出并重新登录；如果在 IPA 侧载页登录过同一账号，重新登录一次即可恢复."
+            return "Apple 会话已过期（错误 1100）.请到「更多 → 设置 → Apple ID 账户」重新登录."
         case .customError(let code, let message):
             // 上游 612319dbf：developer error 2160 = 账号邮箱未验证，Apple 拒绝其使用开发者服务.
             // 重试登录、更换 Anisette 服务器均无效；已保存的登录仍有效，停止流程并指向 account.apple.com.
             // （上游在 rust 侧同时停止了重签循环；本项目登录路径本身单次尝试，无循环可停.）
             if code == 2160 || message.lowercased().contains("developer error 2160") {
-                return "Apple 拒绝该账号使用开发者服务（错误 2160）：账号邮箱未验证.请先到 account.apple.com 验证邮箱；已保存的登录仍然有效，无需重新登录."
+                return "Apple 拒绝该账号使用开发者服务（错误 2160）：邮箱未验证.请到 account.apple.com 验证."
             }
             return "错误 \(code)：\(message)"
         }
@@ -176,10 +176,8 @@ enum AppleAPIError: Error, LocalizedError {
 
 /// 把任意 `Error` 摊成「类型 / Domain / Code / 描述」四行.
 ///
-/// 为什么要这样展示（v0.3.613，参考 MJorb/Seal 的登录失败弹窗形态）：
-/// 只显示一句 `localizedDescription` 时，用户报障只能给一句人话，
-/// 排查时无法区分「Apple 返回的 -80045」「URLSession 超时」「我们自己的枚举」。
-/// 把 NSError 的 domain/code 一并摊出来，用户截图即含全部判据。
+/// v0.3.613（形态参考 MJorb/Seal）：只给 `localizedDescription` 分不清
+/// Apple -80045 / URLSession 超时 / 自定义枚举，故摊出 domain/code，截图即含判据。
 enum ErrorDetail {
     static func describe(_ error: Error) -> String {
         let ns = error as NSError

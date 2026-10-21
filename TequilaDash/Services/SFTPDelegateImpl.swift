@@ -434,7 +434,7 @@ final class SFTPFileSystemDelegate: SFTPDelegate, @unchecked Sendable {
             //
             // 文案刻意写成**一句人话**（NOTICE / TRUNCATED / SHOWING n OF m / DIRECT_PATH_ONLY），
             // 而不是 `TRUNCATED_n_OF_m` 这种像文件名的串 —— 让用户一眼看出这是**提示**、不是文件。
-            LoginLogger.shared.log("[SFTP] opendir 截断：\(path) 共 \(result.total) 条，超过上限 \(sftpMaxDirectoryEntries)，只回前 \(result.entries.count) 条（已追加截断标记；v3 无分页，尾巴请按完整路径直取）")
+            LoginLogger.shared.log("[SFTP] opendir 截断：\(path) 共 \(result.total) 条，超过上限 \(sftpMaxDirectoryEntries)，仅回前 \(result.entries.count) 条（已追加截断标记；无分页，按完整路径直取）")
             listings.append(Self.markerListing(
                 "\(sftpMarkerPrefix)NOTICE_TRUNCATED_SHOWING_\(result.entries.count)_OF_\(result.total)_DIRECT_PATH_ONLY",
                 formatter: formatter

@@ -60,7 +60,7 @@ final class BinaryModuleRunner: ObservableObject {
         // 保证用户还能进 App 看日志/关模块（否则每次进入 2s 后必崩，永远改不回来）
         let flag = Self.inFlightKey(module.id)
         if automatic && UserDefaults.standard.bool(forKey: flag) {
-            let msg = "上次启动疑似导致崩溃，已跳过自动启动（查看日志后可手动启动）"
+            let msg = "上次启动疑似导致崩溃，已跳过自动启动"
             appendLog(
                 ModuleService.shared.installURL(for: module.id).appendingPathComponent("run.log"),
                 "[host] \(msg)")
@@ -105,7 +105,7 @@ final class BinaryModuleRunner: ObservableObject {
     ) {
         // 端口预检：端口被占时绝不调 Go——进程内任何 os.Exit 都会连宿主一起杀
         if let port = bin.port, isPortInUse(UInt16(port)) {
-            appendLog(logFile, "[host] 端口 \(port) 已被占用，放弃启动（服务可能已在运行）")
+            appendLog(logFile, "[host] 端口 \(port) 已被占用，放弃启动")
             setError(module.id, "端口 \(port) 已被占用——服务可能已在运行")
             return
         }
@@ -119,7 +119,7 @@ final class BinaryModuleRunner: ObservableObject {
             try? FileManager.default.removeItem(at: probe)
         } catch {
             let msg = "数据目录不可写：\(error.localizedDescription)（LiveContainer 24h 磁盘写入配额可能已满——等待重置或重启设备）"
-            appendLog(logFile, "[host] \(msg)；放弃启动以避免 os.Exit 杀宿主")
+            appendLog(logFile, "[host] \(msg)；放弃启动")
             setError(module.id, msg)
             return
         }
@@ -148,7 +148,7 @@ final class BinaryModuleRunner: ObservableObject {
     func stop(module: EscapeModule) {
         guard let pid = runningProcesses[module.id] else { return }
         guard pid > 0 else {
-            print("[Binary][\(module.id)] 进程内常驻模块不在此停止（走模块 actions 的桥接符号）")
+            print("[Binary][\(module.id)] 进程内常驻模块不在此停止（走 actions 桥接符号）")
             return
         }
         kill(pid, SIGKILL)
@@ -163,7 +163,7 @@ final class BinaryModuleRunner: ObservableObject {
         runningProcesses[module.id] = nil
         if wasInProcess {
             let logFile = ModuleService.shared.installURL(for: module.id).appendingPathComponent("run.log")
-            appendLog(logFile, "[host] 模块已标记停止（桥 action 成功）—进程内停止后重启 App 才能再次启动")
+            appendLog(logFile, "[host] 模块已标记停止（桥 action 成功）—进程内停止后需重启 App")
         }
     }
 
@@ -174,7 +174,7 @@ final class BinaryModuleRunner: ObservableObject {
     /// 返回 (rc, 实参数组)——消息模板由调用方组装.
     nonisolated static func bridgeCall(module: EscapeModule, symbol: String, argSpecs: [String]) throws -> (Int32, [String]) {
         guard let sym = resolveBridgeSymbol(symbol) else {
-            throw BinaryModuleError.spawnFailed("模块未导出 \(symbol)（需更新模块至支持版本）")
+            throw BinaryModuleError.spawnFailed("模块未导出 \(symbol)（需更新模块）")
         }
         var actual: [String] = []
         for spec in argSpecs {
@@ -382,7 +382,7 @@ final class BinaryModuleRunner: ObservableObject {
             } else {
                 parts.append("模块目录中无 bin/*.dylib——请从 module-esc edge 导入 com.tequila.alist 模块 zip")
             }
-            parts.append("本 App 未内置 \(moduleId) 的 \(entrySymbol)，外部导入属正常现象")
+            parts.append("本 App 未内置 \(moduleId) 的 \(entrySymbol)")
             throw BinaryModuleError.spawnFailed(parts.joined(separator: "\n"))
         }
         // v0.3.481：把宿主能力函数表交给模块（可选导出；老模块没有这个符号是正常的）
@@ -418,7 +418,7 @@ final class BinaryModuleRunner: ObservableObject {
     /// 模块拿到表之后怎么用是它自己的事（`HostCapabilityService.call`）.
     nonisolated private func handoffHostCapabilities(dataDir: URL, moduleDir: URL, logFile: URL) {
         guard let sym = Self.resolveBridgeSymbol("escape_module_init") else {
-            appendLog(logFile, "[host] 模块未导出 escape_module_init（老模块正常现象）→ 跳过能力表交接")
+            appendLog(logFile, "[host] 模块未导出 escape_module_init → 跳过能力表交接")
             return
         }
         var api = HostCapabilityService.makeAPI(moduleDataDir: dataDir.path,

@@ -3,17 +3,15 @@
 //  TequilaDash
 //
 //  后台位置更新保活.移植自 StikPair / StikDebug：
-//  通过持续请求位置更新（精度极低、距离过滤最大），
-//  使应用在后台/锁屏时仍被视为「正在使用位置服务」，
-//  从而延缓 Bonjour 注册被系统 SRP sweeper 回收.
+//  持续请求位置更新（精度极低、距离过滤最大），使应用在后台/锁屏时
+//  仍被视为「正在使用位置服务」，延缓 Bonjour 注册被 SRP sweeper 回收.
 //
 
 import CoreLocation
 
 final class BackgroundLocationManager: NSObject, CLLocationManagerDelegate {
-    /// Swift 6 并发检查：本类型非 Sendable。可变状态（isRunning / activityCount）只在主线程访问 ——
-    /// 公开入口 `start/stop/requestStart/requestStop` 的调用方 `WirelessKeepAlive` 由配对 UI 触发，
-    /// `CLLocationManager` 在主线程创建、其 delegate 回调也回到主队列。
+    /// Swift 6：本类型非 Sendable。可变状态（isRunning / activityCount）只在主线程访问 ——
+    /// 调用方 `WirelessKeepAlive` 由配对 UI 触发，`CLLocationManager` 与其 delegate 回调均在主线程。
     nonisolated(unsafe) static let shared = BackgroundLocationManager()
 
     private let locationManager = CLLocationManager()

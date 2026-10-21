@@ -196,7 +196,7 @@ final class PiPKeepAliveService: NSObject, ObservableObject, @unchecked Sendable
             return
         }
         guard hostContainer?.window != nil else {
-            lastError = "源视图不在窗口层级——请停留在本页面后重试"
+            lastError = "源视图不在窗口层级，请停留在本页重试"
             return
         }
         setupPiP()
@@ -219,7 +219,7 @@ final class PiPKeepAliveService: NSObject, ObservableObject, @unchecked Sendable
                 self.pendingStartWork?.cancel()
                 self.requestStart(attempt: attempt + 1)
             } else {
-                self.lastError = "画中画暂时不可启动：possible=\(pip.isPictureInPicturePossible), sourceReady=\(sourceReady)"
+                self.lastError = "画中画启动失败：possible=\(pip.isPictureInPicturePossible), sourceReady=\(sourceReady)"
             }
         }
         pendingStartWork?.cancel()

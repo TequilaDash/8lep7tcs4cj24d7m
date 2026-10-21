@@ -404,8 +404,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
 
         // 2) 分块写（内部会让出执行权，这是防死锁的关键）
         if truncated {
-            output += "\n\n[已截断] 本次输出超过上限 \(Self.maxResponseBytes / 1024 / 1024)MB，"
-                    + "只回传了前面部分，请缩小范围重试："
+            output += "\n\n[已截断] 输出超过上限 \(Self.maxResponseBytes / 1024 / 1024)MB，仅回传前段："
                     + "`logs 100` / `cat` 小文件 / `cap fs.read` 用 offset+length 分块.\n"
         }
         try await writeChunked(output, to: outputHandler.stdoutPipe)
@@ -564,8 +563,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let catLimit = LogLimitSettings.catLimitBytes
             if catLimit < Int.max {                 // 无限制 → 跳过检查
                 guard size <= UInt64(catLimit) else {
-                    return "文件过大（\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))），"
-                        + "当前上限 \(catLimit / 1024)KB（可在「更多 → 设置 → 日志」调整；填 0 = 无限制）"
+                    return "文件过大（\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))），当前上限 \(catLimit / 1024)KB（设置 → 日志可调，0 = 无限制）"
                 }
             }
             guard let s = try? String(contentsOf: target, encoding: .utf8) else { return "非 UTF-8 文本文件" }
@@ -575,7 +573,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             // 此前硬编码的专用命令（模块名即符号名）已删除——那些是「模块的数据」，
             // 不该出现在引擎代码里.用法：invoke <符号名>
             guard parts.count >= 2 else {
-                return "用法: invoke <符号名>   —— 调用当前二进制模块的导出符号（数据目录作参数传入）"
+                return "用法: invoke <符号名>  调用二进制模块导出符号"
             }
             let symName = parts[1]
 
@@ -588,7 +586,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             guard let sym = BinaryModuleRunner.resolveBinaryModuleSymbol(symName, moduleDir: moduleDir, moduleId: binID) else {
                 return "[失败] 符号未找到: \(symName)\n"
                      + "   模块: \(binID)\n"
-                     + "   可能原因：dylib 加载失败（dyld 库校验拒绝 ad-hoc 签名）或符号未导出\n"
+                     + "   dylib 加载失败（dyld 拒 ad-hoc 签名）或符号未导出\n"
                      + "   详情: runlog 25"
             }
 
@@ -608,7 +606,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                 dataDir.path.withCString { cstr in fn(UnsafeMutablePointer(mutating: cstr)) }
             }
             box.run(timeout: 3, keepAlive: true)
-            let resultText = box.value.map { String($0) } ?? "（阻塞中＝服务在跑，属正常）"
+            let resultText = box.value.map { String($0) } ?? "（阻塞中＝服务在跑）"
             return "\(symName): 已调用（数据目录以参数传入）\n入口=\(sym) 前16字节: \(codeHex)\n结果: \(resultText)\n下一步: runlog 查看模块日志；若闪退见 go_stderr.log 的 [uloader-crash] 行"
 
         case "store":
@@ -659,8 +657,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                 sem.signal()
             }
             if sem.wait(timeout: .now() + Self.devcertTimeoutSeconds) == .timedOut {
-                return "devcert: [超时] 等待开发证书创建超时（\(Int(Self.devcertTimeoutSeconds)) 秒），已放弃等待"
-                    + "（后台任务可能仍在进行，用 logs 查看）\n详情: logs"
+                return "devcert: [超时] 开发证书创建超时（\(Int(Self.devcertTimeoutSeconds)) 秒），后台任务可能仍在进行\n详情: logs"
             }
             return "devcert: \(devcertBox.get())\n详情: logs"
 
@@ -713,7 +710,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let n = Int(parts.count > 1 ? parts[1] : "60") ?? 60
             let url = HostCapabilityService.callLogURL
             guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-                return "（暂无能力调用日志）\n路径: \(url.path)\n（第一次调用宿主能力后才会创建）"
+                return "（暂无能力调用日志）路径: \(url.path)\n首次调用宿主能力后创建"
             }
             let all = text.components(separatedBy: "\n").filter { !$0.isEmpty }
             guard !all.isEmpty else { return "（能力调用日志为空）\n路径: \(url.path)" }
@@ -726,7 +723,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let dir = ModuleService.shared.dataURL(for: id)
             var lines = ["=== \(id) 数据目录 ===", dir.path]
             guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else {
-                lines.append("（目录不存在或不可读 —— 该模块可能还没写过数据）")
+                lines.append("（目录不存在或不可读，模块可能未写过数据）")
                 return lines.joined(separator: "\n")
             }
             if items.isEmpty { lines.append("（空目录）") }
@@ -758,7 +755,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                 return "拒绝：路径越出模块数据目录"
             }
             guard let text = try? String(contentsOf: target, encoding: .utf8) else {
-                return "（读不到 \(id)/\(rel)；先跑 modls \(id) 看该模块有什么）"
+                return "（读不到 \(id)/\(rel)；先跑 modls \(id)）"
             }
             let all = text.components(separatedBy: "\n").filter { !$0.isEmpty }
             return all.isEmpty ? "（文件存在但为空）"
@@ -829,20 +826,20 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
     static let helpText = """
     TequilaDash SSH 调试 · 可用命令:
       status          运行状态总览
-      ddiprobe        只读诊断：查设备是否已挂 DDI（结果 → LoginLogs/ddi_probe.txt）
-      cdprobe         只读诊断：CoreDeviceProxy 隧道内第二个 RSD 握手 + app_service 端到端（结果 → LoginLogs/cd_probe.txt）
+      ddiprobe        只读诊断：设备是否已挂 DDI（结果 → LoginLogs/ddi_probe.txt）
+      cdprobe         只读诊断：CoreDeviceProxy 隧道第二 RSD 握手 + app_service 端到端（结果 → LoginLogs/cd_probe.txt）
       modules         已安装模块列表
       logs [n]        登录日志末尾 n 行（默认 30，最多 5000）
       runlog [n]      二进制模块运行日志末尾 n 行（默认 40）
-      caplog [n]      **宿主能力调用日志**末尾 n 行（默认 60）—— 任何模块（原生界面 / dylib / lua）调宿主能力的入参与返回原文，排障「模块为什么没生效」看这个
-      cap <能力名> [JSON]   直接调一次宿主能力（与模块同一个分发器，也会进 caplog），例: cap host.version / cap afc.list '{"path":"/DCIM"}'
-      modls [模块id]  列任意模块的数据目录（省略 id = 第一个二进制模块）
-      modcat <模块id> <相对路径> [n]   读任意模块数据目录下的文本文件（默认 80 行）
-      invoke <符号>  调用当前二进制模块的导出符号（通用，取代旧专用命令）
-      store get <trackId> [email]   触发一次 App Store 下载（与界面「获取」同一条路径）
-      devcert        创建开发证书（用已登录 Apple ID；原生模块签名用）
-      ls [路径]       浏览 Documents 目录（相对路径）
-      cat <文件>      查看 Documents 内文本文件（≤8MB）
+      caplog [n]      宿主能力调用日志末尾 n 行（默认 60），含入参与返回原文
+      cap <能力名> [JSON]   直接调一次宿主能力（同分发器，进 caplog），例: cap host.version / cap afc.list '{"path":"/DCIM"}'
+      modls [模块id]  列模块数据目录（省略 id = 第一个二进制模块）
+      modcat <模块id> <相对路径> [n]   读模块数据目录内文本文件（默认 80 行）
+      invoke <符号>  调用二进制模块导出符号
+      store get <trackId> [email]   触发 App Store 下载（与界面「获取」同路径）
+      devcert        创建开发证书（用已登录 Apple ID）
+      ls [路径]       浏览 Documents（相对路径）
+      cat <文件>      读 Documents 内文本文件（≤8MB）
       ip              局域网 IP
       uptime          PiP 运行时长
       ping            连通性测试

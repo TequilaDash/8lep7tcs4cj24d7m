@@ -63,7 +63,7 @@ actor SignedStoreAuthenticator {
         // 对齐上游 `appstore_bag.go:89-94`（它只查 https + host 非空）。硬编码兜底降级为最后手段。
         let bagVersion = StoreAuthenticationProtocol.string(value("sign-sap-version"))
         if !bagVersion.isEmpty, bagVersion != "200" {
-            LoginLogger.shared.log("[SAP] bag 的 sign-sap-version=\(bagVersion)（非 200），按 200 处理",
+            LoginLogger.shared.log("[SAP] bag sign-sap-version=\(bagVersion)（非 200），按 200 处理",
                                    category: .appleID)
         }
         let certificateValue = value("sign-sap-setup-cert")
@@ -75,7 +75,7 @@ actor SignedStoreAuthenticator {
         if bagCertificateURL == nil || bagSetupURL == nil {
             let reason = (certificateValue == nil || setupValue == nil)
                 ? "bag 缺少 SAP 端点" : "bag 的 SAP 端点不在 Apple 域内"
-            LoginLogger.shared.log("[SAP] \(reason) → 使用内置兜底端点", category: .appleID)
+            LoginLogger.shared.log("[SAP] \(reason) → 用兜底端点", category: .appleID)
         }
         guard let certificateURL, let setupURL,
               let assets = SAPAssetsLocator.url,
@@ -92,12 +92,10 @@ actor SignedStoreAuthenticator {
             return UInt8(guid[start ..< guid.index(start, offsetBy: 2)], radix: 16)
         }
         guard hardware.count == 6 else { throw StoreAuthenticationError.invalidConfiguration }
-        // v0.3.5xx：SAPContext 构造要读 + 校验 4 个 SAP 资产（约 38 MB）—— 此前**零耗时日志**，
-        // 重登慢时这一段成本一直不可见。补「读资产大小 + 构造耗时」。
+        // v0.3.5xx：SAPContext 构造要读 + 校验 4 个 SAP 资产（约 38 MB），此前无耗时日志，补上。
         let sapStarted = Date()
         let signer = try SAPContext(assetsURL: assets, hardwareID: Data(hardware))
-        // 资产目录已在上面 `[SAP] 资产目录 …` 打过，这里只补构造耗时 + 各资产大小
-        // （4 个资产约 38 MB；侧载宿主重签会让长度偏大，所以逐个列出便于归因）。
+        // 资产目录已打过，这里补构造耗时 + 各资产大小（逐个列出便于归因）。
         LoginLogger.shared.log(
             "[SAP] SAPContext 构造 耗时=\(Int(Date().timeIntervalSince(sapStarted) * 1000))ms"
             + " 资产大小=\(Self.assetSizeSummary(assets))",
@@ -220,8 +218,8 @@ actor SignedStoreAuthenticator {
                     throw StoreAuthenticationError.missingRedirect(response.statusCode)
                 }
                 let next = ladder[rung]
-                LoginLogger.shared.log("[SAP] 认证入口 HTTP \(response.statusCode)（无可用 Location）"
-                    + " → 换 \(next.url.host ?? "?")\(next.url.path)（\(next.contentType)）重打一次",
+                LoginLogger.shared.log("[SAP] 认证入口 HTTP \(response.statusCode)（无 Location）"
+                    + " → 换 \(next.url.host ?? "?")\(next.url.path)（\(next.contentType)）重打",
                     category: .appleID)
                 continue
             }
@@ -236,7 +234,7 @@ actor SignedStoreAuthenticator {
                 }
                 let next = ladder[rung]
                 LoginLogger.shared.log("[SAP] 认证入口 HTTP \(response.statusCode)（\(data.count) 字节，无 plist）"
-                    + " → 换 \(next.url.host ?? "?")\(next.url.path)（\(next.contentType)）重打一次",
+                    + " → 换 \(next.url.host ?? "?")\(next.url.path)（\(next.contentType)）重打",
                     category: .appleID)
                 continue
             }
@@ -336,16 +334,15 @@ actor SignedStoreAuthenticator {
                 && result.1.value(forHTTPHeaderField: "Retry-After") == nil
                 && StoreAuthenticationProtocol.retryable(status: status, hasRedirect: hasRedirect)
             if !shouldRetry { return result }
-            LoginLogger.shared.log("[SAP] 认证请求 HTTP \(status)（第 \(attempt) 次，重发同一 body + 新签名）",
+            LoginLogger.shared.log("[SAP] 认证请求 HTTP \(status)（第 \(attempt) 次，重发 body + 新签名）",
                                    category: .appleID)
             try await Task.sleep(for: StoreAuthenticationProtocol.retryDelay(attempt: attempt))
         }
         throw StoreAuthenticationError.tooManyAttempts
     }
 
-    /// SAPContext 构造要读的 4 个资产的大小摘要（清单与 `SAPContext.mm` 的
-    /// `ReadVerifiedAsset` 逐字一致：CoreFP / CommerceCore / CommerceKit / CoreFP.icxs），
-    /// 供「读 + 校验约 38 MB 资产」的耗时归因。缺失的资产显式标出（构造会因此抛错）。
+    /// 4 个 SAP 资产的大小摘要，供构造耗时归因；清单须与 `SAPContext.mm` 的 `ReadVerifiedAsset`
+    /// 逐字一致（CoreFP / CommerceCore / CommerceKit / CoreFP.icxs）。缺失资产显式标出。
     private static func assetSizeSummary(_ directory: URL) -> String {
         let names = ["CoreFP", "CommerceCore", "CommerceKit", "CoreFP.icxs"]
         let fm = FileManager.default

@@ -25,7 +25,7 @@ enum GrandSlamHTTP {
             let head = String(data: data.prefix(160), encoding: .utf8) ?? ""
             throw NSError(domain: "GrandSlamHTTP", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey:
-                            "Apple 服务器返回 \(http.statusCode)（疑似边缘节点限流）"
+                            "Apple 服务器返回 \(http.statusCode)"
                             + (head.isEmpty ? "" : "：\(head)")])
         }
         return (data, http)
@@ -59,8 +59,8 @@ enum AppleAuthenticator {
         refreshAnisette: (() async throws -> AnisetteData)? = nil
     ) async throws -> (Account, AppleAPISession) {
         let sanitizedAppleID = unsanitizedAppleID.lowercased()
-        LoginLogger.shared.log("[开始] authenticate 开始: \(sanitizedAppleID)", category: .appleID)
-        defer { LoginLogger.shared.log("[结束] authenticate 结束", category: .appleID) }
+        LoginLogger.shared.log("[开始] authenticate: \(sanitizedAppleID)", category: .appleID)
+        defer { LoginLogger.shared.log("[结束] authenticate", category: .appleID) }
 
         let clientDictionary: [String: Any] = [
             "bootstrap": true,
@@ -153,7 +153,7 @@ enum AppleAuthenticator {
         //      ?? ((statusDictionary?["hsc"] as? Int) == 409 ? "pushedCode" : nil)
         let authType = (statusDictionary["au"] as? String)
             ?? ((statusDictionary["hsc"] as? Int) == 409 ? "pushedCode" : nil)
-        LoginLogger.shared.log("[完成] complete 握手成功，au=\(authType ?? "nil") dsid=\(dsid.prefix(8))…", category: .appleID)
+        LoginLogger.shared.log("[完成] complete au=\(authType ?? "nil") dsid=\(dsid.prefix(8))…", category: .appleID)
         switch authType {
         case "trustedDeviceSecondaryAuth", "pushedCode":
             // `pushedCode` = GSA 主动推送到受信任设备的验证码（与 trustedDeviceSecondaryAuth 同一条处理链，
@@ -201,7 +201,7 @@ enum AppleAuthenticator {
             let token = try await fetchAuthToken(app: app, parameters: tokenParameters, context: context, anisetteData: anisetteData)
 
             let session = AppleAPISession(dsid: dsid, authToken: token, anisetteData: anisetteData)
-            LoginLogger.shared.log("[完成] apptokens 获取成功，token=\(token.prefix(12))…", category: .appleID)
+            LoginLogger.shared.log("[完成] apptokens token=\(token.prefix(12))…", category: .appleID)
             let account: Account
             do {
                 account = try await fetchAccount(session: session)
@@ -270,7 +270,7 @@ enum AppleAuthenticator {
                 LoginLogger.shared.log("[失败] Apple 拒绝登录(-80045): \(errorMessage)", category: .appleID)
                 throw AppleAPIError.customError(
                     code: -80045,
-                    message: "登录客户端系统与 Anisette 机器标识的 ADI 库不匹配.请在 Anisette 设置中调整客户端标识，或更换匹配的 Anisette 服务器.")
+                    message: "登录客户端系统与 Anisette 机器标识的 ADI 库不匹配.请在 Anisette 设置中调整客户端标识或更换服务器.")
             default:
                 guard !errorMessage.isEmpty else { throw AppleAPIError.unknown }
                 throw AppleAPIError.customError(code: errorCode, message: errorMessage)
@@ -348,7 +348,7 @@ enum AppleAuthenticator {
         let request = makeTwoFactorCodeRequest(url: requestURL, dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData)
         let (pageData, pageResponse) = try await GrandSlamHTTP.data(for: request)
         if pageResponse.statusCode != 200 {
-            LoginLogger.shared.log("[失败] 受信任设备验证码请求页 HTTP \(pageResponse.statusCode): \(String(data: pageData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
+            LoginLogger.shared.log("[失败] 受信任设备验证码页 HTTP \(pageResponse.statusCode): \(String(data: pageData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
         }
 
         let verificationCode = try await withCheckedThrowingContinuation { continuation in
@@ -390,7 +390,7 @@ enum AppleAuthenticator {
         request.httpBody = try PropertyListSerialization.data(fromPropertyList: bodyXML, format: .xml, options: 0)
         let (putData, putResponse) = try await GrandSlamHTTP.data(for: request)
         if putResponse.statusCode != 200 {
-            LoginLogger.shared.log("[失败] 短信验证码请求页 HTTP \(putResponse.statusCode): \(String(data: putData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
+            LoginLogger.shared.log("[失败] 短信验证码页 HTTP \(putResponse.statusCode): \(String(data: putData.prefix(200), encoding: .utf8) ?? "")", category: .appleID)
         }
 
         let verificationCode = try await withCheckedThrowingContinuation { continuation in

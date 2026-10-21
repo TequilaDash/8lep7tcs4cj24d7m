@@ -166,7 +166,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
             case .unzipFailed(let detail):
                 return "引擎载荷解压失败：\(detail)"
             case .sha256Mismatch(let expected, let actual):
-                return "引擎载荷完整性校验失败（期望 sha256 \(expected.prefix(12))… 实际 \(actual.prefix(12))…），已拒绝安装.请检查网络代理或后再试."
+                return "引擎载荷 sha256 校验失败（期望 \(expected.prefix(12))… 实际 \(actual.prefix(12))…），已拒绝安装."
             }
         }
     }
@@ -497,9 +497,9 @@ final class OnDeviceAnisetteManager: ObservableObject {
     var remoteFallbackReason: String? {
         switch readiness() {
         case .off:
-            return "本机 Anisette 开关未开启，本次走远程服务器."
+            return "本机 Anisette 开关未开启，走远程服务器."
         case .notReady(let missing):
-            return "本机 Anisette 已开启，但引擎未就绪（缺 \(missing.joined(separator: "、"))），本次回退远程服务器."
+            return "本机 Anisette 已开启，但引擎未就绪（缺 \(missing.joined(separator: "、"))），回退远程服务器."
         case .ready:
             return nil
         }

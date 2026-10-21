@@ -42,8 +42,7 @@ enum KBSyncProvider {
             }.value
         }
 
-        // 装完立刻自检一次：资产在不在、storeagent 能不能加载。
-        // 这一步**只写日志、不抛错**，方便真机排障时一眼看出 ent/download 为什么没走。
+        // 装完自检一次：只写日志、不抛错，用于排障 ent/download 未走的原因。
         if SAPAssetsLocator.url == nil {
             LoginLogger.shared.log("[kbsync] 未装配：SAP 资产目录缺失（\(SAPAssetsLocator.describe())）",
                                    category: .appleID)
@@ -53,33 +52,23 @@ enum KBSyncProvider {
         }
     }
 
-    /// 真正跑一次 kbsync。抛错时由上面的闭包原样传回 vendor 层，
-    /// vendor 捕获后落回旧链。
-    ///
-    /// `nonisolated`：这个是纯函数（读资产 → 跑 guest → 返回字节），
-    /// 不需要任何隔离域的上下文。加了它，`Task.detached` 里的调用才不需要 hop。
+    /// 真正跑一次 kbsync。抛错由上面的闭包原样传回 vendor 层，vendor 捕获后落回旧链。
+    /// `nonisolated`：纯函数（读资产 → 跑 guest → 返回字节），`Task.detached` 调用不需 hop。
     private nonisolated static func generate(hardwareID: Data, dsid: UInt64) throws -> Data {
-        // v0.3.548：**先查缓存** —— 对齐上游 `appstore_kbsync_cache.go`。
-        //
-        // 为什么必须有缓存：kbsync 要在 Unicorn 里解释执行 `storeagent`
-        // （纯 CPU，几秒），而这个 blob 的输入只有「hardwareID + DSID」两项 ——
-        // 同一台设备同一次登录下**每次都算出同一个值**。
-        // 不缓存 = 每下一次包白烧几秒 CPU（上游专门为它加了缓存文件）。
-        //
-        // 键选择：上游用 (DSID, GUID) 双键。我们这边 hardwareID 就来自本机
-        // （唯一），所以 DSID 单独做键已经够区分（换账号 = 换 DSID）。
-        //
-        // v0.3.5xx：命中/未命中都打日志 —— 这是「29.6s 到底是不是冷缓存跑 Unicorn」
-        // 的直接判据（此前命中与否零日志，只能靠首尾锚点推断）。
+        // v0.3.548：先查缓存（对齐上游 `appstore_kbsync_cache.go`）。
+        // kbsync 需在 Unicorn 里解释执行 `storeagent`（纯 CPU 数秒），输入只有 hardwareID + DSID，
+        // 同设备同登录恒等 ⇒ 不缓存即每次下载白烧 CPU。
+        // 键：上游用 (DSID, GUID) 双键；本机 hardwareID 唯一，DSID 单键即可区分。
+        // v0.3.5xx：命中/未命中均打日志，作为冷缓存跑 Unicorn 的直接判据。
         let started = Date()
         if let cached = cache.value(for: dsid) {
-            // 命中缓存 = 未跑 Unicorn（省掉几秒纯 CPU 的 guest 执行），耗时只是查表。
+            // 命中 = 未跑 Unicorn，耗时只是查表。
             LoginLogger.shared.log(
                 "[kbsync] 缓存命中 耗时=\(elapsedMs(since: started))ms DSID=\(dsid) 字节=\(cached.count)",
                 category: .appleID)
             return cached
         }
-        // 未命中 = 冷启动要跑 Unicorn（纯 CPU，真机约数秒）—— kbsync 段的主要耗时来源。
+        // 未命中 = 跑 Unicorn（真机约数秒），kbsync 段主要耗时来源。
         LoginLogger.shared.log(
             "[kbsync] 缓存未命中 DSID=\(dsid)",
             category: .appleID)

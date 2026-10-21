@@ -63,8 +63,8 @@ enum StoreAccountSession {
             // 本次结束时 release 会把它清掉，所以一次超时之后链路自行恢复。
             let forcedCount = await gate.forcedAcquireCount()
             LoginLogger.shared.log(
-                "[会话] 账号租约等待超过 \(Int(StoreAccountRequestGate.acquireTimeout))s，已强制接管继续"
-                + "（本进程累计强制接管 \(forcedCount) 次）.可能原因：上一个持有者被系统挂起/回收.",
+                "[会话] 账号租约等待超过 \(Int(StoreAccountRequestGate.acquireTimeout))s，已强制接管"
+                + "（本进程累计 \(forcedCount) 次）.",
                 category: .appleID)
         }
         do {
@@ -158,7 +158,7 @@ actor StoreRefreshCoordinator {
             // 而不是一句清楚的「Sign In to the iTunes Store」。换过身份就**不带旧会话**重登。
             let reusableCookies = stored.deviceGuid == currentGUID ? stored.cookie : []
             if let old = stored.deviceGuid, old != currentGUID {
-                LoginLogger.shared.log("[SAP] 设备标识已变更（\(old) → \(currentGUID)），本次登录不带旧会话",
+                LoginLogger.shared.log("[SAP] 设备标识已变更（\(old) → \(currentGUID)），登录不带旧会话",
                                        category: .appleID)
             }
             let refreshed = try await SignedStoreAuthenticator().authenticate(

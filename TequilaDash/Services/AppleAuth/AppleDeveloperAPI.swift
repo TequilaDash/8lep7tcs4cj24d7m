@@ -305,11 +305,11 @@ enum AppleDeveloperAPI {
             if let resultCode = plist(data)?["resultCode"] as? Int {
                 if resultCode == 3250 {
                     LoginLogger.shared.log("[失败] Apple 拒绝 CSR（3250）")
-                    throw AppleAPIError.customError(code: 3250, message: "Apple 拒绝了证书请求（3250：CSR 无效）")
+                    throw AppleAPIError.customError(code: 3250, message: "证书请求被拒（3250：CSR 无效）")
                 }
                 if resultCode == 7460 {
                     LoginLogger.shared.log("[失败] 证书数量达上限（7460）")
-                    throw AppleAPIError.customError(code: 7460, message: "开发证书数量已达上限（7460）.请到「更多 → 证书管理」吊销一旧证书.")
+                    throw AppleAPIError.customError(code: 7460, message: "开发证书数量已达上限（7460）.请到「更多 → 证书管理」吊销旧证书.")
                 }
             }
             let preview = String(data: data, encoding: .utf8)?.prefix(300) ?? ""
@@ -332,7 +332,7 @@ enum AppleDeveloperAPI {
         } else {
             let status = (certRequest["certRequestStatusCode"] as? String)
                 ?? (certRequest["statusCode"] as? String) ?? "?"
-            LoginLogger.shared.log("[等待] CSR 已受理（异步签发，certRequestStatusCode=\(status)）→ 进入轮询")
+            LoginLogger.shared.log("[等待] CSR 已受理（异步签发，certRequestStatusCode=\(status)）")
             certDER = Data()                                    // 空标记 = 受理成功，待轮询
         }
         LoginLogger.shared.log("[完成] 开发证书创建成功（\(certDER.count) 字节）")

@@ -25,7 +25,7 @@ enum AppleIDSignInService {
             }
             await StoreLoginBackoff.shared.clear(email)
             logRegion(account, log: log)
-            log?("登录成功并已设为当前下载账号")
+            log?("登录成功，已设为当前下载账号")
             return account
         } catch {
             if let authError = error as? StoreAuthenticationError {
@@ -45,7 +45,7 @@ enum AppleIDSignInService {
 
     private static func logRegion(_ account: AppStoreAccount, log: ((String) -> Void)?) {
         if let region = AppStoreService.adoptAccountRegion(storefront: account.store, email: account.email) {
-            log?("账号区域 \(region.uppercased())（storefront \(account.store)），商店已跟随")
+            log?("账号区域 \(region.uppercased())（storefront \(account.store)），已跟随")
             LoginLogger.shared.log("[SAP] 账号区域 \(region.uppercased())（storefront \(account.store)）", category: .appleID)
         }
     }

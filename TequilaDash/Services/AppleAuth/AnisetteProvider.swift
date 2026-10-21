@@ -479,7 +479,7 @@ final class AnisetteProvider {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw AppleAPIError.customError(
                     code: -22421,
-                    message: "Anisette 单次取数超过 \(Int(seconds)) 秒未返回（疑似服务器无响应）")
+                    message: "Anisette 单次取数超过 \(Int(seconds)) 秒未返回")
             }
             guard let first = try await group.next() else {
                 throw AppleAPIError.customError(code: -22421, message: "Anisette 取数未返回")
@@ -495,7 +495,7 @@ final class AnisetteProvider {
         // 上限 60s：比最长一次流程（3 次尝试 × 35s 硬超时，实际受 75s 总预算约束）留出余量，
         // 但又给了「死等」一个确定终点，不会把新调用者永久挂在锁上.
         guard await fetchGate.tryAcquire(timeout: 60) else {
-            throw AppleAPIError.customError(code: -22422, message: "等待上一个 Anisette 取数流程超时（60s），请稍后重试.")
+            throw AppleAPIError.customError(code: -22422, message: "等待上一个 Anisette 取数流程超时（60s）.")
         }
         defer { fetchGate.release() }
         let originalServer = currentServer
@@ -515,7 +515,7 @@ final class AnisetteProvider {
                 attempt += 1
                 let elapsed = Date().timeIntervalSince(started)
                 guard attempt < maxAttempts, elapsed < budget else { break }
-                LoginLogger.shared.log("… 跳过 Anisette 服务器 \(currentServer)（Apple 已拒绝其上报设备 \(Self.refusalCount(for: currentServer)) 次）", category: .appleID)
+                LoginLogger.shared.log("… 跳过 Anisette 服务器 \(currentServer)（上报设备已被拒 \(Self.refusalCount(for: currentServer)) 次）", category: .appleID)
                 if await rotateServer() == nil { break }
                 continue
             }
@@ -547,7 +547,7 @@ final class AnisetteProvider {
                     Self.recordRefusal(for: currentServer)
                     if Self.refusalTotal() >= 2,
                        Self.allRemainingRuledOut(after: Self.orderedIndex(of: currentServer, in: ordered), ordered: ordered) {
-                        LoginLogger.shared.log("… Apple 已拒绝 \(Self.refusalTotal()) 次（503），剩余服务器均被跳过，停止重试", category: .appleID)
+                        LoginLogger.shared.log("… Apple 已拒绝 \(Self.refusalTotal()) 次（503），剩余服务器均跳过，停止重试", category: .appleID)
                         break
                     }
                 }
@@ -562,11 +562,11 @@ final class AnisetteProvider {
                     // （上游判据：同一 ADI 库的身份互通，换同库服务器不重配）.
                     clientInfo = nil
                     userAgent = nil
-                    LoginLogger.shared.log("… 下一服务器与当前身份同库，保留 adiPb 直接重试", category: .appleID)
+                    LoginLogger.shared.log("… 下一服务器同库，保留 adiPb 直接重试", category: .appleID)
                 } else {
                     resetProvisioning()
                 }
-                LoginLogger.shared.log("[注意] Anisette 第 \(attempt)/\(maxAttempts) 次失败（阶段：\(stage ?? "未知")），换服务器重试", category: .appleID)
+                LoginLogger.shared.log("[注意] Anisette 第 \(attempt)/\(maxAttempts) 次失败（阶段 \(stage ?? "未知")），换服务器重试", category: .appleID)
             }
         }
         // 全部失败：把服务器还原成用户原本配置的地址.
@@ -582,7 +582,7 @@ final class AnisetteProvider {
         throw AppleAPIError.customError(
             code: -22421,
             message: "Anisette 连续 \(maxAttempts) 个服务器均失败（最后错误：\(detail)）.\n"
-                + "可到「更多 → 设置 → Anisette 服务器」手动换一个，或稍后重试."
+                + "请到「更多 → 设置 → Anisette 服务器」更换服务器."
         )
     }
 
