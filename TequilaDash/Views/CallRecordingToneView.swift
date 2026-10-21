@@ -29,6 +29,7 @@ struct CallRecordingToneView: View {
             Section {
                 InfoActionCard(
                     icon: "speaker.slash.fill",
+                    iconTint: AppTheme.categorySettings,
                     title: "禁用通话录音",
                     message: "把通话录音的起止提示音替换为等长静音，录音本身仍正常进行.原始提示音会备份到本机，可随时恢复."
                 )

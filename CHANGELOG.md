@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.719] - 2026-10-21
+
+### 变更
+
+- 崩溃子系统 4 处卡片补结构色：报告类型（按崩溃类型取色）/ 最后异常回溯（categorySettings）/ 资源超限（pending）/ 崩溃聚类（categoryHealth）.
+- 三张说明型 hero 卡补 iconTint：禁用通话录音 / 屏蔽域名 / 创建两个快捷指令，统一 categorySettings.
+- 回收页大小胶囊补 categoryClean.
+- 修框架缺陷：InfoActionCard 的动作按钮此前恒用 accent，与卡片图标色不一致，现跟随 iconTint.
+
+### 校验
+
+- normalize_eol / precommit 17 组 / WSL swiftc -parse 9 文件全过；CI 真编译为准.
+
+
 ## [0.3.718] - 2026-10-21
 
 ### 变更

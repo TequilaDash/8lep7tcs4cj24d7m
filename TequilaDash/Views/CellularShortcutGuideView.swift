@@ -32,6 +32,7 @@ struct CellularShortcutGuideView: View {
             Section {
                 InfoActionCard(
                     icon: "bolt.badge.plus",
+                    iconTint: AppTheme.categorySettings,
                     title: "创建两个快捷指令",
                     message: "蜂窝网络下，iOS 会限制回环 VPN 访问本机服务，所以要先临时关掉蜂窝数据."
                         + "用快捷指令 App 里的「设定蜂窝数据」动作（开关蜂窝号码同效），"

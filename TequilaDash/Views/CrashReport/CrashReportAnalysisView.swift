@@ -71,7 +71,7 @@ struct CrashReportAnalysisView: View {
                     CrashThreadsPanel(crash: crash)
                 }
                 if !crash.lastExceptionBacktrace.isEmpty {
-                    CrashSectionCard(title: "最后异常回溯", systemImage: "list.number") {
+                    CrashSectionCard(title: "最后异常回溯", systemImage: "list.number", tint: AppTheme.categorySettings) {
                         CrashFrameList(frames: crash.lastExceptionBacktrace, images: crash.images)
                     }
                 }

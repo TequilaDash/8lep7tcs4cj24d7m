@@ -56,7 +56,7 @@ struct CrashReportSummaryView: View {
     // MARK: 类型与解释
 
     private var kindCard: some View {
-        CrashSectionCard(title: "报告类型", systemImage: "doc.text.magnifyingglass") {
+        CrashSectionCard(title: "报告类型", systemImage: "doc.text.magnifyingglass", tint: kindTint) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 HStack(spacing: AppSpacing.tight) {
                     CrashBadge(text: CrashFormat.kindLabel(report.kind),

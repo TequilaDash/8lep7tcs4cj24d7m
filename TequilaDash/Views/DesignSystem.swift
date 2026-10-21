@@ -525,7 +525,7 @@ struct InfoActionCard: View {
                     Button(action: action) {
                         Text(actionTitle)
                     }
-                    .buttonStyle(TintedButtonStyle())
+                    .buttonStyle(TintedButtonStyle(tint: iconTint))
                     .controlSize(.small)
                     .disabled(disabled)
                     .padding(.top, 2)

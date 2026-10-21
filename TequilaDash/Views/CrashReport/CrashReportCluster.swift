@@ -70,6 +70,7 @@ struct CrashClusterListView: View {
     private func clusterCard(_ cluster: CrashCluster) -> some View {
         CrashSectionCard(title: "\(cluster.count) 份",
                          systemImage: cluster.count > 1 ? "square.stack.3d.up.fill" : "square.stack.3d.up",
+                         tint: AppTheme.categoryHealth,
                          trailing: AnyView(CrashBadge(text: "×\(cluster.count)", level: .tiny))) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashMonoBlock(text: cluster.signature, lines: 3)

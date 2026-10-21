@@ -84,7 +84,7 @@ struct CrashResourceCard: View {
     let report: Report
 
     var body: some View {
-        CrashSectionCard(title: "资源超限", systemImage: "gauge.with.dots.needle.67percent") {
+        CrashSectionCard(title: "资源超限", systemImage: "gauge.with.dots.needle.67percent", tint: AppTheme.pending) {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 CrashFactRow(label: "事件", value: resource.event)
                 if let crash = report.crash, let exception = crash.exception {

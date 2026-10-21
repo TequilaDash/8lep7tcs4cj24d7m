@@ -230,7 +230,7 @@ struct ReclaimTabView: View {
                subtitle: row.subtitle,
                selection: selecting ? selected : nil) {
             if !selecting, !row.failed, row.safeBytes > 0 {
-                SizePill(text: ReclaimService.formatBytes(row.safeBytes))
+                SizePill(text: ReclaimService.formatBytes(row.safeBytes), tint: AppTheme.categoryClean)
             }
         }
         .contentShape(Rectangle())
