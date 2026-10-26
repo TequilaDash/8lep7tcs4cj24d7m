@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.720] - 2026-10-26
+
+### 变更
+
+- 依赖可复现：Citadel 由 `from: 0.8.0`（开区间下界）改为 `exact: 0.12.1`。
+  `from` 不是锁定值，仓库又没有 Package.resolved，CI 每次重新解析依赖树。
+  产物实测已在用 0.12.x，两版之间无 security fix，SFTPDelegate 与 ExecDelegate 的
+  12 个方法签名一个没动（只多了 Sendable，我们已写 @unchecked Sendable）。
+- 新增 `rust/idevice-ffi/Cargo.lock`（574 包）。此前从未生成过：`.gitignore:10` 注释
+  写着 keep Cargo.lock，但 `:11` 只忽略 `target/`，文件是没生成过而不是被忽略。
+  而 `build-xcode.yml:339`/`:372`/`:445` 的 `hashFiles` 都在引用它，文件不存在返回空串，
+  缓存 key 少一维，依赖树变了缓存不失效。
+- `build-xcode.yml` 钉死 module-esc commit（`283155d1`）。原先是裸 `git clone --depth 1`，
+  而 `sync_bundled_modules.py` 会把 `modules/<id>/ui/` 的 SwiftUI 源码拷进编译树，
+  上游一次 push 直接改变发版二进制而本仓库零 diff、无法 bisect。
+- NOTICE 补第 6 节：`Services/MachOLoader/uloader.c` 移植自 Nyxian kxld（emexlab，
+  AGPL-3.0-or-later）。原先 NOTICE 无任何 Nyxian/emexlab 字样。
+- 6 处选中圈由 `.accentColor`（系统蓝 #007AFF）统一到 `AppTheme.accent`（品牌蓝
+  深 #76D6FF / 浅 #005493）：`BackupsListView.swift:143`/`:730`、
+  `FileBrowserView.swift:330`/`:337`、`IconCleanupView.swift:98`、
+  `LiveCleanTabView.swift:210`。另 4 处 `.accentColor` 语义不同不动。
+
+### 校验
+
+- normalize_eol / precommit 17 组全过；CI 真编译为准.
+
+
 ## [0.3.719] - 2026-10-21
 
 ### 变更
