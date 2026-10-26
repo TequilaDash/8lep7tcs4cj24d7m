@@ -489,7 +489,7 @@ jobs:
           # 二进制而本仓库零 diff、无法 bisect。同 workflow 的 AirLift 已用 AIRCARD_COMMIT
           # 钉死（Resources/Scripts/build-airlift-xcframework.sh:20），此处照抄同一做法。
           # 升级步骤：改 MODULE_ESC_COMMIT 后跑一次 CI，确认 BundledModules 清单符合预期。
-          MODULE_ESC_REPO="https://github.com/EscapeOS/module-esc.git"
+          MODULE_ESC_REPO="https://github.com/TequilaDash/module-esc.git"
           MODULE_ESC_COMMIT="283155d17209ab184f664536ed407ee0124aeb48"
           git init -q _module-esc
           git -C _module-esc remote add origin "$MODULE_ESC_REPO"
