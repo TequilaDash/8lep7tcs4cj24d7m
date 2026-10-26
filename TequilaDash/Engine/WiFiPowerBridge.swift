@@ -126,8 +126,7 @@ final class WiFiPowerBridge: @unchecked Sendable {
         // 4) 所有权移交 Rust（此后 Swift 不再释放；Rust 用完自行释放）
         // 移交 adapter/handshake 所有权 + 配对文件路径（Rust 侧用它起 lockdownd 会话）
         pairingPath.withCString { p in
-            lua_host_set_mcinstall_handles(
-                UnsafeMutableRawPointer(adapter), UnsafeMutableRawPointer(handshake), p)
+            lua_host_set_mcinstall_handles(adapter, handshake, p)
         }
         stepLog("步骤3 adapter/handshake 所有权已移交 Rust [完成]")
     }

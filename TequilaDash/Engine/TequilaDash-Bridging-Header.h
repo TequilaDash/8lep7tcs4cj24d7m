@@ -88,15 +88,9 @@ int zsign_adhoc_file(const char *path, const char *bundleId, const char *entXml,
                                                   scale:(CGFloat)scale;
 @end
 
-// Lua 模块宿主（v0.3.95：Rust+mlua 解释器，编进 App 跟随签名；符号随 libidevice_ffi.a 提供）。
-// 表达式求值/语句执行：结果写 outPath；返回 0=成功 -1=Lua 错误 -2=参数空。
-int lua_host_eval(const char *code, const char *outPath);
-int lua_host_exec(const char *code, const char *outPath);
-
-// Lua 宿主原生 handler 注册（v0.3.102：WiFi 射频经 RSD 隧道 MCInstall SetWiFiPowerState）。
-// Swift 实现阻塞执行，返回 0=成功；-1=失败。
-void lua_host_set_wifi_power_fn(int (*fn)(int, char **errOut));
-void lua_host_set_mcinstall_handles(void *adapter, void *handshake, const char *pairingPath);
+// Lua 模块宿主（v0.3.95：Rust+mlua 解释器，编进 App 跟随签名）。
+// 声明统一由 idevice.h（cbindgen 生成段，经 TunnelContext.h 引入）提供。
+// 此处不得重复声明——C 里重复声明会直接编译错。
 
 // 监督（Supervision）身份 + PKCS7 签名（v0.3.249，libcrypto 与 ZSign 同源）
 int zsign_gen_supervision_identity(const char *orgCN,
@@ -109,15 +103,7 @@ int zsign_pkcs7_sign_data(const char *certPem, int certLen,
                           unsigned char **derOut, int *derLen);
 
 // MCInstall 通用请求 + Escalate 签名回调（v0.3.249，Rust 侧 mcinstall.rs）。
-// mcinstall_pkcs7_sign_fn 类型已在 idevice.h 里 typedef（经 TunnelContext.h 引入），
-// 此处不要重复 typedef（C 里重复定义会直接编译错）。
-void mcinstall_set_pkcs7_sign_fn(mcinstall_pkcs7_sign_fn f);
-struct IdeviceFfiError *mcinstall_request_rsd(struct AdapterHandle *adapter,
-                                              struct RsdHandshakeHandle *handshake,
-                                              const char *request_xml,
-                                              const unsigned char *cert_der,
-                                              int cert_der_len,
-                                              char **out_reply);
+// 同上：mcinstall_set_pkcs7_sign_fn / mcinstall_request_rsd 已在 idevice.h 声明。
 
 // v0.3.323：Asspp 分叉的本地 SAP 登录（Unicorn TCI 解释执行 Apple CommerceKit，
 // 不需要 anisette / 不需要第三方服务器）。Swift 侧只看到 SAPContext 这一个类。

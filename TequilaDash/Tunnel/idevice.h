@@ -330,8 +330,6 @@ typedef struct NotificationProxyClientHandle NotificationProxyClientHandle;
 
 typedef struct NotificationsHandle NotificationsHandle;
 
-typedef struct Option_WifiPowerFn Option_WifiPowerFn;
-
 typedef struct OsTraceRelayClientHandle OsTraceRelayClientHandle;
 
 typedef struct OsTraceRelayReceiverHandle OsTraceRelayReceiverHandle;
@@ -1478,7 +1476,9 @@ int lua_host_eval(const char *code, const char *out_path);
  */
 int lua_host_exec(const char *code, const char *out_path);
 
-void lua_host_set_wifi_power_fn(struct Option_WifiPowerFn f);
+// cbindgen cannot express Option<fn>; hand-written to match
+// rust/idevice-ffi/src/lua_host.rs  lua_host_set_wifi_power_fn(f: Option<WifiPowerFn>)
+void lua_host_set_wifi_power_fn(int (*f)(int, char **err_out));
 
 /**
  * Swift 建好隧道后调用：移交 adapter/handshake 所有权（Swift 不再释放）
