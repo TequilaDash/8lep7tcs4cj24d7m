@@ -297,17 +297,35 @@ jobs:
             ~/.rustup
             ~/.cargo/bin
             ~/.cargo/env
-          key: macos-rust-stable-v1
+          # v2 (2026-10-26): v1 那份缓存里 ~/.rustup 是半更新状态，恢复后 rustc 跑不起来、
+          # rustup-init 又因残留目录重装失败。换 key 重新种一份。
+          key: macos-rust-stable-v2
 
       - name: Install Rust toolchain
+        # 2026-10-26 run 40309077726 实证：缓存恢复后 ~/.rustup 处于「半更新」状态，
+        # rustup-init 在已有 toolchains/<host>/{share,share/man,share/doc,etc,share/zsh}
+        # 残留目录上重装会整批报
+        #   error: could not rename 'component' file from '.../tmp/xxx_dir/bk'
+        #          to '.../toolchains/stable-aarch64-apple-darwin/share': Directory not empty (os error 66)
+        # 然后 rollback，toolchain 直接不可用（后续 cargo 全挂）。
+        # 判据从「~/.cargo/bin/rustc 是不是可执行文件」改成「rustc 能不能真跑」：
+        # 跑得起来就只补 target，跑不起来就整块清掉重装，避免半更新状态继续传染缓存。
         run: |
-          if [ -x "$HOME/.cargo/bin/rustc" ]; then
-            echo "Rust toolchain cache hit — skipping install"
+          set -euo pipefail
+          # 新 runner 镜像可能预置 CARGO_HOME/RUSTUP_HOME（如 /opt/homebrew/opt/rustup），
+          # 会让我们装到 ~/.cargo 的 toolchain 不被后续步骤看到，这里显式清掉。
+          unset CARGO_HOME RUSTUP_HOME || true
+          if "$HOME/.cargo/bin/rustc" --version >/dev/null 2>&1; then
+            echo "Rust 工具链可用，跳过安装：$("$HOME/.cargo/bin/rustc" --version)"
           else
+            echo "Rust 工具链不可用，清理 ~/.rustup 与 ~/.cargo/bin 后重装"
+            rm -rf "$HOME/.rustup" "$HOME/.cargo/bin" "$HOME/.cargo/env"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           fi
           source "$HOME/.cargo/env"
           rustup target add aarch64-apple-ios
+          rustc --version
+          cargo --version
 
       - name: Cache Rust registry + build artifacts
         uses: actions/cache@v4
