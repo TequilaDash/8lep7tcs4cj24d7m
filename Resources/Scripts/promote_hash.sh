@@ -32,7 +32,13 @@ set -euo pipefail
 EXCLUDE_RE="^(CHANGELOG[.]md|LICENSE|NOTICE|[.]gitignore|docs/|[.]github/)|(^|/)[^/]*[.]md$"
 
 list_inputs() {
-  git ls-tree -r --name-only HEAD | grep -Ev "$EXCLUDE_RE" || true
+  # core.quotePath=false 是必须的，不是可选优化：git 默认把非 ASCII 路径 C-引用成
+  # "docs/\344\270\255.md" 这种带引号 + 八进制的形态，于是上面 EXCLUDE_RE 的
+  # ^docs/ 与 [.]md$ 两端锚全部失效（该排除的没排除），更致命的是下面
+  # git rev-parse "HEAD:<引号形态>" 会失败，而 git 失败时把入参原样回显到 stdout，
+  # 命令替换拿到的不是空串而是字面量，printf 把它当 blob sha 写进 hash 流 —— 常量，
+  # 于是该文件内容改动对 hash 零影响，promote 会误判可复用，旧 IPA 挂新 tag 而 CI 全绿。
+  git -c core.quotePath=false ls-tree -r --name-only HEAD | grep -Ev "$EXCLUDE_RE" || true
 }
 
 if [ "${1:-}" = "--list" ]; then

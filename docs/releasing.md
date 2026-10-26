@@ -105,13 +105,22 @@ Then tag that same commit (step 4).
 `CUR_HASH`, computed as
 
 ```sh
-git ls-tree -r HEAD -- TequilaDash TequilaDashTunnel project.yml | shasum -a 256
+bash Resources/Scripts/promote_hash.sh
 ```
 
-which hashes `project.yml` **in full** — including the `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`
-lines. Bumping the version changes `CUR_HASH`, so a tag on the new commit can no longer reuse the
-validation build and compiles from scratch a second time (this is the "two full builds per release"
-waste).
+Run it on the commit you intend to tag: the script reads the commit tree, not the working directory,
+so a dirty tree does not change the answer. `--list` prints how many files went into the hash, which is
+the quickest way to confirm you and CI are looking at the same commit.
+
+The script hashes every build input — including `project.yml` **in full**, and therefore the
+`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` lines. Bumping the version changes `CUR_HASH`, so a tag
+on the new commit can no longer reuse the validation build and compiles from scratch a second time
+(this is the "two full builds per release" waste).
+
+Do not hand-roll the hash from a list of directories: the paths that matter are not obvious
+(`Resources/Info.plist` carries the version, two entitlements files, `BundledModules`, `ZSign`,
+`vendor`, `Resources/Scripts`, and `rust/` all feed the build), and a hand-written list silently
+produces a hash that never matches CI.
 
 Same commit ⇒ same `CUR_HASH` ⇒ the tag run finds the successful `workflow_dispatch` run by `headSha`
 (artifacts are readable across runs), reuses its `tequiladash-xcode-ipa`, and skips `xcode-build`
