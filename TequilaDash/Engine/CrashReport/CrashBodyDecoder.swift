@@ -1,7 +1,7 @@
 //
 // 源自 Xrash（github.com/owngoal-dev/Xrash，MIT License, OwnGoal Studio）
 // 目录：Packages/XrashKit/Sources/XrashReport
-// 本目录为逐文件原样搬入，未改动任何逻辑；改动只发生在调用方（CrashLogService / CrashLogView）.
+// 本目录为逐文件原样搬入，解析逻辑未改；本地改动仅限 Swift 6 并发标注 nonisolated(unsafe)，共 3 行.
 import Foundation
 
 /// The body of a 309 — and of the hang and resource reports that share its

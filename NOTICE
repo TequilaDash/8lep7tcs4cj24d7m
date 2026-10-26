@@ -25,3 +25,11 @@ because tunnel/applist code is adapted from StikDebug (AGPL-3.0). See LICENSE.
    itself; SWCompression only parses those folders.
    https://github.com/tsolomko/SWCompression
    https://github.com/tsolomko/BitByteData
+5. TequilaDash/Engine/CrashReport/ (19 Swift files)
+   Adapted from Xrash (github.com/owngoal-dev/Xrash), MIT License, OwnGoal Studio.
+   Copied verbatim from Packages/XrashKit/Sources/XrashReport at upstream main
+   commit 8d00f4c48a (2026-10-15); parsing logic unchanged.
+   Local edits are limited to Swift 6 strict-concurrency annotations
+   (nonisolated(unsafe)) required to compile under -strict-concurrency=complete.
+   License text: Resources/Licenses/xrash.txt.
+   https://github.com/owngoal-dev/Xrash
