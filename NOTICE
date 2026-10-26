@@ -25,6 +25,7 @@ because tunnel/applist code is adapted from StikDebug (AGPL-3.0). See LICENSE.
    itself; SWCompression only parses those folders.
    https://github.com/tsolomko/SWCompression
    https://github.com/tsolomko/BitByteData
+
 5. TequilaDash/Engine/CrashReport/ (19 Swift files)
    Adapted from Xrash (github.com/owngoal-dev/Xrash), MIT License, OwnGoal Studio.
    Copied verbatim from Packages/XrashKit/Sources/XrashReport at upstream main
@@ -33,3 +34,9 @@ because tunnel/applist code is adapted from StikDebug (AGPL-3.0). See LICENSE.
    (nonisolated(unsafe)) required to compile under -strict-concurrency=complete.
    License text: Resources/Licenses/xrash.txt.
    https://github.com/owngoal-dev/Xrash
+
+6. TequilaDash/Services/MachOLoader/uloader.c, uloader.h
+   Ported from Nyxian's ProcEnvironment/Surface/kxld (emexlab),
+   GNU AGPL-3.0-or-later. This is the user-space Mach-O dylib loader
+   that bypasses dyld library validation for ad-hoc signed modules.
+   https://github.com/emexlab/Nyxian

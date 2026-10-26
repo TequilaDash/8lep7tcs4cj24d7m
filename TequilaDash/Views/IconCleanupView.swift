@@ -95,7 +95,7 @@ struct IconCleanupView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: selected.contains(ghost.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(selected.contains(ghost.id) ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(selected.contains(ghost.id) ? AppTheme.accent : Color.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ghost.displayName.isEmpty ? "无名称" : ghost.displayName)
                                 .foregroundStyle(.primary)

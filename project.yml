@@ -94,7 +94,12 @@ settings:
 packages:
   Citadel:
     url: https://github.com/orlandos-nl/Citadel.git
-    from: 0.8.0
+    # v0.3.720：由 from: 0.8.0（开区间下界）改为 exact。
+    # from 不是锁定值，仓库又没有 Package.resolved，CI 每次重新解析依赖树。
+    # 0.12.1 与 0.8.0 的 SFTPDelegate/ExecDelegate 方法签名完全一致（只多了 Sendable，
+    # 我们已写 @unchecked Sendable），SSHServer.host 参数逐字相同，0.8.0 到 0.12.1
+    # 之间无 security fix。钉 exact 是为了让依赖可复现，不是为了升版本。
+    exact: 0.12.1
 
 targets:
   TequilaDash-iOS:

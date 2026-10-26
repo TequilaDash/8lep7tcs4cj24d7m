@@ -484,7 +484,18 @@ jobs:
           # 于是 v0.3.481 新加的模块被自动打成了内置模块（而那个模块要求是独立的），
           # 而且每加一个不内置的模块都要回来改一次 workflow。规则与理由见
           # Resources/Scripts/sync_bundled_modules.py 的头注释。
-          git clone --depth 1 https://github.com/AmorCool/module-esc.git _module-esc
+          # v0.3.720：钉死 commit。module-esc 是内置模块的数据源，sync_bundled_modules.py
+          # 会把 modules/<id>/ui/ 的 SwiftUI 源码拷进编译树，上游一次 push 就会改变发版
+          # 二进制而本仓库零 diff、无法 bisect。同 workflow 的 AirLift 已用 AIRCARD_COMMIT
+          # 钉死（Resources/Scripts/build-airlift-xcframework.sh:20），此处照抄同一做法。
+          # 升级步骤：改 MODULE_ESC_COMMIT 后跑一次 CI，确认 BundledModules 清单符合预期。
+          MODULE_ESC_REPO="https://github.com/EscapeOS/module-esc.git"
+          MODULE_ESC_COMMIT="283155d17209ab184f664536ed407ee0124aeb48"
+          git init -q _module-esc
+          git -C _module-esc remote add origin "$MODULE_ESC_REPO"
+          git -C _module-esc fetch --depth 1 origin "$MODULE_ESC_COMMIT"
+          git -C _module-esc checkout -q --detach FETCH_HEAD
+          echo "module-esc @ $(git -C _module-esc rev-parse HEAD)"
           python3 Resources/Scripts/sync_bundled_modules.py _module-esc
           rm -rf _module-esc
           echo "=== BundledModules ==="

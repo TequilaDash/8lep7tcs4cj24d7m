@@ -207,7 +207,7 @@ struct LiveCleanTabView: View {
         HStack(spacing: 12) {
             if selecting {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(selected ? .accentColor : .secondary)
+                    .foregroundColor(selected ? AppTheme.accent : .secondary)
             }
             GuestIcon(data: row.guest.iconData)
                 .frame(width: 40, height: 40)

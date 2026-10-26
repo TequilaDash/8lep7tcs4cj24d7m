@@ -140,7 +140,7 @@ struct BackupsListView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: selected.contains(record.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selected.contains(record.id) ? .accentColor : .secondary)
+                            .foregroundColor(selected.contains(record.id) ? AppTheme.accent : .secondary)
                         BackupRow(
                             record: record,
                             icon: rowIcon,
@@ -727,7 +727,7 @@ struct RestoreView: View {
                             Image(systemName: vm.selectedSandbox?.id == guest.id
                                   ? "checkmark.circle.fill" : "circle")
                                 .foregroundColor(vm.selectedSandbox?.id == guest.id
-                                                 ? .accentColor : .secondary)
+                                                 ? AppTheme.accent : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(guest.displayName)
                                 Text((guest.containerPath as NSString).lastPathComponent)

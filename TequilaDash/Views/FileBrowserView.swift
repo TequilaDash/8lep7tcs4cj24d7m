@@ -327,14 +327,14 @@ struct FileBrowserView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: selected.contains(item.path) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selected.contains(item.path) ? .accentColor : .secondary)
+                                .foregroundColor(selected.contains(item.path) ? AppTheme.accent : .secondary)
                                 .imageScale(.large)
                             FileRow(item: item)
                             Spacer(minLength: 0)
                         }
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(selected.contains(item.path) ? Color.accentColor.opacity(0.12) : nil)
+                    .listRowBackground(selected.contains(item.path) ? AppTheme.accent.opacity(0.12) : nil)
                 } else if item.isDirectory {
                     NavigationLink(destination: NavigationLazyView(
                         vm.isContainerRoot
