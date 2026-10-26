@@ -103,6 +103,10 @@ struct WifiApi {
 
 static WIFI: OnceLock<Option<WifiApi>> = OnceLock::new();
 
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+fn wifi_api() -> Option<&'static WifiApi> { None }
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 fn wifi_api() -> Option<&'static WifiApi> {
     WIFI.get_or_init(|| unsafe {
         let path = c"/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi";

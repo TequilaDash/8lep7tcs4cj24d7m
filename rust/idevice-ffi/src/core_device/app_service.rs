@@ -1,15 +1,17 @@
 // Jackson Coxson
 
 use std::ffi::{CStr, CString, c_char};
-use std::os::raw::{c_float, c_int};
+use std::os::raw::c_int;
 use std::ptr::{self, null_mut};
 
 use idevice::core_device::AppServiceClient;
-use idevice::{IdeviceError, ReadWrite, RsdService};
+use idevice::{IdeviceError, ReadWrite};
 
-use crate::core_device_proxy::AdapterHandle;
-use crate::rsd::RsdHandshakeHandle;
 use crate::{IdeviceFfiError, ReadWriteOpaque, ffi_err, run_sync, run_sync_local};
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
+use crate::{core_device_proxy::AdapterHandle, rsd::RsdHandshakeHandle};
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
+use idevice::RsdService as _;
 
 /// Opaque handle to an AppServiceClient
 pub struct AppServiceHandle(pub AppServiceClient<Box<dyn ReadWrite>>);
@@ -56,17 +58,6 @@ pub struct SignalResponseC {
     pub signal: u32,
 }
 
-/// C-compatible icon data
-#[repr(C)]
-pub struct IconDataC {
-    pub data: *mut u8,
-    pub data_len: usize,
-    pub icon_width: f64,
-    pub icon_height: f64,
-    pub minimum_width: f64,
-    pub minimum_height: f64,
-}
-
 /// Creates a new AppServiceClient using RSD connection
 ///
 /// # Arguments
@@ -80,6 +71,7 @@ pub struct IconDataC {
 /// # Safety
 /// `provider` and `handshake` must be valid pointers to handles allocated by this library
 /// `handle` must be a valid pointer to a location where the handle will be stored
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn app_service_connect_rsd(
     provider: *mut AdapterHandle,
@@ -588,86 +580,6 @@ pub unsafe extern "C" fn app_service_free_signal_response(response: *mut SignalR
         let response = unsafe { Box::from_raw(response) };
         if !response.executable_url.is_null() {
             let _ = unsafe { CString::from_raw(response.executable_url) };
-        }
-    }
-}
-
-/// Fetches an app icon
-///
-/// # Arguments
-/// * [`handle`] - The AppServiceClient handle
-/// * [`bundle_id`] - Bundle identifier of the app
-/// * [`width`] - Icon width
-/// * [`height`] - Icon height
-/// * [`scale`] - Icon scale
-/// * [`allow_placeholder`] - Whether to allow placeholder icons
-/// * [`icon_data`] - Pointer to store the icon data (caller must free)
-///
-/// # Returns
-/// An IdeviceFfiError on error, null on success
-///
-/// # Safety
-/// All pointer parameters must be valid
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn app_service_fetch_app_icon(
-    handle: *mut AppServiceHandle,
-    bundle_id: *const c_char,
-    width: c_float,
-    height: c_float,
-    scale: c_float,
-    allow_placeholder: c_int,
-    icon_data: *mut *mut IconDataC,
-) -> *mut IdeviceFfiError {
-    if handle.is_null() || bundle_id.is_null() || icon_data.is_null() {
-        return ffi_err!(IdeviceError::FfiInvalidArg);
-    }
-
-    let bundle_id_str = match unsafe { CStr::from_ptr(bundle_id) }.to_str() {
-        Ok(s) => s,
-        Err(_) => return ffi_err!(IdeviceError::FfiInvalidString),
-    };
-
-    let client = unsafe { &mut (*handle).0 };
-    let res = run_sync(async move {
-        client
-            .fetch_app_icon(bundle_id_str, width, height, scale, allow_placeholder != 0)
-            .await
-    });
-
-    match res {
-        Ok(icon) => {
-            let data_vec: Vec<u8> = icon.data.into();
-            let mut data_vec = data_vec.into_boxed_slice();
-            let data_len = data_vec.len();
-            let data_ptr = data_vec.as_mut_ptr();
-            std::mem::forget(data_vec);
-
-            let c_icon = Box::new(IconDataC {
-                data: data_ptr,
-                data_len,
-                icon_width: icon.icon_width,
-                icon_height: icon.icon_height,
-                minimum_width: icon.minimum_width,
-                minimum_height: icon.minimum_height,
-            });
-
-            unsafe { *icon_data = Box::into_raw(c_icon) };
-            null_mut()
-        }
-        Err(e) => ffi_err!(e),
-    }
-}
-
-/// Frees an IconDataC structure
-///
-/// # Safety
-/// `icon_data` must be a valid pointer allocated by app_service_fetch_app_icon
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn app_service_free_icon_data(icon_data: *mut IconDataC) {
-    if !icon_data.is_null() {
-        let icon_data = unsafe { Box::from_raw(icon_data) };
-        if !icon_data.data.is_null() && icon_data.data_len > 0 {
-            let _ = unsafe { std::slice::from_raw_parts(icon_data.data, icon_data.data_len) };
         }
     }
 }

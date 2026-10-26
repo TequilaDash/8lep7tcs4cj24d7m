@@ -6,14 +6,18 @@ use std::{
 };
 
 use idevice::{
-    IdeviceError, IdeviceService, RsdService, afc::AfcClient, house_arrest::HouseArrestClient,
+    IdeviceError, IdeviceService, afc::AfcClient, house_arrest::HouseArrestClient,
     provider::IdeviceProvider,
 };
 
 use crate::{
-    IdeviceFfiError, IdeviceHandle, afc::AfcClientHandle, core_device_proxy::AdapterHandle,
-    ffi_err, provider::IdeviceProviderHandle, rsd::RsdHandshakeHandle, run_sync_local,
+    IdeviceFfiError, IdeviceHandle, afc::AfcClientHandle, ffi_err, provider::IdeviceProviderHandle,
+    run_sync_local,
 };
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
+use crate::{core_device_proxy::AdapterHandle, rsd::RsdHandshakeHandle};
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
+use idevice::RsdService as _;
 
 pub struct HouseArrestClientHandle(pub HouseArrestClient);
 
@@ -69,6 +73,7 @@ pub unsafe extern "C" fn house_arrest_client_connect(
 /// `provider` must be a valid pointer to a handle allocated by this library
 /// `handshake` must be a valid pointer to a handle allocated by this library
 /// `client` must be a valid, non-null pointer to a location where the handle will be stored
+#[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn house_arrest_client_connect_rsd(
     provider: *mut AdapterHandle,
@@ -123,6 +128,10 @@ pub unsafe extern "C" fn house_arrest_client_new(
 
 /// Vends a container for an app
 ///
+/// If any argument is null, the client is not consumed. Otherwise, this function
+/// consumes the client on both success and error, including device errors.
+/// The caller must not use or free the consumed client afterwards.
+///
 /// # Arguments
 /// * [`client`] - The House Arrest client
 /// * [`bundle_id`] - The bundle ID to vend for
@@ -132,7 +141,7 @@ pub unsafe extern "C" fn house_arrest_client_new(
 /// An IdeviceFfiError on error, null on success
 ///
 /// # Safety
-/// `client` must be a allocated by this library
+/// `client` must be a valid pointer to a handle allocated by this library
 /// `bundle_id` must be a NULL-terminated string
 /// `afc_client` must be a valid, non-null pointer where the new AFC client will be stored
 #[unsafe(no_mangle)]
@@ -167,6 +176,10 @@ pub unsafe extern "C" fn house_arrest_vend_container(
 
 /// Vends documents for an app
 ///
+/// If any argument is null, the client is not consumed. Otherwise, this function
+/// consumes the client on both success and error, including device errors.
+/// The caller must not use or free the consumed client afterwards.
+///
 /// # Arguments
 /// * [`client`] - The House Arrest client
 /// * [`bundle_id`] - The bundle ID to vend for
@@ -176,7 +189,7 @@ pub unsafe extern "C" fn house_arrest_vend_container(
 /// An IdeviceFfiError on error, null on success
 ///
 /// # Safety
-/// `client` must be a allocated by this library
+/// `client` must be a valid pointer to a handle allocated by this library
 /// `bundle_id` must be a NULL-terminated string
 /// `afc_client` must be a valid, non-null pointer where the new AFC client will be stored
 #[unsafe(no_mangle)]

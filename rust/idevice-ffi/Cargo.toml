@@ -8,7 +8,7 @@ edition = "2024"
 # Lua 模块宿主（v0.3.95：Rust+mlua 解释器，编进 App；单一 Rust 静态库避免
 # 重复 std 符号）。mlua vendored = 编译捆绑的 Lua 5.4 C 源码，需 CC 指向 iOS SDK。
 mlua = { version = "0.9", features = ["lua54", "vendored", "send"] }
-idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "7bd551c16c6dd2e058740d85a2d9399a51a776e9", default-features = false }
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "26a28f6a46b5d85a28043c2e62febfa394c8b0a6", default-features = false }
 futures = { version = "0.3", optional = true }
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
@@ -47,6 +47,7 @@ windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock"] }
 [features]
 aws-lc = ["idevice/aws-lc"]
 ring = ["idevice/ring"]
+rustcrypto = ["idevice/rustcrypto"]
 openssl = ["idevice/openssl"]
 
 
@@ -54,9 +55,10 @@ afc = ["idevice/afc"]
 amfi = ["idevice/amfi"]
 bt_packet_logger = ["idevice/bt_packet_logger"]
 companion_proxy = ["idevice/companion_proxy"]
-core_device = ["idevice/core_device", "dep:futures", "dep:uuid"]
-core_device_proxy = ["idevice/core_device_proxy"]
-crashreportcopymobile = ["idevice/crashreportcopymobile"]
+core_device = ["idevice/core_device", "dep:futures", "dep:uuid", "rsd"]
+core_device_proxy = ["idevice/core_device_proxy", "idevice/tunnel_tcp_stack"]
+crashreportcopymobile = ["idevice/crashreportcopymobile", "afc"]
+cryptexd = ["idevice/cryptexd", "rsd", "tss"]
 debug_proxy = ["idevice/debug_proxy"]
 diagnostics_relay = ["idevice/diagnostics_relay"]
 dvt = ["idevice/dvt"]
@@ -69,8 +71,8 @@ network_monitor = ["idevice/network_monitor"]
 sysmontap = ["idevice/sysmontap"]
 heartbeat = ["idevice/heartbeat"]
 notification_proxy = ["idevice/notification_proxy"]
-house_arrest = ["idevice/house_arrest"]
-installcoordination_proxy = ["idevice/installcoordination_proxy"]
+house_arrest = ["idevice/house_arrest", "afc"]
+installcoordination_proxy = ["idevice/installcoordination_proxy", "rsd"]
 installation_proxy = ["idevice/installation_proxy"]
 springboardservices = ["idevice/springboardservices"]
 misagent = ["idevice/misagent"]
@@ -82,16 +84,23 @@ pair = ["idevice/pair"]
 pcapd = ["idevice/pcapd"]
 preboard_service = ["idevice/preboard_service"]
 obfuscate = ["idevice/obfuscate"]
-restore_service = ["idevice/restore_service"]
+restore = ["idevice/restore", "dep:futures"]
+restore_recovery = ["restore", "idevice/restore_recovery"]
+restore_service = ["idevice/restore_service", "rsd"]
 remote_pairing = ["idevice/remote_pairing", "dep:mdns-sd"]
 rsd = ["idevice/rsd"]
 syslog_relay = ["idevice/syslog_relay"]
 tcp = ["idevice/tcp"]
-tunnel_tcp_stack = ["idevice/tunnel_tcp_stack"]
-tunnel_tcp_stack_pcap = ["idevice/tunnel_tcp_stack_pcap"]
+tunnel_tcp_stack = [
+  "idevice/tunnel_tcp_stack",
+  "core_device_proxy",
+  "rsd",
+  "remote_pairing",
+]
+tunnel_tcp_stack_pcap = ["idevice/tunnel_tcp_stack_pcap", "tunnel_tcp_stack"]
 tss = ["idevice/tss"]
 tunneld = ["idevice/tunneld"]
-usbmuxd = ["idevice/usbmuxd"]
+usbmuxd = ["idevice/usbmuxd", "dep:futures"]
 wda = ["idevice/wda", "dep:serde_json"]
 xpc = ["idevice/xpc"]
 screenshotr = ["idevice/screenshotr"]
@@ -103,6 +112,7 @@ full = [
   "core_device",
   "core_device_proxy",
   "crashreportcopymobile",
+  "cryptexd",
   "debug_proxy",
   "diagnostics_relay",
   "dvt",
@@ -126,6 +136,8 @@ full = [
   "pair",
   "pcapd",
   "preboard_service",
+  "restore",
+  "restore_recovery",
   "restore_service",
   "remote_pairing",
   "rsd",

@@ -18,6 +18,8 @@ pub mod core_device;
 pub mod core_device_proxy;
 #[cfg(feature = "crashreportcopymobile")]
 pub mod crashreportcopymobile;
+#[cfg(feature = "cryptexd")]
+pub mod cryptexd;
 #[cfg(feature = "debug_proxy")]
 pub mod debug_proxy;
 #[cfg(feature = "diagnostics_relay")]
@@ -52,18 +54,24 @@ pub mod os_trace_relay;
 #[cfg(feature = "remote_pairing")]
 pub mod pairable_host;
 mod pairing_file;
+#[cfg(feature = "remote_pairing")]
+pub mod pairing_host;
 #[cfg(feature = "pcapd")]
 pub mod pcapd;
 #[cfg(feature = "preboard_service")]
 pub mod preboard_service;
 pub mod provider;
+#[cfg(feature = "remote_pairing")]
+pub mod remote_pairing_lockdown;
+#[cfg(feature = "restore")]
+pub mod restore;
 #[cfg(feature = "restore_service")]
 pub mod restore_service;
 #[cfg(feature = "remote_pairing")]
 pub mod rp_pairing_file;
 #[cfg(feature = "remote_pairing")]
 pub mod pairable_host_run;
-#[cfg(feature = "xpc")]
+#[cfg(feature = "rsd")]
 pub mod rsd;
 #[cfg(feature = "screenshotr")]
 pub mod screenshotr;
@@ -94,6 +102,8 @@ use plist_ffi::PlistWrapper;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     ptr::null_mut,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
 use tokio::runtime::{self, Runtime};
 
@@ -127,6 +137,8 @@ static LOCAL_RUNTIME: Lazy<Option<Runtime>> = Lazy::new(|| match build_runtime(t
         None
     }
 });
+
+static GLOBAL_TIMEOUT: AtomicU64 = AtomicU64::new(5);
 
 /// Spawn the future on the global runtime and block current (FFI) thread until result.
 /// F and R must be Send + 'static.
@@ -328,7 +340,7 @@ pub unsafe extern "C" fn idevice_new_tcp_socket(
     };
 
     let device = run_sync(async move {
-        let stream = tokio::net::TcpStream::connect(addr).await?;
+        let stream = run_global_timeout(|| tokio::net::TcpStream::connect(addr)).await?;
         Ok::<idevice::Idevice, idevice::IdeviceError>(idevice::Idevice::new(
             Box::new(stream),
             label,
@@ -447,6 +459,27 @@ pub unsafe extern "C" fn idevice_start_session(
         Ok(_) => null_mut(),
         Err(e) => ffi_err!(e),
     }
+}
+
+/// Sets the timeout on async calls such as TCP connections
+///
+/// # Safety
+/// This function is safe to call from any thread at any time
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn idevice_set_global_timeout(secs: u64) {
+    GLOBAL_TIMEOUT.store(secs, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) async fn run_global_timeout<F, R, E>(f: impl FnOnce() -> F) -> Result<R, IdeviceError>
+where
+    F: Future<Output = Result<R, E>>,
+    E: Into<IdeviceError>,
+{
+    let timeout = GLOBAL_TIMEOUT.load(Ordering::Relaxed);
+    tokio::time::timeout(Duration::from_secs(timeout), f())
+        .await
+        .map_err(|_| IdeviceError::Timeout)?
+        .map_err(Into::into)
 }
 
 /// Frees an Idevice handle

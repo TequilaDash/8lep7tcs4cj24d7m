@@ -27,6 +27,26 @@
 
 #define LOCKDOWN_PORT 62078
 
+/**
+ * The nonce domain index cryptexes are personalized against
+ */
+#define IDEVICE_CRYPTEXD_NONCE_DOMAIN_CRYPTEX 2
+
+/**
+ * The `image-type-index` a DeveloperDiskImage install uses
+ */
+#define IDEVICE_CRYPTEXD_DDI_IMAGE_TYPE_INDEX 10
+
+/**
+ * The `persistence` a DeveloperDiskImage install uses
+ */
+#define IDEVICE_CRYPTEXD_DDI_PERSISTENCE 2
+
+/**
+ * The `nonce-persistence` a DeveloperDiskImage install uses
+ */
+#define IDEVICE_CRYPTEXD_DDI_NONCE_PERSISTENCE 1
+
 typedef enum AfcFopenMode {
   AfcRdOnly = 1,
   AfcRw = 2,
@@ -45,21 +65,26 @@ typedef enum AfcLinkType {
 } AfcLinkType;
 
 /**
- * Network event type discriminant
+ * Which of the device's filesystem domains a session is scoped to
  */
-typedef enum IdeviceNetworkEventType {
-  InterfaceDetection = 0,
-  ConnectionDetection = 1,
-  ConnectionUpdate = 2,
-  Unknown = 255,
-} IdeviceNetworkEventType;
-
-typedef enum IdeviceLoggerError {
-  Success = 0,
-  FileError = -1,
-  AlreadyInitialized = -2,
-  InvalidPathString = -3,
-} IdeviceLoggerError;
+typedef enum IdeviceFileServiceDomain {
+  /**
+   * An app's own data container. The identifier is the bundle ID.
+   */
+  IdeviceFileServiceDomainAppDataContainer = 1,
+  /**
+   * A shared app-group container. The identifier is the group ID.
+   */
+  IdeviceFileServiceDomainAppGroupDataContainer = 2,
+  /**
+   * The temporary directory.
+   */
+  IdeviceFileServiceDomainTemporary = 3,
+  /**
+   * The system crash-log store.
+   */
+  IdeviceFileServiceDomainSystemCrashLogs = 5,
+} IdeviceFileServiceDomain;
 
 typedef enum IdeviceLogLevel {
   Disabled = 0,
@@ -69,6 +94,45 @@ typedef enum IdeviceLogLevel {
   Debug = 4,
   Trace = 5,
 } IdeviceLogLevel;
+
+typedef enum IdeviceLoggerError {
+  Success = 0,
+  FileError = -1,
+  AlreadyInitialized = -2,
+  InvalidPathString = -3,
+} IdeviceLoggerError;
+
+/**
+ * Network event type discriminant
+ */
+typedef enum IdeviceNetworkEventType {
+  InterfaceDetection = 0,
+  ConnectionDetection = 1,
+  ConnectionUpdate = 2,
+  Unknown = 255,
+} IdeviceNetworkEventType;
+
+/**
+ * The outcome of a `CreateStashbag` request.
+ */
+typedef enum IdeviceStashbagOutcome {
+  /**
+   * The device does not need a stashbag; nothing further to do.
+   */
+  NotRequired = 0,
+  /**
+   * A stashbag was created and must be committed with the AP ticket.
+   */
+  CommitRequired = 1,
+} IdeviceStashbagOutcome;
+
+/**
+ * The system's light/dark appearance
+ */
+typedef enum IdeviceUserInterfaceStyle {
+  IdeviceUserInterfaceStyleLight = 0,
+  IdeviceUserInterfaceStyleDark = 1,
+} IdeviceUserInterfaceStyle;
 
 /**
  * Why a tunnel attempt ultimately failed, so the caller can say something more
@@ -145,9 +209,28 @@ typedef struct CompanionProxyClientHandle CompanionProxyClientHandle;
  */
 typedef struct ConditionInducerHandle ConditionInducerHandle;
 
+/**
+ * Opaque handle to a ConfigurationServiceClient
+ */
+typedef struct ConfigurationServiceHandle ConfigurationServiceHandle;
+
 typedef struct CoreDeviceProxyHandle CoreDeviceProxyHandle;
 
 typedef struct CrashReportCopyMobileHandle CrashReportCopyMobileHandle;
+
+/**
+ * Opaque handle to the payloads a Cryptex1 DeveloperDiskImage install needs
+ */
+typedef struct Cryptex1AssetsHandle Cryptex1AssetsHandle;
+
+/**
+ * Opaque handle to a CryptexdClient
+ *
+ * The daemon serves one routine per connection, so every call below consumes
+ * the handle: it is freed by the call and must not be used again, even when
+ * the call fails.
+ */
+typedef struct CryptexdHandle CryptexdHandle;
 
 /**
  * Opaque handle to a DebugProxyClient
@@ -168,11 +251,21 @@ typedef struct DiagnosticsServiceHandle DiagnosticsServiceHandle;
 
 typedef struct EnergyMonitorHandle EnergyMonitorHandle;
 
+/**
+ * Opaque handle to a FileServiceClient
+ */
+typedef struct FileServiceHandle FileServiceHandle;
+
 typedef struct GraphicsHandle GraphicsHandle;
 
 typedef struct HeartbeatClientHandle HeartbeatClientHandle;
 
 typedef struct HouseArrestClientHandle HouseArrestClientHandle;
+
+/**
+ * Opaque handle to an IconServiceClient
+ */
+typedef struct IconServiceHandle IconServiceHandle;
 
 /**
  * Opaque C-compatible handle to an Idevice connection
@@ -186,6 +279,16 @@ typedef struct IdevicePairingFile IdevicePairingFile;
 
 typedef struct IdeviceProviderHandle IdeviceProviderHandle;
 
+/**
+ * An opaque, shareable cancellation flag for an in-flight restore.
+ *
+ * Create one with `idevice_restore_cancel_handle_new`, pass it to
+ * `idevice_restore_run`, and call `idevice_restore_cancel` from another thread to
+ * request a graceful cancel (the device is rebooted toward recovery). Free it with
+ * `idevice_restore_cancel_handle_free` once the restore has returned.
+ */
+typedef struct IdeviceRestoreCancelHandle IdeviceRestoreCancelHandle;
+
 typedef struct IdeviceSocketHandle IdeviceSocketHandle;
 
 typedef struct ImageMounterHandle ImageMounterHandle;
@@ -193,6 +296,11 @@ typedef struct ImageMounterHandle ImageMounterHandle;
 typedef struct InstallationProxyClientHandle InstallationProxyClientHandle;
 
 typedef struct InstallcoordinationProxyHandle InstallcoordinationProxyHandle;
+
+/**
+ * Opaque handle to an opened IPSW archive.
+ */
+typedef struct IpswHandle IpswHandle;
 
 /**
  * Opaque handle to a ProcessControlClient
@@ -222,9 +330,26 @@ typedef struct NotificationProxyClientHandle NotificationProxyClientHandle;
 
 typedef struct NotificationsHandle NotificationsHandle;
 
+typedef struct Option_WifiPowerFn Option_WifiPowerFn;
+
 typedef struct OsTraceRelayClientHandle OsTraceRelayClientHandle;
 
 typedef struct OsTraceRelayReceiverHandle OsTraceRelayReceiverHandle;
+
+/**
+ * Opaque cancellation token for [`pairable_host_accept`].
+ *
+ * Create one with `pairable_host_cancel_new`, hand it to `pairable_host_accept`,
+ * and call `pairable_host_cancel_signal` from any other thread to abort the wait.
+ * Free it with `pairable_host_cancel_free` once the accept has returned.
+ */
+typedef struct PairableHostCancel PairableHostCancel;
+
+/**
+ * Opaque handle holding a generated host identity between
+ * `pairable_host_prepare` and `pairable_host_accept_fd`.
+ */
+typedef struct PairableHostHandle PairableHostHandle;
 
 typedef struct PcapdClientHandle PcapdClientHandle;
 
@@ -238,11 +363,31 @@ typedef struct ProcessControlHandle ProcessControlHandle;
 typedef struct ReadWriteOpaque ReadWriteOpaque;
 
 /**
+ * Opaque handle to a device in recovery/DFU mode.
+ */
+typedef struct RecoveryDeviceHandle RecoveryDeviceHandle;
+
+/**
+ * Opaque handle to the RemoteXPC-native notification proxy (iOS 17+)
+ */
+typedef struct RemoteNotificationProxyClientHandle RemoteNotificationProxyClientHandle;
+
+/**
+ * Opaque handle to a remote pairing client speaking `RPPairing` over lockdown
+ */
+typedef struct RemotePairingLockdownHandle RemotePairingLockdownHandle;
+
+/**
  * Opaque handle to a RemoteServerClient
  */
 typedef struct RemoteServerHandle RemoteServerHandle;
 
 typedef struct RestoreServiceClientHandle RestoreServiceClientHandle;
+
+/**
+ * Opaque handle to a restore-mode `com.apple.mobile.restored` client.
+ */
+typedef struct RestoredClientHandle RestoredClientHandle;
 
 /**
  * Opaque handle to an RPPairing file
@@ -263,6 +408,11 @@ typedef struct RsdHandshakeHandle RsdHandshakeHandle;
 typedef struct ScreenshotClientHandle ScreenshotClientHandle;
 
 typedef struct ScreenshotrClientHandle ScreenshotrClientHandle;
+
+/**
+ * 不透明句柄：持有 tokio runtime 与构建好的 Sideloader。
+ */
+typedef struct SignSession SignSession;
 
 typedef struct SpringBoardServicesClientHandle SpringBoardServicesClientHandle;
 
@@ -313,6 +463,14 @@ typedef struct IdeviceFfiError {
  * Stub to avoid header problems
  */
 typedef void *plist_t;
+
+/**
+ * `int (*)(void *ctx, char *out_buf, size_t buf_len)` — 把 2FA 验证码写进
+ * `out_buf`（NUL 结尾）并返回 1；用户取消返回 0。
+ */
+typedef int32_t (*TwoFactorCb)(void *ctx, char *out_buf, uintptr_t buf_len);
+
+typedef int (*Pkcs7SignFn)(const uint8_t *data, int data_len, uint8_t **der_out, int *der_len);
 
 /**
  * File information structure for C bindings
@@ -414,16 +572,117 @@ typedef struct SignalResponseC {
 } SignalResponseC;
 
 /**
- * C-compatible icon data
+ * The accessibility color filter's state
  */
-typedef struct IconDataC {
-  uint8_t *data;
-  uintptr_t data_len;
-  double icon_width;
-  double icon_height;
-  double minimum_width;
-  double minimum_height;
-} IconDataC;
+typedef struct ColorFilterC {
+  int enabled;
+  /**
+   * The filter preset's name, or NULL if the device didn't report one.
+   * Free with `idevice_string_free`.
+   */
+  char *filter_type;
+  /**
+   * Filter strength, 0.0 to 1.0. Only meaningful when `has_intensity` is 1.
+   */
+  double intensity;
+  int has_intensity;
+} ColorFilterC;
+
+/**
+ * A rendered app icon
+ */
+typedef struct AppIconC {
+  /**
+   * PNG-encoded image data
+   */
+  uint8_t *png_data;
+  uintptr_t png_data_len;
+  /**
+   * Icon dimensions in pixels, i.e. the points multiplied by the scale
+   */
+  double pixel_width;
+  double pixel_height;
+  /**
+   * Icon dimensions in points, as actually rendered. May be smaller than
+   * what was requested.
+   */
+  double width;
+  double height;
+  double scale;
+  /**
+   * 1 when the device had no real icon for the app and rendered a generic
+   * placeholder instead
+   */
+  int is_placeholder;
+} AppIconC;
+
+/**
+ * A cryptex installed on the device
+ */
+typedef struct InstalledCryptexC {
+  /**
+   * Free with `idevice_string_free`
+   */
+  char *identifier;
+  /**
+   * Free with `idevice_string_free`
+   */
+  char *version;
+} InstalledCryptexC;
+
+/**
+ * Which nonce domain a get-nonce or roll-nonce request refers to
+ */
+typedef struct CryptexNonceDomain {
+  /**
+   * When 1, `value` is a nonce domain handle, e.g. a build identity's
+   * `Cryptex1,NonceDomain`. When 0, it is a domain index, e.g.
+   * `IDEVICE_CRYPTEXD_NONCE_DOMAIN_CRYPTEX`.
+   */
+  int is_handle;
+  uint64_t value;
+} CryptexNonceDomain;
+
+/**
+ * The payloads and parameters one install needs
+ */
+typedef struct CryptexInstallRequestC {
+  /**
+   * The cryptex disk image, i.e. the manifest's `Cryptex1,GenericDmg`
+   */
+  const uint8_t *image;
+  uintptr_t image_len;
+  /**
+   * `Cryptex1,GenericTrustCache`
+   */
+  const uint8_t *trustcache;
+  uintptr_t trustcache_len;
+  /**
+   * The Cryptex1 personalization ticket
+   */
+  const uint8_t *im4m;
+  uintptr_t im4m_len;
+  /**
+   * `Cryptex1,CryptexInfoPlist`, which names and versions the cryptex
+   */
+  const uint8_t *info;
+  uintptr_t info_len;
+  /**
+   * `Cryptex1,GenericVolume` root hash
+   */
+  const uint8_t *volumehash;
+  uintptr_t volumehash_len;
+  /**
+   * The `Cryptex1,*` parameters from the build identity, as a plist
+   * dictionary. Non-negative integers are sent as uint64, which the daemon
+   * requires.
+   */
+  plist_t cryptex1_properties;
+  int64_t image_type_index;
+  uint64_t persistence;
+  uint64_t nonce_persistence;
+  uint64_t auth;
+} CryptexInstallRequestC;
 
 /**
  * Represents a debugserver command
@@ -573,6 +832,40 @@ typedef struct IdeviceSysmontapConfig {
 } IdeviceSysmontapConfig;
 
 /**
+ * Progress snapshot passed to `on_progress`.
+ *
+ * A session is split into batches of files. `batch_*` describes the batch
+ * currently streaming; `session_*` accumulates across the whole session.
+ * Fields are only ever appended to, so a callback compiled against an older
+ * header stays ABI-compatible.
+ */
+typedef struct Mobilebackup2BackupProgress {
+  /**
+   * Bytes transferred so far in the current batch.
+   */
+  uint64_t batch_bytes_done;
+  /**
+   * Bytes the device said this batch contains, or 0 if unknown. Approximate.
+   */
+  uint64_t batch_bytes_total;
+  /**
+   * Bytes transferred so far across every batch in this session. Monotonic.
+   */
+  uint64_t session_bytes_done;
+  /**
+   * Estimated total bytes for the session, or 0 while not estimable.
+   * Derived from the device's percentage, so it drifts. Never exact.
+   */
+  uint64_t session_bytes_total;
+  /**
+   * Overall progress percentage (0.0-100.0), or negative if not yet known.
+   * Interpolated within a batch and clamped to be monotonic. Not equal to
+   * session_bytes_done / session_bytes_total.
+   */
+  double overall_progress;
+} Mobilebackup2BackupProgress;
+
+/**
  * C-compatible delegate for mobilebackup2 operations.
  *
  * All function pointers are required except `on_file_received` and
@@ -601,12 +894,16 @@ typedef struct Mobilebackup2BackupDelegateFFI {
   bool (*exists)(const char *path, void *context);
   bool (*is_dir)(const char *path, void *context);
   /**
-   * Optional progress callback. May be NULL.
+   * Optional cancellation callback. May be NULL.
    */
-  void (*on_progress)(uint64_t bytes_done,
-                      uint64_t bytes_total,
-                      double overall_progress,
-                      void *context);
+  bool (*is_cancelled)(void *context);
+  /**
+   * Optional progress callback. May be NULL.
+   *
+   * `progress` is owned by the caller and only valid for the duration of the
+   * call; copy out any fields you need to keep.
+   */
+  void (*on_progress)(const struct Mobilebackup2BackupProgress *progress, void *context);
 } Mobilebackup2BackupDelegateFFI;
 
 typedef struct SyslogLabel {
@@ -623,6 +920,40 @@ typedef struct OsTraceLog {
   const char *message;
   const struct SyslogLabel *label;
 } OsTraceLog;
+
+/**
+ * The peer device identity learned during a successful pair-setup.
+ *
+ * Free with `rppairing_peer_device_free`.
+ */
+typedef struct RpPairingPeerDeviceC {
+  /**
+   * Peer identifier, the same identifier a later `verifyManualPairing` returns.
+   */
+  char *account_id;
+  /**
+   * The device's 16-byte `altIRK`, used to match its mDNS `authTag` records.
+   */
+  uint8_t alt_irk[16];
+  /**
+   * Hardware model identifier, e.g. "AppleTV14,1".
+   */
+  char *model;
+  /**
+   * User-visible device name, e.g. "Living Room".
+   */
+  char *name;
+  /**
+   * The device's UDID.
+   */
+  char *udid;
+} RpPairingPeerDeviceC;
+
+/**
+ * Called when the device issues a setup PIN, so the caller can surface it to the
+ * user. May be NULL.
+ */
+typedef void (*PairableHostPinCb)(const char *pin, void *context);
 
 /**
  * Represents a captured device packet from pcapd
@@ -648,6 +979,191 @@ typedef struct DevicePacketHandle {
   uint8_t *data;
   uintptr_t data_len;
 } DevicePacketHandle;
+
+/**
+ * C delegate supplying firmware component bytes by archive path.
+ *
+ * `read_component` (required) reads a whole component into a system-allocated
+ * buffer (ownership transfers to the library, which frees it). The optional
+ * streaming trio (`open_component`/`read_chunk`/`close_component`) lets large
+ * source boot objects stream without buffering; when `open_component` is NULL the
+ * library falls back to buffering via `read_component`.
+ */
+typedef struct IdeviceRestoreComponentSourceFFI {
+  void *context;
+  struct IdeviceFfiError *(*read_component)(const char *path,
+                                            uint8_t **out_data,
+                                            uintptr_t *out_len,
+                                            void *context);
+  struct IdeviceFfiError *(*open_component)(const char *path, void **out_reader, void *context);
+  struct IdeviceFfiError *(*read_chunk)(void *reader,
+                                        uint8_t *buf,
+                                        uintptr_t buf_len,
+                                        uintptr_t *out_read,
+                                        void *context);
+  void (*close_component)(void *reader, void *context);
+} IdeviceRestoreComponentSourceFFI;
+
+/**
+ * C delegate exposing a seekable, sized filesystem (DMG) image for ASR.
+ */
+typedef struct IdeviceRestoreFilesystemImageFFI {
+  void *context;
+  /**
+   * Returns the total image size in bytes.
+   */
+  struct IdeviceFfiError *(*size)(uint64_t *out_size, void *context);
+  /**
+   * Reads up to `len` bytes at `offset` into a system-allocated buffer whose
+   * ownership transfers to the library.
+   */
+  struct IdeviceFfiError *(*read_at)(uint64_t offset,
+                                     uintptr_t len,
+                                     uint8_t **out_data,
+                                     uintptr_t *out_len,
+                                     void *context);
+} IdeviceRestoreFilesystemImageFFI;
+
+/**
+ * C delegate opening fresh connections to restore-mode data ports.
+ */
+typedef struct IdeviceRestoreDataPortConnectorFFI {
+  void *context;
+  /**
+   * Connects to `port`, yielding a new [`IdeviceHandle`] (ownership transfers
+   * to the library).
+   */
+  struct IdeviceFfiError *(*connect)(uint16_t port,
+                                     struct IdeviceHandle **out_idevice,
+                                     void *context);
+} IdeviceRestoreDataPortConnectorFFI;
+
+/**
+ * C delegate receiving restore progress callbacks. Any field may be NULL.
+ */
+typedef struct IdeviceRestoreProgressFFI {
+  void *context;
+  /**
+   * The device's operation code and completion percentage (0–100).
+   */
+  void (*operation)(uint64_t operation, uint64_t progress, void *context);
+  /**
+   * A named host step (the `DataType` being serviced).
+   */
+  void (*step)(const char *name, void *context);
+  void (*transfer)(const char *component,
+                   uint64_t sent,
+                   uint64_t total,
+                   bool has_total,
+                   void *context);
+} IdeviceRestoreProgressFFI;
+
+/**
+ * C delegate implementing the raw USB surface of a recovery/DFU device.
+ *
+ * The library implements the iBoot/DFU protocol on top of these calls, so the
+ * caller only supplies USB I/O (via nusb, libusb, etc) against the Apple device
+ * already opened in a recovery/DFU mode.
+ */
+typedef struct IdeviceRestoreRecoveryTransportFFI {
+  void *context;
+  /**
+   * Host to device control transfer; writes the byte count to `out_transferred`.
+   */
+  struct IdeviceFfiError *(*control_out)(uint8_t request_type,
+                                         uint8_t request,
+                                         uint16_t value,
+                                         uint16_t index,
+                                         const uint8_t *data,
+                                         uintptr_t data_len,
+                                         uint32_t timeout_ms,
+                                         uintptr_t *out_transferred,
+                                         void *context);
+  /**
+   * Device to host control transfer into a system-allocated buffer (ownership
+   * transfers to the library).
+   */
+  struct IdeviceFfiError *(*control_in)(uint8_t request_type,
+                                        uint8_t request,
+                                        uint16_t value,
+                                        uint16_t index,
+                                        uint16_t length,
+                                        uint32_t timeout_ms,
+                                        uint8_t **out_data,
+                                        uintptr_t *out_len,
+                                        void *context);
+  /**
+   * Bulk OUT transfer; writes the byte count to `out_transferred`.
+   */
+  struct IdeviceFfiError *(*bulk_out)(uint8_t endpoint,
+                                      const uint8_t *data,
+                                      uintptr_t data_len,
+                                      uint32_t timeout_ms,
+                                      uintptr_t *out_transferred,
+                                      void *context);
+  /**
+   * Writes the NUL-terminated USB serial-number string into `buf`
+   * (capacity `buf_len`).
+   */
+  struct IdeviceFfiError *(*serial_number)(char *buf, uintptr_t buf_len, void *context);
+  /**
+   * Returns the device descriptor's `idProduct`.
+   */
+  uint16_t (*product_id)(void *context);
+  /**
+   * Selects a configuration.
+   */
+  struct IdeviceFfiError *(*set_configuration)(uint8_t configuration, void *context);
+  /**
+   * Claims an interface / alternate setting.
+   */
+  struct IdeviceFfiError *(*claim_interface)(uint8_t iface, uint8_t alt_setting, void *context);
+  /**
+   * Resets the device (it re-enumerates afterwards).
+   */
+  struct IdeviceFfiError *(*reset)(void *context);
+} IdeviceRestoreRecoveryTransportFFI;
+
+/**
+ * C delegate opening FDR trust-channel connections to device ports.
+ */
+typedef struct IdeviceRestoreFdrConnectorFFI {
+  void *context;
+  /**
+   * Connects to `port`, yielding a new [`IdeviceHandle`] (ownership
+   * transfers to the library).
+   */
+  struct IdeviceFfiError *(*connect_device_port)(uint16_t port,
+                                                 struct IdeviceHandle **out_idevice,
+                                                 void *context);
+} IdeviceRestoreFdrConnectorFFI;
+
+/**
+ * Emitted by `si_run_host` right after the listener is bound, so the caller
+ * can advertise the pairable-host service over Bonjour. The `txt_*` arrays and
+ * `service_id` point to C strings that are only valid for the duration of the
+ * callback — copy them immediately.
+ */
+typedef void (*SiReadyCb)(void *ctx,
+                          const char *service_id,
+                          uint16_t port,
+                          const char *const *txt_keys,
+                          const char *const *txt_vals,
+                          uintptr_t txt_count);
+
+/**
+ * Emitted once with the 6-digit setup PIN to display in the UI.
+ */
+typedef void (*SiPinCb)(const char *pin, void *ctx);
+
+typedef struct SiPairResult {
+  char *error;
+  char *device_name;
+  char *device_model;
+  char *device_udid;
+  char *pairing_file_path;
+  char *host_alt_irk_hex;
+} SiPairResult;
 
 /**
  * C-compatible representation of an RSD service
@@ -823,6 +1339,14 @@ struct IdeviceFfiError *idevice_start_session(struct IdeviceHandle *idevice,
                                               bool legacy);
 
 /**
+ * Sets the timeout on async calls such as TCP connections
+ *
+ * # Safety
+ * This function is safe to call from any thread at any time
+ */
+void idevice_set_global_timeout(uint64_t secs);
+
+/**
  * Frees an Idevice handle
  *
  * # Arguments
@@ -886,6 +1410,127 @@ void idevice_plist_array_free(plist_t *plists, uintptr_t len);
  * Pass a valid pointer passed by the Vec creating functions
  */
 void idevice_outer_slice_free(void *slice, uintptr_t len);
+
+/**
+ * 登录 Apple ID 并构建签名会话。阻塞；需要 2FA 时调用 `twofa_cb`。
+ *
+ * # Safety
+ * 见 `sideload_auth::apple_signin`。
+ */
+int32_t si_apple_signin(const char *apple_id,
+                        const char *password,
+                        const char *anisette_url,
+                        const char *machine_name,
+                        const char *storage_dir,
+                        TwoFactorCb twofa_cb,
+                        void *ctx,
+                        struct SignSession **out_session,
+                        char **out_summary,
+                        char **out_dsid,
+                        char **out_auth_token,
+                        char **out_error);
+
+/**
+ * 签名 IPA，把签名后的 `.app` 包路径写入 `*out_signed_path`。阻塞。
+ * `udid` 先注册到团队（传 NULL 跳过）。
+ *
+ * # Safety
+ * 见 `sideload_auth::sign_ipa`。
+ */
+int32_t si_sign_ipa(struct SignSession *session,
+                    const char *ipa_path,
+                    const char *udid,
+                    const char *device_name,
+                    char **out_signed_path,
+                    char **out_error);
+
+/**
+ * 释放签名会话。
+ *
+ * # Safety
+ * `session` 必须为 null 或 `si_apple_signin` 返回的指针。
+ */
+void si_sign_session_free(struct SignSession *session);
+
+/**
+ * 用已有的 dsid + xcode.auth token 恢复签名会话（跳过登录与 2FA）。
+ *
+ * # Safety
+ * 见 `sideload_auth::signin_with_session`。
+ */
+int32_t si_signin_with_session(const char *email,
+                               const char *dsid,
+                               const char *auth_token,
+                               const char *anisette_url,
+                               const char *storage_dir,
+                               const char *machine_name,
+                               struct SignSession **out_session,
+                               char **out_summary,
+                               char **out_error);
+
+/**
+ * 表达式求值：结果（OK <值> 或错误）写入 outPath。返回 0=OK；-1=Lua 错误。
+ */
+int lua_host_eval(const char *code, const char *out_path);
+
+/**
+ * 执行语句块：结果（OK 或错误）写入 outPath。返回 0=OK；-1=Lua 错误。
+ */
+int lua_host_exec(const char *code, const char *out_path);
+
+void lua_host_set_wifi_power_fn(struct Option_WifiPowerFn f);
+
+/**
+ * Swift 建好隧道后调用：移交 adapter/handshake 所有权（Swift 不再释放）
+ *
+ * # Safety
+ * 两个指针必须是本库分配的有效句柄；移交后 Swift 不得再使用或释放。
+ */
+void lua_host_set_mcinstall_handles(struct AdapterHandle *adapter,
+                                    struct RsdHandshakeHandle *handshake,
+                                    const char *pairing_path);
+
+/**
+ * 注册 PKCS7 签名回调（幂等，后注册覆盖前者）。
+ *
+ * # Safety
+ * `f` 必须是有效的 C 函数指针；Swift 侧负责其生命周期（静态闭包）。
+ */
+void mcinstall_set_pkcs7_sign_fn(Pkcs7SignFn f);
+
+/**
+ * v0.3.249：通用 MCInstall 请求（隧道内直连 shim.remote → RSDCheckin →
+ * 可选 Escalate → 发送 Swift 组装好的 plist 正文 → 原样返回设备应答）。
+ *
+ * `request_xml` 是 **plist 正文**（`<dict>...</dict>`），不含 `<?xml?>` 头与
+ * `</plist>` 收尾——Rust 侧统一拼装，Swift 不碰任何帧协议（v0.3.244 闪退教训）。
+ * `cert_der`/`cert_der_len` 非空时先走 Escalate（监督通道）。
+ *
+ * # Safety
+ * `adapter`/`handshake` 必须是本库分配的有效句柄；`out_reply` 可为 NULL。
+ */
+struct IdeviceFfiError *mcinstall_request_rsd(struct AdapterHandle *adapter,
+                                              struct RsdHandshakeHandle *handshake,
+                                              const char *request_xml,
+                                              const uint8_t *cert_der,
+                                              int cert_der_len,
+                                              char **out_reply);
+
+/**
+ * 读 MC_TUNNEL 状态（诊断用）：1=句柄已就绪 0=未就绪
+ *
+ * # Safety
+ * 无需指针参数。
+ */
+int mcinstall_handles_ready(void);
+
+/**
+ * 供字符串释放（保留给未来诊断导出）
+ *
+ * # Safety
+ * `p` 必须是本库分配的字符串指针。
+ */
+void mcinstall_string_free(char *p);
 
 /**
  * Connects the adapter to a specific port
@@ -1825,16 +2470,47 @@ struct IdeviceFfiError *app_service_send_signal(struct AppServiceHandle *handle,
 void app_service_free_signal_response(struct SignalResponseC *response);
 
 /**
- * Fetches an app icon
+ * Creates a new ConfigurationServiceClient using RSD connection
  *
  * # Arguments
- * * [`handle`] - The AppServiceClient handle
- * * [`bundle_id`] - Bundle identifier of the app
- * * [`width`] - Icon width
- * * [`height`] - Icon height
- * * [`scale`] - Icon scale
- * * [`allow_placeholder`] - Whether to allow placeholder icons
- * * [`icon_data`] - Pointer to store the icon data (caller must free)
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `provider` and `handshake` must be valid pointers to handles allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *configuration_service_connect_rsd(struct AdapterHandle *provider,
+                                                          struct RsdHandshakeHandle *handshake,
+                                                          struct ConfigurationServiceHandle **handle);
+
+/**
+ * Creates a new ConfigurationServiceClient from a socket
+ *
+ * # Arguments
+ * * [`socket`] - The socket to use for communication. Consumed regardless of the result.
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `socket` must be a valid pointer to a handle allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *configuration_service_new(struct ReadWriteOpaque *socket,
+                                                  struct ConfigurationServiceHandle **handle);
+
+/**
+ * Reads the device's light/dark appearance
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`style`] - Pointer to store the appearance
  *
  * # Returns
  * An IdeviceFfiError on error, null on success
@@ -1842,21 +2518,234 @@ void app_service_free_signal_response(struct SignalResponseC *response);
  * # Safety
  * All pointer parameters must be valid
  */
-struct IdeviceFfiError *app_service_fetch_app_icon(struct AppServiceHandle *handle,
-                                                   const char *bundle_id,
-                                                   float width,
-                                                   float height,
-                                                   float scale,
-                                                   int allow_placeholder,
-                                                   struct IconDataC **icon_data);
+struct IdeviceFfiError *configuration_service_get_user_interface_style(struct ConfigurationServiceHandle *handle,
+                                                                       enum IdeviceUserInterfaceStyle *style);
 
 /**
- * Frees an IconDataC structure
+ * Switches the device between light and dark appearance
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`style`] - The appearance to set
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
  *
  * # Safety
- * `icon_data` must be a valid pointer allocated by app_service_fetch_app_icon
+ * `handle` must be a valid pointer to a handle allocated by this library
  */
-void app_service_free_icon_data(struct IconDataC *icon_data);
+struct IdeviceFfiError *configuration_service_set_user_interface_style(struct ConfigurationServiceHandle *handle,
+                                                                       enum IdeviceUserInterfaceStyle style);
+
+/**
+ * Sets the system liquid-glass opacity
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`opacity`] - The opacity, 0.0 to 1.0
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *configuration_service_set_liquid_glass_opacity(struct ConfigurationServiceHandle *handle,
+                                                                       float opacity);
+
+/**
+ * Reads the accessibility color filter's state
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`filter`] - Pointer to store the state. Free its `filter_type` with
+ *   `idevice_string_free`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_get_color_filter(struct ConfigurationServiceHandle *handle,
+                                                               struct ColorFilterC *filter);
+
+/**
+ * Enables or disables the accessibility color filter
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Whether the filter is on
+ * * [`filter_type`] - The preset to use, e.g. `Protanopia`. Required when enabling,
+ *   ignored otherwise, and may be NULL when disabling.
+ * * [`intensity`] - Filter strength, 0.0 to 1.0. Ignored unless `has_intensity` is set.
+ * * [`has_intensity`] - Whether to send `intensity`
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_set_color_filter(struct ConfigurationServiceHandle *handle,
+                                                               int enabled,
+                                                               const char *filter_type,
+                                                               float intensity,
+                                                               int has_intensity);
+
+/**
+ * Reads the dynamic-type size's name, e.g. `medium` or `large`
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`size`] - Pointer to store the name. Free with `idevice_string_free`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_get_device_text_size(struct ConfigurationServiceHandle *handle,
+                                                                   char **size);
+
+/**
+ * Sets the dynamic-type size by name, e.g. `medium` or `large`
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`size`] - The size's name
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_set_device_text_size(struct ConfigurationServiceHandle *handle,
+                                                                   const char *size);
+
+/**
+ * Reads whether Reduce Motion is on
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Pointer to store the state
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_get_reduce_motion(struct ConfigurationServiceHandle *handle,
+                                                                int *enabled);
+
+/**
+ * Toggles Reduce Motion
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Whether to turn it on
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *configuration_service_set_reduce_motion(struct ConfigurationServiceHandle *handle,
+                                                                int enabled);
+
+/**
+ * Reads whether Reduce Transparency is on
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Pointer to store the state
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_get_reduce_transparency(struct ConfigurationServiceHandle *handle,
+                                                                      int *enabled);
+
+/**
+ * Toggles Reduce Transparency
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Whether to turn it on
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *configuration_service_set_reduce_transparency(struct ConfigurationServiceHandle *handle,
+                                                                      int enabled);
+
+/**
+ * Reads whether the layout-debug borders overlay is on
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Pointer to store the state
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *configuration_service_get_show_borders(struct ConfigurationServiceHandle *handle,
+                                                               int *enabled);
+
+/**
+ * Toggles the layout-debug borders overlay
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Whether to turn it on
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *configuration_service_set_show_borders(struct ConfigurationServiceHandle *handle,
+                                                               int enabled);
+
+/**
+ * Toggles Increase Contrast
+ *
+ * The device offers no getter for this one.
+ *
+ * # Arguments
+ * * [`handle`] - The ConfigurationServiceClient handle
+ * * [`enabled`] - Whether to turn it on
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *configuration_service_set_increase_contrast(struct ConfigurationServiceHandle *handle,
+                                                                    int enabled);
+
+/**
+ * Frees a ConfigurationServiceClient handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void configuration_service_free(struct ConfigurationServiceHandle *handle);
 
 /**
  * Creates a new DiagnosticsServiceClient using RSD connection
@@ -1954,6 +2843,301 @@ void diagnostics_service_free(struct DiagnosticsServiceHandle *handle);
  * `handle` must be a valid pointer to a handle allocated by this library or NULL
  */
 void sysdiagnose_stream_free(struct SysdiagnoseStreamHandle *handle);
+
+/**
+ * Creates a new FileServiceClient using RSD connection
+ *
+ * This connects the service's control channel, i.e.
+ * `com.apple.coredevice.fileservice.control`. Downloads additionally need the
+ * data channel, `com.apple.coredevice.fileservice.data`.
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `provider` and `handshake` must be valid pointers to handles allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *file_service_connect_rsd(struct AdapterHandle *provider,
+                                                 struct RsdHandshakeHandle *handshake,
+                                                 struct FileServiceHandle **handle);
+
+/**
+ * Creates a new FileServiceClient from a socket
+ *
+ * # Arguments
+ * * [`socket`] - The socket to use for communication. Consumed regardless of the result.
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `socket` must be a valid pointer to a handle allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *file_service_new(struct ReadWriteOpaque *socket,
+                                         struct FileServiceHandle **handle);
+
+/**
+ * Opens a session on a domain, which every later command is scoped to
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`domain`] - The domain to scope the session to
+ * * [`identifier`] - The container's identifier, i.e. a bundle ID or an app-group ID.
+ *   The domains that don't take one ignore it, and it may be NULL for them.
+ * * [`session_id`] - Pointer to store the new session's ID, or NULL to ignore it.
+ *   Free with `idevice_string_free`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_create_session(struct FileServiceHandle *handle,
+                                                    enum IdeviceFileServiceDomain domain,
+                                                    const char *identifier,
+                                                    char **session_id);
+
+/**
+ * The session ID from the last `file_service_create_session`
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`session_id`] - Pointer to store the ID, set to NULL when there is no
+ *   session. Free with `idevice_string_free`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_session_id(struct FileServiceHandle *handle,
+                                                char **session_id);
+
+/**
+ * Lists a directory, relative to the session's domain root
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`path`] - The directory to list
+ * * [`entries`] - Pointer to store the entry names, freed with
+ *   `file_service_free_directory_list`
+ * * [`len`] - Pointer to store the number of entries
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_retrieve_directory_list(struct FileServiceHandle *handle,
+                                                             const char *path,
+                                                             char ***entries,
+                                                             uintptr_t *len);
+
+/**
+ * Frees the list from `file_service_retrieve_directory_list`
+ *
+ * # Safety
+ * `entries` must be a pointer returned by `file_service_retrieve_directory_list`
+ * with its reported length, or NULL
+ */
+void file_service_free_directory_list(char **entries, uintptr_t len);
+
+/**
+ * Downloads a file, relative to the session's domain root
+ *
+ * The transfer itself runs on the service's data channel, which the caller
+ * opens by connecting the adapter to the port the RSD handshake reports for
+ * `com.apple.coredevice.fileservice.data`.
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`path`] - The file to download
+ * * [`adapter`] - The adapter the control channel was connected over
+ * * [`data_port`] - The port of `com.apple.coredevice.fileservice.data`
+ * * [`data`] - Pointer to store the contents, freed with `idevice_data_free`
+ * * [`len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_retrieve_file(struct FileServiceHandle *handle,
+                                                   const char *path,
+                                                   struct AdapterHandle *adapter,
+                                                   uint16_t data_port,
+                                                   uint8_t **data,
+                                                   uintptr_t *len);
+
+/**
+ * Downloads a file over a data channel the caller already opened
+ *
+ * Like `file_service_retrieve_file`, but takes the data channel itself instead
+ * of opening one. Note that the device only accepts the connection once the
+ * control channel has announced the transfer, so a stream opened well in
+ * advance may have been dropped.
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`path`] - The file to download
+ * * [`data_stream`] - The data channel. Consumed regardless of the result.
+ * * [`data`] - Pointer to store the contents, freed with `idevice_data_free`
+ * * [`len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_retrieve_file_with_stream(struct FileServiceHandle *handle,
+                                                               const char *path,
+                                                               struct ReadWriteOpaque *data_stream,
+                                                               uint8_t **data,
+                                                               uintptr_t *len);
+
+/**
+ * Creates an empty file, relative to the session's domain root
+ *
+ * # Arguments
+ * * [`handle`] - The FileServiceClient handle
+ * * [`path`] - The file to create
+ * * [`file_permissions`] - The file's mode, e.g. 0644
+ * * [`uid`] - The owning user's ID, e.g. 501
+ * * [`gid`] - The owning group's ID, e.g. 501
+ * * [`creation_time`] - The creation time to set
+ * * [`last_modification_time`] - The modification time to set
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *file_service_propose_empty_file(struct FileServiceHandle *handle,
+                                                        const char *path,
+                                                        uint32_t file_permissions,
+                                                        uint32_t uid,
+                                                        uint32_t gid,
+                                                        int64_t creation_time,
+                                                        int64_t last_modification_time);
+
+/**
+ * Looks a domain up by the name the device uses, e.g. `appDataContainer`
+ *
+ * # Arguments
+ * * [`name`] - The domain's name
+ * * [`domain`] - Pointer to store the domain
+ *
+ * # Returns
+ * 1 when the name is known, 0 otherwise
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+int file_service_domain_from_name(const char *name, enum IdeviceFileServiceDomain *domain);
+
+/**
+ * Frees a FileServiceClient handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void file_service_free(struct FileServiceHandle *handle);
+
+/**
+ * Creates a new IconServiceClient using RSD connection
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `provider` and `handshake` must be valid pointers to handles allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *icon_service_connect_rsd(struct AdapterHandle *provider,
+                                                 struct RsdHandshakeHandle *handshake,
+                                                 struct IconServiceHandle **handle);
+
+/**
+ * Creates a new IconServiceClient from a socket
+ *
+ * # Arguments
+ * * [`socket`] - The socket to use for communication. Consumed regardless of the result.
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `socket` must be a valid pointer to a handle allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *icon_service_new(struct ReadWriteOpaque *socket,
+                                         struct IconServiceHandle **handle);
+
+/**
+ * Fetches an app's icon, rendered as a PNG
+ *
+ * # Arguments
+ * * [`handle`] - The IconServiceClient handle
+ * * [`bundle_identifier`] - Bundle identifier of the app, or NULL to use `app_path`
+ * * [`app_path`] - Path of the app on the device, or NULL to use `bundle_identifier`
+ * * [`width`] - Requested icon width in points
+ * * [`height`] - Requested icon height in points
+ * * [`scale`] - Requested icon scale
+ * * [`allow_placeholder`] - Whether the device may render a generic placeholder
+ * * [`icon`] - Pointer to store the icon, freed with `icon_service_free_icon`
+ *
+ * Exactly one of `bundle_identifier` and `app_path` must be passed.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *icon_service_fetch_icon(struct IconServiceHandle *handle,
+                                                const char *bundle_identifier,
+                                                const char *app_path,
+                                                float width,
+                                                float height,
+                                                float scale,
+                                                int allow_placeholder,
+                                                struct AppIconC **icon);
+
+/**
+ * Frees an AppIconC
+ *
+ * # Safety
+ * `icon` must be a pointer returned by `icon_service_fetch_icon`, or NULL
+ */
+void icon_service_free_icon(struct AppIconC *icon);
+
+/**
+ * Frees an IconServiceClient handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void icon_service_free(struct IconServiceHandle *handle);
 
 /**
  * Automatically creates and connects to Core Device Proxy, returning a client handle
@@ -2289,6 +3473,338 @@ struct IdeviceFfiError *crash_report_flush(struct IdeviceProviderHandle *provide
  * or NULL (in which case this function does nothing)
  */
 void crash_report_client_free(struct CrashReportCopyMobileHandle *handle);
+
+/**
+ * Creates a new CryptexdClient using RSD connection
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `provider` and `handshake` must be valid pointers to handles allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *cryptexd_connect_rsd(struct AdapterHandle *provider,
+                                             struct RsdHandshakeHandle *handshake,
+                                             struct CryptexdHandle **handle);
+
+/**
+ * Creates a new CryptexdClient from a socket
+ *
+ * # Arguments
+ * * [`socket`] - The socket to use for communication. Consumed regardless of the result.
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `socket` must be a valid pointer to a handle allocated by this library
+ * `handle` must be a valid pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *cryptexd_new(struct ReadWriteOpaque *socket,
+                                     struct CryptexdHandle **handle);
+
+/**
+ * Reads the device's AppleImage4 chip instance, which identifies it in a
+ * Cryptex1 personalization request
+ *
+ * The keys are the daemon's `img4_chip_*` names, e.g. `img4_chip_chip`
+ * (ChipID), `img4_chip_bord` (BoardID) and `img4_chip_ecid` (ECID).
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`identifiers`] - Pointer to store the identifiers
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_read_personalization_identifiers(struct CryptexdHandle *handle,
+                                                                  plist_t *identifiers);
+
+/**
+ * Lists the cryptexes installed on the device
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`cryptexes`] - Pointer to store the list, freed with `cryptexd_free_installed`
+ * * [`len`] - Pointer to store the number of entries
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_copy_installed(struct CryptexdHandle *handle,
+                                                struct InstalledCryptexC **cryptexes,
+                                                uintptr_t *len);
+
+/**
+ * Frees the list from `cryptexd_copy_installed`
+ *
+ * # Safety
+ * `cryptexes` must be a pointer returned by `cryptexd_copy_installed` with its
+ * reported length, or NULL
+ */
+void cryptexd_free_installed(struct InstalledCryptexC *cryptexes, uintptr_t len);
+
+/**
+ * Frees an InstalledCryptexC allocated by this library
+ *
+ * # Safety
+ * `cryptex` must be a pointer allocated by this library, or NULL
+ */
+void cryptexd_free_installed_cryptex(struct InstalledCryptexC *cryptex);
+
+/**
+ * Reads a nonce domain's nonce structure
+ *
+ * Use `cryptexd_cryptex_nonce` for the nonce a TSS request wants.
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`domain`] - The nonce domain to read
+ * * [`nonce`] - Pointer to store the nonce, freed with `idevice_data_free`
+ * * [`nonce_len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_get_nonce(struct CryptexdHandle *handle,
+                                           struct CryptexNonceDomain domain,
+                                           uint8_t **nonce,
+                                           uintptr_t *nonce_len);
+
+/**
+ * Reads the nonce a Cryptex1 TSS request is personalized against
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`nonce_domain_handle`] - The build identity's `Cryptex1,NonceDomain`
+ * * [`nonce`] - Pointer to store the nonce, freed with `idevice_data_free`
+ * * [`nonce_len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_cryptex_nonce(struct CryptexdHandle *handle,
+                                               uint64_t nonce_domain_handle,
+                                               uint8_t **nonce,
+                                               uintptr_t *nonce_len);
+
+/**
+ * Rolls (regenerates) a nonce domain's nonce, invalidating anything
+ * personalized against the previous one
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`domain`] - The nonce domain to roll
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library
+ */
+struct IdeviceFfiError *cryptexd_roll_nonce(struct CryptexdHandle *handle,
+                                            struct CryptexNonceDomain domain);
+
+/**
+ * Uninstalls a cryptex by the identifier `cryptexd_copy_installed` reports
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`identifier`] - The cryptex's identifier
+ * * [`version`] - The version to scope the uninstall to, or NULL for all of them
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_uninstall(struct CryptexdHandle *handle,
+                                           const char *identifier,
+                                           const char *version);
+
+/**
+ * Installs a cryptex
+ *
+ * # Arguments
+ * * [`handle`] - The CryptexdClient handle. Consumed by this call.
+ * * [`request`] - The payloads and parameters to install
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid, and the request's buffers must be
+ * readable for their stated lengths
+ */
+struct IdeviceFfiError *cryptexd_install(struct CryptexdHandle *handle,
+                                         const struct CryptexInstallRequestC *request);
+
+/**
+ * Extracts the nonce from cryptexd's nonce structure
+ *
+ * # Arguments
+ * * [`blob`] - The structure `cryptexd_get_nonce` returned
+ * * [`blob_len`] - Its length
+ * * [`nonce`] - Pointer to store the nonce, freed with `idevice_data_free`
+ * * [`nonce_len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid, and `blob` must be readable for
+ * `blob_len` bytes
+ */
+struct IdeviceFfiError *cryptexd_unwrap_nonce(const uint8_t *blob,
+                                              uintptr_t blob_len,
+                                              uint8_t **nonce,
+                                              uintptr_t *nonce_len);
+
+/**
+ * Loads the DeveloperDiskImage payloads from an unpacked DDI `Restore` directory
+ *
+ * # Arguments
+ * * [`restore_dir`] - The directory to read
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptex1_assets_load(const char *restore_dir,
+                                             struct Cryptex1AssetsHandle **handle);
+
+/**
+ * Builds the DeveloperDiskImage payloads from buffers the caller already has
+ *
+ * # Arguments
+ * * [`image`] / [`image_len`] - `Cryptex1,GenericDmg`
+ * * [`trustcache`] / [`trustcache_len`] - `Cryptex1,GenericTrustCache`
+ * * [`info`] / [`info_len`] - `Cryptex1,CryptexInfoPlist`
+ * * [`volumehash`] / [`volumehash_len`] - `Cryptex1,GenericVolume`
+ * * [`build_identity`] - The build identity the payloads came from
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid, and each buffer must be readable for
+ * its stated length
+ */
+struct IdeviceFfiError *cryptex1_assets_from_parts(const uint8_t *image,
+                                                   uintptr_t image_len,
+                                                   const uint8_t *trustcache,
+                                                   uintptr_t trustcache_len,
+                                                   const uint8_t *info,
+                                                   uintptr_t info_len,
+                                                   const uint8_t *volumehash,
+                                                   uintptr_t volumehash_len,
+                                                   plist_t build_identity,
+                                                   struct Cryptex1AssetsHandle **handle);
+
+/**
+ * The handle of the nonce domain the assets are personalized against, i.e. the
+ * build identity's `Cryptex1,NonceDomain`
+ *
+ * # Arguments
+ * * [`handle`] - The assets handle
+ * * [`nonce_domain`] - Pointer to store the handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptex1_assets_nonce_domain(struct Cryptex1AssetsHandle *handle,
+                                                     uint64_t *nonce_domain);
+
+/**
+ * Frees a Cryptex1Assets handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void cryptex1_assets_free(struct Cryptex1AssetsHandle *handle);
+
+/**
+ * Personalizes and installs the DeveloperDiskImage cryptex end to end
+ *
+ * The cryptex equivalent of the image mounter's auto-mount: reads the device's
+ * personalization identifiers and cryptex nonce, has Apple sign a Cryptex1
+ * ticket for them, and installs the assets. Each step opens its own connection
+ * off the adapter, since the daemon serves one routine per connection.
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`assets`] - The payloads to install
+ * * [`installed`] - Pointer to store the installed cryptex, freed with
+ *   `cryptexd_free_installed_cryptex`. May be NULL to ignore it.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_install_ddi(struct AdapterHandle *provider,
+                                             struct RsdHandshakeHandle *handshake,
+                                             struct Cryptex1AssetsHandle *assets,
+                                             struct InstalledCryptexC **installed);
+
+/**
+ * The installed DeveloperDiskImage cryptex, if there is one
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`installed`] - Pointer to store the cryptex, set to NULL when no DDI is
+ *   installed. Freed with `cryptexd_free_installed_cryptex`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *cryptexd_installed_ddi(struct AdapterHandle *provider,
+                                               struct RsdHandshakeHandle *handshake,
+                                               struct InstalledCryptexC **installed);
+
+/**
+ * Frees a CryptexdClient handle
+ *
+ * Only needed for a handle no routine was invoked on: every routine consumes
+ * the handle it is passed.
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void cryptexd_free(struct CryptexdHandle *handle);
 
 /**
  * Creates a new DebugserverCommand
@@ -2997,7 +4513,7 @@ struct IdeviceFfiError *screenshot_client_new(struct RemoteServerHandle *server,
 /**
  * Frees a [`ScreenshotClientHandle`].
  *
- * This releases all memory associated with the handle.  
+ * This releases all memory associated with the handle.
  * After calling this function, the handle pointer must not be used again.
  *
  * # Arguments
@@ -3709,6 +5225,10 @@ struct IdeviceFfiError *house_arrest_client_new(struct IdeviceHandle *socket,
 /**
  * Vends a container for an app
  *
+ * If any argument is null, the client is not consumed. Otherwise, this function
+ * consumes the client on both success and error, including device errors.
+ * The caller must not use or free the consumed client afterwards.
+ *
  * # Arguments
  * * [`client`] - The House Arrest client
  * * [`bundle_id`] - The bundle ID to vend for
@@ -3718,7 +5238,7 @@ struct IdeviceFfiError *house_arrest_client_new(struct IdeviceHandle *socket,
  * An IdeviceFfiError on error, null on success
  *
  * # Safety
- * `client` must be a allocated by this library
+ * `client` must be a valid pointer to a handle allocated by this library
  * `bundle_id` must be a NULL-terminated string
  * `afc_client` must be a valid, non-null pointer where the new AFC client will be stored
  */
@@ -3729,6 +5249,10 @@ struct IdeviceFfiError *house_arrest_vend_container(struct HouseArrestClientHand
 /**
  * Vends documents for an app
  *
+ * If any argument is null, the client is not consumed. Otherwise, this function
+ * consumes the client on both success and error, including device errors.
+ * The caller must not use or free the consumed client afterwards.
+ *
  * # Arguments
  * * [`client`] - The House Arrest client
  * * [`bundle_id`] - The bundle ID to vend for
@@ -3738,7 +5262,7 @@ struct IdeviceFfiError *house_arrest_vend_container(struct HouseArrestClientHand
  * An IdeviceFfiError on error, null on success
  *
  * # Safety
- * `client` must be a allocated by this library
+ * `client` must be a valid pointer to a handle allocated by this library
  * `bundle_id` must be a NULL-terminated string
  * `afc_client` must be a valid, non-null pointer where the new AFC client will be stored
  */
@@ -4032,13 +5556,13 @@ struct IdeviceFfiError *installation_proxy_browse(struct InstallationProxyClient
                                                   size_t *out_result_len);
 
 /**
- * Archive an app to the device (v0.3.281).
+ * v0.3.281：instproxy Archive —— 把 App 归档到设备 `/PublicStaging/<bid>.ipa`
+ * （归档包内即含 `iTunesMetadata.plist`），用于读取「安装来源 Apple ID」。
  *
- * Produces `<bundle_id>.ipa` under the device's `/PublicStaging/` directory,
- * whose payload contains the app's `iTunesMetadata.plist` — the only
- * non-jailbroken channel to read the installing Apple ID (i4Tools-style).
- * Blocks until the archive completes; the caller should then read the file
- * via AFC (`/PublicStaging/<bundle_id>.ipa`) and delete it afterwards.
+ * 通道来源：爱思助手同款——其 `idm_app.dll` 字符串实锤
+ * （`/PublicStaging/` + `SkipUninstall` + `am_archive_app` + `iTunesMetadata`）。
+ * `iTunesMetadata.plist` 只在 App 的 bundle 目录（非 Data 容器），AFC/house_arrest
+ * 均不可达；Archive 是唯一非越狱可用的导出路径。
  *
  * # Safety
  * `client` must be a valid pointer to a handle allocated by this library
@@ -4049,19 +5573,30 @@ struct IdeviceFfiError *installation_proxy_archive(struct InstallationProxyClien
                                                    bool skip_uninstall);
 
 /**
- * Lookup installed apps with a fixed ReturnAttributes set (v0.3.284).
+ * v0.3.284：instproxy **Lookup**（带 ReturnAttributes）——只请求
+ * `FileSharingService.parseAppDict` 真正消费的字段。
  *
- * Returns base fields + StaticDiskUsage/DynamicDiskUsage (sizes) + Entitlements
- * + iTunesMetadata. NOTE: the size fields are only returned by **Lookup**
- * (pymobiledevice3 GET_APPS_ADDITIONAL_INFO uses lookup, not browse).
- * Result is a binary plist array of app dictionaries; free with idevice_data_free.
+ * 关键：`iTunesMetadata`（购买邮箱 / 正版存在性的**唯一**来源）只有在带
+ * ReturnAttributes 的 Lookup 里才返回；无属性的 `get_apps` 不带它 —— 这正是
+ * v0.3.378 把主路径退回 `get_apps` 后「共享正版被判成苹果正版」的原因。
  *
- * # Safety
- * `client` must be a valid pointer to a handle allocated by this library
+ * **v0.3.401：收紧到「类型判定必需」的字段**（去掉 StaticDiskUsage /
+ * DynamicDiskUsage / CFBundleSize）—— 为解决这条命令卡 ~25 秒（真机实测）。
+ *
+ * **v0.3.406：加回 `StaticDiskUsage` 单字段**（恢复「应用大小」，用户报
+ * 「设备瘦身扫不到应用」）。`DynamicDiskUsage` / `CFBundleSize` 仍不请求：
+ * 前者是动态计算（遍历数据容器、随用量增长），最可能就是 25 秒的元凶；
+ * 后者与 StaticDiskUsage 语义重叠。真机耗时即判据（见 attrs 常量上方注释）。
+ * 仍未恢复的是**文档大小**（`DynamicDiskUsage`）：AFC 侧有等价实现
+ * （Swift `FileSharingService.computeDocumentsSize`：house_arrest 打开容器 + AFC
+ * 递归求和），但它的调用点 `FileSharingAppsView.computeDocumentSizes()` 目前
+ * **没有任何调用**（死代码），要用得先接上；且它是「每个 App 一条隧道」的慢路径，
+ * DeviceSlim 的 334 个应用全量跑不现实，只能按需/候选集去算。
+ * 结果以 binary plist 数组字节回传（调用方 idevice_data_free 释放）。
  */
 struct IdeviceFfiError *installation_proxy_lookup_apps(struct InstallationProxyClientHandle *client,
-                                                      void **out_result,
-                                                      size_t *out_result_len);
+                                                       void **out_result,
+                                                       size_t *out_result_len);
 
 /**
  * Creates a new InstallcoordinationProxy client from a ReadWrite stream
@@ -4151,12 +5686,12 @@ struct IdeviceFfiError *installcoordination_proxy_query_app_path(struct Installc
 void installcoordination_proxy_client_free(struct InstallcoordinationProxyHandle *handle);
 
 /**
- * Connects to the Location Simulation service using a provider  
+ * Connects to the Location Simulation service using a provider
  * This is the location_simulation api for iOS 16 and below
  * You must have a developer disk image mounted to use this API
  *
- * # Safety  
- * `provider` must be valid; `client` must be a non-null pointer to store the handle.  
+ * # Safety
+ * `provider` must be valid; `client` must be a non-null pointer to store the handle.
  */
 struct IdeviceFfiError *lockdown_location_simulation_connect(struct IdeviceProviderHandle *provider,
                                                              struct LocationSimulationServiceHandle **handle);
@@ -4197,10 +5732,10 @@ struct IdeviceFfiError *lockdown_location_simulation_set(struct LocationSimulati
 struct IdeviceFfiError *lockdown_location_simulation_clear(struct LocationSimulationServiceHandle *handle);
 
 /**
- * Frees a LocationSimulationService handle  
- *  
- * # Safety  
- * `handle` must be a pointer returned by `lockdown_location_simulation_connect`.  
+ * Frees a LocationSimulationService handle
+ *
+ * # Safety
+ * `handle` must be a pointer returned by `lockdown_location_simulation_connect`.
  */
 void lockdown_location_simulation_free(struct LocationSimulationServiceHandle *handle);
 
@@ -4242,16 +5777,34 @@ struct IdeviceFfiError *lockdownd_connect_rsd(struct AdapterHandle *provider,
                                               struct LockdowndClientHandle **client);
 
 /**
- * Creates a new LockdownClient via RSD using an explicitly named RSD service
+ * Creates a new LockdownClient via RSD using an **explicitly named** RSD service.
  *
- * 上游 `idevice` crate 把 RSD 上的 lockdown 服务名写死为
- * `com.apple.mobile.lockdown.remote.trusted`；本函数把服务名参数化，可改连
- * `com.apple.mobile.lockdown.remote.untrusted`。端口从 RSD 服务表按名查表取得（不硬编码）。
+ * ## 为什么需要它
+ * 上游 `idevice` crate 里 `LockdownClient` 实现的 `RsdService::rsd_service_name()` **写死**
+ * 为 `com.apple.mobile.lockdown.remote.trusted`（受信版），该常量在 crate 内部，外部无法
+ * 覆盖 —— `lockdownd_connect_rsd` 走的就是它。本函数把服务名**参数化**，让调用方能改连
+ * `com.apple.mobile.lockdown.remote.untrusted`（未受信版；RSD 服务表里给「尚未配对的对端」
+ * 用的那条，见 pymobiledevice3 `misc/RemoteXPC.md`）。
+ *
+ * ## 实现范式（照 `mobileactivationd_deactivate_rsd` 的「RSD 服务表查表」路线）
+ * RSD 通道**不支持** lockdownd 的 `StartService` RPC（本项目 v0.3.414~417 真机实证：
+ * 设备对 StartService 直接关连接 ⇒ `BrokenPipe`），所以不能复用 `connect_rsd` 内部那条
+ * `RsdHandshake::connect::<LockdownClient>`，必须自己走四步：
+ * 1. RSD 服务表**本地查表**拿端口（按调用方给的服务名，不发 StartService）。
+ * 2. `adapter.connect(port)` —— 在隧道内新开一条流（非裸 TCP）。
+ * 3. `Idevice::new(stream, service_name)` + `rsd_checkin()` —— RSD 语义下的启动握手
+ *    （不发它设备会直接关连接；与上游 `from_stream` 逐句同构）。
+ * 4. `LockdownClient::new(dev)` —— 包成 lockdown 客户端，此后 `lockdownd_pair` /
+ *    `lockdownd_get_value` 等既有 FFI 均可直接作用其上。
+ *
+ * 端口**不硬编码**：一律从设备回的服务表里取（不同 iOS 版本可能不同；文档里的 52288
+ * 只是一个参考值）。服务名不在表里时返回可定位的错误（列出表内含 "lockdown" 的服务名）。
  *
  * # Arguments
  * * [`provider`] - An adapter created by this library
  * * [`handshake`] - An RSD handshake from the same provider
- * * [`service_name`] - The RSD service name to connect to (null-terminated string)
+ * * [`service_name`] - The RSD service name to connect to (null-terminated string),
+ *   e.g. `com.apple.mobile.lockdown.remote.untrusted`
  * * [`client`] - On success, will be set to point to a newly allocated LockdownClient handle
  *
  * # Returns
@@ -4386,22 +5939,22 @@ struct IdeviceFfiError *lockdownd_get_value(struct LockdowndClientHandle *client
 struct IdeviceFfiError *lockdownd_enter_recovery(struct LockdowndClientHandle *client);
 
 /**
- * Sets a value in lockdownd  
- *  
- * # Arguments  
- * * `client` - A valid LockdowndClient handle  
- * * `key` - The key to set (null-terminated string)  
- * * `value` - The value to set as a plist  
- * * `domain` - The domain to set in (null-terminated string, optional)  
- *  
- * # Returns  
- * An IdeviceFfiError on error, null on success  
- *  
- * # Safety  
- * `client` must be a valid pointer to a handle allocated by this library  
- * `key` must be a valid null-terminated string  
- * `value` must be a valid plist  
- * `domain` must be a valid null-terminated string or NULL  
+ * Sets a value in lockdownd
+ *
+ * # Arguments
+ * * `client` - A valid LockdowndClient handle
+ * * `key` - The key to set (null-terminated string)
+ * * `value` - The value to set as a plist
+ * * `domain` - The domain to set in (null-terminated string, optional)
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `client` must be a valid pointer to a handle allocated by this library
+ * `key` must be a valid null-terminated string
+ * `value` must be a valid plist
+ * `domain` must be a valid null-terminated string or NULL
  */
 struct IdeviceFfiError *lockdownd_set_value(struct LockdowndClientHandle *client,
                                             const char *key,
@@ -5067,23 +6620,74 @@ struct IdeviceFfiError *mobileactivationd_is_activated(struct MobileActivationdC
 struct IdeviceFfiError *mobileactivationd_deactivate(struct MobileActivationdClientHandle *client);
 
 /**
- * v0.3.531：反激活 —— RSD 通道变体（mobileactivationd_deactivate 的 RSD 版）.
+ * v0.3.531：反激活 —— RSD 通道变体（`mobileactivationd_deactivate` 的 RSD 版）.
  *
- * 走「RSD 服务表查端口 → adapter.connect(port) → Idevice::rsd_checkin()
- * → 发二进制 plist { Command = "DeactivateRequest" }」，
- * 与项目已在生产跑通的 mcinstall_set_wifi_power_rsd 同款范式.
+ * ## 为什么需要它
+ * 上游 `MobileActivationdClient::new(provider)` 内部走 `IdeviceService::connect(provider)`，
+ * 而该默认实现第一步就是 `provider.get_pairing_file()`（lockdown 配对文件）.
+ * 本项目手上只有 RpPairingFile（RSD / 无线配对格式），`CDProbe.swift:36-45` 实测
+ * `idevice_pairing_file_read` 会报 `failed to parse raw pairing file from bytes`，
+ * 所以 provider 那条路在本项目里**永远连不上**，必须走 RSD 隧道.
  *
- * v0.3.530 用的 lockdownd StartService 在 RSD 通道上不成立（真机回
- * Socket(BrokenPipe, "channel closed")），故 v0.3.531 改走服务表路线.
- * 每一步失败都有不同的 [反激活诊断][步骤N-...] 文案，便于一次真机定案.
+ * ## v0.3.531 修了什么（v0.3.530 真机失败根因）
+ * v0.3.530 用的是 `LockdownClient::connect_rsd` → `lockdown.start_service(...)`，
+ * 真机回 `Socket(Custom { kind: BrokenPipe, error: "channel closed" })`.
+ * 三个独立诊断 agent 收敛到同一结论：**RSD 通道不支持 lockdownd 的 StartService RPC**
+ * （本项目 v0.3.414~417 真机实证：连「已知可用」的 `com.apple.afc` 也回同一个错；
+ * pymobiledevice3 的 RSD 实现从设计上就绕开 StartService）.
+ * 设备对这条 RPC 直接关连接 ⇒ `jktcp` 用户态 TCP 栈任务退出 ⇒ 下一次 I/O 报
+ * `BrokenPipe("channel closed")`.
  *
- * 为什么不用 mobileactivationd_deactivate(provider)：上游内部要
- * provider.get_pairing_file()（lockdown 配对文件），本项目只有 RpPairingFile，
- * 那条路连不上.
+ * ## 协议（= 项目已在生产跑通的 `mcinstall_set_wifi_power_rsd` 同款**范式**）
+ * 即：服务表查表 → `adapter.connect` → RSDCheckin.
+ * ⚠️ 但**不是同一个函数** —— mcinstall 在**裸流**上手写 XML（见 mcinstall.rs:122-151），
+ * 这里用上游 crate 的 **`Idevice::rsd_checkin()`**；排查时**不要照抄 mcinstall 的代码**.
+ * 1. RSD 服务表**本地查表**拿端口（先标准名，再 `.shim.remote` 变体）—— 不发 StartService.
+ * 2. `adapter.connect(port)` —— 在隧道内新开一条流连到该端口（非裸 TCP）.
+ * 3. `Idevice::rsd_checkin()` —— RSD 语义下真正的「启动服务」；
+ *    **不发它设备会直接关连接**（v0.3.465 已定案）. 该调用发 XML plist
+ *    `{Label, ProtocolVersion:"2", Request:"RSDCheckin"}` 并读两条应答
+ *    （`Request == RSDCheckin` / `Request == StartService`）.
+ * 4. 发**二进制 plist** `{ Command = "DeactivateRequest" }`（4 字节大端长度前缀）.
+ *    libimobiledevice 用 `property_list_service_send_binary_plist`，
+ *    与爱思 `idm_aia.dll` 的构造点 `0x18000ca62` 一致.
+ * 5. 读回一条 plist 应答；若含 `Error` 键则失败（libimobiledevice 的
+ *    `mobileactivation_check_result` 同款判定）.
  *
- * WARNING: 本函数会让设备变成未激活状态（回到 Hello / 激活界面）. 带激活锁时
- * 反激活后必须知道原 Apple ID 密码才能重新激活，否则变砖；执行前必须关闭设备网络.
- * 不可逆. 安全闸在上层 ActivationService.swift，绝对不要在真机上裸调本函数.
+ * 注：上游 Rust crate 的 `send_plist` 走 `to_writer_xml`（XML plist），
+ * 但 `send_plist` / `read_plist` 是 crate 私有（本仓 `installation_proxy.rs:677` 已实锤 E0624），
+ * 所以第 4/5 步改用 `send_raw` / `read_raw` 自组帧 —— 顺带得以精确对齐
+ * libimobiledevice 的**二进制**格式（`mobileactivationd` 要的是二进制 plist）.
+ *
+ * ## 分步诊断（v0.3.531 新增，三个诊断 agent 一致的第一建议）
+ * v0.3.530 所有失败都塌成同一个 `BrokenPipe`，等于在猜. 现在每一步失败都用
+ * **不同的文案前缀**区分（`[反激活诊断][步骤N-…]`），一次真机即可定案：
+ * 步骤1-服务表 / 步骤2-connect / 步骤3-RSDCheckin / 步骤4-发送 /
+ * 步骤5-读应答 / 步骤6-解析 / 步骤7-设备拒绝.
+ *
+ * ## ⚠️ 安全警告（本函数只负责发指令，安全闸在上层）
+ * 本函数会让设备**变成未激活状态**（回到 Hello / 激活界面）：
+ * - 设备**带激活锁**时反激活后必须知道原 Apple ID 密码才能重新激活，**否则变砖**；
+ * - 执行前必须关闭设备网络，否则 `mobileactivationd` 会立刻联网重新激活，白做；
+ * - 不可逆. 上层 `ActivationService.swift` 已做「ActivationState == Activated」
+ *   + 「com.apple.fmip.IsAssociated == false」双重前置闸与不可跳过的确认弹窗.
+ *   **绝对不要在真机上裸调本函数.**
+ *
+ * ## 待真机验证（静态看不出来，未在真机执行过）
+ * - **服务表里到底登记的是哪个名字**：标准名 `com.apple.mobileactivationd`
+ *   还是 `.shim.remote` 变体 —— 静态查不到，只能真机看步骤1的报错文案
+ *   （文案里会列出表内含 "activation" 的服务名）.
+ * - **该服务是否需要 RSDCheckin**：本实现按 RSD 正解一律先 `rsd_checkin`
+ *   （pymobiledevice3 的 RSD 路每条连接都做；本项目 `.shim.remote` 服务已实证
+ *   「不发 RSDCheckin 设备直接关连接」）. 若真机在步骤3报错，说明该服务不吃
+ *   RSDCheckin，需改成「connect 后直发指令」.
+ * - **应答**：libimobiledevice 会 `receive_plist` 读一条应答，读不到即 PLIST_ERROR；
+ *   但上游 Rust crate 的注释说「Deactivate 可能不给应答」. 本实现按 libimobiledevice
+ *   走「必须有应答」（三份参照全都期待应答，上游注释被诊断 agent 认定为误导），
+ *   若真机实测无应答（步骤5超时），改成「超时即当成功 + 复查 `ActivationState`」.
+ * - **SSL**：新路线不发 StartService，故无 `EnableServiceSSL` 应答；
+ *   RSD 服务在 pymobiledevice3 里被硬编码为 `EnableServiceSSL: False`，
+ *   本项目全部 RSD 服务（AFC/DVT/MCInstall）也都不做 TLS. 本实现不做 TLS.
  *
  * # Arguments
  * * [`adapter`] - An adapter created by this library
@@ -5374,6 +6978,118 @@ void notification_proxy_free_string(char *s);
 void notification_proxy_client_free(struct NotificationProxyClientHandle *handle);
 
 /**
+ * Connects to the remote notification proxy over RSD
+ *
+ * # Arguments
+ * * [`provider`] - An adapter created by this library
+ * * [`handshake`] - An RSD handshake from the same provider
+ * * [`client`] - On success, will be set to point to a newly allocated handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `provider` and `handshake` must be valid pointers to handles allocated by this library
+ * `client` must be a valid, non-null pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *remote_notification_proxy_connect_rsd(struct AdapterHandle *provider,
+                                                              struct RsdHandshakeHandle *handshake,
+                                                              struct RemoteNotificationProxyClientHandle **client);
+
+/**
+ * Creates a remote notification proxy client from a socket
+ *
+ * # Arguments
+ * * [`socket`] - The socket to use for communication. Consumed regardless of the result.
+ * * [`client`] - On success, will be set to point to a newly allocated handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `socket` must be a valid pointer to a handle allocated by this library
+ * `client` must be a valid, non-null pointer to a location where the handle will be stored
+ */
+struct IdeviceFfiError *remote_notification_proxy_new(struct ReadWriteOpaque *socket,
+                                                      struct RemoteNotificationProxyClientHandle **client);
+
+/**
+ * Posts a notification on the device
+ *
+ * # Arguments
+ * * [`client`] - A valid handle
+ * * [`name`] - The notification to post
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_notification_proxy_post(struct RemoteNotificationProxyClientHandle *client,
+                                                       const char *name);
+
+/**
+ * Registers interest in a notification, after which the device relays it back
+ * whenever it fires
+ *
+ * # Arguments
+ * * [`client`] - A valid handle
+ * * [`name`] - The notification to observe
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_notification_proxy_observe(struct RemoteNotificationProxyClientHandle *client,
+                                                          const char *name);
+
+/**
+ * Registers interest in several notifications at once
+ *
+ * # Arguments
+ * * [`client`] - A valid handle
+ * * [`names`] - The notifications to observe
+ * * [`len`] - How many notifications were passed
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid, and `names` must hold `len` strings
+ */
+struct IdeviceFfiError *remote_notification_proxy_observe_multiple(struct RemoteNotificationProxyClientHandle *client,
+                                                                   const char *const *names,
+                                                                   uintptr_t len);
+
+/**
+ * Waits for the next relayed notification and returns its name
+ *
+ * # Arguments
+ * * [`client`] - A valid handle
+ * * [`name_out`] - On success, set to the notification's name. Free with
+ *   `notification_proxy_free_string`.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_notification_proxy_receive(struct RemoteNotificationProxyClientHandle *client,
+                                                          char **name_out);
+
+/**
+ * Frees a remote notification proxy handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library, or NULL
+ */
+void remote_notification_proxy_free(struct RemoteNotificationProxyClientHandle *handle);
+
+/**
  * Connects to the relay with the given provider
  *
  * # Arguments
@@ -5496,13 +7212,48 @@ struct IdeviceFfiError *os_trace_relay_next(struct OsTraceRelayReceiverHandle *c
 void os_trace_relay_free_log(struct OsTraceLog *log);
 
 /**
+ * Creates a cancellation token for `pairable_host_accept`.
+ *
+ * Returns NULL only if allocation fails. Free with `pairable_host_cancel_free`.
+ */
+struct PairableHostCancel *pairable_host_cancel_new(void);
+
+/**
+ * Signals a cancellation token, unblocking the `pairable_host_accept` it was passed
+ * to. That call returns the `CanceledByUser` error.
+ *
+ * Safe to call from any thread, before or during the accept, and safe to call more
+ * than once. Cancelling a token that was never passed to an accept, or one whose
+ * accept already returned, does nothing.
+ *
+ * # Safety
+ * `cancel` must be a pointer returned by `pairable_host_cancel_new` that has not yet
+ * been freed.
+ */
+void pairable_host_cancel_signal(const struct PairableHostCancel *cancel);
+
+/**
+ * Frees a cancellation token.
+ *
+ * The in-flight accept holds its own reference to the shared state, so freeing the
+ * token while an accept is still running is safe — it just means nothing can cancel
+ * that accept any more.
+ *
+ * # Safety
+ * `cancel` must be a pointer returned by `pairable_host_cancel_new` or NULL, and must
+ * not be used afterwards.
+ */
+void pairable_host_cancel_free(struct PairableHostCancel *cancel);
+
+/**
  * Advertises this computer as a pairable host and accepts a single device-initiated
  * pairing.
  *
  * This blocks the calling thread until a device discovers the advertised
  * `_remotepairing-pairable-host._tcp` service, connects, and the pairing either
- * completes or fails. While the pairing is in progress `pin_callback` is invoked
- * once with the 6-digit setup code that the user must type into the device.
+ * completes or fails — or until `cancel` is signalled from another thread. While the
+ * pairing is in progress `pin_callback` is invoked once with the 6-digit setup code
+ * that the user must type into the device.
  *
  * On success a freshly generated [`RpPairingFileHandle`] is written to
  * `out_pairing_file`; it carries this host's long-term keys plus the paired
@@ -5516,23 +7267,52 @@ void os_trace_relay_free_log(struct OsTraceLog *log);
  * * `port` - TCP port to listen on. `0` picks a free port.
  * * `pin_callback` - invoked with the setup PIN to display. May be `NULL`.
  * * `pin_context` - opaque pointer passed back to `pin_callback`.
+ * * `cancel` - optional cancellation token from `pairable_host_cancel_new`. Signal it
+ *   from another thread to abort the wait (e.g. the user dismissed the pairing UI).
+ *   `NULL` means the call can only be ended by a device connecting. Without one there
+ *   is no way to stop advertising short of exiting the process.
  * * `out_host_alt_irk` - optional. If non-NULL, must point to a 16-byte buffer that
  *   receives the host's generated `altIRK` (needed to re-advertise this host so an
  *   already-paired device recognizes it). May be `NULL`.
+ * * `out_peer_device` - optional. If non-NULL, receives the paired device's identity
+ *   (name, model, UDID, `altIRK`), which the caller must free with
+ *   `rppairing_peer_device_free`. May be `NULL`.
  * * `out_pairing_file` - receives the resulting pairing file on success.
  *
  * # Safety
  * `name` must be a valid null-terminated C string. `model` must be NULL or a valid
- * null-terminated C string. `out_host_alt_irk` must be NULL or point to at least 16
- * writable bytes. `out_pairing_file` must be valid and non-null.
+ * null-terminated C string. `cancel` must be NULL or a live token from
+ * `pairable_host_cancel_new`. `out_host_alt_irk` must be NULL or point to at least 16
+ * writable bytes. `out_peer_device` must be NULL or a valid writable pointer.
+ * `out_pairing_file` must be valid and non-null.
  */
 struct IdeviceFfiError *pairable_host_accept(const char *name,
                                              const char *model,
                                              uint16_t port,
                                              void (*pin_callback)(const char *pin, void *context),
                                              void *pin_context,
+                                             const struct PairableHostCancel *cancel,
                                              uint8_t *out_host_alt_irk,
+                                             struct RpPairingPeerDeviceC **out_peer_device,
                                              struct RpPairingFileHandle **out_pairing_file);
+
+/**
+ * Same as `pairable_host_accept`, with explicit pairable-host policy options.
+ *
+ * # Safety
+ * Same pointer validity requirements as `pairable_host_accept`.
+ */
+struct IdeviceFfiError *pairable_host_accept_with_options(const char *name,
+                                                          const char *model,
+                                                          uint16_t port,
+                                                          bool allows_pinless_pairing,
+                                                          void (*pin_callback)(const char *pin,
+                                                                               void *context),
+                                                          void *pin_context,
+                                                          const struct PairableHostCancel *cancel,
+                                                          uint8_t *out_host_alt_irk,
+                                                          struct RpPairingPeerDeviceC **out_peer_device,
+                                                          struct RpPairingFileHandle **out_pairing_file);
 
 /**
  * Reads a pairing file from the specified path
@@ -5601,6 +7381,95 @@ struct IdeviceFfiError *idevice_pairing_file_serialize(const struct IdevicePairi
  * or NULL (in which case this function does nothing)
  */
 void idevice_pairing_file_free(struct IdevicePairingFile *pairing_file);
+
+/**
+ * Generates a fresh host identity and returns the data a caller needs to publish
+ * its own `_remotepairing-pairable-host._tcp` Bonjour service.
+ *
+ * # Arguments
+ * * `name` - human-readable name shown on the device.
+ * * `model` - hardware model shown on the device. `NULL` defaults to `"Mac17,7"`.
+ * * `allows_pinless_pairing` - if true, advertise pinless pairing and use the
+ *   all-zero setup code expected by that flow; if false, generate a random PIN.
+ * * `out_handle` - receives the host handle; pass it to `pairable_host_accept_fd`
+ *   and free it with `pairable_host_free`.
+ * * `out_service_id` - receives the Bonjour service instance name. Free with
+ *   `idevice_string_free`.
+ * * `out_txt_data`/`out_txt_len` - receive an XML plist dictionary of the TXT
+ *   records to publish. Free with `idevice_data_free`.
+ * * `out_host_alt_irk` - optional. If non-NULL, must point to a 16-byte buffer
+ *   that receives the generated host `altIRK`; persist it with the pairing file.
+ *
+ * A fresh identity is generated on every call.
+ *
+ * # Safety
+ * `name` must be a valid null-terminated C string. `model` must be NULL or a
+ * valid null-terminated C string. All required out-pointers must be valid and
+ * non-null. `out_host_alt_irk` must be NULL or point to at least 16 writable bytes.
+ */
+struct IdeviceFfiError *pairable_host_prepare(const char *name,
+                                              const char *model,
+                                              bool allows_pinless_pairing,
+                                              struct PairableHostHandle **out_handle,
+                                              char **out_service_id,
+                                              uint8_t **out_txt_data,
+                                              uintptr_t *out_txt_len,
+                                              uint8_t *out_host_alt_irk);
+
+/**
+ * Backwards-compatible alias for AltStore's original function name.
+ * Prefer `pairable_host_prepare` for new callers.
+ *
+ * # Safety
+ * Same requirements as `pairable_host_prepare`, except `model` is required and
+ * pinless pairing is disabled.
+ */
+struct IdeviceFfiError *pairable_host_new(const char *name,
+                                          const char *model,
+                                          struct PairableHostHandle **out_handle,
+                                          char **out_service_id,
+                                          uint8_t **out_txt_data,
+                                          uintptr_t *out_txt_len);
+
+/**
+ * Runs pair-setup against a device that has already connected to `fd`.
+ *
+ * Blocks the calling thread until pairing succeeds or fails. The fd is duplicated
+ * before use, so the caller keeps ownership of the original socket.
+ *
+ * # Safety
+ * `handle` must be a valid handle from `pairable_host_prepare` or
+ * `pairable_host_new`. `fd` must be a valid connected TCP socket.
+ * `out_pairing_file` must be valid and non-null. `out_peer_device` must be NULL
+ * or a valid writable pointer. `pin_cb`/`ctx` must stay valid until this call returns.
+ */
+struct IdeviceFfiError *pairable_host_accept_fd(struct PairableHostHandle *handle,
+                                                int32_t fd,
+                                                PairableHostPinCb pin_cb,
+                                                void *ctx,
+                                                struct RpPairingPeerDeviceC **out_peer_device,
+                                                struct RpPairingFileHandle **out_pairing_file);
+
+/**
+ * Backwards-compatible alias for AltStore's original function name.
+ * Prefer `pairable_host_accept_fd` for new callers.
+ *
+ * # Safety
+ * Same requirements as `pairable_host_accept_fd`.
+ */
+struct IdeviceFfiError *pairable_host_handshake(struct PairableHostHandle *handle,
+                                                int32_t fd,
+                                                PairableHostPinCb pin_cb,
+                                                void *ctx,
+                                                struct RpPairingFileHandle **out_pairing_file);
+
+/**
+ * Frees a `PairableHostHandle`.
+ *
+ * # Safety
+ * `handle` must be a handle from `pairable_host_prepare`/`pairable_host_new`, or NULL.
+ */
+void pairable_host_free(struct PairableHostHandle *handle);
 
 /**
  * Automatically creates and connects to pcapd, returning a client handle.
@@ -5754,12 +7623,14 @@ struct IdeviceFfiError *preboard_service_new(struct IdeviceHandle *socket,
                                              struct PreboardServiceClientHandle **client);
 
 /**
- * Creates a stashbag on the device
+ * Creates a stashbag on the device from a local preboard manifest (will prompt
+ * for the passcode on the device), writing the outcome to `out_outcome`
  *
  * # Arguments
  * * `client` - A valid PreboardServiceClient handle
  * * `manifest` - Pointer to the manifest data
  * * `manifest_len` - Length of the manifest data
+ * * `out_outcome` - On success, set to whether a commit is required
  *
  * # Returns
  * An IdeviceFfiError on error, null on success
@@ -5767,10 +7638,12 @@ struct IdeviceFfiError *preboard_service_new(struct IdeviceHandle *socket,
  * # Safety
  * `client` must be a valid pointer to a handle allocated by this library
  * `manifest` must be a valid pointer to `manifest_len` bytes of data
+ * `out_outcome` must be a valid, non-null pointer
  */
 struct IdeviceFfiError *preboard_service_create_stashbag(struct PreboardServiceClientHandle *client,
                                                          const uint8_t *manifest,
-                                                         uintptr_t manifest_len);
+                                                         uintptr_t manifest_len,
+                                                         enum IdeviceStashbagOutcome *out_outcome);
 
 /**
  * Commits a stashbag on the device
@@ -5880,6 +7753,619 @@ struct IdeviceFfiError *usbmuxd_provider_new(struct UsbmuxdAddrHandle *addr,
  */
 struct IdeviceFfiError *idevice_provider_get_pairing_file(struct IdeviceProviderHandle *provider,
                                                           struct IdevicePairingFile **pairing_file);
+
+/**
+ * Connects to `remotepairingdeviced` over lockdown
+ *
+ * # Arguments
+ * * [`provider`] - An IdeviceProvider
+ * * [`sending_host`] - The name this computer identifies itself by, the same
+ *   value the wireless flow uses
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_connect(struct IdeviceProviderHandle *provider,
+                                                        const char *sending_host,
+                                                        struct RemotePairingLockdownHandle **handle);
+
+/**
+ * Wraps an existing lockdown connection to `remotepairingdeviced`
+ *
+ * # Arguments
+ * * [`socket`] - A connection to `com.apple.dt.remotepairingdeviced.lockdown`.
+ *   Consumed regardless of the result.
+ * * [`sending_host`] - The name this computer identifies itself by
+ * * [`handle`] - Pointer to store the newly created handle
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_new(struct IdeviceHandle *socket,
+                                                    const char *sending_host,
+                                                    struct RemotePairingLockdownHandle **handle);
+
+/**
+ * Runs the control channel's handshake and returns what the device reports
+ * about itself
+ *
+ * # Arguments
+ * * [`handle`] - The client handle
+ * * [`handshake`] - Pointer to store the device's response
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_attempt_pair_verify(struct RemotePairingLockdownHandle *handle,
+                                                                    plist_t *handshake);
+
+/**
+ * Checks whether the device still recognizes a pairing record
+ *
+ * The handshake must have run first, i.e.
+ * `remote_pairing_lockdown_attempt_pair_verify`.
+ *
+ * # Arguments
+ * * [`handle`] - The client handle
+ * * [`pairing_file`] - The RPPairing file to validate
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_validate_pairing(struct RemotePairingLockdownHandle *handle,
+                                                                 struct RpPairingFileHandle *pairing_file);
+
+/**
+ * Pairs with the device, saving the record into `pairing_file`
+ *
+ * # Arguments
+ * * [`handle`] - The client handle
+ * * [`pairing_file`] - The RPPairing file to pair with, e.g. a fresh one from
+ *   `rp_pairing_file_generate`. Updated in place on success, so write it out
+ *   afterwards to keep the pairing.
+ * * [`pin`] - The PIN to answer a Trust prompt with, or NULL for `000000`.
+ *   Pairing over USB is promptless, so the device should never ask.
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_pair(struct RemotePairingLockdownHandle *handle,
+                                                     struct RpPairingFileHandle *pairing_file,
+                                                     const char *pin);
+
+/**
+ * Pairs only if the device doesn't already recognize the pairing record
+ *
+ * Runs the handshake, validates `pairing_file`, and pairs when that fails.
+ *
+ * # Arguments
+ * * [`handle`] - The client handle
+ * * [`pairing_file`] - The RPPairing file to validate or pair with. Updated in
+ *   place when pairing happens, so write it out afterwards.
+ * * [`pin`] - The PIN to answer a Trust prompt with, or NULL for `000000`
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All non-NULL pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_connect_pairing(struct RemotePairingLockdownHandle *handle,
+                                                                struct RpPairingFileHandle *pairing_file,
+                                                                const char *pin);
+
+/**
+ * The encryption key established during pairing, used as the TLS-PSK for
+ * tunnel connections
+ *
+ * # Arguments
+ * * [`handle`] - The client handle
+ * * [`key`] - Pointer to store the key, freed with `idevice_data_free`
+ * * [`key_len`] - Pointer to store the number of bytes
+ *
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * All pointer parameters must be valid
+ */
+struct IdeviceFfiError *remote_pairing_lockdown_encryption_key(struct RemotePairingLockdownHandle *handle,
+                                                               uint8_t **key,
+                                                               uintptr_t *key_len);
+
+/**
+ * Frees a remote pairing lockdown handle
+ *
+ * # Safety
+ * `handle` must be a valid pointer to a handle allocated by this library or NULL
+ */
+void remote_pairing_lockdown_free(struct RemotePairingLockdownHandle *handle);
+
+/**
+ * Connects to `restored` over an existing [`IdeviceHandle`] (consumes it).
+ *
+ * # Safety
+ * `idevice` is consumed and must not be used afterwards. `out_client` must be a
+ * valid, non-null location for the resulting handle.
+ */
+struct IdeviceFfiError *idevice_restored_connect(struct IdeviceHandle *idevice,
+                                                 struct RestoredClientHandle **out_client);
+
+/**
+ * Finds a restore-mode device by ECID over usbmux and connects to `restored`.
+ *
+ * After a normal to restore transition the device re-enumerates with a new usbmux
+ * id, so this polls the device list and matches on `HardwareInfo.UniqueChipID`,
+ * retrying until `timeout_ms` elapses.
+ *
+ * # Safety
+ * `addr` must be a valid `UsbmuxdAddrHandle` (it is borrowed, not consumed);
+ * `out_client` must be valid; `label` a valid C string or NULL.
+ */
+struct IdeviceFfiError *idevice_restored_connect_by_ecid(struct UsbmuxdAddrHandle *addr,
+                                                         uint64_t ecid,
+                                                         const char *label,
+                                                         uint64_t timeout_ms,
+                                                         struct RestoredClientHandle **out_client);
+
+/**
+ * Reads the device's ECID (from `HardwareInfo`).
+ *
+ * # Safety
+ * `client` and `out_ecid` must be valid, non-null pointers.
+ */
+struct IdeviceFfiError *idevice_restored_get_ecid(struct RestoredClientHandle *client,
+                                                  uint64_t *out_ecid);
+
+/**
+ * Reads the usbmux `device_id` the client was found on.
+ *
+ * Only meaningful when the client was created with
+ * `idevice_restored_connect_by_ecid`; writes `true` to `out_has_device_id` in
+ * that case (and the id to `out_device_id`), or `false` otherwise (e.g. clients
+ * built from an existing `Idevice`). Pass the id to
+ * `idevice_restore_connect_usb_port` so data-port / FDR connections target this
+ * same device.
+ *
+ * # Safety
+ * `client`, `out_device_id`, `out_has_device_id` must be valid, non-null pointers.
+ */
+struct IdeviceFfiError *idevice_restored_get_device_id(struct RestoredClientHandle *client,
+                                                       uint32_t *out_device_id,
+                                                       bool *out_has_device_id);
+
+/**
+ * Frees a [`RestoredClientHandle`].
+ *
+ * # Safety
+ * `client` must be a handle allocated by this library, or NULL.
+ */
+void idevice_restored_free(struct RestoredClientHandle *client);
+
+/**
+ * Connects to `port` on the usbmux device identified by `device_id`, returning a
+ * new [`IdeviceHandle`]. A convenience for restore data-port and FDR connectors.
+ *
+ * `device_id` must be the id `idevice_restored_get_device_id` reported for the
+ * restore-mode client, so the connection targets the device being restored.
+ *
+ * The entire find-device-and-connect sequence runs in one async task; splitting
+ * it across separate blocking calls corrupts the shared tokio I/O state, so this
+ * is the supported way to build those connectors from C.
+ *
+ * This is a single attempt (the restore state machine retries data-port
+ * connects itself); it errors rather than blocking when the device or port is
+ * not yet available.
+ *
+ * # Safety
+ * `addr` must be a valid `UsbmuxdAddrHandle` (it is borrowed, not consumed);
+ * `out_idevice` must be valid; `label` a valid C string or NULL.
+ */
+struct IdeviceFfiError *idevice_restore_connect_usb_port(struct UsbmuxdAddrHandle *addr,
+                                                         uint32_t device_id,
+                                                         uint16_t port,
+                                                         const char *label,
+                                                         struct IdeviceHandle **out_idevice);
+
+/**
+ * Allocates a cancellation handle.
+ *
+ * # Safety
+ * `out_handle` must be a valid, non-null location for the handle pointer.
+ */
+struct IdeviceFfiError *idevice_restore_cancel_handle_new(struct IdeviceRestoreCancelHandle **out_handle);
+
+/**
+ * Requests cancellation of the restore this handle was passed to.
+ *
+ * Safe to call from any thread while the restore runs; it is a no-op if `handle`
+ * is NULL.
+ *
+ * # Safety
+ * `handle` must be a valid handle from `idevice_restore_cancel_handle_new` (or NULL).
+ */
+void idevice_restore_cancel(struct IdeviceRestoreCancelHandle *handle);
+
+/**
+ * Frees a cancellation handle.
+ *
+ * # Safety
+ * `handle` must be a valid handle from `idevice_restore_cancel_handle_new` (or NULL)
+ * and must not be used after this call.
+ */
+void idevice_restore_cancel_handle_free(struct IdeviceRestoreCancelHandle *handle);
+
+/**
+ * Builds the default iOS `RestoreOptions` dictionary sent with `StartRestore`.
+ *
+ * The caller may tweak the returned plist before passing it to
+ * `idevice_restore_run`, and must free it with `plist_free`.
+ *
+ * # Safety
+ * `out_options` must be a valid, non-null location for the plist.
+ */
+struct IdeviceFfiError *idevice_restore_options_new(plist_t *out_options);
+
+/**
+ * Drives the restore-mode state machine to completion.
+ *
+ * Sends `StartRestore` with `options`, then services the device's data requests
+ * (personalizing components with `tss_ticket`, streaming the filesystem over
+ * ASR, proxying its key requests) until the device reports success.
+ *
+ * # Arguments
+ * * `client` - connected [`RestoredClientHandle`].
+ * * `build_identity` - the selected build-identity dictionary (plist).
+ * * `board_id`, `chip_id`, `ecid` - device identifiers.
+ * * `tss_ticket`/`tss_ticket_len` - the `ApImg4Ticket` (IM4M) from TSS.
+ * * `components` - component-source delegate (required).
+ * * `filesystem` - filesystem-image delegate, or NULL for a restore that sends
+ *   no filesystem.
+ * * `data_ports` - data-port connector delegate (required).
+ * * `progress` - progress delegate, or NULL.
+ * * `cancel` - cancellation handle from `idevice_restore_cancel_handle_new`, or
+ *   NULL. When another thread calls `idevice_restore_cancel` on it, the restore
+ *   stops and the device is rebooted toward recovery (returning a `Cancelled`
+ *   error).
+ * * `options` - the `RestoreOptions` plist (see `idevice_restore_options_new`).
+ *
+ * # Safety
+ * All non-NULL pointers must be valid for the duration of the call, and each
+ * delegate struct must remain valid until this returns.
+ */
+struct IdeviceFfiError *idevice_restore_run(struct RestoredClientHandle *client,
+                                            plist_t build_identity,
+                                            uint64_t board_id,
+                                            uint64_t chip_id,
+                                            uint64_t ecid,
+                                            const uint8_t *tss_ticket,
+                                            uintptr_t tss_ticket_len,
+                                            struct IdeviceRestoreComponentSourceFFI *components,
+                                            struct IdeviceRestoreFilesystemImageFFI *filesystem,
+                                            struct IdeviceRestoreDataPortConnectorFFI *data_ports,
+                                            struct IdeviceRestoreProgressFFI *progress,
+                                            struct IdeviceRestoreCancelHandle *cancel,
+                                            plist_t options);
+
+/**
+ * Opens an IPSW archive from a filesystem path.
+ *
+ * # Safety
+ * `path` must be a valid C string; `out_ipsw` a valid, non-null location.
+ */
+struct IdeviceFfiError *idevice_ipsw_open(const char *path, struct IpswHandle **out_ipsw);
+
+/**
+ * Reads and parses the archive's `BuildManifest.plist`.
+ *
+ * # Safety
+ * `ipsw` must be a valid handle; `out_manifest` a valid, non-null location. The
+ * returned plist must be freed with `plist_free`.
+ */
+struct IdeviceFfiError *idevice_ipsw_build_manifest(struct IpswHandle *ipsw, plist_t *out_manifest);
+
+/**
+ * Reads a component named in `build_identity` into a caller-freed buffer.
+ *
+ * # Safety
+ * `ipsw`, `name`, `out_data`, `out_len` must be valid. Free the buffer with
+ * `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_ipsw_read_component(struct IpswHandle *ipsw,
+                                                    plist_t build_identity,
+                                                    const char *name,
+                                                    uint8_t **out_data,
+                                                    uintptr_t *out_len);
+
+/**
+ * Reads an arbitrary archive entry by exact path into a caller-freed buffer.
+ *
+ * # Safety
+ * `ipsw`, `path`, `out_data`, `out_len` must be valid. Free with
+ * `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_ipsw_read_file(struct IpswHandle *ipsw,
+                                               const char *path,
+                                               uint8_t **out_data,
+                                               uintptr_t *out_len);
+
+/**
+ * Extracts an archive entry to a file on disk (streamed, for large images).
+ *
+ * # Safety
+ * `ipsw`, `entry_path`, `dest_path` must be valid C strings.
+ */
+struct IdeviceFfiError *idevice_ipsw_extract_to_file(struct IpswHandle *ipsw,
+                                                     const char *entry_path,
+                                                     const char *dest_path);
+
+/**
+ * Frees an [`IpswHandle`].
+ *
+ * # Safety
+ * `ipsw` must be a handle allocated by this library, or NULL.
+ */
+void idevice_ipsw_free(struct IpswHandle *ipsw);
+
+/**
+ * Selects the `BuildIdentity` matching `board_id`/`chip_id` (and, when non-NULL,
+ * `restore_behavior`, e.g. "Erase"/"Update") from a `BuildManifest` plist.
+ *
+ * # Safety
+ * `build_manifest`, `out_identity` must be valid. The result plist must be freed
+ * with `plist_free`.
+ */
+struct IdeviceFfiError *idevice_restore_select_build_identity(plist_t build_manifest,
+                                                              uint64_t board_id,
+                                                              uint64_t chip_id,
+                                                              const char *restore_behavior,
+                                                              plist_t *out_identity);
+
+/**
+ * Resolves the archive path of a component from a build identity's `Manifest`.
+ *
+ * # Safety
+ * `build_identity`, `name`, `out_path` must be valid. Free the string with
+ * `idevice_string_free`.
+ */
+struct IdeviceFfiError *idevice_restore_component_path(plist_t build_identity,
+                                                       const char *name,
+                                                       char **out_path);
+
+/**
+ * Fetches the AP `ApImg4Ticket` (IM4M) from Apple's TSS server for a build
+ * identity and device, returning the ticket bytes.
+ *
+ * `ap_nonce`/`sep_nonce` may be NULL (length 0); a NULL `sep_nonce` is signed
+ * with a zeroed nonce.
+ *
+ * # Safety
+ * `build_identity`, `out_ticket`, `out_ticket_len` must be valid. Free the ticket
+ * with `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_restore_fetch_ap_ticket(plist_t build_identity,
+                                                        uint64_t board_id,
+                                                        uint64_t chip_id,
+                                                        uint64_t ecid,
+                                                        const uint8_t *ap_nonce,
+                                                        uintptr_t ap_nonce_len,
+                                                        const uint8_t *sep_nonce,
+                                                        uintptr_t sep_nonce_len,
+                                                        uint8_t **out_ticket,
+                                                        uintptr_t *out_ticket_len);
+
+/**
+ * Stitches an `IM4P` component with the `ApImg4Ticket` into a personalized
+ * `IMG4` the device will accept.
+ *
+ * `fourcc` is either NULL (keep the payload's own type) or a pointer to exactly
+ * four bytes to re-tag the payload with (required for some `Restore*` components;
+ * see the library's `restore_fourcc_override`).
+ *
+ * # Safety
+ * `im4p`, `ticket`, `out_data`, `out_len` must be valid. If non-NULL, `fourcc`
+ * must point to 4 readable bytes. Free the buffer with `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_img4_stitch_component(const uint8_t *im4p,
+                                                      uintptr_t im4p_len,
+                                                      const uint8_t *ticket,
+                                                      uintptr_t ticket_len,
+                                                      const uint8_t *fourcc,
+                                                      uint8_t **out_data,
+                                                      uintptr_t *out_len);
+
+/**
+ * Returns the four-character code a `Restore*` component must be re-tagged with,
+ * if any, writing four bytes to `out_fourcc`.
+ *
+ * Returns `true` and fills `out_fourcc` when the component needs re-tagging;
+ * returns `false` and leaves `out_fourcc` untouched otherwise.
+ *
+ * # Safety
+ * `component_name` must be a valid C string; `out_fourcc` must point to 4
+ * writable bytes.
+ */
+bool idevice_img4_restore_fourcc_override(const char *component_name, uint8_t *out_fourcc);
+
+/**
+ * Returns the components iBoot loads during the restore boot, in manifest order,
+ * as a newline-separated, NUL-terminated string (empty when none).
+ *
+ * # Safety
+ * `build_identity`, `out_names` must be valid. Free the string with
+ * `idevice_string_free`.
+ */
+struct IdeviceFfiError *idevice_restore_boot_component_names(plist_t build_identity,
+                                                             char **out_names);
+
+/**
+ * Builds the local (unsigned) `IM4M` preboard manifest for a stashbag request
+ * from a build identity, into a caller-freed buffer.
+ *
+ * # Safety
+ * `build_identity`, `out_data`, `out_len` must be valid. Free the buffer with
+ * `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_restore_build_preboard_manifest(plist_t build_identity,
+                                                                uint64_t board_id,
+                                                                uint64_t chip_id,
+                                                                uint8_t **out_data,
+                                                                uintptr_t *out_len);
+
+/**
+ * Opens a recovery/DFU device over a caller-supplied transport delegate.
+ *
+ * The `transport` struct is copied by value; the caller may free its own
+ * storage after this returns (the `context` pointer must stay valid).
+ *
+ * # Safety
+ * `transport` and `out_device` must be valid, non-null pointers.
+ */
+struct IdeviceFfiError *idevice_recovery_device_new(const struct IdeviceRestoreRecoveryTransportFFI *transport,
+                                                    struct RecoveryDeviceHandle **out_device);
+
+/**
+ * Sends an iBoot command (NUL-terminated), with an explicit `bRequest`.
+ *
+ * # Safety
+ * `device`, `command` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_send_command(struct RecoveryDeviceHandle *device,
+                                                      const char *command,
+                                                      uint8_t b_request);
+
+/**
+ * Uploads a firmware image (bulk in recovery mode, chunked control transfers
+ * in DFU mode).
+ *
+ * # Safety
+ * `device`, `data` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_send_buffer(struct RecoveryDeviceHandle *device,
+                                                     const uint8_t *data,
+                                                     uintptr_t len);
+
+/**
+ * Reads an environment variable via `getenv` into a caller-freed buffer.
+ *
+ * # Safety
+ * `device`, `name`, `out_data`, `out_len` must be valid. Free with
+ * `idevice_data_free`.
+ */
+struct IdeviceFfiError *idevice_recovery_getenv(struct RecoveryDeviceHandle *device,
+                                                const char *name,
+                                                uint8_t **out_data,
+                                                uintptr_t *out_len);
+
+/**
+ * Sets an environment variable via `setenv`.
+ *
+ * # Safety
+ * `device`, `name`, `value` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_setenv(struct RecoveryDeviceHandle *device,
+                                                const char *name,
+                                                const char *value);
+
+/**
+ * Enables or disables auto-boot and persists it (`saveenv`).
+ *
+ * # Safety
+ * `device` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_set_autoboot(struct RecoveryDeviceHandle *device,
+                                                      bool enable);
+
+/**
+ * Issues the zero-length `finish_transfer` control request.
+ *
+ * # Safety
+ * `device` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_finish_transfer(struct RecoveryDeviceHandle *device);
+
+/**
+ * Reboots the device.
+ *
+ * # Safety
+ * `device` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_reboot(struct RecoveryDeviceHandle *device);
+
+/**
+ * Returns the device's USB `idProduct` (identifying its mode), and whether it
+ * is a recovery (iBoot) mode as opposed to DFU/WTF.
+ *
+ * # Safety
+ * `device`, `out_product_id`, `out_is_recovery` must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_get_mode(struct RecoveryDeviceHandle *device,
+                                                  uint16_t *out_product_id,
+                                                  bool *out_is_recovery);
+
+/**
+ * Fills device identifiers parsed from the recovery serial string.
+ *
+ * Each `has_*` output is set to whether the corresponding value was present;
+ * missing values leave their `out_*` untouched.
+ *
+ * # Safety
+ * All non-null out-pointers must be valid.
+ */
+struct IdeviceFfiError *idevice_recovery_get_info(struct RecoveryDeviceHandle *device,
+                                                  uint64_t *out_cpid,
+                                                  bool *out_has_cpid,
+                                                  uint64_t *out_bdid,
+                                                  bool *out_has_bdid,
+                                                  uint64_t *out_ecid,
+                                                  bool *out_has_ecid);
+
+/**
+ * Returns the AP nonce (`NONC`) from the recovery serial, if present, into a
+ * caller-freed buffer. Returns `true` when a nonce was present.
+ *
+ * # Safety
+ * `device`, `out_data`, `out_len` must be valid. Free with `idevice_data_free`.
+ */
+bool idevice_recovery_get_ap_nonce(struct RecoveryDeviceHandle *device,
+                                   uint8_t **out_data,
+                                   uintptr_t *out_len);
+
+/**
+ * Frees a [`RecoveryDeviceHandle`].
+ *
+ * # Safety
+ * `device` must be a handle allocated by this library, or NULL.
+ */
+void idevice_recovery_device_free(struct RecoveryDeviceHandle *device);
+
+/**
+ * Starts the FDR trust channel: control handshake, then a background listener
+ * running for the rest of the restore.
+ *
+ * The `connector` struct is copied by value (its `context` must stay valid for
+ * the duration of the restore).
+ *
+ * # Safety
+ * `connector` must be a valid, non-null pointer.
+ */
+struct IdeviceFfiError *idevice_restore_fdr_start(const struct IdeviceRestoreFdrConnectorFFI *connector);
 
 /**
  * Creates a new RestoreServiceClient from a ReadWrite stream
@@ -6081,6 +8567,43 @@ struct IdeviceFfiError *rp_pairing_file_write(struct RpPairingFileHandle *handle
  * `handle` must be valid or NULL.
  */
 void rp_pairing_file_free(struct RpPairingFileHandle *handle);
+
+/**
+ * Frees a peer device struct and its heap-allocated string fields.
+ *
+ * # Safety
+ * `peer_device` must be a pointer returned by `rppairing_pair_network` or
+ * `pairable_host_accept`, or NULL.
+ */
+void rppairing_peer_device_free(struct RpPairingPeerDeviceC *peer_device);
+
+/**
+ * Bind a listener, hand advertising details to the caller via `ready_cb`, wait
+ * for the device, drive pairing through `pin_cb`, and write the pairing file
+ * to `out_path`. Blocks the calling thread until pairing completes or fails.
+ *
+ * # Safety
+ * All `*const c_char` args must be null or valid C strings; `out` must be a
+ * valid, writable `SiPairResult`.
+ */
+int32_t si_run_host(const char *bind_addr,
+                    uint16_t port,
+                    const char *name,
+                    const char *model,
+                    const char *out_path,
+                    const char *host_alt_irk_hex,
+                    SiReadyCb ready_cb,
+                    SiPinCb pin_cb,
+                    void *ctx,
+                    struct SiPairResult *out);
+
+/**
+ * Free the heap strings inside a `SiPairResult`.
+ *
+ * # Safety
+ * `r` must be null or a `SiPairResult` previously populated by `si_run_host`.
+ */
+void si_result_free(struct SiPairResult *r);
 
 /**
  * Creates a new RSD handshake from a ReadWrite connection
@@ -6472,16 +8995,22 @@ struct IdeviceFfiError *springboard_services_get_homescreen_icon_metrics(struct 
                                                                          plist_t *res);
 
 /**
- * Reads the whole home screen icon layout (SpringBoard getIconState).
+ * Reads the whole home screen icon layout (SpringBoard `getIconState`).
  *
- * \param client A valid SpringBoardServicesClient handle
- * \param format_version Optional C string: "2" = flat list (most complete),
- *        "1"/"3" = fixed grid (trailing cells are false filler), "4" = row matrix.
- *        Pass NULL for the device default. Read and write MUST use the same value.
- * \param out_result On success, points to a newly allocated binary plist blob
- * \param out_result_len On success, contains the byte length of that blob
+ * # Arguments
+ * * `client` - A valid SpringBoardServicesClient handle
+ * * `format_version` - Optional C string: `"2"` = flat list (most complete),
+ *   `"1"`/`"3"` = fixed grid (trailing cells are `false` filler), `"4"` = row matrix.
+ *   Pass NULL for the device default. **读和写必须用同一个版本号**。
+ * * `out_result` - On success, points to a newly allocated **binary plist** blob
+ * * `out_result_len` - On success, contains the byte length of that blob
  *
- * eturns An IdeviceFfiError on error, null on success
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `client` must be a valid pointer to a handle allocated by this library
+ * `out_result` / `out_result_len` must be valid, non-null pointers
  */
 struct IdeviceFfiError *springboard_services_get_icon_state(struct SpringBoardServicesClientHandle *client,
                                                             const char *format_version,
@@ -6489,15 +9018,20 @@ struct IdeviceFfiError *springboard_services_get_icon_state(struct SpringBoardSe
                                                             size_t *out_result_len);
 
 /**
- * Writes a home screen icon layout back to SpringBoard (setIconState).
+ * Writes a home screen icon layout back to SpringBoard (`setIconState`).
  *
- * \param client A valid SpringBoardServicesClient handle
- * \param data A binary plist blob (usually the one from get_icon_state, modified)
- * \param len Byte length of data
- * \param format_version Optional C string, MUST match the value used when reading.
- *        NULL = send no formatVersion.
+ * # Arguments
+ * * `client` - A valid SpringBoardServicesClient handle
+ * * `data` - A **binary plist** blob (通常就是 `get_icon_state` 拿到的、改过的那份)
+ * * `len` - Byte length of `data`
+ * * `format_version` - Optional C string, **必须与读的时候一致**；NULL = 不带版本号
  *
- * eturns An IdeviceFfiError on error, null on success
+ * # Returns
+ * An IdeviceFfiError on error, null on success
+ *
+ * # Safety
+ * `client` must be a valid pointer to a handle allocated by this library
+ * `data` must point to at least `len` readable bytes
  */
 struct IdeviceFfiError *springboard_services_set_icon_state(struct SpringBoardServicesClientHandle *client,
                                                             const uint8_t *data,
@@ -6912,7 +9446,7 @@ void idevice_usbmuxd_listener_handle_free(struct UsbmuxdListenerHandle *stream_h
 struct IdeviceFfiError *idevice_usbmuxd_listener_next(struct UsbmuxdListenerHandle *stream_handle,
                                                       bool *connect,
                                                       struct UsbmuxdDeviceHandle **connection_device,
-                                                      uint32_t *disconnection_id);
+                                                      uint64_t *disconnection_id);
 
 /**
  * Reads the BUID (Boot-Unique ID) from usbmuxd.
@@ -7596,6 +10130,14 @@ void wda_bridge_endpoints_free(struct WdaBridgeEndpointsC *endpoints);
  * `handle` must be a pointer returned by this library or NULL.
  */
 void wda_bridge_free(struct WdaBridgeHandle *handle);
+
+/**
+ * 释放 `cstr` 产生的堆 C 字符串。
+ *
+ * # Safety
+ * `p` 必须为 null 或 `cstr`/`into_raw` 返回的指针。
+ */
+void si_string_free(char *p);
 
 #endif  /* IDEVICE_H */
 
@@ -9067,68 +11609,4 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
-#endif
-
-/* ---- TequilaDash 扩展：MCInstall SetWiFiPowerState over RSD 隧道（v0.3.247） ----
- *
- * 由 rust/idevice-ffi/src/mcinstall.rs 导出。此前该符号只有 Rust 实现、没有 C 声明，
- * Swift 侧（WirelessLockdownService）调用不到——这也是 v0.3.246 本地代码编不过、
- * 射频开关只能沿用会闪退的 Swift 手写帧版本的原因。
- */
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * Sets the device Wi-Fi radio power state over an already-established RSD tunnel.
- *
- * # Arguments
- * * [`adapter`] - The adapter handle of the tunnel (borrowed, caller keeps ownership)
- * * [`handshake`] - The RSD handshake handle (borrowed, caller keeps ownership)
- * * [`on`] - 1 to enable the Wi-Fi radio, 0 to disable
- * * [`out_reply`] - Optional out-pointer for the device reply (free with
- *   `idevice_string_free`); may be NULL
- *
- * # Returns
- * Null on success, an IdeviceFfiError otherwise (ServiceNotFound when the device
- * does not expose `com.apple.mobile.MCInstall.shim.remote`).
- *
- * # Safety
- * Both handles must be valid pointers allocated by this library and must be
- * released by the caller afterwards.
- */
-typedef int (*mcinstall_pkcs7_sign_fn)(const unsigned char *data,
-                                       int data_len,
-                                       unsigned char **der_out,
-                                       int *der_len);
-
-/**
- * Registers the PKCS#7 signing callback used by the supervision (Escalate)
- * handshake. Implemented on the Swift side with the already-linked libcrypto.
- *
- * # Safety
- * `f` must remain valid for the lifetime of the process.
- */
-void mcinstall_set_pkcs7_sign_fn(mcinstall_pkcs7_sign_fn f);
-
-/**
- * Sends one MCInstall request over an RSD tunnel.
- *
- * `request_xml` is the bare plist body (`<dict>...</dict>`); the plist header
- * and closing tag are added here. When `cert_der` is non-NULL the supervision
- * Escalate handshake runs first on the same connection.
- *
- * # Safety
- * `adapter`/`handshake` must be handles allocated by this library; `out_reply`
- * may be NULL and the returned string must be freed with `idevice_string_free`.
- */
-struct IdeviceFfiError *mcinstall_request_rsd(struct AdapterHandle *adapter,
-                                              struct RsdHandshakeHandle *handshake,
-                                              const char *request_xml,
-                                              const unsigned char *cert_der,
-                                              int cert_der_len,
-                                              char **out_reply);
-
-#ifdef __cplusplus
-}
 #endif

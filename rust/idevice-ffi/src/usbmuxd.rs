@@ -7,7 +7,8 @@ use std::{
 };
 
 use crate::{
-    IdeviceFfiError, IdeviceHandle, IdevicePairingFile, ffi_err, run_sync, run_sync_local,
+    IdeviceFfiError, IdeviceHandle, IdevicePairingFile, ffi_err, run_global_timeout, run_sync,
+    run_sync_local,
     util::{SockAddr, c_socket_to_rust, idevice_sockaddr, idevice_socklen_t},
 };
 use futures::{Stream, StreamExt};
@@ -58,7 +59,7 @@ pub unsafe extern "C" fn idevice_usbmuxd_new_tcp_connection(
     };
 
     let res = run_sync(async move {
-        let stream = tokio::net::TcpStream::connect(addr).await?;
+        let stream = run_global_timeout(|| tokio::net::TcpStream::connect(addr)).await?;
         Ok::<_, IdeviceError>(UsbmuxdConnection::new(Box::new(stream), tag))
     });
 
@@ -230,12 +231,7 @@ pub unsafe extern "C" fn idevice_usbmuxd_connect_to_device(
         return ffi_err!(IdeviceError::FfiInvalidArg);
     }
 
-    // Take ownership of the connection handle
-    let conn = unsafe {
-        let conn = std::ptr::read(&(*usbmuxd_connection).0); // move the inner connection
-        drop(Box::from_raw(usbmuxd_connection)); // free the wrapper
-        conn
-    };
+    let conn = unsafe { Box::from_raw(usbmuxd_connection) }.0;
 
     let label = unsafe {
         match CStr::from_ptr(label).to_str() {
@@ -410,7 +406,7 @@ pub unsafe extern "C" fn idevice_usbmuxd_listener_next(
     stream_handle: *mut UsbmuxdListenerHandle,
     connect: *mut bool,
     connection_device: *mut *mut UsbmuxdDeviceHandle,
-    disconnection_id: *mut u32,
+    disconnection_id: *mut u64,
 ) -> *mut IdeviceFfiError {
     if stream_handle.is_null()
         || connect.is_null()
