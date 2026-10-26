@@ -332,7 +332,15 @@ struct AFCBrowserView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let data = try service.readFile(entry.path)
-                let target = URL(fileURLWithPath: downloadDir).appendingPathComponent(entry.name)
+                // P0-1：设备返回的名字不可信，含路径分隔符会写到 downloadDir 之外。
+                guard let safeName = FileNameRules.sanitize(entry.name) else {
+                    DispatchQueue.main.async {
+                        loading = false
+                        errorMessage = "文件名非法，已拒绝下载."
+                    }
+                    return
+                }
+                let target = URL(fileURLWithPath: downloadDir).appendingPathComponent(safeName)
                 try data.write(to: target)
                 DispatchQueue.main.async {
                     loading = false

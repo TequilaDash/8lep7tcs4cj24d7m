@@ -230,7 +230,11 @@ final class RingtonesService: @unchecked Sendable {
         let data = try afc.readFile(entry.path)
         guard !data.isEmpty else { throw makeError("铃声内容为空") }
         let localDir = Self.exportDirectory
-        let localURL = URL(fileURLWithPath: localDir).appendingPathComponent(entry.name)
+        // P0-1：设备返回的名字不可信，净化失败直接拒绝，不写盘。
+        guard let safeName = FileNameRules.sanitize(entry.name) else {
+            throw makeError("铃声文件名非法，已拒绝导出")
+        }
+        let localURL = URL(fileURLWithPath: localDir).appendingPathComponent(safeName)
         try data.write(to: localURL, options: .atomic)
         return localURL
     }

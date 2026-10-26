@@ -734,7 +734,7 @@ struct AppFileBrowserView: View {
                 return count
             }.value
             guard sessionIsCurrent(epoch) else { return }
-            if truncated > 0 { showToast("\(truncated) 项因层级过深未导出.") }
+            if truncated > 0 { showToast("\(truncated) 项未导出：层级过深或名称非法.") }
             await MainActor.run { shareItems = ShareItems(urls: [dest]) }
         } catch {
             guard sessionIsCurrent(epoch) else { return }
@@ -780,7 +780,14 @@ struct AppFileBrowserView: View {
                 // U-1：句柄现取——上一轮 await 之后会话可能已被 closeAll 释放。
                 guard let client = currentClient(epoch) else { break }
                 do {
-                    let dest = destDir.appendingPathComponent(entry.name)
+                    // P0-1：设备返回的文件名不可信。未净化的名字若含路径分隔符，
+                    // appendingPathComponent 会把写入点搬到导出目录之外（App 容器任意位置）。
+                    // 净化失败不抛错 —— 一个坏名字不该让整次导出失败，跳过并计入 truncated。
+                    guard let safeName = FileNameRules.sanitize(entry.name) else {
+                        truncated += 1
+                        continue
+                    }
+                    let dest = destDir.appendingPathComponent(safeName)
                     var skipped = 0
                     try Self.exportEntry(client: client, entry: entry, to: dest, truncated: &skipped) { name, done, total in
                         Task { await MainActor.run {
@@ -802,7 +809,7 @@ struct AppFileBrowserView: View {
                 selectedPaths.removeAll()
                 showToast("已导出 \(okR) 项 → 文件导出浏览"
                           + (failR > 0 ? "（\(failR) 项失败）" : "")
-                          + (truncR > 0 ? "（\(truncR) 项因层级过深未导出）" : ""))
+                          + (truncR > 0 ? "（\(truncR) 项未导出：层级过深或名称非法）" : ""))
             }
         }
     }
@@ -838,7 +845,12 @@ struct AppFileBrowserView: View {
         guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
-            let target = toDir.appendingPathComponent(item.name)
+            // P0-1：设备端文件名同样不可信，净化失败跳过该条目（计入 truncated）。
+            guard let safeName = FileNameRules.sanitize(item.name) else {
+                truncated += 1
+                continue
+            }
+            let target = toDir.appendingPathComponent(safeName)
             let rel = prefix + "/" + item.name
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
@@ -867,7 +879,12 @@ struct AppFileBrowserView: View {
         guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
-            let target = toDir.appendingPathComponent(item.name)
+            // P0-1：设备端文件名不可信，净化失败跳过该条目（计入 truncated）。
+            guard let safeName = FileNameRules.sanitize(item.name) else {
+                truncated += 1
+                continue
+            }
+            let target = toDir.appendingPathComponent(safeName)
             if item.isDirectory {
                 try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
                 try recursiveDownload(client: client, srcDir: item.path, toDir: target, depth: depth + 1,

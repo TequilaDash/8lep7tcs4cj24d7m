@@ -4,7 +4,7 @@
 
 ### 变更
 
-- 依赖可复现：Citadel 由 `from: 0.8.0`（开区间下界）改为 `exact: 0.12.1`。
+- 依赖可复现：Citadel 由 `from: 0.8.0`（开区间下界）改为 `exactVersion: 0.12.1`（键名必须是 exactVersion，xcodegen 不认 exact）。
   `from` 不是锁定值，仓库又没有 Package.resolved，CI 每次重新解析依赖树。
   产物实测已在用 0.12.x，两版之间无 security fix，SFTPDelegate 与 ExecDelegate 的
   12 个方法签名一个没动（只多了 Sendable，我们已写 @unchecked Sendable）。
@@ -31,6 +31,15 @@
 - `docs/releasing.md` 的发版文档改用 `bash Resources/Scripts/promote_hash.sh`，
   并写明不要手搓路径列表：原命令只覆盖 TequilaDash / TequilaDashTunnel / project.yml，
   漏掉 Resources/Info.plist、两个 entitlements、BundledModules、ZSign、vendor、Resources/Scripts、rust/。
+- 安全：设备（AFC）返回的文件名接入 `FileNameRules.sanitize`，5 处未净化点修复。
+  原先 `AppFileBrowserView.swift:783`/`:841`/`:870`、`AFCBrowserView.swift:335`、
+  `RingtonesService.swift:233` 直接 `appendingPathComponent(entry.name)`，设备回一个含
+  `/` 或反斜杠的名字即可把写入点搬到导出目录之外（App 容器任意位置）。净化失败跳过该
+  条目并计入 truncated，不让一个坏名字废掉整次导出。
+- 稳定：`rust/idevice-ffi/src/afc.rs` 三处 `CString::new(..).unwrap()` 改为不 panic 的
+  `device_cstring`（内嵌 NUL 换 U+FFFD）。原先设备一条含 NUL 的畸形回包就能让 panic
+  跨 `extern "C"` 边界 abort 整个 App。顺带修掉 `afc_list_directory` 的
+  `filter_map(..ok())` 静默丢条目、以及 `Layout::array(..).unwrap()`。
 
 ### 校验
 

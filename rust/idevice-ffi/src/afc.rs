@@ -18,6 +18,20 @@ use crate::{core_device_proxy::AdapterHandle, rsd::RsdHandshakeHandle};
 #[cfg(all(feature = "core_device_proxy", feature = "rsd"))]
 use idevice::RsdService as _;
 
+/// 把设备给的字符串转成 C 字符串，**不 panic**。
+///
+/// 设备侧数据不可信：AFC 回的 `st_nlink` / `st_ifmt` / `st_link_target` / `model`
+/// 只要含一个内嵌 NUL，`CString::new(..).unwrap()` 就会 panic；而 panic 跨
+/// `extern "C"` 边界默认直接 abort，等于设备一条畸形回包就能把整个 App 打掉。
+/// 这里把内嵌 NUL 换成 U+FFFD（与 `to_string_lossy` 同一口径，信息不丢），
+/// 转换后不可能再有 NUL，兜底也走 `unwrap_or_default` 而不是 `unwrap`。
+fn device_cstring(value: &str) -> std::ffi::CString {
+    if let Ok(s) = std::ffi::CString::new(value) {
+        return s;
+    }
+    std::ffi::CString::new(value.replace('\0', "\u{FFFD}")).unwrap_or_default()
+}
+
 pub struct AfcClientHandle(pub AfcClient);
 
 /// Connects to the AFC service using a TCP provider
@@ -217,16 +231,23 @@ pub unsafe extern "C" fn afc_list_directory(
     match res {
         Ok(items) => {
             // Create a heap-allocated array of C strings that will be freed by the caller
+            // 原先 filter_map(..ok()) 会把含内嵌 NUL 的设备名**静默丢掉**：
+            // 调用方只看到「目录里少了几项」，无从得知是设备给了畸形名字。
+            // 改成保留（NUL 换 U+FFFD），条目数与设备返回的条目数一致。
             let c_strings = items
                 .into_iter()
-                .filter_map(|s| std::ffi::CString::new(s).ok())
+                .map(|s| device_cstring(&s))
                 .collect::<Vec<_>>();
 
             // Get the count before we modify anything
             let string_count = c_strings.len();
 
             // Create memory for array of char pointers (including NULL terminator)
-            let layout = std::alloc::Layout::array::<*mut libc::c_char>(string_count + 1).unwrap();
+            let layout = match std::alloc::Layout::array::<*mut libc::c_char>(string_count + 1) {
+                Ok(layout) => layout,
+                // 元素数撑爆 usize 时返回错误码，不再 unwrap panic
+                Err(_) => return ffi_err!(IdeviceError::FfiInvalidArg),
+            };
             let ptr = unsafe { std::alloc::alloc(layout) as *mut *mut libc::c_char };
             if ptr.is_null() {
                 return ffi_err!(IdeviceError::FfiInvalidArg);
@@ -345,16 +366,10 @@ pub unsafe extern "C" fn afc_get_file_info(
                 (*info).creation = file_info.creation.and_utc().timestamp();
                 (*info).modified = file_info.modified.and_utc().timestamp();
 
-                (*info).st_nlink = std::ffi::CString::new(file_info.st_nlink)
-                    .unwrap()
-                    .into_raw();
-
-                (*info).st_ifmt = std::ffi::CString::new(file_info.st_ifmt)
-                    .unwrap()
-                    .into_raw();
-
+                (*info).st_nlink = device_cstring(&file_info.st_nlink).into_raw();
+                (*info).st_ifmt = device_cstring(&file_info.st_ifmt).into_raw();
                 (*info).st_link_target = match file_info.st_link_target {
-                    Some(target) => std::ffi::CString::new(target).unwrap().into_raw(),
+                    Some(target) => device_cstring(&target).into_raw(),
                     None => std::ptr::null_mut(),
                 };
             }
@@ -425,9 +440,7 @@ pub unsafe extern "C" fn afc_get_device_info(
     match res {
         Ok(device_info) => {
             unsafe {
-                (*info).model = std::ffi::CString::new(device_info.model)
-                    .unwrap()
-                    .into_raw();
+                (*info).model = device_cstring(&device_info.model).into_raw();
                 (*info).total_bytes = device_info.total_bytes;
                 (*info).free_bytes = device_info.free_bytes;
                 (*info).block_size = device_info.block_size;
