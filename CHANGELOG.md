@@ -21,6 +21,16 @@
   深 #76D6FF / 浅 #005493）：`BackupsListView.swift:143`/`:730`、
   `FileBrowserView.swift:330`/`:337`、`IconCleanupView.swift:98`、
   `LiveCleanTabView.swift:210`。另 4 处 `.accentColor` 语义不同不动。
+- `promote_hash.sh` 修 `core.quotePath`：`git ls-tree` 默认把非 ASCII 路径 C-引用成
+  `"docs/\344\270\255.md"` 形态，`EXCLUDE_RE` 的 `^docs/` 与 `[.]md$` 两端锚全部失效；
+  更致命的是随后 `git rev-parse "HEAD:<引号形态>"` 失败时 git 把入参原样回显到 stdout，
+  命令替换拿到的不是空串而是字面量，`printf` 把它当 blob sha 写进 hash 流 —— 常量。
+  后果是任何非 ASCII 文件名的构建输入，其内容改动对 promote hash 零影响，
+  promote 会误判可复用、旧 IPA 挂新 tag 而 CI 全绿。修法一行 `git -c core.quotePath=false ls-tree`。
+  实测本仓当前被 C-引用的非 ASCII 路径 2 条，都是本就该排除的 .md，故此前无实害。
+- `docs/releasing.md` 的发版文档改用 `bash Resources/Scripts/promote_hash.sh`，
+  并写明不要手搓路径列表：原命令只覆盖 TequilaDash / TequilaDashTunnel / project.yml，
+  漏掉 Resources/Info.plist、两个 entitlements、BundledModules、ZSign、vendor、Resources/Scripts、rust/。
 
 ### 校验
 
