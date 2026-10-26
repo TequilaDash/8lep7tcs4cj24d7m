@@ -528,7 +528,7 @@ struct AppFileBrowserView: View {
         HStack {
             if selectionMode {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? .blue : .secondary)
+                    .foregroundStyle(selected ? AppTheme.accent : .secondary)
             }
             Image(systemName: entry.isDirectory ? "folder.fill" : fileIcon(entry.name))
                 .foregroundStyle(entry.isDirectory ? .blue : .gray)
