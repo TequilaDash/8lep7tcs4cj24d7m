@@ -58,7 +58,7 @@ struct IconCleanupView: View {
                 HStack {
                     Text("扫描设备图标")
                     Spacer()
-                    if phase == .scanning { ProgressView() }
+                    if phase == .scanning { ProgressView().controlSize(.small) }
                 }
             }
             .disabled(isBusy)
@@ -125,7 +125,7 @@ struct IconCleanupView: View {
                 HStack {
                     Text("删除选中的图标")
                     Spacer()
-                    if phase == .cleaning { ProgressView() }
+                    if phase == .cleaning { ProgressView().controlSize(.small) }
                 }
             }
             .disabled(selected.isEmpty || isBusy)

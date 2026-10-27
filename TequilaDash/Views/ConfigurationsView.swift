@@ -360,6 +360,7 @@ struct ConfigurationsView: View {
                     Spacer()
                     if isBusy {
                         ProgressView()
+                            .controlSize(.small)
                     } else {
                         Image(systemName: "chevron.right")
                             .font(.caption)

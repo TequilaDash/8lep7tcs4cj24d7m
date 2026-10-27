@@ -263,11 +263,13 @@ struct ModuleManagerView: View {
     // MARK: 子视图
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("暂无模块", systemImage: "shippingbox")
-        } description: {
-            Text("点击右上角导入 .zip 模块\n（规范 escape.module.v1）")
-        }
+        // v0.3.721：整页空态统一到 AppEmptyState（自包含，不依赖 List 的 Section 提供卡片外观）.
+        AppEmptyState(
+            icon: "shippingbox",
+            secondaryIcon: nil,
+            title: "暂无模块",
+            message: "点击右上角导入 .zip 模块\n（规范 escape.module.v1）"
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -276,9 +278,12 @@ struct ModuleManagerView: View {
             // 搜索无结果时也必须保留 List（.searchable 挂在上面，
             // 切换视图会把搜索框整个卸载）
             if filteredModules.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                // v0.3.721：搜索无结果收敛到 AppStateSection（与 I4StoreFreeView / LiveCleanTabView 同款文案）.
+                // 不再套 .listRowBackground(Color.clear)：AppStateSection 自带 Section，
+                // 保留默认行背景才能让 InfoActionCard 落进卡片里（InfoActionCard 自身无背景）.
+                AppStateSection(state: .empty("没有匹配「\(searchText)」的模块",
+                                              message: "换个关键词试试.",
+                                              icon: "magnifyingglass"))
             } else {
                 ForEach(filteredModules) { module in
                     Section {

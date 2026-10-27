@@ -323,6 +323,7 @@ struct IPAInstallView: View {
                 Section {
                     HStack(spacing: 10) {
                         ProgressView()
+                            .controlSize(.small)
                         Text(stepText)
                             .font(.subheadline)
                         Spacer()

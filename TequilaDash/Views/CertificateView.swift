@@ -113,6 +113,7 @@ struct CertificateView: View {
                     } label: {
                         if manager.isWorking {
                             ProgressView()
+                                .controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
                         }

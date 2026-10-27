@@ -36,6 +36,7 @@ struct RoutePlannerSheet: View {
                     } label: {
                         if isRouting {
                             ProgressView()
+                                .controlSize(.small)
                         } else {
                             Label("沿道路规划步行或驾车路线", systemImage: "road.lanes")
                         }

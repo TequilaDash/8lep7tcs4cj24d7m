@@ -80,12 +80,16 @@ struct ModuleHostShell: View {
     @ViewBuilder
     private var content: some View {
         if tabs.isEmpty {
-            // 注册名缺失 / 模块没声明原生界面：给一句人话，不留白屏
-            ContentUnavailableView(
-                "该模块没有可用的原生界面",
-                systemImage: "square.grid.2x2",
-                description: Text("模块声明的原生界面未在宿主内注册.")
+            // 注册名缺失 / 模块没声明原生界面：给一句人话，不留白屏.
+            // v0.3.721：这里不在 List 内（外层是 NavigationStack），系统 ContentUnavailableView 的灰底
+            // 与品牌色体系不符；整页空态统一用自包含的 AppEmptyState（无需 Section 外壳）.
+            AppEmptyState(
+                icon: "square.grid.2x2",
+                secondaryIcon: nil,
+                title: "该模块没有可用的原生界面",
+                message: "模块声明的原生界面未在宿主内注册."
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             TabView(selection: $selection) {
                 ForEach(tabs) { tab in

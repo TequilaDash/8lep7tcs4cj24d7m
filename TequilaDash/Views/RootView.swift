@@ -154,56 +154,13 @@ struct SetupStep: View {
                 .font(.headline)
                 .foregroundColor(.white)
                 .frame(width: 28, height: 28)
-                .background(Color.accentColor)
+                // v0.3.721：原 Color.accentColor 是系统蓝 #007AFF，与品牌蓝 AppTheme.accent 不一致.
+                .background(AppTheme.accent)
                 .clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline)
                 Text(text).font(.subheadline).foregroundColor(.secondary)
             }
-        }
-    }
-}
-
-/// Generic error state with retry, styled as a card to match the rest of the app.
-struct ErrorStateView: View {
-    let message: String
-    let onRetry: () -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                InfoActionCard(
-                    icon: "info.circle",
-                    iconTint: .orange,
-                    title: "出现问题",
-                    message: message + (message.contains("tunnel") || message.contains("LocalDevVPN") || message.contains("Heartbeat")
-                        ? "\n\n提示：将 LocalDevVPN 重置为默认的 10.7.0.1 地址，并让 iPASide 放置配对文件（或在此导入）.iOS 26.5 上不需要自定义局域网 IP."
-                        : ""),
-                    actionTitle: "重试",
-                    action: onRetry
-                )
-                .padding(.horizontal)
-            }
-            .padding(.top, 24)
-        }
-    }
-}
-
-/// Shown when no user apps are discoverable.
-struct EmptyStateView: View {
-    let diagnostics: String
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                InfoActionCard(
-                    icon: "square.grid.2x2",
-                    title: "未找到应用",
-                    message: diagnostics
-                )
-                .padding(.horizontal)
-            }
-            .padding(.top, 24)
         }
     }
 }
@@ -291,7 +248,7 @@ struct SettingsForm: View {
                     Button {
                         certTask = Task { await runCertCreation() }
                     } label: {
-                        if certStore.isBusy { ProgressView() } else { Text("重新创建证书") }
+                        if certStore.isBusy { ProgressView().controlSize(.small) } else { Text("重新创建证书") }
                     }
                     .disabled(certStore.isBusy)
                 } else {
@@ -300,7 +257,7 @@ struct SettingsForm: View {
                     Button {
                         certTask = Task { await runCertCreation() }
                     } label: {
-                        if certStore.isBusy { ProgressView() } else { Text("创建开发证书") }
+                        if certStore.isBusy { ProgressView().controlSize(.small) } else { Text("创建开发证书") }
                     }
                     .disabled(certStore.isBusy)
                 }

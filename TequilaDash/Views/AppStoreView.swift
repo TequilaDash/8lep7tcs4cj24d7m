@@ -320,9 +320,10 @@ struct AppStoreView: View {
                     .padding(.vertical, 30)
             }
         } else if items.isEmpty {
-            Section {
-                ContentUnavailableView("暂无数据", systemImage: "square.grid.2x2")
-            }
+            // 同卡 loading / error 已是 AppLoadingRow / AppErrorRow，empty 也收敛到 AppStateSection.
+            AppStateSection(state: .empty("暂无数据",
+                                          message: "换个地区 / 分类 / 榜单试试.",
+                                          icon: "square.grid.2x2"))
         } else {
             Section {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, app in
@@ -345,9 +346,9 @@ struct AppStoreView: View {
                 AppLoadingRow(title: "搜索中…", centered: true, level: .block)
             }
         } else if searchResults.isEmpty && ownedMatches.isEmpty {
-            Section {
-                ContentUnavailableView.search(text: keyword)
-            }
+            AppStateSection(state: .empty("没有找到「\(keyword)」",
+                                          message: "换个关键词试试.",
+                                          icon: "magnifyingglass"))
         } else {
             if !searchResults.isEmpty {
                 Section("\(regionTitle) 搜索结果 · \(searchResults.count) 款") {

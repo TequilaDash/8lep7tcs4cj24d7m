@@ -203,8 +203,9 @@ private struct ProcessRow: View {
                 Spacer()
                 if activeControl != nil {
                     ProgressView()
+                        .controlSize(.small)
                         .progressViewStyle(.circular)
-                        .tint(.accentColor)
+                        .tint(AppTheme.accent)
                 } else {
                     HStack(spacing: 8) {
                         Button {

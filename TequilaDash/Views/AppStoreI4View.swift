@@ -80,7 +80,11 @@ struct AppStoreI4View: View {
     @ViewBuilder
     private var specialSection: some View {
         if specials.isEmpty {
-            Section { ContentUnavailableView("暂无专题", systemImage: "square.stack.3d.up") }
+            // v0.3.721：系统 ContentUnavailableView 收敛到 AppStateSection —— 同一张 Section 卡里
+            // 的 loading / error 早就是 AppLoadingRow / AppErrorRow，只有 empty 还是系统件.
+            AppStateSection(state: .empty("暂无专题",
+                                          message: "签名成功后等待服务端返回专题列表.",
+                                          icon: "square.stack.3d.up"))
         } else {
             Section("专题 · \(specials.count)") {
                 ForEach(Array(specials.enumerated()), id: \.offset) { _, s in
@@ -116,10 +120,9 @@ struct AppStoreI4View: View {
     @ViewBuilder
     private var appSection: some View {
         if apps.isEmpty {
-            Section {
-                ContentUnavailableView("该榜单暂无数据", systemImage: "square.grid.2x2",
-                                       description: Text("签名成功；remd 未返回条目"))
-            }
+            AppStateSection(state: .empty("该榜单暂无数据",
+                                          message: "签名成功；remd 未返回条目.",
+                                          icon: "square.grid.2x2"))
         } else {
             Section("\(rank.title) · \(apps.count)") {
                 ForEach(Array(apps.enumerated()), id: \.offset) { idx, a in

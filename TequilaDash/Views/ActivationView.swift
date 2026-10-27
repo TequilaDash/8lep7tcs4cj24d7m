@@ -61,7 +61,7 @@ struct ActivationView: View {
                 HStack {
                     Text("刷新状态")
                     Spacer()
-                    if loading { ProgressView() }
+                    if loading { ProgressView().controlSize(.small) }
                 }
             }
             .disabled(isBusy)
@@ -90,7 +90,7 @@ struct ActivationView: View {
                 HStack {
                     Text("反激活设备")
                     Spacer()
-                    if deactivating { ProgressView() }
+                    if deactivating { ProgressView().controlSize(.small) }
                 }
             }
             .disabled(!(status?.canDeactivate ?? false) || isBusy)
