@@ -224,21 +224,6 @@ final class RingtonesService: @unchecked Sendable {
         return remote
     }
 
-    /// 导出铃声到本地文件 App（用户可长按 → 用作铃声，iOS 16+）.
-    /// 通过 AFC 读取设备上的铃声文件 → 保存到 Documents/Ringtones/.
-    func exportToLocal(entry: Entry) throws -> URL {
-        let data = try afc.readFile(entry.path)
-        guard !data.isEmpty else { throw makeError("铃声内容为空") }
-        let localDir = Self.exportDirectory
-        // P0-1：设备返回的名字不可信，净化失败直接拒绝，不写盘。
-        guard let safeName = FileNameRules.sanitize(entry.name) else {
-            throw makeError("铃声文件名非法，已拒绝导出")
-        }
-        let localURL = URL(fileURLWithPath: localDir).appendingPathComponent(safeName)
-        try data.write(to: localURL, options: .atomic)
-        return localURL
-    }
-
     // MARK: - 铃声注册表（iTunes_Control/iTunes/Ringtones.plist）
 
     /// 读取 → 修改 → 写回注册表。保留 "Ringtones" 以外的根键与已有条目

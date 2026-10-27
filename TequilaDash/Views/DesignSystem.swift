@@ -613,7 +613,7 @@ extension AppRow where Trailing == EmptyView {
 ///
 /// ## 为什么要有它
 /// 全仓「区块正在加载」的写法有 3 套并存（审计实证）：
-///   · `HStack { ProgressView(); Text("正在…").foregroundColor(.secondary) }` —— 最常见
+///   · `HStack { ProgressView(); Text("正在…").foregroundStyle(.secondary) }` —— 最常见
 ///   · 裸 `ProgressView()` —— 136 处 / 70 文件（多数是按钮内小圈，不算区块态）
 ///   · `AppStateSection.loading` —— 自带整卡，只适合「整页空态」
 /// 同一句「正在加载」，字号有 subheadline / caption / 默认 body 三种，颜色有 secondary / 无 两种.

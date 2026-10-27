@@ -378,12 +378,6 @@ struct BatteryHealthView: View {
         return "未知"
     }
 
-    private func chargingLabel(_ info: BatteryHealthInfo) -> String {
-        if info.fullyCharged == true { return "已充满" }
-        if info.isCharging == true { return "充电中" }
-        return "未充电"
-    }
-
     // v0.3.251: 错误态拆成两张独立卡片 —— (1)状态卡(图标/标题/重试)
     // (2)配对引导卡(PairingGuideCard 自带独立卡片背景), 不再把引导挤进状态卡里.
     // v0.3.252：错误态两张卡片**同款紧凑样式**（图标块 + 文案 + 右侧重试，同一 16pt 圆角、

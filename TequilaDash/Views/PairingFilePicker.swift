@@ -12,7 +12,7 @@ struct PairingFilePickerModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: isPresented) { presented in
+            .onChange(of: isPresented) { _, presented in
                 if presented {
                     let types: [UTType] = [
                         .item,

@@ -128,7 +128,7 @@ struct IncreaseMemoryView: View {
                             Text(team.name).tag(team.identifier)
                         }
                     }
-                    .onChange(of: ctrl.selectedTeamID) { _ in
+                    .onChange(of: ctrl.selectedTeamID) { _, _ in
                         Task { await ctrl.loadAppIDs() }
                     }
                     if ctrl.teams.count == 1 {

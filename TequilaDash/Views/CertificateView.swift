@@ -127,7 +127,7 @@ struct CertificateView: View {
         .safeAreaInset(edge: .bottom) {
             p12ImportFooter
         }
-        .onChange(of: showP12Picker) { shown in
+        .onChange(of: showP12Picker) { _, shown in
             guard shown else { return }
             SharedDocumentPicker.present(allowedTypes: [.data]) { urls in
                 guard let url = urls.first,
@@ -169,7 +169,7 @@ struct CertificateView: View {
         .onAppear {
             manager.autoLoad()
         }
-        .onChange(of: settings.appleID) { _ in
+        .onChange(of: settings.appleID) { _, _ in
             // 新登录 / 切换账号：清空旧团队的证书，重新拉团队列表.
             manager.reset()
             manager.autoLoad()
@@ -276,7 +276,7 @@ struct CertificateView: View {
                             Text(team.name).tag(team.identifier)
                         }
                     }
-                    .onChange(of: manager.selectedTeamID) { _ in
+                    .onChange(of: manager.selectedTeamID) { _, _ in
                         manager.loadCerts()
                     }
                     if manager.teams.count == 1, let only = manager.teams.first {

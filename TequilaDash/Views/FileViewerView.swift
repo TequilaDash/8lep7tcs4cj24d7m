@@ -384,7 +384,7 @@ struct TextFileEditorView: View {
             TextEditor(text: $vm.text)
                 .font(.system(size: 13, design: .monospaced))
                 .disableAutocorrection(true)
-                .onChange(of: vm.text) { _ in
+                .onChange(of: vm.text) { _, _ in
                     if !vm.truncated { vm.markDirty() }
                 }
                 .disabled(vm.truncated)

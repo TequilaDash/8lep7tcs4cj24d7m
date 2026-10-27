@@ -107,7 +107,7 @@ struct RootView: View {
             viewModel.reload()
             warmUpAutoLogin()
         }
-        .onChange(of: hasAcknowledgedLimits) { acknowledged in
+        .onChange(of: hasAcknowledgedLimits) { _, acknowledged in
             if acknowledged {
                 viewModel.reload()
             }

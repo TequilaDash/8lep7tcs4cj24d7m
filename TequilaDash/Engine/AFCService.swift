@@ -142,15 +142,6 @@ final class AFCService {
         throw lastError ?? makeError("连接 AFC 服务失败")
     }
 
-    /// 释放 C 字符串数组（Rust 侧 CString::into_raw 分配，与 libc free 兼容）.
-    private func freeCStrings(_ entries: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?, _ count: Int) {
-        guard let entries else { return }
-        for index in 0..<count {
-            if let p = entries[index] { free(p) }
-        }
-        entries.deallocate()
-    }
-
     /// 在串行队列上执行可能抛错的闭包.
     ///
     /// 不直接用 `try afcQueue.sync { ... }`：Theos 的 GCD 桥接里

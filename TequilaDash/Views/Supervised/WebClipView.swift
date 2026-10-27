@@ -94,7 +94,7 @@ struct WebClipView: View {
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
-        .onChange(of: selectedPhoto) { received in
+        .onChange(of: selectedPhoto) { _, received in
             guard let received else { return }
             Task {
                 if let data = try? await received.loadTransferable(type: Data.self) {

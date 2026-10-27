@@ -336,7 +336,7 @@ struct IPAInstallView: View {
             if !service.isSignedIn && !isAutoSigningIn && !isManuallySigningIn {
                 Section {
                     Toggle("自动登录（用「设置」里的 Apple ID）", isOn: $autoSignInOn)
-                        .onChange(of: autoSignInOn) { newValue in
+                        .onChange(of: autoSignInOn) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "IPA.autoSignInEnabled")
                         }
                     if MemoryLimitSettings.shared.isLoggedIn {

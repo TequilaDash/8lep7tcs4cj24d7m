@@ -41,7 +41,7 @@ struct DomainBlockerView: View {
             Section {
                 ForEach(Array(presets.enumerated()), id: \.element.id) { index, preset in
                     Toggle(preset.host, isOn: $presets[index].enabled)
-                        .onChange(of: presets[index].enabled) { _ in
+                        .onChange(of: presets[index].enabled) { _, _ in
                             DomainBlockerStore.shared.savePresets(presets)
                         }
                 }

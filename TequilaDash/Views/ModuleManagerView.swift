@@ -778,7 +778,7 @@ struct ModuleInstallSheet: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: lines.count) { _ in
+                    .onChange(of: lines.count) { _, _ in
                         // 官方：日志更新即滚到底部
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(lines.count - 1, anchor: .bottom)

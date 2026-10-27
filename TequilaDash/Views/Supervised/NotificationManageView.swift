@@ -71,7 +71,7 @@ struct NotificationManageView: View {
                             }
                         }
                     }
-                    .onChange(of: app.isOn) { _ in
+                    .onChange(of: app.isOn) { _, _ in
                         applyToProfile(bundleID: app.bundleID, enabled: app.isOn)
                         persistCatalog()
                         persist()

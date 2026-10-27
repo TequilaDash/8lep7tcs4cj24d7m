@@ -308,7 +308,7 @@ struct DialerThemeView: View {
             } message: {
                 Text(viewModel.successMessage ?? "")
             }
-            .onChange(of: viewModel.exportedURL) { url in
+            .onChange(of: viewModel.exportedURL) { _, url in
                 if url != nil { showShareSheet = true }
             }
     }

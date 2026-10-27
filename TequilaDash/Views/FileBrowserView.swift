@@ -375,7 +375,7 @@ struct FileBrowserView: View {
         .refreshable {
             vm.open(vm.currentPath)
         }
-        .onChange(of: vm.items.map(\.path)) { paths in
+        .onChange(of: vm.items.map(\.path)) { _, paths in
             selected.formIntersection(Set(paths))
         }
     }

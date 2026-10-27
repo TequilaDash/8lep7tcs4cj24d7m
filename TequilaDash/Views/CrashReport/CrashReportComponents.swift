@@ -89,20 +89,3 @@ struct CrashBadge: View {
         SizePill(text: text, tint: tint, level: level)
     }
 }
-
-/// 值区块：把一组键值行装进内层容器（AppSurface.inner + AppRadius.inner）.
-struct CrashInnerBlock<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            content()
-        }
-        .padding(AppSpacing.row)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                .fill(AppSurface.inner)
-        )
-    }
-}

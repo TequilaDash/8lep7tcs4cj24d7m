@@ -179,7 +179,7 @@ struct AppDetailView: View {
             viewModel.ensureIcon(for: app.bundleIdentifier)
             appBackups.reload(bundleIdentifier: app.bundleIdentifier)
         }
-        .onChange(of: access.isGranted) { granted in
+        .onChange(of: access.isGranted) { _, granted in
             if granted {
                 inventory.load(app: app)
             }

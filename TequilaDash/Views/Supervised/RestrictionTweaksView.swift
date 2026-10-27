@@ -82,7 +82,7 @@ struct RestrictionTweaksView: View {
             // OTA 延迟更新
             Section {
                 Toggle("延迟 OTA 更新", isOn: $otaDelayEnabled)
-                    .onChange(of: otaDelayEnabled) { enable in
+                    .onChange(of: otaDelayEnabled) { _, enable in
                         payloadContent()?["forceDelayedSoftwareUpdates"] = enable
                         persist()
                     }
@@ -93,7 +93,7 @@ struct RestrictionTweaksView: View {
                         TextField("90", value: $otaDelay, format: .number)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
-                            .onChange(of: otaDelay) { int in
+                            .onChange(of: otaDelay) { _, int in
                                 var delay = min(int, 90)
                                 payloadContent()?["enforcedSoftwareUpdateDelay"] = delay
                                 otaDelay = delay

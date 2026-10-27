@@ -127,7 +127,7 @@ struct SharedDocumentPickerModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: isPresented) { presented in
+            .onChange(of: isPresented) { _, presented in
                 if presented {
                     SharedDocumentPicker.present(
                         allowedTypes: allowedTypes,
