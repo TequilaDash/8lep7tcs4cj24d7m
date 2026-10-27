@@ -380,21 +380,28 @@ final class RingtonesService: @unchecked Sendable {
     /// 下载铃声到本地导出目录，返回本地路径.
     func download(path: String) throws -> String {
         let data = try afc.readFile(path)
-        let name = (path as NSString).lastPathComponent
-        let target = URL(fileURLWithPath: Self.exportDirectory).appendingPathComponent(name)
+        // P0-1：设备返回的路径不可信，末段名净化失败直接拒绝，不写盘.
+        guard let safeName = FileNameRules.sanitize((path as NSString).lastPathComponent) else {
+            throw makeError("铃声文件名非法，已拒绝导出")
+        }
+        let target = URL(fileURLWithPath: Self.exportDirectory).appendingPathComponent(safeName)
         try data.write(to: target)
         return target.path
     }
 
     /// 重命名铃声（AFC rename_path + 注册表同步改键，否则改名后设置里会消失）.
     func renameRingtone(path: String, to newName: String) throws {
+        // P0-1：newName 来自输入框，含 / 或 .. 会把设备侧路径改到别处.
+        guard let safeNewName = FileNameRules.sanitize(newName) else {
+            throw makeError("铃声名非法，已拒绝重命名")
+        }
         let parent = (path as NSString).deletingLastPathComponent
-        let target = (parent == "/" ? "" : parent) + "/" + newName
+        let target = (parent == "/" ? "" : parent) + "/" + safeNewName
         try afc.renamePath(path, to: target)
         try? renameRingtoneRegistryEntry(
             from: (path as NSString).lastPathComponent,
-            to: newName,
-            displayName: (newName as NSString).deletingPathExtension)
+            to: safeNewName,
+            displayName: (safeNewName as NSString).deletingPathExtension)
     }
 
     /// 删除铃声（文件 + 注册表记录一并移除，避免设置里残留幽灵条目）.
