@@ -45,21 +45,8 @@ struct PlistEditorView: View {
             }
             .overlay {
                 if vm.isSaving {
-                    ZStack {
-                        Color(.systemBackground).opacity(0.6)
-                        VStack(spacing: 12) {
-                            ProgressView()
-                            Text("正在写入…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(24)
-                        .background(
-                            AppSurface.card,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        )
-                    }
-                    .ignoresSafeArea()
+                    // v0.3.721：原先这里是逐字复制的浅色卡片遮罩，已收进 AppBusyOverlay 的 .card 档.
+                    AppBusyOverlay(title: "正在写入…", style: .card)
                 }
             }
     }

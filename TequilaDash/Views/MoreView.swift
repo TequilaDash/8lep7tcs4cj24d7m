@@ -16,6 +16,8 @@ import SwiftUI
 /// - 图标 `.hierarchical` 分层渲染；工具栏动作补触觉 `AppHaptics.tap()`.
 /// - **布局**：分段标题统一用 `AppSectionHeader`（组级模块色竖条 + 主标题）；「设备工具」6 项平级工具
 ///   改用 **2 列卡片网格**（`AppCardGrid` + `AppGridTile`，布局 B），其余分组仍走全宽行（布局 A）.
+///   v0.3.721：网格瓦片补 `tinted: true`，与 `HomeView` 的「设备与系统」网格同款（此前用素卡底，
+///   同为 2 列网格却与主页观感不一致）.
 ///
 /// ⚠️ 仅改样式：`isVisible(_:)` 热补丁过滤、`NavigationLazyView(item.destination)` 懒加载、
 /// 两个 toolbar sheet（设备控制 / 设置）与 `MoreItem` 数据定义均**原样保留**.
@@ -269,7 +271,7 @@ struct MoreView: View {
                             NavigationLazyView(item.destination)
                         } label: {
                             AppGridTile(icon: item.icon, title: item.title, subtitle: item.subtitle,
-                                        tint: section.tint)
+                                        tint: section.tint, tinted: true)
                         }
                         .appPressable()
                     }
