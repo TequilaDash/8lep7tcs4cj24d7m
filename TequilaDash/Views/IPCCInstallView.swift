@@ -71,7 +71,7 @@ struct IPCCInstallView: View {
             Section {
                 if records.isEmpty {
                     AppStateSection(state: .empty("暂无安装记录",
-                                                  message: "安装过的运营商配置包会显示在这里."))
+                                                  message: "安装过的运营商配置包会显示在这里."), wrapsSection: false)
                 } else {
                     ForEach(records) { record in
                         HStack {

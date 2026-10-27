@@ -907,6 +907,14 @@ struct AppStateSection: View {
 
     let state: State
 
+    /// 是否自带一层 `Section`（默认 `true`）.
+    ///
+    /// 本组件默认输出 `Section { InfoActionCard(...) }`，用于「列表里除了这三态没有别的内容」的场景。
+    /// 但 v0.3.677 那批把空态塞进已有 `Section` 时没拆外层，全仓 18 处因此成了 **Section 套 Section**
+    /// （外层带 header/footer，内层又起一个分组）。这些位置传 `false`，只输出 `InfoActionCard`，
+    /// 让它作为外层 Section 的一行渲染 —— 与「裸 Text 空态」原来的层级一致。
+    var wrapsSection: Bool = true
+
     var body: some View {
         switch state {
         case .loading(let title, let detail):
@@ -938,16 +946,28 @@ struct AppStateSection: View {
         }
     }
 
+    @ViewBuilder
     private func card(icon: String, tint: Color, title: String,
                       message: String, actionTitle: String?, action: (() -> Void)?) -> some View {
-        Section {
-            InfoActionCard(icon: icon,
-                           iconTint: tint,
-                           title: title,
-                           message: message,
-                           actionTitle: actionTitle,
-                           action: action)
+        if wrapsSection {
+            Section {
+                cardBody(icon: icon, tint: tint, title: title,
+                         message: message, actionTitle: actionTitle, action: action)
+            }
+        } else {
+            cardBody(icon: icon, tint: tint, title: title,
+                     message: message, actionTitle: actionTitle, action: action)
         }
+    }
+
+    private func cardBody(icon: String, tint: Color, title: String,
+                          message: String, actionTitle: String?, action: (() -> Void)?) -> some View {
+        InfoActionCard(icon: icon,
+                       iconTint: tint,
+                       title: title,
+                       message: message,
+                       actionTitle: actionTitle,
+                       action: action)
     }
 }
 

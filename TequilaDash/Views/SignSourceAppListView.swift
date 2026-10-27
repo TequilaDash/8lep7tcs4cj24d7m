@@ -247,11 +247,11 @@ struct SignSourceAppListView: View {
             if apps.isEmpty {
                 AppStateSection(state: .empty("这个源里没有应用",
                                               message: "该源没有返回任何应用条目.",
-                                              icon: "tray.full"))
+                                              icon: "tray.full"), wrapsSection: false)
             } else {
                 AppStateSection(state: .empty("没有匹配的应用",
                                               message: "换个关键词或筛选条件.",
-                                              icon: "magnifyingglass"))
+                                              icon: "magnifyingglass"), wrapsSection: false)
             }
         }
     }

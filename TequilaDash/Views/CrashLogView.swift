@@ -66,7 +66,7 @@ struct CrashLogView: View {
                 } else if entries.isEmpty {
                     AppStateSection(state: .empty("没有日志",
                                                   message: "设备上没有可读取的崩溃日志.",
-                                                  icon: "doc.text"))
+                                                  icon: "doc.text"), wrapsSection: false)
                 } else {
                     ForEach(visibleEntries) { entry in
                         row(entry)

@@ -124,7 +124,7 @@ struct AppStoreAccountsView: View {
             if accounts.isEmpty {
                 AppStateSection(state: .empty("还没有登录任何 Apple ID",
                                               message: "登录后可下载已购应用.",
-                                              icon: "person.crop.circle.badge.plus"))
+                                              icon: "person.crop.circle.badge.plus"), wrapsSection: false)
             }
             ForEach(accounts, id: \.email) { a in
                 HStack(spacing: 12) {

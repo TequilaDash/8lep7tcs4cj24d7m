@@ -269,7 +269,7 @@ struct CertificateView: View {
                     // 这里确实是「空列表」：团队已加载成功、但账号下 0 个团队（不是错误态）。
                     AppStateSection(state: .empty("账号下没有可用团队",
                                                   message: "该 Apple ID 名下没有开发者团队；创建后重新加载.",
-                                                  icon: "person.2.slash"))
+                                                  icon: "person.2.slash"), wrapsSection: false)
                 } else {
                     Picker("选择团队", selection: $manager.selectedTeamID) {
                         ForEach(manager.teams) { team in

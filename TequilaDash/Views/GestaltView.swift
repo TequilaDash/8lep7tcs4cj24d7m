@@ -263,7 +263,7 @@ struct GestaltView: View {
             if backupFiles.isEmpty {
                 AppStateSection(state: .empty("暂无备份文件",
                                               message: "导出的 Gestalt 备份会保存在这里.",
-                                              icon: "externaldrive"))
+                                              icon: "externaldrive"), wrapsSection: false)
             } else {
                 ForEach(backupFiles, id: \.self) { url in
                     HStack(spacing: 10) {

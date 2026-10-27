@@ -77,7 +77,7 @@ struct ProcessManagerView: View {
                         // 原两行合并成一条 title + 一条 message，语义不变：没扫到进程，可能是设备空闲或隧道未就绪。
                         AppStateSection(state: .empty("未找到运行中的进程",
                                                       message: "设备可能处于空闲状态，或隧道尚未就绪.点击右上角刷新重试.",
-                                                      icon: "gearshape.2"))
+                                                      icon: "gearshape.2"), wrapsSection: false)
                     }
                 }
             } else {
@@ -85,7 +85,7 @@ struct ProcessManagerView: View {
                     if viewModel.sortedProcesses.isEmpty {
                         AppStateSection(state: .empty("没有匹配的进程",
                                                       message: "换个关键词试试.",
-                                                      icon: "magnifyingglass"))
+                                                      icon: "magnifyingglass"), wrapsSection: false)
                     } else {
                         ForEach(viewModel.sortedProcesses) { process in
                             ProcessRow(
