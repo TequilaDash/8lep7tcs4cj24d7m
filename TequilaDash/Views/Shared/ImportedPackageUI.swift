@@ -106,7 +106,7 @@ struct ImportedPackageMonogram: View {
     var body: some View {
         let letter = String(name.prefix(1)).uppercased()
         return ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous)
                 .fill(AppTheme.accent.opacity(0.14))
             Text(letter.isEmpty ? "?" : letter)
                 .font(.system(size: size * 0.42, weight: .semibold))
@@ -188,11 +188,11 @@ struct ImportedPackageIconView: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous))
         // 发丝级描边：浅色底上把图标与背景分开（透明度沿用 `ToastOverlay` 的既有口径）.
         // App 图标画稿自带明暗与高光，故**不加**合成高光，避免与画稿打架.
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
         )
         .task(id: url) { load() }

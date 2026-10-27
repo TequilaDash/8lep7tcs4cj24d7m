@@ -430,19 +430,7 @@ struct CustomRestoreSheet: View {
                         }
                         if filteredNormalApps.isEmpty && filteredGuestApps.isEmpty {
                             Section {
-                                HStack {
-                                    Spacer()
-                                    VStack(spacing: 16) {
-                                        Image(systemName: "magnifyingglass")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.secondary)
-                                        Text("未找到匹配「\(searchText)」的应用.")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.vertical, 60)
+                                AppEmptyRow(title: "未找到匹配「\(searchText)」的应用.")
                             }
                         }
                     }

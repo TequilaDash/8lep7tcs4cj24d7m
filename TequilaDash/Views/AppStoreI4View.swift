@@ -97,7 +97,7 @@ struct AppStoreI4View: View {
                                 else { Color(.tertiarySystemFill) }
                             }
                             .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text((s["name"] as? String) ?? "—").font(.subheadline.weight(.medium)).lineLimit(1)
                                 Text((s["introduce"] as? String) ?? "")

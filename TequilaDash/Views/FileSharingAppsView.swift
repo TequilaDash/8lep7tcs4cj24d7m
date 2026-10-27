@@ -534,7 +534,7 @@ struct FileSharingAppsView: View {
             Image(uiImage: img)
                 .resizable()
                 .frame(width: 34, height: 34)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.icon, style: .continuous))
         } else {
             Image(systemName: "app.fill")
                 .foregroundStyle(.secondary)

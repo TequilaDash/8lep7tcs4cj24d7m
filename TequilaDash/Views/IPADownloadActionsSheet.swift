@@ -355,7 +355,7 @@ struct IPADownloadActionsSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .locusGlass(.interactive, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .locusGlass(.interactive, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     /// 贴合内容高度：固定行高 × 行数 + 头图 + 三个分组标题 + 取消行 + 内边距

@@ -61,7 +61,7 @@ struct NotificationManageView: View {
                             supervisedAppIcon(app.bundleID)
                                 .resizable()
                                 .frame(width: 36, height: 36)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.chip, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(app.name.isEmpty ? app.bundleID : app.name)
                                     .font(.subheadline)
@@ -170,7 +170,7 @@ struct NotificationManageView: View {
                             supervisedAppIcon(app.bundleIdentifier)
                                 .resizable()
                                 .frame(width: 36, height: 36)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.chip, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(app.name)
                                     .font(.subheadline)

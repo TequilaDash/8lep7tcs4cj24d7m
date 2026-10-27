@@ -149,7 +149,7 @@ struct RingtonesView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(28)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 .appRaisedShadow(colorScheme)
             }
         }

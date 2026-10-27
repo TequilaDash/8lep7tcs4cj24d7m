@@ -121,7 +121,7 @@ struct AppFavoritesView: View {
                 }
             }
             .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(fav.name).font(.subheadline).lineLimit(1)

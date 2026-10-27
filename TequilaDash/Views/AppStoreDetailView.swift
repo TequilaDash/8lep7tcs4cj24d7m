@@ -726,7 +726,7 @@ struct InstallOptionsSheet: View {
                     .font(.body.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 16)

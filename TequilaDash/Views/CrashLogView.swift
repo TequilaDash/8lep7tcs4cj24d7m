@@ -72,11 +72,7 @@ struct CrashLogView: View {
                         row(entry)
                     }
                     if !entries.isEmpty && visibleEntries.isEmpty {
-                        Text("没有匹配的日志.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
+                        AppEmptyRow(title: "没有匹配的日志.")
                     }
                 }
             } header: {
@@ -154,7 +150,7 @@ struct CrashLogView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(28)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 .appRaisedShadow(colorScheme)
             }
         }

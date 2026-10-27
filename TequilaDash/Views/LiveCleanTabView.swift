@@ -269,7 +269,7 @@ struct GuestIcon: View {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.chip, style: .continuous))
             } else {
                 Image(systemName: "shippingbox")
                     .resizable()

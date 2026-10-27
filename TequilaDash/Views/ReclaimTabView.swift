@@ -188,7 +188,7 @@ struct ReclaimTabView: View {
         let count = reclaimable.count
         return HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous)
                     .fill(AppTheme.categoryClean.opacity(0.14))
                 Image(systemName: "leaf.arrow.circlepath")
                     .font(.system(size: 26))

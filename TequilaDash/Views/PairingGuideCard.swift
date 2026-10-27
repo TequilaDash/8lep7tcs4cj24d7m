@@ -53,7 +53,7 @@ struct PairingGuideCard: View {
             // v0.3.257：List 场景不自带背景 —— 系统 Section 卡片的圆角/底色/边距
             // 与同页其它卡片天然一致，自绘 16pt 圆角永远差一点（用户实测截图）.
             if showsBackground {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                     .fill(AppSurface.card)
             }
         }

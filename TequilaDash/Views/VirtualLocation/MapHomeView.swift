@@ -218,8 +218,8 @@ struct MapHomeView: View {
             }
         }
         .padding(12)
-        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private var searchResults: some View {
@@ -243,8 +243,8 @@ struct MapHomeView: View {
                 Divider().opacity(0.3)
             }
         }
-        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private var mapChromeButtons: some View {

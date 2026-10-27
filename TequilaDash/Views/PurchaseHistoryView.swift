@@ -243,7 +243,7 @@ struct PurchaseHistoryView: View {
                 monogram(app)
             }
             .frame(width: side, height: side)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.chip, style: .continuous))
         } else {
             monogram(app)
         }
@@ -252,7 +252,7 @@ struct PurchaseHistoryView: View {
     private func monogram(_ app: OwnedApp) -> some View {
         let letter = String((app.name.isEmpty ? app.bundleId : app.name).prefix(1)).uppercased()
         return ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.chip, style: .continuous)
                 .fill(AppTheme.categoryStore.opacity(0.14))
             Text(letter.isEmpty ? "?" : letter)
                 .font(.system(size: 16, weight: .semibold))

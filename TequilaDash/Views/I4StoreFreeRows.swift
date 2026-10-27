@@ -32,7 +32,7 @@ extension I4StoreFreeView {
                         .foregroundStyle(.secondary)
                         .frame(width: 54, height: 54)
                         .background(Color.secondary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("App Store ID \(trackID)").font(.body).lineLimit(1)
@@ -85,7 +85,7 @@ extension I4StoreFreeView {
                         }
                     }
                     .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.displayName.isEmpty ? "App \(app.id)" : app.displayName)
@@ -215,7 +215,7 @@ extension I4StoreFreeView {
                             }
                         }
                         .frame(width: 54, height: 54)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
                         // 名次角标：榜单页最有信息量的那一项.
                         Text("\(item.rank)")
@@ -320,7 +320,7 @@ extension I4StoreFreeView {
                         }
                     }
                     .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
                     // v0.3.367：信息列不再被右侧进度控件挤扁 ——
                     // 胶囊固定单行（`.fixedSize()`），一行放不下就**整体换到下一行**（`ChipFlow`），
@@ -459,7 +459,7 @@ extension I4StoreFreeView {
                         }
                     }
                     .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.name).font(.subheadline.weight(.medium)).lineLimit(2)

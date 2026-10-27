@@ -78,8 +78,7 @@ struct AppDetailView: View {
                     if inventory.isLoading && inventory.roots.isEmpty {
                         AppLoadingRow(title: "正在统计文件…")
                     } else if inventory.roots.isEmpty {
-                        Text("未找到 Documents、Library 或 tmp.")
-                            .foregroundColor(.secondary)
+                        AppEmptyRow(icon: "folder", title: "未找到 Documents、Library 或 tmp.")
                     } else {
                         ForEach(inventory.roots) { root in
                             HStack {

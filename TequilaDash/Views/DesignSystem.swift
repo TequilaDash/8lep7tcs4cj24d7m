@@ -1150,6 +1150,48 @@ struct AppSettingsRow: View {
     }
 }
 
+/// 行内空态（v0.3.721 新增）：**列表 / 卡片里的一句空结果**，与整页空态 `AppEmptyState` 分工.
+///
+/// ## 为什么要有它
+/// 全仓空态曾有三套并存：`AppEmptyState`（整页 118pt 浅蓝圆）、`ContentUnavailableView`（系统灰）、
+/// 裸 `Text("暂无…")`（最不规范的一种）. 前两套已在 v0.3.720 统一，剩下的裸 `Text` 收敛到这里.
+///
+/// 与 `AppEmptyState` 的分工：`AppEmptyState` 是**整页**只有一个空态时的插画式空态；
+/// 本组件是**行内**的（渲染在调用方已有的 `Section` / `List` 行里），不画卡片底、不自带 `Section`.
+/// 与 `AppLoadingRow` / `AppErrorRow` 同族：三者都是行内状态行，取色一致（secondary / tertiary）.
+///
+/// ## 用法
+/// ```swift
+/// if filtered.isEmpty {
+///     AppEmptyRow(title: "没有匹配的日志.")
+/// }
+/// // 语义不是「搜索无果」时换字形：
+/// AppEmptyRow(icon: "folder", title: "未找到 Documents、Library 或 tmp.")
+/// ```
+struct AppEmptyRow: View {
+    /// 字形；传 `nil` 只显示文案（与既有「纯文字」空态逐像素一致的那一档）.
+    var icon: String? = "magnifyingglass"
+    /// 一句空态文案.
+    let title: String
+
+    var body: some View {
+        VStack(spacing: AppSpacing.tight) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(AppFont.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.section)
+    }
+}
+
 /// 空状态（TRApp IMG_0079 语言）：**118pt 浅蓝圆 + 青绿字形 + 20pt 标题 + 一句俏皮副标题**，垂直居中.
 ///
 /// 对照规范 §③组件 3：`.car` 内**无** placeholder 图片资源 ⇒ 空状态插画是**运行时 SF Symbols

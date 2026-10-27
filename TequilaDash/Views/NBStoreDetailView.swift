@@ -239,9 +239,9 @@ struct NBStoreDetailView: View {
                                 }
                             }
                             .frame(width: 132, height: 234)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous)
                                     .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 0.5)
                             )
                         }

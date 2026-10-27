@@ -233,13 +233,13 @@ struct SignSourceListView: View {
     ///
     /// 渲染交给共享件 `RemoteIconView`：**加载中不再转圈**（旧 `SourceIconView` 加载中画 spinner、
     /// 靠 15s 超时兜底；现统一为静态占位，从根上消除「图标地址不返回 ⇒ 行内一直转圈」）。
-    /// 尺寸 / 圆角 / 占位样式按本页旧观感传入（44pt / 圆角 10 / 「无地址」紫底 `shippingbox.fill`、
+    /// 尺寸 / 圆角 / 占位样式按本页旧观感传入（44pt / 圆角 `AppRadius.searchField`（10） / 「无地址」紫底 `shippingbox.fill`、
     /// 「加载中·失败·超时」裸 `shippingbox.fill`）⇒ 除「加载中不转圈」外逐像素不变。
     private func sourceIcon(_ urlString: String?) -> some View {
         RemoteIconView(
             urlString: urlString,
             side: 44,
-            cornerRadius: 10,
+            cornerRadius: AppRadius.searchField,
             placeholderStyle: IconPlaceholderStyle(
                 icon: "shippingbox.fill",
                 tint: .secondary,

@@ -612,13 +612,13 @@ struct SignSourceAppListView: View {
 
     /// App 图标；无地址 / 加载中 / 失败一律静态占位（见共享件 `RemoteIconView`），**不转圈**。
     ///
-    /// 尺寸 / 圆角 / 占位样式按本页旧观感传入（54pt / 圆角 12 / 灰底 `app.dashed`）⇒ 逐像素不变；
+    /// 尺寸 / 圆角 / 占位样式按本页旧观感传入（54pt / 圆角 `AppRadius.button`（12） / 灰底 `app.dashed`）⇒ 逐像素不变；
     /// 本页原本就「加载中画静态占位」，故迁到共享件后**本页观感零变化**。
     private func appIcon(_ urlString: String?) -> some View {
         RemoteIconView(
             urlString: urlString,
             side: 54,
-            cornerRadius: 12,
+            cornerRadius: AppRadius.button,
             placeholderStyle: IconPlaceholderStyle(
                 icon: "app.dashed",
                 tint: .secondary,

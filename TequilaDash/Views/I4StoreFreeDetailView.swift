@@ -166,7 +166,7 @@ struct I4StoreFreeDetailView: View {
                                     }
                                 }
                                 .frame(height: 220)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.searchField, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }
