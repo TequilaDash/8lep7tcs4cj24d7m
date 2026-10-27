@@ -47,7 +47,7 @@ struct IncreaseMemoryView: View {
                     Text("账号")
                     Spacer()
                     Text(showDetails ? settings.appleID : settings.maskedAppleID())
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Button {
                         showDetails.toggle()
@@ -63,7 +63,7 @@ struct IncreaseMemoryView: View {
                         Text("账户名称")
                         Spacer()
                         Text(accountName)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } else {
@@ -71,11 +71,11 @@ struct IncreaseMemoryView: View {
                     Text("状态")
                     Spacer()
                     Text("未登录")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 Text("请在「更多 → 设置 → Apple ID 账户」中登录.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -88,7 +88,7 @@ struct IncreaseMemoryView: View {
                 Text("当前服务器")
                 Spacer()
                 Text(MemoryLimitSettings.host(from: settings.anisetteServer))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
@@ -106,7 +106,7 @@ struct IncreaseMemoryView: View {
                     // 硬规则 1：不用黄色感叹号。原为 exclamationmark.circle + .orange。
                     Image(systemName: "info.circle").foregroundStyle(AppTheme.pending)
                     Text("尚未加载团队")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("加载") { Task { await ctrl.reload() } }
                 }
@@ -134,7 +134,7 @@ struct IncreaseMemoryView: View {
                     if ctrl.teams.count == 1 {
                         Text(ctrl.teams[0].name)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -243,7 +243,7 @@ private struct AppRowView: View {
                     .font(.subheadline)
                 Text(app.name)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()

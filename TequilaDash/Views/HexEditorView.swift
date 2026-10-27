@@ -105,7 +105,7 @@ private struct HexRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(String(format: "%08X", offset))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 74, alignment: .leading)
             HStack(spacing: 4) {
                 ForEach(0..<columns, id: \.self) { index in
@@ -123,7 +123,7 @@ private struct HexRow: View {
                 }
             }
             Text(ascii)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
         .font(.system(size: 12, design: .monospaced))

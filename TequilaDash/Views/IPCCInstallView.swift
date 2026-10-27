@@ -35,10 +35,10 @@ struct IPCCInstallView: View {
                             .font(.subheadline.weight(.semibold))
                         Text("标识：\(parsed.identifier.isEmpty ? "未知" : parsed.identifier)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Text("版本：\(parsed.version.isEmpty ? "未知" : parsed.version)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -83,14 +83,14 @@ struct IPCCInstallView: View {
                                     .lineLimit(1)
                                 Text(record.bundleName)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                 Text(record.date.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                 if !record.detail.isEmpty {
                                     Text(record.detail)
                                         .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                         .lineLimit(2)
                                 }
                             }
@@ -198,12 +198,12 @@ struct IPCCInstallView: View {
                         }
                         Text(record.fileName)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Divider()
                         if record.steps.isEmpty {
                             Text(record.detail.isEmpty ? "（无详细日志）" : record.detail)
                                 .font(.footnote)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         } else {
                             ForEach(Array(record.steps.enumerated()), id: \.offset) { _, line in
                                 Text(line)

@@ -24,9 +24,9 @@ struct AppDetailView: View {
                     AppIconView(icon: viewModel.icons[app.bundleIdentifier], size: 56)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(app.name).font(.headline)
-                        Text(app.bundleIdentifier).font(.caption).foregroundColor(.secondary)
+                        Text(app.bundleIdentifier).font(.caption).foregroundStyle(.secondary)
                         if let version = app.version {
-                            Text("版本 \(version)").font(.caption2).foregroundColor(.secondary)
+                            Text("版本 \(version)").font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
@@ -85,7 +85,7 @@ struct AppDetailView: View {
                                 Text(root.name)
                                 Spacer()
                                 Text(root.summary)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .font(.subheadline)
                             }
                         }
@@ -270,7 +270,7 @@ struct AppDetailView: View {
                     .font(.subheadline)
                 Text(current)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Button("取消", role: .destructive) {
@@ -284,10 +284,10 @@ struct AppDetailView: View {
                     .foregroundColor(AppTheme.success)
                 Text("\(result.fileCount) 个文件 · \(formatBytes(result.totalBytes))")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("已保存到 TequilaDash → Backups")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 // v0.3.705：这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
                 if !result.skippedFiles.isEmpty {
                     Label("\(result.skippedFiles.count) 个文件未能写入归档.", systemImage: "info.circle")
@@ -340,7 +340,7 @@ private struct AppBackupRow: View {
             if let modified = record.modified {
                 Text(BackupPaths.displayStamp.string(from: modified))
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Button(action: onRestore) {
                 HStack(spacing: 8) {

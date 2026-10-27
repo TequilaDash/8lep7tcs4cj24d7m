@@ -63,7 +63,7 @@ struct PiPKeepAliveView: View {
                             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                                 Text(formatElapsed(Int(ctx.date.timeIntervalSince(startedAt))))
                                     .font(.body.monospacedDigit())
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -91,7 +91,7 @@ struct PiPKeepAliveView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("悬浮窗高度")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Text(String(format: "%.1f pt", service.pipHeight))
                             .font(.body.monospacedDigit())
@@ -109,7 +109,7 @@ struct PiPKeepAliveView: View {
             Section {
                 Label("保活强度：PiP > 静默音频（自动）", systemImage: "shield.lefthalf.filled")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 if let err = service.lastError {
                     // v0.3.683：区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)
@@ -132,7 +132,7 @@ struct PiPKeepAliveView: View {
                 .tint(AppTheme.switchOnTint)
                 HStack {
                     Text("实测帧率")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer()
                 Text(highRefresh.isRunning ? "\n(highRefresh.measuredFPS) FPS" : "—")
                         .font(.body.monospacedDigit())

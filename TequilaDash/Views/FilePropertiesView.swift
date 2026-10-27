@@ -114,7 +114,7 @@ struct FilePropertiesView: View {
             Text(title)
             Spacer()
             Text(value)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
         }

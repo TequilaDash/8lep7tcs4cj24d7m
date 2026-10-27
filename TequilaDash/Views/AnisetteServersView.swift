@@ -103,17 +103,17 @@ struct AnisetteServersView: View {
         case .checking:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("检测中").foregroundColor(.secondary)
+                Text("检测中").foregroundStyle(.secondary)
             }
         case .connected:
             HStack(spacing: 6) {
                 Circle().fill(AppTheme.success).frame(width: 8, height: 8)
-                Text("已连接").foregroundColor(.secondary)
+                Text("已连接").foregroundStyle(.secondary)
             }
         case .failed(let reason):
             HStack(spacing: 6) {
                 Circle().fill(AppTheme.danger).frame(width: 8, height: 8)
-                Text(reason).foregroundColor(.secondary).lineLimit(1)
+                Text(reason).foregroundStyle(.secondary).lineLimit(1)
             }
         }
     }
@@ -178,7 +178,7 @@ struct AnisetteServersView: View {
                 Text("当前生效")
                 Spacer()
                 Text(customClientInfo.isEmpty ? "内置默认" : "自定义")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Button("填入 Android 形态") {
                 customClientInfo = Self.androidClientInfo
@@ -186,7 +186,7 @@ struct AnisetteServersView: View {
             Button("恢复内置默认") {
                 customClientInfo = ""
             }
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -201,14 +201,14 @@ struct AnisetteServersView: View {
                 Text("就绪状态")
                 Spacer()
                 Text(oda.readinessText)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             HStack {
                 Text("元数据源")
                 Spacer()
                 Text(OnDeviceAnisetteManager.metadataHost)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             engineRow
             // v0.3.620：本机 ADI 取数**已接线**（v0.3.613 起），这里按真实状态显示.
@@ -256,7 +256,7 @@ struct AnisetteServersView: View {
                 Text("ADI 引擎")
                 Spacer()
                 Text(oda.engineVersion.isEmpty ? "已安装" : "已安装 \(oda.engineVersion)")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Button {
                     AppHaptics.tap()
@@ -303,7 +303,7 @@ struct AnisetteServersView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).foregroundColor(.primary)
-                Text(host).font(.footnote).foregroundColor(.secondary).lineLimit(1)
+                Text(host).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
             if host == MemoryLimitSettings.host(from: anisetteServer) {

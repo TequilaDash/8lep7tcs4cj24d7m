@@ -143,7 +143,7 @@ struct ReclaimTabView: View {
             }
             if !vm.progressText.isEmpty && vm.isScanning {
                 Text(vm.progressText)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             // v0.3.642：修「渲染空字符串」。
             //
@@ -198,13 +198,13 @@ struct ReclaimTabView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("可回收空间")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text(ReclaimService.formatBytes(total))
                     .font(.title2.bold())
                     .foregroundColor(AppTheme.categoryClean)
                 Text("来自 \(count) 个应用的安全缓存")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
         }
@@ -245,7 +245,7 @@ struct ReclaimTabView: View {
                     .font(.subheadline.weight(.semibold))
                 Text(ReclaimService.formatBytes(bytes))
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             Button("回收安全项") {

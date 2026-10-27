@@ -201,7 +201,7 @@ struct TunnelHealthCheckView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(row.title).font(.body)
-                                Text(row.subtitle).font(.caption).foregroundColor(.secondary)
+                                Text(row.subtitle).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             statusIcon(row)
@@ -221,7 +221,7 @@ struct TunnelHealthCheckView: View {
                                 Text(peer).font(.system(.body, design: .monospaced))
                                 Spacer()
                                 if peer == viewModel.snapshot.targetIP {
-                                    Text("当前目标").font(.caption).foregroundColor(.secondary)
+                                    Text("当前目标").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -252,15 +252,15 @@ struct TunnelHealthCheckView: View {
                                     }
                                     Spacer()
                                     Text(iface.isIPv4 ? "IPv4" : "IPv6")
-                                        .font(.caption).foregroundColor(.secondary)
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Text(iface.address)
                                     .font(.system(.caption, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                 if let peer = iface.peer {
                                     Text("对端 \(peer)")
                                         .font(.system(.caption, design: .monospaced))
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                             .padding(.vertical, 2)

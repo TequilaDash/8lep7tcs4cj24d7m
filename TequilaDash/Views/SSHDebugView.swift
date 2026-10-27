@@ -144,21 +144,21 @@ struct SSHDebugView: View {
                     Text("端口")
                     Spacer()
                     Text("\(service.port)")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .font(.body.monospacedDigit())
                 }
                 HStack {
                     Text("用户名")
                     Spacer()
                     Text(service.username)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .font(.body.monospaced())
                 }
                 HStack {
                     Text("密码")
                     Spacer()
                     Text(service.password)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .font(.body.monospaced())
                         .textSelection(.enabled)
                 }
@@ -166,7 +166,7 @@ struct SSHDebugView: View {
                     Text("局域网 IP")
                     Spacer()
                     Text(service.lanIP)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .font(.body.monospaced())
                         .textSelection(.enabled)
                 }
@@ -178,7 +178,7 @@ struct SSHDebugView: View {
                         Text("局域网")
                         Spacer()
                         Text(service.connectHint)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .font(.system(.footnote, design: .monospaced))
                             .textSelection(.enabled)
                     }
@@ -191,10 +191,10 @@ struct SSHDebugView: View {
                 // v0.3.405：不再在文案里枚举命令（加一条就得改一次，迟早写歪）；`help` 里是全的
                 Label("受限 shell：只应答内置诊断命令（help 查看全部）", systemImage: "lock.shield")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Label("需电脑与手机在同一 Wi-Fi；首次连接触发本地网络权限弹窗，请允许", systemImage: "wifi")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 if let err = service.lastError {
                     // v0.3.683：区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)

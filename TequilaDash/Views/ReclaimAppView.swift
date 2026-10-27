@@ -85,15 +85,15 @@ struct ReclaimAppView: View {
                     if let uuid = containerUUID {
                         Text("UUID: \(uuid)")
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
                     HStack(spacing: 6) {
                         Image(systemName: vm.isLoading ? "hourglass" : "internaldrive")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Text(selectedSummary)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -128,7 +128,7 @@ struct ReclaimAppView: View {
     private var sessionSection: some View {
         Section(header: Text("会话"), footer: Text("可能导致应用内网页登录态丢失.默认关闭，需要时可手动开启.")) {
             if vm.isFilling && vm.buckets.filter({ $0.category.risk == .session }).isEmpty {
-                Text("测量中…").foregroundColor(.secondary)
+                Text("测量中…").foregroundStyle(.secondary)
             }
             ForEach(vm.buckets.filter { $0.category.risk == .session }) { bucket in
                 bucketRow(bucket)
@@ -139,7 +139,7 @@ struct ReclaimAppView: View {
     private var keptSection: some View {
         Section(header: Text("保留"), footer: Text("Documents、Preferences 与 Application Support 在此面板中不会被回收.")) {
             if vm.isFilling && vm.buckets.filter({ $0.category.risk == .kept }).isEmpty {
-                Text("测量中…").foregroundColor(.secondary)
+                Text("测量中…").foregroundStyle(.secondary)
             }
             ForEach(vm.buckets.filter { $0.category.risk == .kept }) { bucket in
                 bucketRow(bucket)
@@ -187,7 +187,7 @@ struct ReclaimAppView: View {
                     .font(.subheadline.weight(.semibold))
                 Text("不会删除 Documents、Preferences 或 Application Support")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
@@ -219,7 +219,7 @@ struct ReclaimAppView: View {
                     .font(.subheadline)
                 Text(current)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Button("取消", role: .destructive) {
@@ -233,10 +233,10 @@ struct ReclaimAppView: View {
                     .foregroundColor(AppTheme.success)
                 Text("\(result.fileCount) 个文件 · \(ReclaimService.formatBytes(result.totalBytes))")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("已保存到 TequilaDash → Backups")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 // v0.3.705：这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
                 if !result.skippedFiles.isEmpty {
                     Label("\(result.skippedFiles.count) 个文件未能写入归档.", systemImage: "info.circle")
@@ -263,7 +263,7 @@ struct ReclaimAppView: View {
                     .font(.body.weight(.medium))
                 Text(bucket.summary)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             if bucket.available, (bucket.files > 0 || bucket.bytes > 0) {

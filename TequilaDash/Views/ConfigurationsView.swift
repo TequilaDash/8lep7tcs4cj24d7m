@@ -355,7 +355,7 @@ struct ConfigurationsView: View {
                             .font(.subheadline)
                         Text("导出两个 plist 为 zip（含说明），可隔空投送 / 存文件 / 分享.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     if isBusy {
@@ -364,7 +364,7 @@ struct ConfigurationsView: View {
                     } else {
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 2)
@@ -441,7 +441,7 @@ struct ConfigurationsView: View {
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
             }
@@ -475,7 +475,7 @@ struct ConfigurationsView: View {
                                 .font(.subheadline)
                             Text(supervisedToolsEnabled ? "描述文件方式调整" : "需监督模式")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -495,7 +495,7 @@ struct ConfigurationsView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
                 }

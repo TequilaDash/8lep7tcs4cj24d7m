@@ -17,7 +17,7 @@ struct FileRow: View {
                     // 不截断省略 —— 用户需要看全.
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 8) {
@@ -29,7 +29,7 @@ struct FileRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }

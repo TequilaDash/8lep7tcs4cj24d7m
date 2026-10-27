@@ -23,7 +23,7 @@ struct LimitsDisclaimerView: View {
                     .font(.title2).bold()
                 Text(ProductLimits.body)
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 // 硬规则 3：不用全宽深色实底按钮。.borderedProminent 是实底（用户明确不喜欢），
                 // 改用 TintedButtonStyle —— 半透明着色 + 发丝描边，与全站主行动一致。

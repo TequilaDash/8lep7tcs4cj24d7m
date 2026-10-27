@@ -54,7 +54,7 @@ struct ProfileInstallView: View {
                                     .lineLimit(1)
                                 Text(profileSummary(named: name))
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                             Spacer()

@@ -32,7 +32,7 @@ struct SignedIPAInstallView: View {
                                 .font(.subheadline.weight(.semibold))
                             Text("无视版本，经隧道直接安装")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                     }
@@ -59,7 +59,7 @@ struct SignedIPAInstallView: View {
                             .progressViewStyle(.linear)
                         Text(String(format: "安装中 %.0f%%…", progress * 100))
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
                 } header: {

@@ -373,15 +373,15 @@ struct ModuleManagerView: View {
             // 版本 / 作者（灰字两行）
             Text("版本: v\(module.version)")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text("作者: \(module.author ?? "未知")")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             // 描述（灰字自动换行）
             Text(module.description)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             // 签名徽章（热补丁/二进制模块）
             if module.isHotfixModule || module.isBinaryModule {

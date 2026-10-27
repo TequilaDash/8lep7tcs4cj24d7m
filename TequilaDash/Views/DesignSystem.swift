@@ -515,7 +515,7 @@ struct InfoActionCard: View {
                     .font(.subheadline.weight(.semibold))
                 Text(message)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle = actionTitle, let action = action {
                     // 统一「透明淡蓝」（本轮修正）：此前默认走 `.borderedProminent` + `.tint(accent)`

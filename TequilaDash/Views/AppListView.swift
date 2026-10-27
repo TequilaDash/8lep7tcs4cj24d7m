@@ -447,7 +447,7 @@ struct AppListView: View {
                 }
                 if visible.isEmpty {
                     Text(emptyListMessage)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 } else {
                     ForEach(sections(in: visible), id: \.letter) { section in
                         Section(header: Text(section.letter).id(section.letter)) {

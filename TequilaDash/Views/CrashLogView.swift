@@ -147,7 +147,7 @@ struct CrashLogView: View {
                     }
                     Text("正在处理…")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(28)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
@@ -163,7 +163,7 @@ struct CrashLogView: View {
                         CrashReportAnalysisView(report: report, rawText: previewText)
                     } else if previewText.isEmpty {
                         Text("（空文件）")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     } else {
                         ScrollView {
                             Text(previewText)
@@ -220,7 +220,7 @@ struct CrashLogView: View {
         HStack {
             Text("已选 \(selectedEntries.count) 项")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Spacer()
             Button {
                 exportSelected()
@@ -327,7 +327,7 @@ struct CrashLogView: View {
                 if let detail = rowDetail(entry) {
                     Text(detail)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -336,7 +336,7 @@ struct CrashLogView: View {
                 rowBadge(entry)
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .contentShape(Rectangle())

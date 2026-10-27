@@ -215,7 +215,7 @@ struct CertificateView: View {
                              ? (manager.teamSummary ?? "已登录 Apple ID")
                              : "管理 Apple ID 的 iOS 开发证书（列出 / 吊销）")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
@@ -252,7 +252,7 @@ struct CertificateView: View {
                     // 改为 info.circle + AppTheme.pending（语义相同，形态合规，且取色明暗自适应）。
                     Image(systemName: "info.circle").foregroundStyle(AppTheme.pending)
                     Text("尚未加载团队")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("加载") { manager.loadTeams() }
                 }
@@ -282,7 +282,7 @@ struct CertificateView: View {
                     if manager.teams.count == 1, let only = manager.teams.first {
                         Text("\(only.name)（\(only.identifier)）")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -464,7 +464,7 @@ struct CertificateView: View {
                     if let machine = cert.machineLabel {
                         Label(machine, systemImage: "desktopcomputer")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -502,7 +502,7 @@ struct CertificateView: View {
                     }
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
 
             if !selecting {

@@ -40,7 +40,7 @@ struct CallRecordingToneView: View {
                     Text("当前状态")
                     Spacer()
                     Text(statusText)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 Label("状态", systemImage: "waveform")

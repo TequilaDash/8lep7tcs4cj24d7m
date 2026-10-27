@@ -90,7 +90,7 @@ struct FileBrowserRootView: View {
                         .foregroundColor(.primary)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 

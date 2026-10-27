@@ -231,14 +231,14 @@ struct AFCBrowserView: View {
                 if !entry.isDirectory {
                     Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file))
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer()
             if entry.isDirectory {
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .contentShape(Rectangle())

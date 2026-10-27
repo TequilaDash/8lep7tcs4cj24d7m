@@ -266,19 +266,19 @@ private struct BackupRow: View {
                     }
                     Text(record.metadata.bundleIdentifier)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(record.displaySubtitle)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text(record.archiveFileName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let modified = record.modified {
                         Text(BackupPaths.displayStamp.string(from: modified))
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -329,7 +329,7 @@ private struct UnreadableBackupRow: View {
             if let modified = item.modified {
                 Text(BackupPaths.displayStamp.string(from: modified))
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -353,7 +353,7 @@ struct AppIconView: View {
                         .fill(Color.secondary.opacity(0.15))
                     Image(systemName: "app.fill")
                         .font(.system(size: size * 0.42))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -493,7 +493,7 @@ struct CustomRestoreSheet: View {
                     }
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -560,7 +560,7 @@ struct RestoreView: View {
                         Text("\(done) / \(total) 个文件")
                         Text(current)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Button("取消", role: .destructive) {
@@ -593,7 +593,7 @@ struct RestoreView: View {
                             .font(.headline)
                         Text(message)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                         Button("关闭") { dismiss() }
@@ -666,7 +666,7 @@ struct RestoreView: View {
                     }
                     Text("将覆盖 Documents、Library 和 tmp 中现有的同名文件.Keychain 数据不会被恢复.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal)
 
@@ -691,7 +691,7 @@ struct RestoreView: View {
             }
         } else {
             Text("此备份无法恢复.")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -720,7 +720,7 @@ struct RestoreView: View {
                                 Text(guest.displayName)
                                 Text((guest.containerPath as NSString).lastPathComponent)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
@@ -740,7 +740,7 @@ struct RestoreView: View {
         HStack(alignment: .top) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 72, alignment: .leading)
             Text(value)
                 .font(.caption)

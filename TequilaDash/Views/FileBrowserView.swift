@@ -311,10 +311,10 @@ struct FileBrowserView: View {
             if vm.isContainerRoot, vm.unresolvedContainerCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Text("有 \(vm.unresolvedContainerCount) 个容器未能读出标识，这些容器只能按 UUID 搜索.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
                 .listRowBackground(Color.secondary.opacity(0.08))

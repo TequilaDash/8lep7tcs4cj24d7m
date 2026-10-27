@@ -35,7 +35,7 @@ struct PairingInstallView: View {
                             .font(.headline)
                         Text("把配对文件写入已安装的侧载工具，让它们复用同一份配对身份.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
@@ -146,7 +146,7 @@ struct PairingInstallView: View {
                     .font(.subheadline.weight(.semibold))
                 Text(target.bundleID)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }

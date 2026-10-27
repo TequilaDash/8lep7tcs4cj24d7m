@@ -146,7 +146,7 @@ struct RingtonesView: View {
                     ProgressView()
                     Text("正在处理…")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(28)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
@@ -181,7 +181,7 @@ struct RingtonesView: View {
                         .truncationMode(.middle)
                 }
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
             Spacer()
             Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle")

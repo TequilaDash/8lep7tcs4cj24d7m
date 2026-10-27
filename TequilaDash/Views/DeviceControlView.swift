@@ -186,7 +186,7 @@ struct DeviceControlView: View {
                     .foregroundColor(.primary)
                 Text(action.subtitle)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()

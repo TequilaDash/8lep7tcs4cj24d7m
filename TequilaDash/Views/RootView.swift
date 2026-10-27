@@ -159,7 +159,7 @@ struct SetupStep: View {
                 .clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline)
-                Text(text).font(.subheadline).foregroundColor(.secondary)
+                Text(text).font(.subheadline).foregroundStyle(.secondary)
             }
         }
     }
@@ -208,7 +208,7 @@ struct SettingsForm: View {
                         Text("账号")
                         Spacer()
                         Text(showAccountDetails ? memorySettings.appleID : memorySettings.maskedAppleID())
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Button {
                             showAccountDetails.toggle()
@@ -223,7 +223,7 @@ struct SettingsForm: View {
                             Text("凭证")
                             Spacer()
                             Text("Apple ID 密码已保存于钥匙串")
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .font(.caption)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -253,7 +253,7 @@ struct SettingsForm: View {
                     .disabled(certStore.isBusy)
                 } else {
                     Label("尚未创建开发证书", systemImage: "seal")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Button {
                         certTask = Task { await runCertCreation() }
                     } label: {
@@ -277,7 +277,7 @@ struct SettingsForm: View {
                         Text("服务器")
                         Spacer()
                         Text(MemoryLimitSettings.host(from: anisetteServer))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
@@ -365,7 +365,7 @@ struct SettingsForm: View {
                             // 刻意**不回写文本**，否则用户永远清不空输入框。
                             logLimit.maxFileMB = LogLimitSettings.normalizedMB(from: newValue)
                         }
-                    Text("MB").foregroundColor(.secondary)
+                    Text("MB").foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("cat 读取上限")
@@ -377,7 +377,7 @@ struct SettingsForm: View {
                         .onChange(of: catLimitText) { _, newValue in
                             logLimit.maxCatMB = LogLimitSettings.normalizedMB(from: newValue)
                         }
-                    Text("MB").foregroundColor(.secondary)
+                    Text("MB").foregroundStyle(.secondary)
                 }
                 Button("清空日志", role: .destructive) {
                     LoginLogger.shared.clear()
@@ -397,7 +397,7 @@ struct SettingsForm: View {
                     .font(.headline)
                 Text(ProductLimits.body)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             Section(header: Text("保活"), footer: Text("开启后，关闭本应用也会在后台保持运行.")) {
@@ -414,7 +414,7 @@ struct SettingsForm: View {
             Section(header: Text("关于")) {
                 Text(Self.aboutLine)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         // 左上角：登录日志查询入口.右上角「完成」由外层 MoreView 的 sheet 提供，

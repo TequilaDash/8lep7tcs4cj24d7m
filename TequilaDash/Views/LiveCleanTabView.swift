@@ -173,7 +173,7 @@ struct LiveCleanTabView: View {
         return Group {
             if !vm.progressText.isEmpty && vm.isScanning {
                 Text(vm.progressText)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && visible.isEmpty && !vm.rows.isEmpty {
@@ -228,7 +228,7 @@ struct LiveCleanTabView: View {
                 }
                 Text(row.subtitle)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("UUID: \(row.containerUUID)")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.8))
@@ -274,7 +274,7 @@ struct GuestIcon: View {
                 Image(systemName: "shippingbox")
                     .resizable()
                     .scaledToFit()
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -299,14 +299,14 @@ struct SharedAppLimitBanner: View {
                         .font(.subheadline.weight(.semibold))
                     Text("当前运行于已打补丁的 LiveContainer，宿主已签发沙盒扩展，转为共享的应用现在可直接列出、浏览与回收.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("看不到转为共享的应用？")
                         .font(.subheadline.weight(.semibold))
                     Text("共享 app 数据在 AppGroup 沙盒，不在当前 LiveContainer 容器内.在 LiveContainer 内长按该应用 → Convert to Private，待数据回迁 Documents 后再回此扫描.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -334,7 +334,7 @@ struct ContainerDiagnosticView: View {
             ForEach(SandboxEscape.lcContainerConsumeResults, id: \.self) { r in
                 Text("• \(r)")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -344,7 +344,7 @@ struct ContainerDiagnosticView: View {
     private func diagRow(_ k: String, _ v: String, color: Color? = nil) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Text(k + "：")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text(v)
                 .foregroundColor(color ?? .primary)
                 .textSelection(.enabled)

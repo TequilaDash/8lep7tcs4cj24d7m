@@ -348,7 +348,7 @@ struct IPAInstallView: View {
                     } else {
                         Label("「更多 → 设置」里还没有保存 Apple ID", systemImage: "info.circle")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 } footer: {
                     Text("关闭自动登录后，进入本页不再自动登录/触发 2FA.")
