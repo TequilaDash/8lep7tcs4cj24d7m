@@ -90,25 +90,56 @@ struct IPAInstallView: View {
         ipaURL?.lastPathComponent ?? ""
     }
 
+    /// 行式导入入口（与 PairingSetupView 的 importRow 同构）.
+    private func importRow(title: String,
+                           subtitle: String,
+                           systemImage: String,
+                           showsCheck: Bool) -> some View {
+        HStack(spacing: 12) {
+            AppRowIcon(systemName: systemImage, tint: AppTheme.categoryDownload, symbolSize: 17, frameSize: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.bodyEmphasis)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 6)
+            if showsCheck {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppTheme.success)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// 页头：品牌图标块 + 标题 + 三个关键状态 stat.
+    ///
+    /// v0.3.721 重构：原先是 Section 里手搓的「40pt 图标 + headline + caption」，
+    /// 与全仓详情页的 AppHeroHeader 语言不一致，且进页看不出「配对文件有没有 /
+    /// 登录没登录 / IPA 选没选」. 改用 AppHeroHeader 后这三件事一眼可见.
+    private var heroSection: some View {
+        Section {
+            AppHeroHeader(
+                title: "IPA 侧载",
+                subtitle: "签名并安装 IPA 到设备（需 Apple ID + 配对文件 + LocalDevVPN）.",
+                symbol: "arrow.down.app.fill",
+                stats: [
+                    AppStat("配对文件", pairingFileExists ? "已就绪" : "未导入"),
+                    AppStat("Apple ID", service.isSignedIn ? "已登录" : "未登录"),
+                    AppStat("待装 IPA", ipaURL == nil ? "未选择" : "已选择")
+                ]
+            )
+            .padding(.vertical, 6)
+        }
+    }
+
     var body: some View {
         List {
-            // 头部
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        AppRowIcon(systemName: "arrow.down.app.fill", tint: AppTheme.categoryDownload, symbolSize: 20, frameSize: 40)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("IPA 侧载")
-                                .font(.headline)
-                            Text("签名并安装 IPA 到设备（需 Apple ID + 配对文件 + LocalDevVPN）.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                }
-                .padding(.vertical, 6)
-            }
+            heroSection
 
             // v0.3.245：配对引导卡独立板块（与其他功能页同一 PairingGuideCard 视觉）
             if !pairingFileExists {
@@ -123,25 +154,14 @@ struct IPAInstallView: View {
                 Button {
                     showImporter = true
                 } label: {
-                    HStack {
-                        Label(ipaURL == nil ? "导入 IPA 文件" : "重新导入 IPA 文件",
-                              systemImage: "doc.badge.plus")
-                        Spacer()
-                        if ipaURL != nil {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        }
-                    }
+                    importRow(title: ipaURL == nil ? "导入 IPA 文件" : "重新导入 IPA 文件",
+                              subtitle: ipaDisplayName.isEmpty
+                                  ? "从「文件」中选取 .ipa，会先拷贝到应用沙盒."
+                                  : ipaDisplayName,
+                              systemImage: "doc.badge.plus",
+                              showsCheck: ipaURL != nil)
                 }
                 .disabled(isRunning)
-
-                if let url = ipaURL {
-                    Text(url.lastPathComponent)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
 
                 HStack(spacing: 8) {
                     TextField("或粘贴 IPA 直链（http/https）", text: $ipaLink)
@@ -163,10 +183,17 @@ struct IPAInstallView: View {
                     .disabled(ipaLink.isEmpty || isRunning || isDownloading)
                 }
                 if isDownloading {
-                    ProgressView(value: downloadProgress)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: downloadProgress)
+                            .tint(AppTheme.categoryDownload)
+                        Text("已下载 \(Int(downloadProgress * 100))%")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
                 }
             } header: {
-                Text("IPA")
+                Text("IPA 来源")
             } footer: {
                 Text("导入的 IPA 会先拷贝到应用沙盒（统一文件选择调用点），可离线签名安装.")
             }
@@ -183,7 +210,7 @@ struct IPAInstallView: View {
                             AppRowIcon(systemName: "shippingbox.fill", tint: AppTheme.categoryDownload)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(AppFont.subheadlineEmphasis)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                 HStack(spacing: 8) {
@@ -192,13 +219,13 @@ struct IPAInstallView: View {
                                         Text(modified.formatted(date: .abbreviated, time: .shortened))
                                     }
                                 }
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(AppFont.caption)
+                                .foregroundStyle(.secondary)
                             }
                             Spacer()
                             if ipaURL?.path == item.url.path {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
+                                    .foregroundStyle(AppTheme.success)
                             }
                         }
                         .contentShape(Rectangle())
@@ -223,22 +250,30 @@ struct IPAInstallView: View {
             } header: {
                 Text("已下载的 IPA")
             } footer: {
-                Text("点击选择为要安装的 IPA，再次点击取消选择；左滑删除.")
+                Text("点击选择为要安装的 IPA，再次点击取消选择.左滑删除.")
             }
 
             // Apple ID
             Section {
                 if service.isSignedIn {
-                    HStack {
-                        Label(service.teamSummary ?? "已登录", systemImage: "checkmark.seal.fill")
-                            .foregroundColor(.green)
-                        Spacer()
+                    HStack(spacing: 12) {
+                        AppRowIcon(systemName: "checkmark.seal.fill", tint: AppTheme.success, symbolSize: 17, frameSize: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("已登录")
+                                .font(AppFont.bodyEmphasis)
+                            Text(service.teamSummary ?? "签名会话已就绪.")
+                                .font(AppFont.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 6)
                         Button("退出") {
                             service.signOut()
                             appleID = ""
                             password = ""
                         }
-                        .font(.subheadline)
+                        .font(AppFont.footnote)
+                        .buttonStyle(.borderless)
                     }
                 } else if isAutoSigningIn || isManuallySigningIn {
                     // 区块级加载收敛到共享 AppLoadingRow（.block 档）：
@@ -285,10 +320,12 @@ struct IPAInstallView: View {
                         Label("登录", systemImage: "person.crop.circle.badge.checkmark")
                             .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
+                    .controlSize(.large)
                     .disabled(appleID.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
                 }
             } header: {
-                Text("Apple ID")
+                Text("签名账号")
             } footer: {
                 Text(service.isSignedIn
                      ? "签名会话已就绪."
@@ -321,36 +358,26 @@ struct IPAInstallView: View {
             // 流程状态
             if let stepText = step.text {
                 Section {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(stepText)
-                            .font(.subheadline)
-                        Spacer()
-                        if step == .installing {
-                            Text("\(Int(installProgress * 100))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundColor(.secondary)
-                        }
-                    }
+                    AppLoadingRow(
+                        title: stepText,
+                        detail: step == .installing
+                            ? "进度 \(Int(installProgress * 100))%"
+                            : nil,
+                        level: .block
+                    )
                 }
             }
 
             if let error = errorMessage {
-                Section {
-                    InfoActionCard(
-                        icon: "xmark.circle.fill",
-                        iconTint: .red,
-                        title: "出错了",
-                        message: error
-                    )
-                }
+                AppStateSection(state: .error("出错了", message: error))
             }
             if let success = successMessage {
+                // 成功提示不用 AppStateSection：它只有 loading / error / empty 三态，
+                // 把「完成」塞进 .empty 语义不对，后来人容易当成空态「修」掉.
                 Section {
                     InfoActionCard(
                         icon: "checkmark.seal.fill",
-                        iconTint: .green,
+                        iconTint: AppTheme.success,
                         title: "完成",
                         message: success
                     )

@@ -1042,7 +1042,7 @@ struct AppCapsuleLabel: View {
     var horizontalPadding: CGFloat = 18
     /// 纵向内边距（默认 12）.
     var verticalPadding: CGFloat = 12
-    /// 明暗模式：投影走 `AppShadow.card`（深色为 .clear），需显式传入.
+    /// 明暗模式：投影走 `AppShadow.card`（浅色黑 6% / 深色黑 35%），需显式传入.
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1320,15 +1320,20 @@ enum AppSpacing {
 /// 卡片边界主要靠 accentBorder 0.30 的描边撑着，观感偏平。
 ///
 /// 这里只补**两级**阴影，不做完整体系（与 AppRadius 的克制口径一致）：
-/// - card：卡片浮起（浅色下极淡，深色下几乎不可见 —— 深色靠描边，这是对的）
+/// - card：卡片浮起（浅色下极淡，深色下更重 —— 深色背景上必须靠对比托起卡片）
 /// - raised：浮层 / 拖拽中的元素（如 MapDropPin 拖拽态）
 ///
-/// 判据：阴影只在**浅色模式**有意义；深色模式用描边而非阴影，
-/// 因为深色背景上的黑色阴影只会让边缘糊成一片脏带（本仓 hero 卡曾踩过同类坑）。
+/// 判据（v0.3.721 起）：两级阴影在**两种模式下都生效**，但深色下必须更重。
+///
+/// 原判据是「深色模式用描边而非阴影」，理由是深色背景上的黑色阴影会把边缘糊成脏带。
+/// 实测下来这条只对**极淡**的阴影成立：深色下 card 取 `.clear` ⇒ 卡片与页底只靠
+/// accentBorder 0.30 的 0.5pt 描边区分，观感偏平（用户 2026-10-27 批准放开深色阴影）。
+/// 现在深色 card 用黑 35% —— 比浅色的 6% 重得多，靠**对比**把卡片从页底托起来，
+/// 而不是靠一层糊在边缘的浅灰。若将来发现边缘发脏，先调这个不透明度，不要退回 .clear。
 enum AppShadow {
-    /// 卡片投影：浅色下极淡（黑 6%，radius 8，y 2），深色下不投影.
+    /// 卡片投影：浅色黑 6% / 深色黑 35%（radius 8，y 2）.
     static func card(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? .clear : Color.black.opacity(0.06)
+        scheme == .dark ? Color.black.opacity(0.35) : Color.black.opacity(0.06)
     }
     /// 卡片投影半径.
     static let cardRadius: CGFloat = 8

@@ -32,99 +32,20 @@ struct PairingSetupView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Image(systemName: "network.badge.shield.half.filled")
-                    .font(.system(size: 48))
-                    .foregroundColor(AppTheme.categoryDevice)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 24)
-
-                Text("一次性设置")
-                    .font(.title2).bold()
-                    .frame(maxWidth: .infinity)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    SetupStep(number: 1, title: "安装 LocalDevVPN",
-                               text: "从 App Store 安装 LocalDevVPN，保持设备 IP / 隧道 IP 为默认值（10.7.0.1），连接它并开启 Wi-Fi.")
-                    SetupStep(number: 2, title: "获取配对文件",
-                               text: "在 Windows 上用 iPASide 侧载，生成 pairingFile.plist 并自动放置.也可在此导入 iLoader 文件.之后可拔线（走 LocalDevVPN，不走 USB）.iOS 26.4+ 需远程配对密钥，iOS 18 只需 USB 信任部分.")
-                    SetupStep(number: 3, title: "加载应用",
-                               text: "TequilaDash 随后列出你已安装的应用，可浏览或备份其数据.")
-                }
-                .padding(.horizontal)
-
-                Button {
-                    showImporter = true
-                } label: {
-                    Label("导入配对文件", systemImage: "doc.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
-                .controlSize(.large)
-                .padding(.horizontal)
-
-                Button {
-                    importFromClipboard()
-                } label: {
-                    Label("从剪贴板粘贴配对文件", systemImage: "doc.on.clipboard")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
-                .controlSize(.large)
-                .padding(.horizontal)
-
-                if let importError = importError {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow（ScrollView 内无 Section，直接裸放）.
-                    AppErrorRow(message: importError)
-                        .padding(.horizontal)
-                }
-
-                if let clipboardError = clipboardError {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
-                    AppErrorRow(message: clipboardError)
-                        .padding(.horizontal)
-                }
-
-                // iOS 27 无线配对（无需电脑）：配对码直接在 App 内显示，
-                // 参考 SideInstaller 的 in-app PIN 卡片做法（原版 StikPair 用通知）.
-                // 真实配对引擎已接入：si_run_host（Rust）经 WirelessPairing 桥接到本视图，
-                // 配对文件写入 Documents/pairingFile.plist，TunnelContext 自动加载.
-                if isIOS27OrLater {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Label("iOS 27 无线配对（无需电脑）", systemImage: "wifi")
-                            .font(.headline)
-                            .foregroundStyle(AppTheme.categoryDevice)
-
-                        Text("iOS 27 支持无线配对，且配对码会直接显示在 App 内（而不是系统通知）.点击「开始无线配对」后，在另一台设备的 设置 › 隐私与安全性 › 开发者模式 中选择「与 TequilaDash 配对」，并把此处显示的配对码输入到该设备即可完成.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        Button {
-                            startWirelessPairing()
-                        } label: {
-                            Label("开始无线配对", systemImage: "lock.iphone")
-                                .frame(maxWidth: .infinity)
-                        }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
-                        .controlSize(.large)
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                            .fill(AppSurface.card)
-                    )
-                    .padding(.horizontal)
-                }
-
-                Button("我已经完成了 — 重试") {
-                    viewModel.reload()
-                }
-                .font(.footnote)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
+        List {
+            heroSection
+            importSection
+            stepsSection
+            if isIOS27OrLater {
+                wirelessSection
+            } else {
+                wirelessUnavailableSection
             }
+            retrySection
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("配对文件导入")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showWirelessPairing) {
             wirelessSheetContent
                 .onDisappear {
@@ -140,40 +61,234 @@ struct PairingSetupView: View {
                 }
         }
         .pairingFilePicker(isPresented: $showImporter) { result in
-            switch result {
-            case .success(let data):
-                do {
-                    let contents: String
-                    if let utf8 = String(data: data, encoding: .utf8), !utf8.isEmpty {
-                        contents = utf8
-                    } else if let xml = try? PropertyListSerialization.data(
-                        fromPropertyList: try PropertyListSerialization.propertyList(from: data, options: [], format: nil),
-                        format: .xml,
-                        options: 0
-                    ), let text = String(data: xml, encoding: .utf8) {
-                        contents = text
-                    } else {
-                        throw NSError(
-                            domain: "TequilaDash",
-                            code: -2,
-                            userInfo: [NSLocalizedDescriptionKey: "无法读取该配对文件."]
-                        )
-                    }
-                    try viewModel.importPairingFile(contents)
-                    importError = nil
-                    viewModel.reload()
-                } catch {
-                    importError = error.localizedDescription
-                }
-            case .failure(let error):
-                // Don't treat user cancellation as an error surface.
-                if (error as NSError).code == -4 { break }
-                importError = error.localizedDescription
-            }
+            handlePairingPicker(result)
         }
         .onAppear(perform: registerWirelessObservers)
         .onDisappear(perform: unregisterWirelessObservers)
     }
+
+    // MARK: - Sections
+
+    /// 顶部说明块：品牌图标块 + 标题 + 配对状态.
+    ///
+    /// v0.3.721 重构：原先是 48pt 裸图标 + .title2 居中标题的「欢迎页」语汇，
+    /// 与全仓二级页的 AppHeroHeader / AppBrandTile 语言不一致；改用
+    /// AppHeroHeader 同款结构，并带上配对状态 stat，让用户进页第一眼就知道
+    /// 现在到底有没有配对文件.
+    private var heroSection: some View {
+        Section {
+            AppHeroHeader(
+                title: "配对文件导入",
+                subtitle: "TequilaDash 通过配对文件识别你的设备，走 LocalDevVPN 隧道读写应用与文件.",
+                symbol: "key.horizontal.fill",
+                stats: [
+                    AppStat("配对状态", viewModel.hasPairingFile ? "已就绪" : "未导入"),
+                    AppStat("可用方式", isIOS27OrLater ? "文件 / 剪贴板 / 无线" : "文件 / 剪贴板")
+                ]
+            )
+            .padding(.vertical, 6)
+        }
+    }
+
+    /// 导入区：两条导入通道收进同一个 Section，错误统一到一个错误槽.
+    ///
+    /// v0.3.721 重构：原先「导入文件」与「剪贴板导入」是两个 44pt 大按钮，
+    /// 外加两条各自独立的 AppErrorRow；两条错误槽在界面上是两行灰字，
+    /// 用户分不清是哪条通道失败的. 现在改成 List 原生行（与 PairingInstallView /
+    /// IncreaseMemoryView 一致），错误只留一个槽，由 importErrorText 归并.
+    private var importSection: some View {
+        Section {
+            Button {
+                showImporter = true
+            } label: {
+                importRow(title: "导入配对文件",
+                          subtitle: "从「文件」中选取 pairingFile.plist 或 iLoader 文件.",
+                          systemImage: "doc.badge.plus")
+            }
+
+            Button {
+                importFromClipboard()
+            } label: {
+                importRow(title: "从剪贴板粘贴",
+                          subtitle: "剪贴板里已是配对文件的文本内容.",
+                          systemImage: "doc.on.clipboard")
+            }
+
+            if let message = importErrorText {
+                AppErrorRow(message: message)
+            }
+        } header: {
+            Text("导入")
+        } footer: {
+            Text(viewModel.hasPairingFile
+                 ? "已检测到配对文件.重新导入会覆盖现有配对身份，导入后无需重启."
+                 : "导入后无需重启，返回即可看到设备上的应用列表.")
+        }
+    }
+
+    private func importRow(title: String, subtitle: String, systemImage: String) -> some View {
+        HStack(spacing: 12) {
+            AppRowIcon(systemName: systemImage, tint: AppModule.sign.tint, symbolSize: 17, frameSize: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppFont.bodyEmphasis)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// 三步准备：编号步骤改用行内编号圆点 + 标题 + 说明.
+    ///
+    /// v0.3.721 重构：原先复用 RootView 里的 SetupStep（28×28 圆底 + headline），
+    /// 与 List 行高体系不匹配；现在编号圆点改用 AppTheme.accentSoft 淡底，
+    /// 视觉与「导入」区同族.
+    private var stepsSection: some View {
+        Section {
+            numberedStep(1, title: "安装 LocalDevVPN",
+                        text: "从 App Store 安装 LocalDevVPN，保持设备 IP / 隧道 IP 为默认值（10.7.0.1），连接它并开启 Wi-Fi.")
+            numberedStep(2, title: "获取配对文件",
+                        text: "在 Windows 上用 iPASide 侧载生成 pairingFile.plist，也可在此直接导入.之后可拔线（走 LocalDevVPN，不走 USB）.")
+            numberedStep(3, title: "加载应用",
+                        text: "TequilaDash 随后列出你已安装的应用，可浏览或备份其数据.")
+        } header: {
+            Text("准备步骤")
+        } footer: {
+            Text("iOS 26.4 及更高版本需要远程配对密钥，iOS 18 只需 USB 信任部分.")
+        }
+    }
+
+    private func numberedStep(_ number: Int, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(AppFont.captionEmphasis)
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(AppTheme.accentSoft))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(AppFont.bodyEmphasis)
+                Text(text)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// iOS 27 无线配对入口（原先是页内卡片，现在收进 List 行）.
+    private var wirelessSection: some View {
+        Section {
+            Button {
+                startWirelessPairing()
+            } label: {
+                HStack(spacing: 12) {
+                    AppRowIcon(systemName: "wifi", tint: AppTheme.categoryDevice, symbolSize: 17, frameSize: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iOS 27 无线配对")
+                            .font(AppFont.bodyEmphasis)
+                            .foregroundStyle(.primary)
+                        Text("无需电脑，配对码直接显示在 App 内.")
+                            .font(AppFont.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 6)
+                    Image(systemName: "lock.iphone")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.categoryDevice)
+                }
+                .contentShape(Rectangle())
+            }
+        } header: {
+            Text("无线配对")
+        } footer: {
+            Text("点击后，在另一台设备的 设置 › 隐私与安全性 › 开发者模式 中选择「与 TequilaDash 配对」，并输入此处显示的配对码.")
+        }
+    }
+
+    /// 低版本 iOS 的无线配对不可用说明（原先是整张卡片都不渲染，用户不知道有这个能力）.
+    private var wirelessUnavailableSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                AppRowIcon(systemName: "info.circle", tint: AppTheme.pending, symbolSize: 17, frameSize: 30)
+                Text("iOS 27 起支持无线配对（无需电脑）.当前系统版本请用文件或剪贴板导入.")
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var retrySection: some View {
+        Section {
+            Button {
+                viewModel.reload()
+            } label: {
+                HStack {
+                    Label("重新加载应用列表", systemImage: "arrow.clockwise")
+                    Spacer()
+                }
+            }
+            .disabled(viewModel.isLoading)
+        } footer: {
+            Text("已导入配对文件但仍看不到应用时，先确认 LocalDevVPN 已连接，再点这里.")
+        }
+    }
+
+    // MARK: - Derived state
+
+    /// 两条导入通道的错误归并到一个槽：剪贴板错误优先（它是更近的一次操作），
+    /// 其次是文件导入错误.
+    private var importErrorText: String? {
+        clipboardError ?? importError
+    }
+
+    /// 文件选择器的结果处理（从 body 里抽出，避免闭包过长挤占视图体）.
+    private func handlePairingPicker(_ result: Result<Data, Error>) {
+        switch result {
+        case .success(let data):
+            do {
+                let contents: String
+                if let utf8 = String(data: data, encoding: .utf8), !utf8.isEmpty {
+                    contents = utf8
+                } else if let xml = try? PropertyListSerialization.data(
+                    fromPropertyList: try PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+                    format: .xml,
+                    options: 0
+                ), let text = String(data: xml, encoding: .utf8) {
+                    contents = text
+                } else {
+                    throw NSError(
+                        domain: "TequilaDash",
+                        code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "无法读取该配对文件."]
+                    )
+                }
+                try viewModel.importPairingFile(contents)
+                importError = nil
+                clipboardError = nil
+                viewModel.reload()
+            } catch {
+                importError = error.localizedDescription
+            }
+        case .failure(let error):
+            // Don't treat user cancellation as an error surface.
+            if (error as NSError).code == -4 { break }
+            importError = error.localizedDescription
+        }
+    }
+
 
     /// Read a pairing file from the system pasteboard and import it.
     /// Reuses the same Data→String (plist fallback) parsing as the file importer.
@@ -247,7 +362,6 @@ struct PairingSetupView: View {
         wirelessPin = nil
         wirelessError = nil
         wirelessBroadcastErrorCode = nil
-        wirelessBroadcastErrorCode = nil
         wirelessDeviceName = nil
         wirelessStatus = "正在广播配对服务…"
     }
@@ -256,23 +370,23 @@ struct PairingSetupView: View {
     private var keepAliveCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("后台保活")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.primary)
+                .font(AppFont.subheadlineEmphasis)
+                .foregroundStyle(.primary)
 
             Toggle("静默音频", isOn: $keepAliveAudio)
-                .font(.subheadline)
+                .font(AppFont.subheadline)
 
             Toggle("位置更新", isOn: $keepAliveLocation)
-                .font(.subheadline)
+                .font(AppFont.subheadline)
 
             Text("若广播过一会就消失，可开启其中一个或多个选项，让系统在后台继续保留本 App 的 Bonjour 注册.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(AppFont.caption)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .padding(AppMetrics.cardPadding)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                 .fill(AppSurface.card)
         )
     }
@@ -290,11 +404,11 @@ struct PairingSetupView: View {
                 if let error = wirelessError {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(.red)
-                    Text("配对失败").font(.title3).bold()
+                        .foregroundStyle(AppTheme.danger)
+                    Text("配对失败").font(AppFont.title3)
                     Text(error)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(AppFont.subheadline)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     Button("关闭") {
                         cancelWirelessPairing()
@@ -303,11 +417,11 @@ struct PairingSetupView: View {
                 } else if let name = wirelessDeviceName {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(.green)
-                    Text("配对成功").font(.title3).bold()
+                        .foregroundStyle(AppTheme.success)
+                    Text("配对成功").font(AppFont.title3)
                     Text("已与 \(name) 建立无线配对.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(AppFont.subheadline)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     Button("完成") {
                         cancelWirelessPairing()
@@ -319,19 +433,19 @@ struct PairingSetupView: View {
                         Image(systemName: "lock.iphone")
                             .font(.system(size: 40))
                             .foregroundStyle(AppTheme.categoryDevice)
-                        Text("请输入配对码").font(.headline)
+                        Text("请输入配对码").font(AppFont.headline)
                         Text(pin)
                             .font(.system(size: 44, weight: .bold, design: .monospaced))
                             .foregroundStyle(AppTheme.categoryDevice)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
                             .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                                     .fill(AppSurface.card)
                             )
                         Text("在另一台设备的 设置 › 隐私与安全性 › 开发者模式 中选择「与 TequilaDash 配对」，并输入上方配对码.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(AppFont.subheadline)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
                 } else {
@@ -344,8 +458,8 @@ struct PairingSetupView: View {
                         AppLoadingRow(title: wirelessStatus, level: .page)
                         if let code = wirelessBroadcastErrorCode {
                             Text("广播未确认（错误码 \(code)）")
-                                .font(.caption)
-                                .foregroundColor(.orange)
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppTheme.pending)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -399,6 +513,20 @@ struct PairingSetupView: View {
                 self.keepAlive.stop()
             } else {
                 self.wirelessError = errorMsg.isEmpty ? "配对失败，请重试." : errorMsg
+            }
+        }
+        // Bonjour 广播失败（NSNetService didNotPublish）：
+        // v0.2.76 之前只 NSLog，LiveContainer 共享应用 guest 等嵌入环境下
+        // 静默失败让用户以为广播成功却搜不到——现在把错误码回报给 UI 提示.
+        // v0.3.721 修：这段注册原本错放在 unregisterWirelessObservers() 末尾，
+        // 每次 onDisappear 都会新增一个永不注销的观察者并覆盖旧 token（泄漏）.
+        wirelessBroadcastObserver = center.addObserver(
+            forName: Notification.Name("WirelessPairingDidFailBroadcastNotification"),
+            object: nil,
+            queue: .main
+        ) { [self] note in
+            if let code = note.userInfo?["code"] as? Int {
+                self.wirelessBroadcastErrorCode = code
             }
         }
     }

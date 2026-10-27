@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.721] - 2026-10-27
+
+### 变更
+
+- 补齐通话录音静音素材：新增 `Resources/SilentTones/AirBeepStartSilence.caf`（425 字节，
+  上游 AirBeep v2.5.1 同名文件逐字节相同，sha256 `a9af3b89…89525`），并在
+  `CallRecordingToneService.swift` 补上第三个 Tone（`StartDisclosure.caf` → 同一素材的 caf 形态，
+  `optional: true`）。此前头注释写着「本仓暂不处理」，导致 iOS 上真有该提示音的系统版本
+  无法静音该文件。optional 语义已接线：读不到时不进 unreadable 阻塞列表、不参与必选项
+  齐全判据；`writeTargets` 保证本次读不到的项不写入（不在设备上凭空创建原本不存在的文件）。
+- 深色模式卡片阴影：`AppShadow.card` 深色分支由 `.clear` 改为黑 35%（浅色黑 6% 不变）。
+  原判据「深色用描边而非阴影」实测只对极淡阴影成立 —— 深色下 surfaceCard(#1B1F26) 与
+  surfaceBase(#0E1116) 明度差很小，卡片边界只靠 0.5pt 描边撑着，观感偏平。
+  一处改动全仓 3 个 `appCardShadow` 消费点同时生效；`raised` 档未动。
+- 重构「更多 → 配对文件导入」页：`ScrollView` 欢迎页语汇（48pt 裸图标 + .title2 居中标题）
+  改为 `List` + `AppHeroHeader` + 分区结构，与 `PairingInstallView` / `IncreaseMemoryView`
+  等二级页一致。两条导入通道收进同一 Section 并用行式入口；原先两条各自独立的
+  `AppErrorRow` 归并为一个错误槽（剪贴板错误优先，它是更近的一次操作）。
+  三步准备改用 22pt `accentSoft` 淡底编号圆点；低版本 iOS 不再整块不渲染，
+  改为明说「iOS 27 起支持无线配对」，否则用户不知道有这个能力。
+- 修 `PairingSetupView.unregisterWirelessObservers()` 的真实缺陷：该函数末尾又
+  `addObserver(forName: "WirelessPairingDidFailBroadcastNotification")`，
+  于是每次 `onDisappear` 都新增一个永不注销的观察者并覆盖旧 token（泄漏），
+  页面进出越多累积越多。注册搬回 `registerWirelessObservers()`，注销函数只负责 remove。
+  顺带删掉 `cancelWirelessPairingCleanup()` 里连写两遍的 `wirelessBroadcastErrorCode = nil`。
+- 重构「更多 → IPA 侧载」页：页头改为 `AppHeroHeader` 并带三个状态 stat
+  （配对文件 / Apple ID / 待装 IPA），进页第一眼能看出三件事齐不齐；
+  导入入口改为行式；已下载列表、已登录行接 `AppFont` / `AppTheme` token；
+  流程状态与错误/成功提示收进 `AppLoadingRow(.block)` 与 `AppStateSection`；
+  下载进度补百分比与品牌色；登录按钮补 `TintedButtonStyle` 与 `.large` 档。
+
+### 校验
+
+- normalize_eol / precommit 17 组全过；5 个改动文件 `swiftc -parse` 全 OK；CI 真编译为准.
+
 ## [0.3.720] - 2026-10-26
 
 ### 变更

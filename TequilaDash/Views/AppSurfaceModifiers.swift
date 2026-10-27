@@ -19,9 +19,9 @@ import SwiftUI
 extension View {
     /// 卡片投影（值语义 = `AppShadow.card`）.
     ///
-    /// 浅色：黑 6% / radius 8 / y 2；深色：`.clear`（深色靠描边而非阴影，
-    /// 判据见 `AppShadow` 定义处）。调用方须先取 `@Environment(\.colorScheme)`
-    /// 再传入，视图才能在明暗切换时重算.
+    /// 浅色：黑 6% / 深色：黑 35%，radius 8 / y 2（判据见 `AppShadow` 定义处）。
+    /// v0.3.721 起深色不再取 `.clear` —— 只靠 0.5pt 描边撑卡片边界观感偏平。
+    /// 调用方须先取 `@Environment(\.colorScheme)` 再传入，视图才能在明暗切换时重算.
     func appCardShadow(_ colorScheme: ColorScheme) -> some View {
         shadow(color: AppShadow.card(colorScheme),
                radius: AppShadow.cardRadius,

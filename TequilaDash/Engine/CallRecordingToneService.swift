@@ -31,8 +31,10 @@ import Foundation
 // · 本机（Windows）无法编译 / 实机验证，格式与时长按 AirBeep 钉死的素材为准。
 // · 状态判据用持久化标记（UserDefaults）而非文件内容比对 —— PCM 静音与原音
 //   长度相同、字节数也相同，按大小无法区分；故如实说明「状态以本 App 的标记为准」。
-// · 上游还有第三个可选文件 StartDisclosure.caf（很多系统版本没有）。本仓暂不处理：
-//   没有对应的静音素材，盲写一个设备上原本不存在的文件风险大于收益。
+// · 上游还有第三个可选文件 StartDisclosure.caf（很多系统版本没有）。v0.3.721 起已按上游补齐：
+//   素材 Resources/SilentTones/AirBeepStartSilence.caf（425B，与 AirBeep v2.5.1 逐字节相同），
+//   Tone.optional = true。可选文件「不存在 / 读不出」**不阻断**禁用：它既不进 unreadable 阻塞列表，
+//   也不参与「必选项是否齐全」的判据 —— 这与上游 readTonesTolerant 的 optional 语义一致。
 // · 写入需**导入配对文件 + LocalDevVPN 隧道**（目标 iOS/iPadOS 18.0–27.2 B2）。
 
 /// 通话录音提示音的禁用 / 恢复服务。
@@ -66,6 +68,19 @@ enum CallRecordingToneService {
         optional: false
     )
 
+    /// 开始录音提示音的可选变体（很多 iOS 版本没有这个文件）。
+    ///
+    /// v0.3.721：素材补自上游 AirBeep v2.5.1（Resources/SilentTones/AirBeepStartSilence.caf，
+    /// 425 字节）。与 startTone 同名不同扩展名（m4a / caf），resourceURL(for:) 按扩展名区分，不会撞。
+    /// optional = true 的语义：设备上没有它、或读不出它，都不阻断禁用与恢复。
+    static let startToneCaf = Tone(
+        name: "StartDisclosure.caf",
+        path: directory + "/StartDisclosure.caf",
+        resourceName: "AirBeepStartSilence",
+        resourceExtension: "caf",
+        optional: true
+    )
+
     /// 结束录音提示音。
     static let stopTone = Tone(
         name: "StopDisclosure.caf",
@@ -76,7 +91,25 @@ enum CallRecordingToneService {
     )
 
     /// 全部提示音（顺序即备份 / 静音素材的对应顺序）。
-    static var allTones: [Tone] { [startTone, stopTone] }
+    ///
+    /// 顺序与上游 AirBeep v2.5.1 的 files 数组一致：m4a 开始音、caf 开始音（可选）、caf 结束音。
+    /// 备份按 Tone.name 落盘，因此顺序只影响「数组下标与文件」的对应，不影响已有备份的复用。
+    static var allTones: [Tone] { [startTone, startToneCaf, stopTone] }
+
+    /// 必选项是否**全部**读到（可选文件读不到不影响结论）。
+    ///
+    /// v0.3.721：加了第三个可选文件后，**所有「读全了才能断言」的判据都必须按必选项算**，
+    /// 否则「设备上本来就没有 StartDisclosure.caf」会被误判成「读通道坏了」：
+    /// disable 会抛 backupIncomplete（功能直接不可用）、alreadySilent 永远不成立（每次都重写）。
+    /// 上游 AirBeep v2.5.1 的等价判据是 `file.optional || (data?.isEmpty == false)`。
+    ///
+    /// 「读不到」与「确定没有」在本模块无法区分（airlift 读通道不区分这两种失败），
+    /// 因此这里只用于「能不能下断言」，不用于「设备上到底有什么」。
+    private static func allRequiredReadable(_ tones: [Data?]) -> Bool {
+        zip(allTones, tones).allSatisfy { tone, data in
+            tone.optional || data != nil
+        }
+    }
 
     // MARK: - 状态
 
@@ -239,8 +272,11 @@ enum CallRecordingToneService {
         // 于是走「补标记直接返回成功」分支，界面说「已替换为静音」，而 stop 其实还是原始音。
         // 这正是 v0.3.646 记的那类「界面全对、设备不对」，只是换了个入口。
         // 读不全 ⇒ 不能断言已静音 ⇒ 走下面的备份/确认分支，由用户决定。
-        let readable = current.compactMap { $0 }.count
-        let alreadySilent = readable == allTones.count && tonesEqual(current, silent, requireAll: true)
+        // v0.3.721：判据从「全部读到」收窄为「必选项全部读到」—— 设备上没有可选文件
+        // StartDisclosure.caf 是常态（很多 iOS 版本不提供），用全量计数会把它误判成读失败。
+        // 比较用 requireAll: false：可选文件读不到时该位置是 nil，跳过比较，
+        // 否则「设备上本来没有这个文件」会让 alreadySilent 永远不成立，每次都白写一遍。
+        let alreadySilent = allRequiredReadable(current) && tonesEqual(current, silent, requireAll: false)
 
         var backupComplete = hasBackup()
         var unreadable: [String] = []
@@ -250,8 +286,10 @@ enum CallRecordingToneService {
         // 于是「恢复」永远报 noBackup —— 用户的原始提示音永久丢失，而界面显示一切正常。
         // 现在无论走哪条分支，都先尝试备份。
         if !backupComplete && !alreadySilent {
+            // v0.3.721：只统计**必选项**。可选文件读不到是常态，若把它算进 unreadable，
+            // 下面的 backupIncomplete 会让「禁用提示音」在多数设备上直接不可用。
             unreadable = allTones.enumerated()
-                .filter { current[$0.offset] == nil }
+                .filter { !$0.element.optional && current[$0.offset] == nil }
                 .map { $0.element.name }
             if unreadable.isEmpty {
                 // 全部读到了 —— 正常备份。
@@ -275,7 +313,7 @@ enum CallRecordingToneService {
         }
 
         do {
-            try await writeTones(silent)
+            try await writeTones(writeTargets(silent, current: current))
             UserDefaults.standard.set(true, forKey: disabledKey)
             // v0.3.689：记下「这次是在没有完整备份的情况下静音的」——
             // 没有这个标记，restore() 在备份丢失时只能给一条用户做不到的指令。
@@ -318,8 +356,9 @@ enum CallRecordingToneService {
     /// ① 先读设备、再判备份 —— 原实现第一行就读备份，缺备份即抛 noBackup，文案却是
     ///    「请先执行一次『禁用提示音』以生成备份」，而那一刻禁用按钮被
     ///    .disabled(state == .silenced) 锁住 ⇒ 用户既做不到，也不会被告知真正有效的做法；
-    /// ② 「已是原始音」必须**全部读得到**才敢断言（requireAll: true，对齐上游 :307），
-    ///    原实现 requireAll: false 会让「有一项读不到」也判成已恢复；
+    /// ② 「已是原始音」必须**必选项全部读得到**才敢断言（v0.3.721 起口径由「全部」收窄为
+    ///    「必选项」，见 allRequiredReadable；可选文件 StartDisclosure.caf 在很多 iOS 版本上
+    ///    本来就不存在，按全量算会永远判不成已恢复）；
     /// ③ 用第二个持久键区分「从未静音过」与「静音过但备份丢了」，后者给可执行指引。
     static func restore() async throws {
         let current = await readTones()
@@ -337,8 +376,10 @@ enum CallRecordingToneService {
             let wasSilenced = UserDefaults.standard.bool(forKey: disabledKey) || flagged
             var stillSilent = false
             if let silent = try? silentTones(),
-               current.compactMap({ $0 }).count == allTones.count {
-                stillSilent = tonesEqual(current, silent, requireAll: true)
+               allRequiredReadable(current) {
+                // requireAll: false —— 必选项已确认全部读到，剩下的 nil 只可能是可选文件，
+                // 它在设备上不存在是常态，不能因此断言「不是静音」。
+                stillSilent = tonesEqual(current, silent, requireAll: false)
             }
             if !wasSilenced && !stillSilent {
                 UserDefaults.standard.set(false, forKey: disabledKey)
@@ -348,10 +389,10 @@ enum CallRecordingToneService {
             throw ToneError.languageRestoreRequired
         }
 
-        // 全部读得到、且逐项等于备份 ⇒ 已经是原始音，只补标记；读不全则不做此断言，走写入分支。
-        let readable = current.compactMap { $0 }.count
-        if readable == allTones.count,
-           tonesEqual(current, backup, requireAll: true) {
+        // 必选项全部读得到、且逐项等于备份 ⇒ 已经是原始音，只补标记；否则走写入分支。
+        // requireAll: false 同上：可选文件在设备上不存在时 current 与 backup 都是 nil，跳过比较。
+        if allRequiredReadable(current),
+           tonesEqual(current, backup, requireAll: false) {
             UserDefaults.standard.set(false, forKey: disabledKey)
             UserDefaults.standard.set(false, forKey: silencedWithoutBackupKey)
             return
@@ -412,6 +453,22 @@ enum CallRecordingToneService {
 
     /// 读出最近一次读取失败的原因（诊断用）。
     static func lastReadFailureReason() -> String? { lastReadFailure }
+
+    /// 把「期望写入的内容」收窄为「实际可以写的内容」。
+    ///
+    /// v0.3.721：可选文件 StartDisclosure.caf 在多数 iOS 版本上**本来就不存在**。
+    /// 静音素材是齐的（三个都有），若原样写下去就会在设备上凭空创建这个文件 ——
+    /// 那是改变设备状态的行为，超出「把已有提示音换成静音」的范围。
+    /// 因此：可选文件在本次读取里没有读到（nil）时，不写它。
+    /// 这与上游 AirBeep v2.5.1 略有不同（上游会一并写入），差异与理由记在 CHANGELOG。
+    private static func writeTargets(_ desired: [Data?], current: [Data?]) -> [Data?] {
+        zip(allTones, desired).enumerated().map { index, pair in
+            let (tone, data) = pair
+            guard tone.optional else { return data }
+            let present = current.indices.contains(index) && current[index] != nil
+            return present ? data : nil
+        }
+    }
 
     /// 一次 airlift 操作写入若干提示音，随后**尽力而为**校验。
     ///
@@ -533,8 +590,11 @@ enum CallRecordingToneService {
 
     /// 读 bundle 内**等长静音**素材（顺序与 allTones 对应）。
     private static func silentTones() throws -> [Data?] {
-        try allTones.map { tone in
+        try allTones.map { tone -> Data? in
             guard let url = resourceURL(for: tone) else {
+                // v0.3.721：可选素材没打进 bundle 时退化为「不处理这个文件」，
+                // 而不是让整个功能抛 invalidToneBundle —— 一个可选文件不该拖垮必需项。
+                if tone.optional { return nil }
                 throw ToneError.invalidToneBundle
             }
             return try Data(contentsOf: url)
