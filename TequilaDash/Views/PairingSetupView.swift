@@ -545,17 +545,5 @@ struct PairingSetupView: View {
             center.removeObserver(t)
             wirelessBroadcastObserver = nil
         }
-        // 监听 Bonjour 广播失败（NSNetService didNotPublish）：
-        // v0.2.76 之前只 NSLog，LiveContainer 共享应用 guest 等嵌入环境下
-        // 静默失败让用户以为广播成功却搜不到——现在把错误码回报给 UI 提示.
-        wirelessBroadcastObserver = center.addObserver(
-            forName: Notification.Name("WirelessPairingDidFailBroadcastNotification"),
-            object: nil,
-            queue: .main
-        ) { [self] note in
-            if let code = note.userInfo?["code"] as? Int {
-                self.wirelessBroadcastErrorCode = code
-            }
-        }
     }
 }

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.722] - 2026-10-27
+
+### 修复
+
+- 修 v0.3.721 引入的回归：`PairingSetupView.unregisterWirelessObservers()` 里那段
+  `addObserver(forName: "WirelessPairingDidFailBroadcastNotification")` 只搬走了一份、
+  旧位置没删，于是同一通知被注册两次，其中一份仍然永不注销 —— 比 v0.3.720 之前
+  **泄漏更多**。构建日志里 `PairingSetupView.swift:557:22` 的那条
+  `main actor-isolated property 'wirelessBroadcastErrorCode' can not be mutated` 警告
+  就是这段残留。现在 `addObserver` 3 处 / `removeObserver` 3 处一一对应，
+  注销函数只剩 remove。
+- 上一版 CHANGELOG 第 23-26 行把这件事写成「已修」，实际只修了一半 —— 记在这里，
+  说明当时没有核对注册点与注销点的**数量**，只看了「注册已搬到新函数」。
+
+### 校验
+
+- normalize_eol / precommit 17 组全过；`swiftc -parse` OK；CI 真编译为准.
+
 ## [0.3.721] - 2026-10-27
 
 ### 变更
