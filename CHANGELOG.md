@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.3.723] - 2026-10-30
+
+### 新增
+
+- JIT 启用加一条 **CoreDevice 兜底链路**。根因是实测比对出来的，不是推断：iOS 27.0.1 上
+  老路径第 3 步取 `com.apple.internal.dt.remote.debugproxy` 必然 ServiceNotFound，因为
+  我们自己的 RPPairing RSD 服务表（67 条）里**没有这个服务**，而经 CoreDevice 隧道的表
+  （85 条）里有。与 DDI 无关、与配对文件无关（dtservicehub / afc / installation_proxy
+  都在第一张表里）。上游 StikDebug 与我们逐字同源（同一张表），其 3.1.15 的
+  「Attempt to fix ServiceNotFound errors」也没解决这件事，所以同步源码不是解。
+  新增 FFI `core_device_proxy_new_from_stream(stream, out)`（既有 `core_device_proxy_new`
+  只收 `*mut IdeviceHandle`，两者无法互转），Swift 侧新增 `CoreDeviceHandles` 与
+  `createCoreDeviceTunnel(from:)`，链路 rsd_get_service_info → adapter_connect →
+  new_from_stream → get_server_rsd_port → create_tcp_adapter → adapter_connect →
+  rsd_handshake_new；`enableJIT` 先走老路径，失败再兜底。
+- 隧道诊断：新增 `TunnelDiagnostics` 作为所有建隧道动作的统一记录点，23 份建隧道实现
+  共 71 个插桩点；隧道日志里额外 dump 两张 RSD 服务表（RPPairing 与 CoreDevice 各一份），
+  便于一眼看出某个服务在哪张表里缺；SSH 会话内可用 `tunnellog` 直接查看这些日志。
+
+### 修复
+
+- `TunnelDiagnostics` 的 `lastKey` / `lastAt` / `suppressed` 三个非隔离全局可变状态
+  补 `nonisolated(unsafe)`。它们读写全部发生在 `stateLock`（NSLock）之间、逻辑上无竞争，
+  但 Swift 6 并发检查看不到锁，CI 直接报 `#MutableGlobalVariable` 三条 error 拦下构建。
+  记一笔教训：`swiftc -parse` 只验语法，这类问题只有真机构建才暴露。
+
+### 变更
+
+- UI 颜色语义收敛：蓝色不再作为标题/正文/说明文字的前景（5 处清零），红色只保留真正的
+  破坏性语义（11 处换 token），另有 3 处非破坏性提示由红降为 `AppTheme.pending`
+  （「谨慎选择」/「恢复原生主题」/「下架」胶囊）。14 个文件 / 19 行，一参一行，未动结构与
+  业务逻辑。
+
+### 校验
+
+- normalize_eol / precommit 17 组全过；UI copy 与 theme-blue 守卫命中 0；CI 真编译为准.
+
 ## [0.3.722] - 2026-10-27
 
 ### 修复
