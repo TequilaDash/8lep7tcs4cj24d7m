@@ -13,10 +13,10 @@ struct HexEditorView: View {
             if vm.truncated {
                 Text("仅显示前 512 KB 的十六进制预览.超过此大小的文件不可保存.")
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppTheme.pending)
                     .padding(8)
                     .frame(maxWidth: .infinity)
-                    .background(Color.orange.opacity(0.12))
+                    .background(AppTheme.pending.opacity(0.12))
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {

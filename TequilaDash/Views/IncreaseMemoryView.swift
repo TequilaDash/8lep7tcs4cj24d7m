@@ -250,7 +250,7 @@ private struct AppRowView: View {
             if app.hasIncreasedMemory {
                 Label("已开启", systemImage: "checkmark.circle.fill")
                     .font(.caption)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
             } else if isOperating {
                 ProgressView().controlSize(.small)
             } else {

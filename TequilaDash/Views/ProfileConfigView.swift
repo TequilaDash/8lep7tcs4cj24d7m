@@ -200,11 +200,11 @@ struct ProfileConfigView: View {
                             .lineLimit(1)
                     }
                     if p.verified {
-                        Text("已验证").font(.caption2).foregroundStyle(.green)
+                        Text("已验证").font(.caption2).foregroundStyle(AppTheme.success)
                     }
                     Text(p.removable ? "可移除" : "不可移除")
                         .font(.caption2)
-                        .foregroundStyle(p.removable ? Color.secondary : Color.orange)
+                        .foregroundStyle(p.removable ? Color.secondary : AppTheme.pending)
                 }
                 if let expiry = p.expiry {
                     Text("过期：\(expiry.formatted(date: .abbreviated, time: .omitted))")

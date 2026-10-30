@@ -73,7 +73,7 @@ struct ActivationView: View {
             if let resultText {
                 Text(resultText)
                     .font(.footnote)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.success)
             }
         } header: {
             Text("前置条件")

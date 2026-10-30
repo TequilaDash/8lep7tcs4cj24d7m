@@ -351,7 +351,7 @@ struct CrashLogView: View {
                 } label: {
                     Label("分享", systemImage: "square.and.arrow.up")
                 }
-                .tint(.accentColor)
+                .tint(AppTheme.accent)
             }
         }
     }

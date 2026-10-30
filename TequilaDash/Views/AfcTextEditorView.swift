@@ -24,7 +24,7 @@ struct AfcTextEditorView: View {
                 } else if let errorText {
                     VStack(spacing: 12) {
                         Image(systemName: "info.circle")
-                            .font(.largeTitle).foregroundStyle(.orange)
+                            .font(.largeTitle).foregroundStyle(AppTheme.pending)
                         Text(errorText).font(.callout).foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }

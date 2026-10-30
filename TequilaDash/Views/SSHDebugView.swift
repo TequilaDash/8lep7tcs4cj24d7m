@@ -68,14 +68,14 @@ struct SSHDebugView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(service.isRunning ? Color.green : Color.secondary)
+                            .fill(service.isRunning ? AppTheme.success : Color.secondary)
                             .frame(width: 8, height: 8)
                         Text(
                             service.isRunning ? "服务运行中（局域网可达）"
                             : service.hasSetPassword ? "服务未启动"
                             : "请先设置 SSH 密码")
                             .font(.subheadline)
-                            .foregroundColor(service.isRunning ? .green : .secondary)
+                            .foregroundColor(service.isRunning ? AppTheme.success : .secondary)
                     }
                     if service.isRunning {
                         Text(service.connectHint)
@@ -129,7 +129,7 @@ struct SSHDebugView: View {
                         Text("重置密码（回到初始设置）")
                     }
                 }
-                .tint(.orange)
+                .tint(AppTheme.pending)
                 .disabled(service.isRunning)
             } footer: {
                 if service.isRunning {

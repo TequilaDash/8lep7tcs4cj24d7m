@@ -313,7 +313,7 @@ struct GestaltView: View {
         Section {
             HStack(spacing: 12) {
                 Image(systemName: MCMIntegration.isMobileHouseArrest ? "checkmark.shield.fill" : "exclamationmark.shield")
-                    .foregroundStyle(MCMIntegration.isMobileHouseArrest ? .green : .orange)
+                    .foregroundStyle(MCMIntegration.isMobileHouseArrest ? AppTheme.success : AppTheme.pending)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(MCMIntegration.isMobileHouseArrest ? "MHA 身份已生效" : "非 MHA 构建")
                         .font(.subheadline).bold()
@@ -332,7 +332,7 @@ struct GestaltView: View {
                         .font(.caption2).foregroundStyle(.secondary)
                     Text(MCMIntegration.signedCodeIdentifier)
                         .font(.caption.monospaced())
-                        .foregroundStyle(MCMIntegration.isMobileHouseArrest ? .green : .orange)
+                        .foregroundStyle(MCMIntegration.isMobileHouseArrest ? AppTheme.success : AppTheme.pending)
                         .textSelection(.enabled)
                 }
             }
@@ -585,7 +585,7 @@ struct GestaltView: View {
                     Label("Sandbox Extension", systemImage: "key.fill")
                     Spacer()
                     Text(model.hasExtension ? "Active" : "None")
-                        .foregroundStyle(model.hasExtension ? .green : .secondary)
+                        .foregroundStyle(model.hasExtension ? AppTheme.success : .secondary)
                         .font(.caption)
                 }
                 HStack {

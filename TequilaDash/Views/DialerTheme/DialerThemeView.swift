@@ -360,12 +360,12 @@ struct DialerThemeView: View {
                 LabeledContent("原生备份") {
                     Text(status.hasBackup ? "已备份" : "未备份")
                         .font(.subheadline)
-                        .foregroundStyle(status.hasBackup ? .green : .secondary)
+                        .foregroundStyle(status.hasBackup ? AppTheme.success : .secondary)
                 }
             } else {
                 InfoActionCard(
                     icon: "info.circle",
-                    iconTint: .orange,
+                    iconTint: AppTheme.pending,
                     title: "未定位到电话容器",
                     message: "请确认设备可使用电话功能，并打开一次拨号键盘让系统生成缓存，然后点右上角刷新重试.",
                     actionTitle: "重新扫描",

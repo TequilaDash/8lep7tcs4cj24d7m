@@ -25,11 +25,11 @@ struct MDMManageView: View {
                         // v0.3.699：区块级加载行收口到共享 AppLoadingRow（.block 档）.
                         AppLoadingRow(title: "正在逐层尝试逃逸策略…", level: .block)
                     } else if let m = escapeMethod {
-                        Text("逃逸成功：\(m)").font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        Text("逃逸成功：\(m)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.success)
                         Text(escapeTarget ?? "").font(.caption2.monospaced()).foregroundStyle(.secondary)
                     } else {
                         Text("未逃逸（点击下方「检测逃逸」尝试 5 层策略）")
-                            .font(.caption).foregroundStyle(.orange)
+                            .font(.caption).foregroundStyle(AppTheme.pending)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,12 +42,12 @@ struct MDMManageView: View {
                     ForEach(fileStates, id: \.name) { f in
                         HStack {
                             Image(systemName: f.present ? "doc.text.fill" : "doc")
-                                .foregroundStyle(f.present ? .orange : .secondary)
+                                .foregroundStyle(f.present ? AppTheme.pending : .secondary)
                             Text(f.name).font(.footnote.monospaced())
                             Spacer()
                             Text(f.present ? "存在" : "未预置")
                                 .font(.caption2)
-                                .foregroundStyle(f.present ? .orange : .secondary)
+                                .foregroundStyle(f.present ? AppTheme.pending : .secondary)
                         }
                     }
                 }

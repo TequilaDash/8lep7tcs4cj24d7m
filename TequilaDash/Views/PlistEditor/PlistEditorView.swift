@@ -59,7 +59,7 @@ struct PlistEditorView: View {
         } else if vm.errorMessage != nil {
             InfoActionCard(
                 icon: "info.circle",
-                iconTint: .orange,
+                iconTint: AppTheme.pending,
                 title: "无法解析这个 plist",
                 message: vm.errorMessage ?? ""
             )

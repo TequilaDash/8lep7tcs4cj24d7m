@@ -144,7 +144,7 @@ struct FileBrowserView: View {
                     Section {
                         InfoActionCard(
                             icon: "info.circle",
-                            iconTint: .orange,
+                            iconTint: AppTheme.pending,
                             title: "无法打开目录",
                             message: error,
                             actionTitle: "重试",

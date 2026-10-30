@@ -345,7 +345,7 @@ struct CertificateView: View {
         let isOK = msg.hasPrefix("[完成]")
         Text(msg)
             .font(.caption)
-            .foregroundStyle(isOK ? Color.green : Color.orange)
+            .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
             .padding(.horizontal)
     }
 
@@ -372,11 +372,11 @@ struct CertificateView: View {
             if certStore.hasCert {
                 Label(certStore.localCertSummary, systemImage: "checkmark.seal.fill")
                     .font(.footnote)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.success)
             } else {
                 Label("未设置本地签名证书", systemImage: "info.circle")
                     .font(.footnote)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppTheme.pending)
             }
             Button {
                 showP12Picker = true
@@ -421,7 +421,7 @@ struct CertificateView: View {
             } label: {
                 Label("移出白名单", systemImage: "xmark.seal")
             }
-            .tint(.orange)
+            .tint(AppTheme.pending)
         }
     }
 
@@ -472,7 +472,7 @@ struct CertificateView: View {
                     // Step 3 批 6-B：与左侧「白名单」同页并列，不再保留非档位的 9 / 4；
                     // 归 `.regular` 档（caption + 10 / 5），字重 `.bold` 与底色 16% 用覆盖项钉住.
                     SizePill(text: "已过期",
-                             tint: .orange,
+                             tint: AppTheme.pending,
                              level: .regular,
                              weight: .bold,
                              fillOpacity: 0.16)

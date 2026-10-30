@@ -154,7 +154,7 @@ struct LiveCleanTabView: View {
                     Section {
                         InfoActionCard(
                             icon: vm.discoveryError != nil ? "info.circle" : "checkmark.circle.fill",
-                            iconTint: vm.discoveryError != nil ? .orange : .green,
+                            iconTint: vm.discoveryError != nil ? AppTheme.pending : AppTheme.success,
                             title: vm.discoveryError != nil ? "扫描失败" : "未找到应用",
                             message: vm.discoveryError ?? "LiveContainer 内未找到已安装的应用."
                         )
@@ -291,7 +291,7 @@ struct SharedAppLimitBanner: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: supported ? "person.2" : "person.2.slash")
                 .font(.title3)
-                .foregroundColor(supported ? .green : .orange)
+                .foregroundColor(supported ? AppTheme.success : AppTheme.pending)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
                 if supported {

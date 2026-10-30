@@ -69,7 +69,7 @@ struct AddAccountSheet: View {
                     Section {
                         Label("SAP 资产缺失，登录会失败", systemImage: "info.circle")
                             .font(.footnote)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppTheme.pending)
                     }
                 }
 

@@ -244,7 +244,7 @@ struct SettingsForm: View {
                 if certStore.hasCert {
                     Label("证书已创建\(certStore.teamId.map { " · Team \($0)" } ?? "")",
                           systemImage: "checkmark.seal.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(AppTheme.success)
                     Button {
                         certTask = Task { await runCertCreation() }
                     } label: {

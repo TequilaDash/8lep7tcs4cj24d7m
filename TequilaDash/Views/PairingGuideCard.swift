@@ -18,7 +18,7 @@ struct PairingGuideCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 AppRowIcon(systemName: "info.circle",
-                           tint: .orange, symbolSize: 20, frameSize: 40)
+                           tint: AppTheme.pending, symbolSize: 20, frameSize: 40)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("配对文件未导入")
                         .font(.headline)

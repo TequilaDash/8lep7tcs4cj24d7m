@@ -65,7 +65,7 @@ struct PairingInstallView: View {
                 Section {
                     InfoActionCard(
                         icon: "checkmark.seal.fill",
-                        iconTint: .green,
+                        iconTint: AppTheme.success,
                         title: "完成",
                         message: success
                     )

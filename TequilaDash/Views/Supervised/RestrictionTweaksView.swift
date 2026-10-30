@@ -129,7 +129,7 @@ struct RestrictionTweaksView: View {
                                         showWarning = true
                                     } label: {
                                         Image(systemName: "info.circle")
-                                            .foregroundColor(.orange)
+                                            .foregroundColor(AppTheme.pending)
                                     }
                                     .buttonStyle(.borderless)
                                 }
