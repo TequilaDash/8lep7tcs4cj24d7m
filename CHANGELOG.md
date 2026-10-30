@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.724] - 2026-10-30
+
+### 修复
+
+- **配对文件导入只认 RSD 远程配对格式**。旧判据把「经典 lockdown 配对文件」也放行了
+  （只要求含 `DeviceCertificate` 或 `identifier` + `public_key`），但隧道只认
+  `RpPairingFile`。经典文件里没有 `public_key`，落盘之后每次建隧道都报
+  `missing field public_key`，用户看到的是隧道功能全线失败，完全不知道是配对文件格式不对。
+  现在：经典格式当场拒收并说明原因；其余格式先写临时文件、用 Rust 侧真解析一遍，
+  解析不过就丢弃临时文件（**不动盘上原来能用的配对文件**），解析通过才原子替换。
+  无线配对流程落盘后同样复验一次，写出不完整记录时当场报错。
+- Rust 侧的 plist 字段错误（`missing field public_key` / `private_key` / `identifier`）
+  翻成人话再上屏，诊断页与导入两条路共用这一条。
+- 配对文件解析探针抽出 `_parseProbeAtPath:`，可对任意路径做一次纯内存解析。
+
+### 变更
+
+- **`List` 里裸 `Button` 导致的双层蓝**：SwiftUI 会把裸 `Button` 的 label 整体套 accent 前景，
+  于是 `.primary` 变成深蓝、`.secondary` 变成同色淡化的浅蓝（真机像素实测 `#3B85F0` 与
+  `#98BFE6`）。配对页两个导入按钮已加 `.buttonStyle(.plain)`，导入行图标从签名粉改为 accent。
+- IPA 侧载页删除正文里重复的「自动登录」开关，只保留导航栏「更多」菜单里的入口。
+- 属性胶囊族收敛：价格 / 体积 / 日期 / 区域 / 格式一律 `.secondary`，只有版本号留 accent。
+- 版本号 0.3.724（build 1013）。
+
 ## [0.3.723] - 2026-10-30
 
 ### 新增

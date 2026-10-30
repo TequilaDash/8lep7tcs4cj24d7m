@@ -518,6 +518,12 @@ struct PairingSetupView: View {
                 self.wirelessDeviceName = deviceName.isEmpty ? "设备" : deviceName
                 self.wirelessBroadcastErrorCode = nil
                 self.keepAlive.stop()
+                // 落盘后立刻让 Rust 侧真解析一遍：设备写出不完整记录的实例是存在的，
+                // 解析不过就当场报错，别等用户到隧道功能里才看到「missing field public_key」.
+                if let probe = TunnelContext.shared.pairingFileParseError {
+                    self.wirelessDeviceName = nil
+                    self.wirelessError = "配对文件已写入但无法解析：\(probe)"
+                }
             } else {
                 self.wirelessError = errorMsg.isEmpty ? "配对失败，请重试." : errorMsg
             }

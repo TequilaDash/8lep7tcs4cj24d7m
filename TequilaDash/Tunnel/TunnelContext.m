@@ -104,17 +104,34 @@
 /// 抽成私有方法是为了让上面两个属性共用同一次解析结果语义
 /// （诊断页会连着读两次）。
 - (NSString *)_pairingParseProbe {
-    NSString *path = self._pairingFileURL.path;
+    return [self _parseProbeAtPath:self._pairingFileURL.path];
+}
+
+/// 同一套解析探针，作用于任意路径.
+///
+/// 导入时先验临时文件，避免「格式不对的文件把原来能用的配对文件冲掉」.
+- (NSString *)_parseProbeAtPath:(NSString *)path {
     if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
         return @"配对文件不存在";
     }
     struct RpPairingFileHandle *pf = NULL;
     struct IdeviceFfiError *err = rp_pairing_file_read(path.fileSystemRepresentation, &pf);
     if (err) {
-        NSString *msg = [NSString stringWithFormat:@"%s (code %d)", err->message, err->code];
+        NSString *raw = [NSString stringWithFormat:@"%s (code %d)", err->message, err->code];
         idevice_error_free(err);
         if (pf) rp_pairing_file_free(pf);
-        return msg;
+        // Rust 侧的 plist 字段错误直接抛英文串，用户看不懂。这里翻成人话，
+        // 诊断页与导入两条路都吃这一条.
+        if ([raw containsString:@"missing field public_key"]) {
+            return @"缺少 public_key：这是经典 lockdown 配对文件，隧道需要 RSD 远程配对文件";
+        }
+        if ([raw containsString:@"missing field private_key"]) {
+            return @"缺少 private_key：配对文件不完整";
+        }
+        if ([raw containsString:@"missing field identifier"]) {
+            return @"缺少 identifier：配对文件不完整";
+        }
+        return raw;
     }
     if (pf) rp_pairing_file_free(pf);
     return nil;
@@ -133,13 +150,48 @@
 }
 
 - (BOOL)savePairingFile:(NSString *)contents error:(NSError **)error {
-    BOOL looksLikePairing = [contents containsString:@"DeviceCertificate"]
-        || ([contents containsString:@"identifier"] && [contents containsString:@"public_key"]);
-    if (!looksLikePairing) {
-        if (error) *error = [self _error:@"That file is not a valid pairing file." code:-2];
+    // v0.3.724：旧判据把「经典 lockdown 配对文件」也放行了.
+    // 经典文件里有 DeviceCertificate / HostPrivateKey，**没有** public_key / private_key，
+    // 而隧道只认 RSD 远程配对格式（RpPairingFile）。放行之后 rp_pairing_file_read 报
+    // 「missing field public_key」，用户看到的是隧道功能全线失败，完全不知道是配对文件格式不对.
+    // 现在：经典格式当场拒收并说清原因；其余格式先写临时文件、用 Rust 侧真解析一遍，
+    // 解析不过就丢弃临时文件（不动盘上原有配对文件），解析通过才替换.
+    BOOL hasPublicKey = [contents containsString:@"public_key"];
+    BOOL hasIdentifier = [contents containsString:@"identifier"];
+    if (!hasPublicKey || !hasIdentifier) {
+        BOOL classic = [contents containsString:@"DeviceCertificate"]
+            || [contents containsString:@"HostPrivateKey"];
+        NSString *msg = classic
+            ? @"这是经典 lockdown 配对文件. 隧道需要 RSD 远程配对文件（含 public_key / private_key / identifier）."
+            : @"配对文件缺少 public_key 或 identifier，不是有效的 RSD 远程配对文件.";
+        if (error) *error = [self _error:msg code:-2];
         return NO;
     }
-    return [contents writeToURL:self._pairingFileURL atomically:YES encoding:NSUTF8StringEncoding error:error];
+
+    NSString *tmpPath = [self._pairingFileURL.path stringByAppendingString:@".import"];
+    NSError *writeError = nil;
+    if (![contents writeToFile:tmpPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
+        if (error) *error = writeError;
+        return NO;
+    }
+
+    NSString *probe = [self _parseProbeAtPath:tmpPath];
+    if (probe) {
+        [NSFileManager.defaultManager removeItemAtPath:tmpPath error:nil];
+        NSString *msg = [NSString stringWithFormat:@"配对文件无法解析：%@", probe];
+        if (error) *error = [self _error:msg code:-2];
+        return NO;
+    }
+
+    NSString *dstPath = self._pairingFileURL.path;
+    [NSFileManager.defaultManager removeItemAtPath:dstPath error:nil];
+    NSError *moveError = nil;
+    if (![NSFileManager.defaultManager moveItemAtPath:tmpPath toPath:dstPath error:&moveError]) {
+        [NSFileManager.defaultManager removeItemAtPath:tmpPath error:nil];
+        if (error) *error = moveError;
+        return NO;
+    }
+    return YES;
 }
 
 - (BOOL)resetPairingFileWithError:(NSError **)error {
