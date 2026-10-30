@@ -501,7 +501,13 @@ final class JITEnableService: Sendable {
                     throw error(from: ffiError, fallback: "连接调试代理失败")
                 }
             } catch let cdError {
-                throw original ?? cdError
+                // 兜底自己也失败时，必须把两边的原因都交出去：否则用户看到的还是老路径的
+                // ServiceNotFound，会误判成「兜底没生效」，排障又退回原点.
+                TunnelDiagnostics.fail("JIT CoreDevice 兜底", error: cdError)
+                if let original {
+                    throw makeError("\(original.localizedDescription)（CoreDevice 兜底也失败：\(cdError.localizedDescription)）")
+                }
+                throw cdError
             }
         }
         defer { debug_proxy_free(debugProxy) }
