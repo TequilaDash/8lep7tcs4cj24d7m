@@ -138,12 +138,41 @@ final class DeviceControlService {
     ///   **无回退** ⇒ 失败时**重试 3 次毫无意义**（只是白等 0.9s）；
     /// - 两个内置模块 / 进程管理 / 虚拟定位停止 / 拨号器主题重启电话 / IPCC 重启 CommCenter /
     ///   设备控制重启 SpringBoard **共用同一套 `app_service` 底座** ⇒ 它不可用时这些会一起失败。
+    // MARK: 服务表预检（与 Views/ProcessManagerService.swift:197-214 同一口径）
+
+    /// RSD 服务表里的 CoreDevice 入口名（= 上游 `AppServiceClient::rsd_service_name()`）.
+    private static let appServiceServiceName = "com.apple.coredevice.appservice"
+
+    /// 预检：`app_service` 是否在**本次** RSD 握手的服务表里.
+    ///
+    /// `rsd_service_available` 只做 `handshake.services.contains_key(name)`：不连设备、
+    /// 不发请求，与 `app_service_connect_rsd` 读的是**同一张**表 ⇒ 能精确预测会不会抛
+    /// `ServiceNotFound`(21). 查不到时直接给出人话，而不是让用户看一条裸错误码.
+    private func appServiceAvailable(handshake: OpaquePointer) -> Bool {
+        var available = false
+        if let ffiError = Self.appServiceServiceName.withCString({
+            rsd_service_available(handshake, $0, &available)
+        }) {
+            idevice_error_free(ffiError)
+            return false
+        }
+        return available
+    }
+
+    /// 服务不在表里时的统一文案（设备侧状态，不是本 App 缺陷；见 `withAppService` 注释）.
+    private func appServiceMissing() -> NSError {
+        makeError("设备当前没有广播应用服务（app_service），本次隧道里查不到它，重试也不会成功.该服务随 CoreDevice 族下发，通常需要开发者磁盘映像（DDI）就绪；若已就绪仍失败，请重启设备后再试.")
+    }
+
+    // MARK: 应用服务
     private func withAppService<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
         var tunnel = try createTunnel(hostname: "TequilaDashDevice")
         defer { tunnel.free() }
         guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
             throw makeError("隧道未建立")
         }
+        // 先查表再连：服务根本不在表里时，3 次退避重试只是白等 0.9s（见下方注释）.
+        guard appServiceAvailable(handshake: handshake) else { throw appServiceMissing() }
         var lastError: NSError?
         for attempt in 0..<3 {
             var appService: OpaquePointer?
@@ -233,6 +262,7 @@ final class DeviceControlService {
         guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
             throw makeError("隧道未建立")
         }
+        guard appServiceAvailable(handshake: handshake) else { throw appServiceMissing() }
         var appService: OpaquePointer?
         var connectError: NSError?
         // 注意： 同 `withAppService`：这里的 3 次重试**覆盖不了任何东西** ——
