@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.725] - 2026-10-30
+
+### 修复
+
+- **RPPairing 端口不再写死 49152**。iOS 27.2 起设备端 Remote Pairing 端口不再保证是 49152，
+  全仓 24 处建隧道代码把它写死，一旦端口变了，所有依赖配对连接的功能会整体连不上，
+  而用户只看到「隧道建不起来」，看不出是端口问题。
+  现在改为三级解析：手动覆盖（`rppairing.portOverride`）→ Bonjour 发现 `_remotepairing._tcp.`
+  （缓存 60 秒）→ 回落 49152。任何一级失败都退回旧行为，因此不会比之前更差。
+- 端口解析**不阻塞**：`RemotePairingPort.current` 只读缓存，解析在后台线程跑。
+  缓存过期时会顺手踢一次后台解析，下次调用就能拿到新端口。
+- `TunnelContext.m` 新增 `TDRPPairingPort()`，按同一套策略从 UserDefaults 读取，
+  ObjC 侧不再直接写死端口。
+
+### 其它
+
+- `Info.plist` 的 `NSBonjourServices` 补 `_remotepairing._tcp`。
+- 解析结果与来源会记进隧道日志（「配对端口」条目）。
+
+
 ## [0.3.724] - 2026-10-30
 
 ### 修复
