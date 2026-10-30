@@ -151,6 +151,7 @@ enum ActivationService {
         }
 
         var lastError: String?
+        TunnelDiagnostics.begin("激活隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = hostname.withCString { hostname in
@@ -172,6 +173,7 @@ enum ActivationService {
             if let ffiError {
                 lastError = message(from: ffiError, fallback: "创建开发者隧道失败")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("激活隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -180,6 +182,7 @@ enum ActivationService {
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("激活隧道", code: -1, message: lastError)
         throw DeactivateError.tunnelFailed(lastError ?? "创建开发者隧道失败")
     }
 

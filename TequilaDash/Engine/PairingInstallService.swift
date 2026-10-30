@@ -140,6 +140,7 @@ final class PairingInstallService: Sendable {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("配对安装隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = "TequilaDashPairingInstall".withCString { hostname in
@@ -161,6 +162,7 @@ final class PairingInstallService: Sendable {
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("配对安装隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -171,6 +173,7 @@ final class PairingInstallService: Sendable {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
+        TunnelDiagnostics.fail("配对安装隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 

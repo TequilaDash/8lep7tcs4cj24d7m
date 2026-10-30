@@ -84,6 +84,7 @@ final class AFCService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("AFC 隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = "TequilaDashAFC".withCString { hn in
@@ -105,6 +106,7 @@ final class AFCService {
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("AFC 隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -115,6 +117,7 @@ final class AFCService {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
+        TunnelDiagnostics.fail("AFC 隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 

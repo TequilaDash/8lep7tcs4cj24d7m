@@ -236,6 +236,7 @@ enum DDIMountProbe {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("DDI 探针隧道")
         for attempt in 0..<3 {
             var candidate = TunnelHandles()
             // v0.3.643：改用**独立** hostname。
@@ -272,6 +273,7 @@ enum DDIMountProbe {
                 lastError = probeError("code=\(code) \(message)")
             } else if candidate.adapter != nil, candidate.handshake != nil {
                 tunnel = candidate
+                TunnelDiagnostics.succeed("DDI 探针隧道")
                 return
             } else {
                 var incomplete = candidate
@@ -280,6 +282,7 @@ enum DDIMountProbe {
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("DDI 探针隧道", error: lastError)
         throw lastError ?? probeError("创建开发者隧道失败")
     }
 
@@ -311,6 +314,8 @@ enum DDIMountProbe {
             }
         }
         out.append("  · 服务总数 = \(total)（隧道内受信 RSD；直连 untrusted RSD 只有 7 个）")
+        // v0.3.723：服务表同时写进隧道日志，SSH `tunnellog` 与界面「隧道日志」页都能直接看.
+        TunnelDiagnostics.noteServiceTable(names)
 
         // 判据 A：本探针要连的服务在不在
         let mounterName = "com.apple.mobile.mobile_image_mounter.shim.remote"

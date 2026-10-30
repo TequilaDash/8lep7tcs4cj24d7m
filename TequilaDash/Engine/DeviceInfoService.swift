@@ -514,6 +514,7 @@ enum DeviceInfoService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("设备信息隧道")
         for _ in 0..<3 {
             var tunnel = TunnelHandles()
             let e = "TequilaDashDeviceInfo".withCString { hn in
@@ -540,11 +541,13 @@ enum DeviceInfoService {
                                     userInfo: [NSLocalizedDescriptionKey:
                                         message.isEmpty ? "创建隧道失败" : "创建隧道失败：" + message])
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("设备信息隧道")
                 return tunnel
             }
             if let h = tunnel.handshake { rsd_handshake_free(h) }
             if let a = tunnel.adapter { adapter_free(a) }
         }
+        TunnelDiagnostics.fail("设备信息隧道", error: lastError)
         throw lastError ?? NSError(domain: "DeviceInfo", code: -6, userInfo: [NSLocalizedDescriptionKey: "创建隧道失败"])
     }
 

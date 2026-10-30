@@ -118,6 +118,7 @@ enum ProvisioningProfileStore {
 
         var adapter: OpaquePointer?
         var handshake: OpaquePointer?
+        TunnelDiagnostics.begin("描述文件库隧道")
         let ffiError = "TequilaDashProfiles".withCString { hostname in
             withUnsafePointer(to: &addr) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -139,11 +140,14 @@ enum ProvisioningProfileStore {
             // ffiError，所以必须先建成 NSError 复用，不能调两次（会 double free）.
             let failure = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             LoginLogger.shared.log("[描述文件] 建隧道失败（hostname=TequilaDashProfiles）：\(failure.localizedDescription)")
+            TunnelDiagnostics.fail("描述文件库隧道", error: failure)
             throw failure
         }
         guard let adapter, let handshake else {
+            TunnelDiagnostics.fail("描述文件库隧道", error: nil)
             throw makeError("创建开发者隧道失败")
         }
+        TunnelDiagnostics.succeed("描述文件库隧道")
         return (adapter, handshake)
     }
 

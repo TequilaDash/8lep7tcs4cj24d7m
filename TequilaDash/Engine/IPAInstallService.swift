@@ -1113,6 +1113,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("安装隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = "TequilaDashIPAInstall".withCString { hostname in
@@ -1134,6 +1135,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("安装隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -1144,6 +1146,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
+        TunnelDiagnostics.fail("安装隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 }

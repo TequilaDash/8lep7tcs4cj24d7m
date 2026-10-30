@@ -489,6 +489,30 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let all = LoginLogger.shared.fullLog().components(separatedBy: "\n")
             let tail = all.suffix(max(1, min(n, 5000))).joined(separator: "\n")
             return tail.isEmpty ? "（登录日志为空）" : tail
+        case "tunnellog":
+            // ▸ 隧道诊断日志（v0.3.723）.
+            //
+            // 与界面「隧道日志」页（Views/TunnelLogView.swift）读**同一份**数据：
+            // LoginLogger 的 .tunnelCellular 分类 —— 不另开文件、不另开分类.
+            // 写入方是 Engine/TunnelDiagnostics.swift：所有走 RSD 的建隧道入口
+            // （AFC / 设备信息 / 安装 / 崩溃日志 / 定位 / 描述文件 …）都在关键节点留了一条.
+            //
+            // 用法：
+            //   tunnellog         末尾 200 行（默认）
+            //   tunnellog 50      末尾 50 行
+            //   tunnellog clear   清空隧道日志（只清这一个分类，不碰登录日志）
+            let arg = parts.count > 1 ? parts[1].lowercased() : ""
+            if arg == "clear" {
+                LoginLogger.shared.clear(categories: [.tunnelCellular])
+                return "已清空隧道日志（分类 \(LoginLogger.Category.tunnelCellular.rawValue)）"
+            }
+            let keep = min(max(Int(arg) ?? 200, 1), 5000)
+            let lines = LoginLogger.shared.recentLines(keep, categories: [.tunnelCellular])
+            guard !lines.isEmpty else {
+                return "（隧道日志为空）尚未触发任何隧道操作，或刚被清空.\n"
+                    + "先执行 ddiprobe，或打开任意需要配对的功能（设备信息 / 文件浏览 / 安装）再看"
+            }
+            return "=== 隧道诊断日志（末尾 \(keep) 行）===\n" + lines.joined(separator: "\n")
         case "runlog":
             // 模块运行日志：run.log（宿主+子进程）+ data/stderr.log（进程内 Go）
             let n = Int(parts.count > 1 ? parts[1] : "40") ?? 40
@@ -830,6 +854,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
       cdprobe         只读诊断：CoreDeviceProxy 隧道第二 RSD 握手 + app_service 端到端（结果 → LoginLogs/cd_probe.txt）
       modules         已安装模块列表
       logs [n]        登录日志末尾 n 行（默认 30，最多 5000）
+      tunnellog [n]   隧道诊断日志末尾 n 行（默认 200）；tunnellog clear 清空
       runlog [n]      二进制模块运行日志末尾 n 行（默认 40）
       caplog [n]      宿主能力调用日志末尾 n 行（默认 60），含入参与返回原文
       cap <能力名> [JSON]   直接调一次宿主能力（同分发器，进 caplog），例: cap host.version / cap afc.list '{"path":"/DCIM"}'

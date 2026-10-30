@@ -115,6 +115,7 @@ final class ScreenshotService: Sendable {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
+        TunnelDiagnostics.begin("截图隧道")
         var lastError: NSError?
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
@@ -136,6 +137,7 @@ final class ScreenshotService: Sendable {
             }
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+                TunnelDiagnostics.succeed("截图隧道")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
                 return tunnel
             } else {
@@ -147,6 +149,7 @@ final class ScreenshotService: Sendable {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
+        TunnelDiagnostics.fail("截图隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 

@@ -100,6 +100,7 @@ enum DeviceEnrichService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("设备增强隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let e = "TequilaDashEnrich".withCString { hn in
@@ -114,6 +115,7 @@ enum DeviceEnrichService {
             if let e {
                 lastError = ffiError(e, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("设备增强隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -122,6 +124,7 @@ enum DeviceEnrichService {
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("设备增强隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败")
     }
 

@@ -1410,6 +1410,7 @@ enum FileSharingService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("文件共享隧道")
         for _ in 0..<3 {
             var tunnel = TunnelHandles()
             let e = "TequilaDashFileShare".withCString { hn in
@@ -1427,6 +1428,7 @@ enum FileSharingService {
                 // 端口不通 / 隧道未就绪）压成同一句话，重试 3 次后用户拿到的还是它.
                 lastError = error(from: e, fallback: "建隧道失败")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("文件共享隧道")
                 return tunnel
             }
             if let h = tunnel.handshake { rsd_handshake_free(h) }
@@ -1434,6 +1436,7 @@ enum FileSharingService {
         }
         // v0.3.376：这条路径以前失败也不留痕，用户只能看到「一直读取中」.
         LoginLogger.shared.log("[文件共享] 建隧道失败（已重试 3 次）：\(lastError?.localizedDescription ?? "未知")")
+        TunnelDiagnostics.fail("文件共享隧道", error: lastError)
         throw lastError ?? makeError("建隧道失败")
     }
 }

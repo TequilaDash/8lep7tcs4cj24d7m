@@ -168,6 +168,7 @@ enum IconCleanupService {
         }
 
         var lastError: String?
+        TunnelDiagnostics.begin("图标清理隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = hostname.withCString { hostname in
@@ -189,6 +190,7 @@ enum IconCleanupService {
             if let ffiError {
                 lastError = message(from: ffiError, fallback: "创建开发者隧道失败")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("图标清理隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -197,6 +199,7 @@ enum IconCleanupService {
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("图标清理隧道", code: -1, message: lastError)
         throw CleanupError.tunnelFailed(lastError ?? "创建开发者隧道失败")
     }
 

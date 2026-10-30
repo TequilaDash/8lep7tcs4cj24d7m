@@ -678,6 +678,7 @@ enum I4PairingService {
         //   ⑤ 记录方式：每次配对在 onLog 里已有「建 RSD 隧道」一条，把它的时间戳与失败那条的时间戳
         //      相减即得上限；三次重试间隔合计 0.9 秒可忽略.
         var lastError: String?
+        TunnelDiagnostics.begin("爱思配对隧道")
         for attempt in 0..<3 {
             var adapter: OpaquePointer?
             var handshake: OpaquePointer?
@@ -694,12 +695,14 @@ enum I4PairingService {
                 if let handshake { rsd_handshake_free(handshake) }
                 if let adapter { adapter_free(adapter) }
             } else if let adapter, let handshake {
+                TunnelDiagnostics.succeed("爱思配对隧道")
                 return PairTunnel(adapter: adapter, handshake: handshake)
             } else {
                 lastError = "隧道句柄为空"
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("爱思配对隧道", code: -1, message: lastError)
         throw PairingError.pairTransportFailed(
             "创建 RSD 隧道失败（请确认 LocalDevVPN 已连接）：\(lastError ?? "未知")")
     }

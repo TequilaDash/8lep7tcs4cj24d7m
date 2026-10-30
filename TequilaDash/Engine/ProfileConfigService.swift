@@ -86,6 +86,7 @@ enum ProfileConfigService {
 
         var adapter: OpaquePointer?
         var handshake: OpaquePointer?
+        TunnelDiagnostics.begin("描述文件配置隧道")
         let ffiError = "TequilaDashProfiles".withCString { hostname in
             withUnsafePointer(to: &addr) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -103,11 +104,15 @@ enum ProfileConfigService {
             }
         }
         if let ffiError {
-            throw error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+            let failure = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+            TunnelDiagnostics.fail("描述文件配置隧道", error: failure)
+            throw failure
         }
         guard let adapter, let handshake else {
+            TunnelDiagnostics.fail("描述文件配置隧道", error: nil)
             throw makeError("创建开发者隧道失败")
         }
+        TunnelDiagnostics.succeed("描述文件配置隧道")
         return (adapter, handshake)
     }
 

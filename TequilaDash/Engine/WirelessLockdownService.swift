@@ -94,6 +94,7 @@ enum WirelessLockdownService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("无线 lockdown 隧道")
         for attempt in 0..<3 {
             var adapter: OpaquePointer?
             var handshake: OpaquePointer?
@@ -118,12 +119,14 @@ enum WirelessLockdownService {
                 if let handshake { rsd_handshake_free(handshake) }
                 if let adapter { adapter_free(adapter) }
             } else if let adapter, let handshake {
+                TunnelDiagnostics.succeed("无线 lockdown 隧道")
                 return Tunnel(adapter: adapter, handshake: handshake)
             } else {
                 lastError = makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("无线 lockdown 隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 

@@ -74,6 +74,7 @@ final class WiFiPowerBridge: @unchecked Sendable {
         // 3) rp_pairing 隧道（3 次退避）
         var created: (adapter: OpaquePointer, handshake: OpaquePointer)? = nil
         var lastError: NSError?
+        TunnelDiagnostics.begin("WiFi 电源隧道")
         for attempt in 0..<3 {
             var pairingFile: OpaquePointer?
             if let ffiError = pairingPath.withCString({ rp_pairing_file_read($0, &pairingFile) }) {
@@ -109,6 +110,7 @@ final class WiFiPowerBridge: @unchecked Sendable {
                 idevice_error_free(ffiError)
                 lastError = makeError("创建开发者隧道失败（attempt \(attempt)）")
             } else if let adapter, let handshake {
+                TunnelDiagnostics.succeed("WiFi 电源隧道")
                 created = (adapter, handshake)
                 break
             } else {
@@ -119,6 +121,7 @@ final class WiFiPowerBridge: @unchecked Sendable {
             usleep(useconds_t(300_000 * (attempt + 1)))
         }
         guard let (adapter, handshake) = created else {
+            TunnelDiagnostics.fail("WiFi 电源隧道", error: lastError)
             throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
         }
         stepLog("步骤2 隧道创建 [完成]（IP=\(deviceIP)）")

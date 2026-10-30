@@ -94,6 +94,7 @@ enum BatteryHealthService {
         }
 
         var lastError: NSError?
+        TunnelDiagnostics.begin("电池健康隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let e = "TequilaDashBattery".withCString { hn in
@@ -115,6 +116,7 @@ enum BatteryHealthService {
             if let e {
                 lastError = ffiError(e, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("电池健康隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -123,6 +125,7 @@ enum BatteryHealthService {
             }
             if attempt < 2 { usleep(useconds_t(300_000 * (attempt + 1))) }
         }
+        TunnelDiagnostics.fail("电池健康隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败")
     }
 

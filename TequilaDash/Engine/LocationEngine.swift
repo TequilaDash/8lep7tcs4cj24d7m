@@ -238,6 +238,7 @@ enum LocationEngine {
         // 建隧道：最多 3 次、短退避. Wi-Fi↔蜂窝切换等瞬时抖动会令 RPPairing 握手失败，
         // 重试后通常成功（与 JITEnableService / AFCService 等服务同款，见本仓既有模式）.
         var created = false
+        TunnelDiagnostics.begin("定位隧道")
         for attempt in 0..<3 {
             let providerError = withUnsafePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -257,6 +258,7 @@ enum LocationEngine {
                 idevice_error_free(providerError)
                 cleanup()
             } else {
+                TunnelDiagnostics.succeed("定位隧道")
                 created = true
                 break
             }

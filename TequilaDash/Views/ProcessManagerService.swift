@@ -133,6 +133,7 @@ final class ProcessManagerService: Sendable {
 
         // 隧道建立失败自动重试（最多 3 次、短退避）：对齐 DeviceControlService.
         var lastError: NSError?
+        TunnelDiagnostics.begin("进程管理隧道")
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
             let ffiError = hostname.withCString { hn in
@@ -154,6 +155,7 @@ final class ProcessManagerService: Sendable {
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                TunnelDiagnostics.succeed("进程管理隧道")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -164,6 +166,7 @@ final class ProcessManagerService: Sendable {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
+        TunnelDiagnostics.fail("进程管理隧道", error: lastError)
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
     }
 
