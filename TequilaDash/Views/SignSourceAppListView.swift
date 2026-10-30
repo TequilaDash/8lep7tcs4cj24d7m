@@ -630,12 +630,12 @@ struct SignSourceAppListView: View {
     /// 版本 / 大小 / 日期 —— 一行放不下由 `ChipFlow` 整块换行（与 `I4StoreFreeView` 同款）。
     private func chips(_ app: SignSourceApp) -> [ChipItem] {
         var out: [ChipItem] = []
-        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: AppTheme.categorySign)) }
+        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: AppTheme.accent)) }
         if let s = app.size, s > 0 {
-            out.append(ChipItem(text: IPADownloadLibrary.sizeText(Int64(s)), tint: AppTheme.success))
+            out.append(ChipItem(text: IPADownloadLibrary.sizeText(Int64(s)), tint: .secondary))
         }
         if let d = formattedVersionDate(app.versionDate) {
-            out.append(ChipItem(text: d, tint: AppTheme.pending))
+            out.append(ChipItem(text: d, tint: .secondary))
         }
         return out
     }

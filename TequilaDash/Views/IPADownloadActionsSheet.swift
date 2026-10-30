@@ -141,8 +141,8 @@ struct IPADownloadActionsSheet: View {
                     // 换行、不省略
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
-                    if let v = item.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload) }
-                    PackageChip(text: item.sizeText, tint: .green)
+                    if let v = item.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: AppTheme.accent) }
+                    PackageChip(text: item.sizeText, tint: .secondary)
                 }
             }
 

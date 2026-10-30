@@ -94,9 +94,9 @@ extension I4StoreFreeView {
                         ChipFlow(spacing: 6) {
                             PackageChip(text: "下架", tint: AppTheme.pending, horizontalPadding: 5)
                             if let v = app.displayVersion, !v.isEmpty {
-                                PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload, horizontalPadding: 5)
+                                PackageChip(text: "v\(v)", tint: AppTheme.accent, horizontalPadding: 5)
                             }
-                            if let s = app.sizeText { PackageChip(text: s, tint: .green, horizontalPadding: 5) }
+                            if let s = app.sizeText { PackageChip(text: s, tint: .secondary, horizontalPadding: 5) }
                         }
                         if let b = app.bundleID, !b.isEmpty {
                             Text(b).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -266,7 +266,7 @@ extension I4StoreFreeView {
     /// 付费榜是「¥ xx」—— 两者都是有效信息，照原样显示，不硬转成「免费」二字.
     private func nbChips(_ item: NBStoreRankClient.RankItem) -> [ChipItem] {
         var out: [ChipItem] = []
-        if let p = item.priceText, !p.isEmpty { out.append(ChipItem(text: p, tint: .orange)) }
+        if let p = item.priceText, !p.isEmpty { out.append(ChipItem(text: p, tint: .secondary)) }
         if let c = item.category, !c.isEmpty { out.append(ChipItem(text: c, tint: AppTheme.categoryDownload)) }
         return out
     }
@@ -431,8 +431,8 @@ extension I4StoreFreeView {
     /// 版本 / 大小 / 已签名 —— 用 `ForEach` 交给 `ChipFlow`，一行放不下就整块换行
     private func chips(_ app: I4PCStoreClient.I4App) -> [ChipItem] {
         var out: [ChipItem] = []
-        if let v = app.version { out.append(ChipItem(text: "v\(v)", tint: AppTheme.categoryDownload)) }
-        if let s = app.sizeText { out.append(ChipItem(text: s, tint: .green)) }
+        if let v = app.version { out.append(ChipItem(text: "v\(v)", tint: AppTheme.accent)) }
+        if let s = app.sizeText { out.append(ChipItem(text: s, tint: .secondary)) }
         if app.isSigned { out.append(ChipItem(text: "已签名", tint: .purple)) }
         return out
     }
@@ -512,9 +512,9 @@ extension I4StoreFreeView {
     /// 版本 / 大小 / 区域 —— 与爱思行的胶囊同款
     private func chips(_ app: NiuwaStoreClient.NiuwaApp) -> [ChipItem] {
         var out: [ChipItem] = []
-        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: AppTheme.categoryDownload)) }
-        if let s = app.sizeText, !s.isEmpty { out.append(ChipItem(text: s, tint: .green)) }
-        out.append(ChipItem(text: region.title, tint: .orange))
+        if let v = app.version, !v.isEmpty { out.append(ChipItem(text: "v\(v)", tint: AppTheme.accent)) }
+        if let s = app.sizeText, !s.isEmpty { out.append(ChipItem(text: s, tint: .secondary)) }
+        out.append(ChipItem(text: region.title, tint: .secondary))
         return out
     }
 

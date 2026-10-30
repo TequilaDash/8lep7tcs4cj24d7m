@@ -188,13 +188,13 @@ struct NBStoreDetailView: View {
 
                     HStack(spacing: 6) {
                         if let price = detail?.formattedPrice, !price.isEmpty {
-                            chip(price, AppTheme.accent)
+                            chip(price, .secondary)
                         }
                         if let v = detail?.version ?? versions.first?.version, !v.isEmpty {
-                            chip("v\(v)", .gray)
+                            chip("v\(v)", AppTheme.accent)
                         }
                         if let s = detail?.sizeText {
-                            chip(s, .green)
+                            chip(s, .secondary)
                         }
                     }
                 }
@@ -405,8 +405,8 @@ struct NBStoreDetailView: View {
                                 .lineLimit(1)
                             HStack(spacing: 6) {
                                 // 版本快照日：源数据本就是纯日期（无时刻），故用 `.day` 保留年份.
-                                if let t = DateText.string(from: v.releaseTime, style: .day) { chip(t, .gray) }
-                                if let s = v.sizeText, !s.isEmpty { chip(s, .green) }
+                                if let t = DateText.string(from: v.releaseTime, style: .day) { chip(t, .secondary) }
+                                if let s = v.sizeText, !s.isEmpty { chip(s, .secondary) }
                             }
                         }
                         Spacer(minLength: 6)

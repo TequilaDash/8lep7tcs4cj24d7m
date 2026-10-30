@@ -221,8 +221,8 @@ struct LiveCleanTabView: View {
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.green.opacity(0.18))
-                            .foregroundColor(.green)
+                            .background(Color.secondary.opacity(0.18))
+                            .foregroundColor(.secondary)
                             .clipShape(Capsule())
                     }
                 }

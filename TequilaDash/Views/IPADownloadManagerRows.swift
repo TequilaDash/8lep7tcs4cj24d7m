@@ -250,8 +250,8 @@ extension IPADownloadManagerView {
                         .font(AppFont.subheadlineEmphasis)
                         .lineLimit(2)
                     HStack(spacing: 6) {
-                        if let v = item.version { PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload) }
-                        PackageChip(text: item.sizeText, tint: AppTheme.success)
+                        if let v = item.version { PackageChip(text: "v\(v)", tint: AppTheme.accent) }
+                        PackageChip(text: item.sizeText, tint: .secondary)
                     }
                     // v0.3.363：包类型从胶囊同行里挪到**独立一行**。
                     // 原来和两个胶囊挤同一个 HStack，空间不够时被压成竖排窄列

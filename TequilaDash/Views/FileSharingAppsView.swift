@@ -238,10 +238,10 @@ struct FileSharingAppsView: View {
                     if !app.version.isEmpty {
                         tappableCapsule("v\(app.version)", tint: AppTheme.accent, app: app)
                     }
-                    tappableCapsule("应用 \(FileSharingService.formatMB(app.appSize))", tint: .green, app: app)
+                    tappableCapsule("应用 \(FileSharingService.formatMB(app.appSize))", tint: .secondary, app: app)
                 }
                 HStack(spacing: 5) {
-                    tappableCapsule(docCapsuleText(app), tint: .orange, app: app)
+                    tappableCapsule(docCapsuleText(app), tint: .secondary, app: app)
                 }
             }
             Spacer()
