@@ -96,6 +96,7 @@ struct KernelCacheView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                        .buttonStyle(.plain)
                 }
                 // 版本选择
                 if !firmwares.isEmpty {

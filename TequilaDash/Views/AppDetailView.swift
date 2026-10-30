@@ -127,6 +127,7 @@ struct AppDetailView: View {
                     Label("重置应用数据", systemImage: "trash.fill")
                         .foregroundColor(AppTheme.danger)
                 }
+                    .buttonStyle(.plain)
                 .disabled(!access.isGranted || isResetting)
             }
 

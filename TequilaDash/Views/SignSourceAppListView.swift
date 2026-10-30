@@ -788,8 +788,8 @@ struct SignSourceAppListView: View {
                 Text("跳转")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(AppTheme.categoryClean.opacity(0.16), in: Capsule())
-                    .foregroundStyle(AppTheme.categoryClean)
+                    .background(AppTheme.accent.opacity(0.16), in: Capsule())
+                    .foregroundStyle(AppTheme.accent)
             }
             .buttonStyle(.plain)
         }

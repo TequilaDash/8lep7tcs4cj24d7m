@@ -183,6 +183,7 @@ struct AppHideView: View {
                             }
                         }
                     }
+                        .buttonStyle(.plain)
                 }
             }
         }

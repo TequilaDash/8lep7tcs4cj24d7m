@@ -433,7 +433,7 @@ extension I4StoreFreeView {
         var out: [ChipItem] = []
         if let v = app.version { out.append(ChipItem(text: "v\(v)", tint: AppTheme.accent)) }
         if let s = app.sizeText { out.append(ChipItem(text: s, tint: .secondary)) }
-        if app.isSigned { out.append(ChipItem(text: "已签名", tint: .purple)) }
+        if app.isSigned { out.append(ChipItem(text: "已签名", tint: AppTheme.success)) }
         return out
     }
 

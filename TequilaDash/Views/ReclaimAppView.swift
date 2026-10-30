@@ -174,6 +174,7 @@ struct ReclaimAppView: View {
                 Label("备份数据", systemImage: "externaldrive.fill.badge.plus")
                     .foregroundColor(AppTheme.categoryClean)
             }
+                .buttonStyle(.plain)
             .disabled(!access.isGranted || backup.isBusy)
 
             backupStatus

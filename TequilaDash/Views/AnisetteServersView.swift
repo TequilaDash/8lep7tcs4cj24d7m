@@ -186,6 +186,7 @@ struct AnisetteServersView: View {
             Button("恢复内置默认") {
                 customClientInfo = ""
             }
+                .buttonStyle(.plain)
             .foregroundStyle(.secondary)
         }
     }

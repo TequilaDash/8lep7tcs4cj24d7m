@@ -28,7 +28,7 @@ import SwiftUI
 /// v0.3.599：**去棕 + 去悬浮球 banner**（用户原话：「我不喜欢棕色的颜色 主页你踩雷了 特别是你看
 /// "扩展与商店"那两个选区的颜色 你不许用棕色」「主页那个悬浮球背景还叠加一层 banner 看着怪别扭」）。
 /// - `categoryStore` 橙棕 `#C2620E` → 冷青蓝 `#0B8FC9`（「扩展与商店」两行随之去棕）。
-/// - `categoryAdvanced` 砖红 `#BF3A2B` → 正红 `#E5342B`（同属暖棕族，一并去棕）。
+/// - `categoryAdvanced` 已并入 `AppTheme.danger`（仓库只允许一个红，见 HARD-RULES 28）。
 /// - hero 卡片删除叠加的冷色渐变 banner 层。
 /// - 分组头竖条改用各分组模块色（不再统一蓝）。
 /// v0.3.219：Hero 换装 Metal 实时液态玻璃球（LiquidGlassOrbView + LiquidGlassOrb.metal）。

@@ -787,6 +787,7 @@ struct AppleIDPickerSheet: View {
                             }
                         }
                     }
+                        .buttonStyle(.plain)
                 }
             }
             .navigationTitle("选择 AppleID")

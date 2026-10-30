@@ -68,6 +68,7 @@ struct PiPKeepAliveView: View {
                         }
                     }
                 }
+                    .buttonStyle(.plain)
                 .tint(AppTheme.accent)
 
                 // 隐藏 / 显示（原版 0.1pt 技巧——缩 preferredContentSize 到不可见）

@@ -182,7 +182,7 @@ extension IPADownloadManagerView {
                     .font(AppFont.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(hasLink ? AppTheme.categoryClean : Color.secondary)
+            .foregroundStyle(hasLink ? AppTheme.success : Color.secondary)
             .disabled(!hasLink)
         }
     }

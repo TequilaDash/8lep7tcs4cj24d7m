@@ -292,7 +292,7 @@ struct AppStoreView: View {
                                 .foregroundStyle(genre == g ? Color.white : Color.primary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(genre == g ? AppTheme.categoryStore : Color(.tertiarySystemFill), in: Capsule())
+                                .background(genre == g ? AppTheme.accent : Color(.tertiarySystemFill), in: Capsule())
                         }
                         .buttonStyle(.plain)
                     }

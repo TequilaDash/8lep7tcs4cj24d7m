@@ -323,7 +323,7 @@ struct TreasureBoxView: View {
                                AppHaptics.tap()
                                onOpenI4Advanced()
                            },
-                           iconTint: AppTheme.categoryAdvanced)
+                           iconTint: AppModule.advanced.tint)
             // 安装爱思移动端：把爱思 9.0 的「安装爱思移动端」对话框移植过来.
             // 内嵌 IPA 是 FairPlay 加密包（cryptid=1），装前有诚实提示（见 I4MobileInstallView）.
             // 末行不附发丝分隔（组尾）.

@@ -369,6 +369,7 @@ struct ConfigurationsView: View {
                 }
                 .padding(.vertical, 2)
             }
+                .buttonStyle(.plain)
             .disabled(isBusy)
         } header: {
             Text("备份")

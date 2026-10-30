@@ -180,6 +180,7 @@ struct NotificationManageView: View {
                             }
                         }
                     }
+                        .buttonStyle(.plain)
                 }
             }
         }

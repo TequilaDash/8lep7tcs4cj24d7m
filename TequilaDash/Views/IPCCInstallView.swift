@@ -138,6 +138,7 @@ struct IPCCInstallView: View {
                         Label("重启蜂窝网络服务", systemImage: "arrow.clockwise.circle")
                     }
                 }
+                    .buttonStyle(.plain)
                 .disabled(commCenterBusy)
                 .foregroundColor(AppTheme.categoryDevice)
             } header: {

@@ -170,6 +170,7 @@ struct BluetoothPanelView: View {
                             }
                         }
                     }
+                        .buttonStyle(.plain)
                     .disabled(coordinator.connectedPeerID != nil)
                 }
             }
@@ -236,6 +237,7 @@ struct BluetoothPanelView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+                .buttonStyle(.plain)
         } footer: {
             Text("蓝牙日志独立存储，不与登录 / 商店等其它日志混在一起.")
         }

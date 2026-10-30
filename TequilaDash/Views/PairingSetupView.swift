@@ -226,6 +226,7 @@ struct PairingSetupView: View {
                 }
                 .contentShape(Rectangle())
             }
+                .buttonStyle(.plain)
         } header: {
             Text("无线配对")
         } footer: {

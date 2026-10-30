@@ -256,16 +256,9 @@ enum AppTheme {
             ? UIColor(red: 0xFF / 255, green: 0x8F / 255, blue: 0xB4 / 255, alpha: 1)
             : UIColor(red: 0xCE / 255, green: 0x32 / 255, blue: 0x68 / 255, alpha: 1)
     })
-    /// 高级功能 / 逆向模块色（正红）.
-    ///
-    /// ⚠️ 此前为**砖红** `#BF3A2B`（HSL 6° / 63% / 46%）—— 低明度砖红在浅底上显**陶土棕**，
-    /// 同属用户禁用的暖棕族。改用**正红** `#E5342B`（HSL 3° / 78% / 53%）：提高明度与饱和度，
-    /// 落在「鲜明红」而非「棕红」区间；深色分支维持提亮的珊瑚红 `#FF8C7C`.
-    static let categoryAdvanced = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? UIColor(red: 0xFF / 255, green: 0x8C / 255, blue: 0x7C / 255, alpha: 1)
-            : UIColor(red: 0xE5 / 255, green: 0x34 / 255, blue: 0x2B / 255, alpha: 1)
-    })
+    // 高级功能模块色（原 categoryAdvanced 正红 #E5342B）已并入 AppTheme.danger。
+    // 理由：仓库只允许一个红。模块识别色里再留一个正红，用户就无法凭颜色判断
+    // 「红 = 危险」，这条语义一旦失效，整套配色规则都塌。见 HARD-RULES 第 28 条。
 
     // ── ② 表面层（四级背景，撑起卡片层次）──
     //
@@ -329,9 +322,9 @@ enum AppTheme {
     ///
     /// ⚠️ 此前为 `[categoryStore, categorySign]`（橙 → 粉）；`categoryStore` 已去棕改为冷青蓝，
     /// 若沿用则「暖色渐变」名不副实（青→粉）。故改由**两个仍在暖区、且都已去棕**的模块色构成：
-    /// 签名粉 `categorySign`（HSL 338°）→ 高级正红 `categoryAdvanced`（HSL 3°），保持暖色语义.
+    /// 签名粉 `categorySign`（HSL 338°）→ 危险红 `danger`（HSL 3°），保持暖色语义.
     static let gradientWarm = LinearGradient(
-        colors: [categorySign, categoryAdvanced],
+        colors: [categorySign, danger],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -360,7 +353,7 @@ enum AppModule {
         case .settings: return AppTheme.categorySettings
         case .download: return AppTheme.categoryDownload
         case .sign: return AppTheme.categorySign
-        case .advanced: return AppTheme.categoryAdvanced
+        case .advanced: return AppTheme.danger
         }
     }
 }

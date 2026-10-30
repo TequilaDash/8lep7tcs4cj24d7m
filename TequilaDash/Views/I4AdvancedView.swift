@@ -222,7 +222,7 @@ struct I4AdvancedView: View {
                     Text(buttonTitle).frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryAdvanced, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
             .disabled(isBusy || probe?.carrier == nil)
 
             Text("把授权标记（8es1421dg.be，内容 = i4tool2.acc 的 auth plist）写进载体 App 的 Documents，"
@@ -264,7 +264,7 @@ struct I4AdvancedView: View {
                     Text(pairing ? "正在配对…" : "尝试现场配对").frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryAdvanced, radius: AppRadius.button))
+            .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
             .disabled(pairing || probe?.hasPairingFile != true)
 
             Text("经 RSD 隧道连设备本机的 lockdownd，发一次真 lockdown Pair；"

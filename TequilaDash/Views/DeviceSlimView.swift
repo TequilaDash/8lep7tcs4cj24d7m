@@ -301,6 +301,7 @@ struct DeviceSlimView: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppTheme.danger)
                     }
+                        .buttonStyle(.plain)
                 }
                 // 有「确认缺失」或「没查成」的行时给出重检入口（不是爱思有、是免越狱下网络会抖）
                 if missingSourceCount + unknownSourceCount > 0 {
@@ -310,7 +311,7 @@ struct DeviceSlimView: View {
                         Label(probingAvailability ? "正在检测…" : "重新检测可重装性",
                               systemImage: "arrow.clockwise")
                             .font(.subheadline)
-                            .foregroundStyle(probingAvailability ? Color.secondary : AppTheme.categoryClean)
+                            .foregroundStyle(probingAvailability ? Color.secondary : AppTheme.success)
                     }
                     .disabled(probingAvailability)
                 }
@@ -376,7 +377,7 @@ struct DeviceSlimView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: on ? "checkmark.square.fill" : "square")
-                    .font(.body).foregroundStyle(on ? AppTheme.categoryClean : .secondary)
+                    .font(.body).foregroundStyle(on ? AppTheme.accent : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.subheadline).lineLimit(1)
                     if let detail = item.detail {
@@ -403,7 +404,7 @@ struct DeviceSlimView: View {
             HStack(spacing: 10) {
                 Image(systemName: actionable ? (on ? "checkmark.square.fill" : "square") : "square")
                     .font(.body)
-                    .foregroundStyle(actionable ? (on ? AppTheme.categoryClean : .secondary) : AppTheme.unselected)
+                    .foregroundStyle(actionable ? (on ? AppTheme.accent : .secondary) : AppTheme.unselected)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.subheadline).lineLimit(1).foregroundStyle(.primary)
                     HStack(spacing: 6) {
