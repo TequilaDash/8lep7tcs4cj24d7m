@@ -125,10 +125,20 @@ struct PairingSetupView: View {
         } header: {
             Text("导入")
         } footer: {
-            Text(viewModel.hasPairingFile
-                 ? "已检测到配对文件.重新导入会覆盖现有配对身份，导入后无需重启."
-                 : "导入后无需重启，返回即可看到设备上的应用列表.")
+            Text(pairingFooterText)
         }
+    }
+
+    /// 已导入但解析不了的配对文件是**最坏的一种状态**：页面显示「已检测到」，隧道却全线失败.
+    /// v0.3.724：把 Rust 侧的解析结果并进脚注，坏文件当场说清原因.
+    private var pairingFooterText: String {
+        guard viewModel.hasPairingFile else {
+            return "导入后无需重启，返回即可看到设备上的应用列表."
+        }
+        if let probe = TunnelContext.shared.pairingFileParseError {
+            return "配对文件存在但无法解析：\(probe).请重新导入 RSD 远程配对文件."
+        }
+        return "已检测到配对文件.重新导入会覆盖现有配对身份，导入后无需重启."
     }
 
     private func importRow(title: String, subtitle: String, systemImage: String) -> some View {
