@@ -96,7 +96,7 @@ struct GestaltView: View {
                         Image(systemName: "chevron.down")
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.accent)
                 }
             }
         }

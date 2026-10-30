@@ -76,7 +76,7 @@ struct IPCCInstallView: View {
                     ForEach(records) { record in
                         HStack {
                             Image(systemName: record.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(record.success ? .green : .red)
+                                .foregroundColor(record.success ? AppTheme.success : AppTheme.danger)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(record.fileName)
                                     .font(.subheadline)
@@ -192,7 +192,7 @@ struct IPCCInstallView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 6) {
                             Image(systemName: record.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(record.success ? .green : .red)
+                                .foregroundColor(record.success ? AppTheme.success : AppTheme.danger)
                             Text(record.success ? "安装成功" : "安装失败")
                                 .font(.headline)
                         }

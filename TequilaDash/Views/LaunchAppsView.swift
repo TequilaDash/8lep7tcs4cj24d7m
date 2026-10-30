@@ -121,7 +121,7 @@ struct LaunchAppsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .appGlassCapsule()
-                    .foregroundStyle(feedback.success ? .green : .red)
+                    .foregroundStyle(feedback.success ? AppTheme.success : AppTheme.danger)
                     .appRaisedShadow(colorScheme)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.bottom, 24)

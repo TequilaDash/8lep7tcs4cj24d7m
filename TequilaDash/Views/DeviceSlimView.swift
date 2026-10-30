@@ -418,7 +418,7 @@ struct DeviceSlimView: View {
                         } else if probingAvailability && item.sourceAvailable == nil {
                             Text("检测中…").foregroundStyle(.secondary)
                         } else if item.isRisky {
-                            Text("谨慎选择").foregroundStyle(AppTheme.danger)
+                            Text("谨慎选择").foregroundStyle(AppTheme.pending)
                         } else if item.sourceAvailable == nil {
                             Text("源里未查到，可重试").foregroundStyle(.secondary)
                         }

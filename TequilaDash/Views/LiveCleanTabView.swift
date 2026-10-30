@@ -325,7 +325,7 @@ struct ContainerDiagnosticView: View {
             Label("容器扫描诊断", systemImage: "stethoscope")
                 .font(.subheadline.weight(.semibold))
             let active = SandboxEscape.lcContainerExtensionsActive
-            diagRow("扩展激活", active ? "是" : "否", color: active ? .green : .red)
+            diagRow("扩展激活", active ? "是" : "否", color: active ? AppTheme.success : AppTheme.danger)
             diagRow("宿主签发结论", SandboxEscape.lcContainerGrantStatus ?? "（无 / 宿主未传递）")
             diagRow("Token 期望/消费", "\(SandboxEscape.lcContainerTokenCount) / \(SandboxEscape.lcContainerConsumedCount)")
             diagRow("启动模式", SandboxEscape.lcContainerLaunchMode ?? "未知")

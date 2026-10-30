@@ -56,7 +56,7 @@ struct ExpandableText: View {
     /// 展开按钮字体。
     var buttonFont: Font = .caption2.weight(.medium)
     /// 展开按钮颜色。
-    var buttonTint: Color = .blue
+    var buttonTint: Color = AppTheme.accent
     /// 展开 / 收起的动画；`nil` = 不加动画。
     var animation: Animation? = .easeInOut(duration: 0.18)
 

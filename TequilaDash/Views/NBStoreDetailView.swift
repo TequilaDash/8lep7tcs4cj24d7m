@@ -188,7 +188,7 @@ struct NBStoreDetailView: View {
 
                     HStack(spacing: 6) {
                         if let price = detail?.formattedPrice, !price.isEmpty {
-                            chip(price, .blue)
+                            chip(price, AppTheme.accent)
                         }
                         if let v = detail?.version ?? versions.first?.version, !v.isEmpty {
                             chip("v\(v)", .gray)
@@ -366,7 +366,7 @@ struct NBStoreDetailView: View {
                             .font(.caption.weight(.medium))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.danger)
 
                     Spacer(minLength: 0)
                 }

@@ -48,7 +48,7 @@ struct CertificateView: View {
                     Section {
                         InfoActionCard(
                             icon: manager.lastErrorIsSessionExpired ? "person.badge.key.fill" : "xmark.circle.fill",
-                            iconTint: manager.lastErrorIsSessionExpired ? .orange : .red,
+                            iconTint: manager.lastErrorIsSessionExpired ? AppTheme.pending : AppTheme.danger,
                             title: manager.lastErrorIsSessionExpired ? "需要重新登录" : "出错了",
                             message: error
                         )

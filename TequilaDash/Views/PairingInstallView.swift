@@ -54,7 +54,7 @@ struct PairingInstallView: View {
                 Section {
                     InfoActionCard(
                         icon: "xmark.circle.fill",
-                        iconTint: .red,
+                        iconTint: AppTheme.danger,
                         title: "出错了",
                         message: error
                     )

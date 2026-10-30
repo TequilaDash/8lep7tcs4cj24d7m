@@ -92,7 +92,7 @@ extension I4StoreFreeView {
                             .font(.subheadline.weight(.medium)).lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         ChipFlow(spacing: 6) {
-                            PackageChip(text: "下架", tint: .red, horizontalPadding: 5)
+                            PackageChip(text: "下架", tint: AppTheme.pending, horizontalPadding: 5)
                             if let v = app.displayVersion, !v.isEmpty {
                                 PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload, horizontalPadding: 5)
                             }

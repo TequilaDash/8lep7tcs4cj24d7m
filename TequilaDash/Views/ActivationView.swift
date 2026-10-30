@@ -106,14 +106,14 @@ struct ActivationView: View {
 
     private var stateColor: Color {
         guard let status else { return .secondary }
-        return status.activationState == .activated ? .green : .red
+        return status.activationState == .activated ? AppTheme.success : AppTheme.danger
     }
 
     private var lockColor: Color {
         guard let status else { return .secondary }
         switch status.activationLock {
-        case .off: return .green
-        case .on, .unknown: return .red
+        case .off: return AppTheme.success
+        case .on, .unknown: return AppTheme.danger
         }
     }
 

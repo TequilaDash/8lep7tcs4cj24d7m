@@ -555,7 +555,7 @@ struct AppFileBrowserView: View {
             if !selectionMode && !entry.isDirectory && isEditableText(entry) {
                 Image(systemName: "pencil")
                     .font(.caption2)
-                    .foregroundStyle(.blue.opacity(0.7))
+                    .foregroundStyle(AppTheme.accent.opacity(0.7))
             }
         }
     }

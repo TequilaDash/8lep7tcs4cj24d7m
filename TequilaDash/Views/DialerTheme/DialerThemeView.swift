@@ -390,7 +390,7 @@ struct DialerThemeView: View {
                 showRestoreConfirm = true
             } label: {
                 Label("恢复原生主题", systemImage: "arrow.uturn.left")
-                    .foregroundStyle(viewModel.status?.hasBackup == true ? .red : .secondary)
+                    .foregroundStyle(viewModel.status?.hasBackup == true ? AppTheme.pending : .secondary)
             }
             .disabled(viewModel.status?.hasBackup != true)
 

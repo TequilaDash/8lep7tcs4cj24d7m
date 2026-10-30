@@ -112,7 +112,7 @@ struct I4StoreFreeDetailView: View {
                         Text(s).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                     HStack(spacing: 6) {
-                        if let v = d.version { chip("v\(v)", .blue) }
+                        if let v = d.version { chip("v\(v)", AppTheme.accent) }
                         if let c = d.category { chip(c, .gray) }
                     }
                 }
@@ -554,7 +554,7 @@ private struct DownloadJobSection: View {
                             .font(.caption.weight(.medium))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.danger)
 
                     Spacer(minLength: 0)
                 }
