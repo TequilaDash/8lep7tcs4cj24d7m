@@ -341,7 +341,13 @@ final class AnisetteProvider {
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        request.setValue(clientInfo, forHTTPHeaderField: "X-Mme-Client-Info")
+        // v0.3.724：**必须走 normalizedClientInfo**，与 :322（本机身份）/ :700/:712（远程解析）
+        // 保持同一口径. 此前这里发的是服务器原始值，于是「设置 → Anisette 服务器 →
+        // 客户端标识」里用户填的自定义值（绕 Code -80045 的唯一手段）对
+        // gsa lookup / midStartProvisioning / midFinishProvisioning **整条配给链不生效**，
+        // 而登录请求（AppleAuthenticator:225/:446、AppleDeveloperAPI:84 读 deviceDescription）
+        // 却生效 —— 同一次登录里两套 client-info，Apple 侧看成两台设备.
+        request.setValue(Self.normalizedClientInfo(clientInfo), forHTTPHeaderField: "X-Mme-Client-Info")
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
