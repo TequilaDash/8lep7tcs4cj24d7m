@@ -459,6 +459,10 @@ struct AppHeroHeader: View {
     var symbol: String
     var stats: [AppStat] = []
 
+    /// 浅色模式下需要给 stat 胶囊补一层可见的底：`.tertiarySystemGroupedBackground`
+    /// 在浅色是近纯白，压在 `.systemGroupedBackground` 页面上几乎看不出边界（深色模式正常）.
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
@@ -496,7 +500,12 @@ struct AppHeroHeader: View {
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
-                                .fill(AppSurface.inner)
+                                .fill(AppTheme.accent.opacity(colorScheme == .dark ? 0.14 : 0.07))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
+                                .strokeBorder(AppTheme.accent.opacity(colorScheme == .dark ? 0.24 : 0.18),
+                                              lineWidth: 0.5)
                         )
                     }
                 }

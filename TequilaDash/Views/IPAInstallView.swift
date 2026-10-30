@@ -27,6 +27,8 @@ struct IPAInstallView: View {
     @State private var ipaURL: URL?
     @State private var ipaLink = ""
     @State private var isDownloading = false
+    /// 直链输入面板是否展开（v0.3.723：默认收起，点「粘贴直链」才展开）.
+    @State private var showLinkField = false
     /// 「已下载的 IPA」列表（Documents/Custom 目录）.
     @State private var savedIPAs: [SavedIPA] = []
     /// 待确认删除的 IPA.
@@ -137,12 +139,30 @@ struct IPAInstallView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    refreshStatus()
+                Menu {
+                    Button {
+                        refreshStatus()
+                    } label: {
+                        Label("刷新状态", systemImage: "arrow.clockwise")
+                    }
+                    Button {
+                        autoSignInOn.toggle()
+                        UserDefaults.standard.set(autoSignInOn, forKey: "IPA.autoSignInEnabled")
+                    } label: {
+                        Label("自动登录（用「设置」里的 Apple ID）",
+                              systemImage: autoSignInOn ? "checkmark.circle.fill" : "circle")
+                    }
+                    if MemoryLimitSettings.shared.isLoggedIn {
+                        Button {
+                            autoSignInWithSavedCredentials()
+                        } label: {
+                            Label("从「设置」登录 Apple ID", systemImage: "person.badge.key.fill")
+                        }
+                    }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Image(systemName: "ellipsis.circle")
                 }
-                .accessibilityLabel("刷新状态")
+                .accessibilityLabel("更多")
             }
         }
         .safeAreaInset(edge: .bottom) { installBar }
@@ -330,98 +350,164 @@ struct IPAInstallView: View {
 
     // MARK: - 选择 IPA
 
-    /// 行式导入入口（与 PairingSetupView 的 importRow 同构）.
-    private func importRow(title: String,
-                           subtitle: String,
-                           systemImage: String,
-                           showsCheck: Bool) -> some View {
-        HStack(spacing: 12) {
-            AppRowIcon(systemName: systemImage, tint: AppTheme.categoryDownload, symbolSize: 17, frameSize: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppFont.bodyEmphasis)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(AppFont.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer(minLength: 6)
-            if showsCheck {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppTheme.success)
-            }
-        }
-        .contentShape(Rectangle())
-    }
-
+    /// 选择 IPA：虚线投放区（视觉主角）+ 折叠的直链面板 + 已下载清单.
+    ///
+    /// v0.3.723 改版：原来「一行导入入口 + 常驻直链输入框 + 发丝线 + 列表」是四段平铺，
+    /// 与「签名账号」等卡完全同构，看不出这一步是在「挑一个文件」. 改成虚线投放区，
+    /// 直链输入折到按钮后面，已下载清单降为次级分组.
     private var sourceCard: some View {
         sectionCard(title: "选择 IPA", icon: "doc.badge.plus", tint: AppTheme.categoryDownload) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    showImporter = true
-                } label: {
-                    importRow(title: ipaURL == nil ? "导入 IPA 文件" : "重新导入 IPA 文件",
-                              subtitle: ipaDisplayName.isEmpty
-                                  ? "从「文件」中选取 .ipa，会先拷贝到应用沙盒."
-                                  : ipaDisplayName,
-                              systemImage: "doc.badge.plus",
-                              showsCheck: ipaURL != nil)
+            VStack(alignment: .leading, spacing: 12) {
+                dropZone
+                if showLinkField {
+                    linkPanel
                 }
-                .buttonStyle(.plain)
-                .disabled(isRunning)
+                if !savedIPAs.isEmpty {
+                    savedIPAList
+                }
+            }
+        }
+    }
 
-                AppHairline()
-                    .padding(.vertical, 10)
+    /// 虚线投放区：未选包时是「大图标 + 提示 + 两个入口」，已选包时收成一条文件行.
+    private var dropZone: some View {
+        VStack(spacing: 12) {
+            if let ipa = ipaURL {
+                HStack(spacing: 12) {
+                    AppRowIcon(systemName: "shippingbox.fill",
+                               tint: AppTheme.categoryDownload,
+                               symbolSize: 20,
+                               frameSize: 38)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ipa.lastPathComponent)
+                            .font(AppFont.subheadlineEmphasis)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text("已选为待安装的 IPA.")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 6)
+                    Button("更换") {
+                        AppHaptics.tap()
+                        showImporter = true
+                    }
+                    .font(AppFont.footnote)
+                    .buttonStyle(.borderless)
+                    .disabled(isRunning)
+                }
+            } else {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(AppTheme.categoryDownload)
+                    .frame(width: 54, height: 54)
+                    .background(Circle().fill(AppTheme.categoryDownload.opacity(0.12)))
+                    .accessibilityHidden(true)
 
-                HStack(spacing: 8) {
-                    TextField("或粘贴 IPA 直链（http/https）", text: $ipaLink)
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .textFieldStyle(.roundedBorder)
+                VStack(spacing: 3) {
+                    Text("还没有选择 IPA")
+                        .font(AppFont.bodyEmphasis)
+                    Text("支持 .ipa 文件，导入后会先拷贝到应用沙盒.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                HStack(spacing: 10) {
                     Button {
-                        downloadIPA()
+                        AppHaptics.tap()
+                        showImporter = true
                     } label: {
-                        if isDownloading {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("下载")
-                        }
+                        Label("从文件导入", systemImage: "folder")
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
-                    .controlSize(.small)
-                    .disabled(ipaLink.isEmpty || isRunning || isDownloading)
-                }
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload, radius: AppRadius.button))
+                    .disabled(isRunning)
 
-                if isDownloading {
-                    AppLoadingRow(title: "正在下载 IPA…", level: .inline)
-                        .padding(.top, 8)
+                    Button {
+                        AppHaptics.tap()
+                        showLinkField.toggle()
+                    } label: {
+                        Label("粘贴直链", systemImage: "link")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(TintedButtonStyle(tint: AppTheme.accent, radius: AppRadius.button))
+                    .disabled(isRunning)
                 }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
+                .fill(AppTheme.categoryDownload.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
+                .strokeBorder(AppTheme.categoryDownload.opacity(0.35),
+                              style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        )
+    }
 
-                Text("导入的 IPA 会先拷贝到应用沙盒（统一文件选择调用点），可离线签名安装.")
-                    .font(AppFont.caption)
+    /// 直链下载面板：只在点了「粘贴直链」后展开，收起时不占版面.
+    private var linkPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("粘贴 IPA 直链（http/https）", text: $ipaLink)
+                .keyboardType(.URL)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .submitLabel(.go)
+                .onSubmit { downloadIPA() }
+                .textFieldStyle(.roundedBorder)
+
+            HStack(spacing: 10) {
+                Button {
+                    downloadIPA()
+                } label: {
+                    if isDownloading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("下载", systemImage: "arrow.down.circle")
+                    }
+                }
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDownload))
+                .disabled(ipaLink.isEmpty || isRunning || isDownloading)
+
+                Button("收起") {
+                    showLinkField = false
+                }
+                .font(AppFont.footnote)
+                .buttonStyle(.borderless)
+
+                Spacer(minLength: 0)
+            }
+
+            if isDownloading {
+                AppLoadingRow(title: "正在下载 IPA…", level: .inline)
+            }
+        }
+    }
+
+    /// 已下载清单：带计数的小标题 + 行，行间发丝线.
+    private var savedIPAList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Text("本地文件")
+                    .font(AppFont.captionEmphasis)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
+                Text("\(savedIPAs.count)")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+            }
+            .padding(.bottom, 2)
 
-                AppHairline()
-                    .padding(.vertical, 10)
-
-                if savedIPAs.isEmpty {
-                    AppEmptyRow(icon: "shippingbox",
-                                title: "还没有已下载的 IPA. 导入或下载后会出现在这里.")
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(savedIPAs.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 {
-                                AppHairline()
-                            }
-                            savedIPARow(item)
-                        }
-                    }
+            ForEach(Array(savedIPAs.enumerated()), id: \.element.id) { index, item in
+                if index > 0 {
+                    AppHairline()
                 }
+                savedIPARow(item)
             }
         }
     }

@@ -396,8 +396,11 @@ struct TintedButtonStyle: ButtonStyle {
         TintedBody(configuration: configuration, tint: tint, radiusOverride: radius)
     }
 
-    /// 样式体单独成一个 `View`：只有 `View` 能读 `@Environment`，用它在**禁用**时降透明度
+    /// 样式体单独成一个 `View`：只有 `View` 能读 `@Environment`，用它在**禁用**时换一套配色
     /// （自定义 `ButtonStyle` 不会像 `.borderedProminent` 那样自动置灰）.
+    ///
+    /// v0.3.723：禁用态原来是整块 `.opacity(0.4)`，淡底 + 淡字叠在浅色页面上等于「看不清」，
+    /// 用户实测反馈刺眼难辨. 改为「次级灰字 + 系统填充底 + 分隔线描边」，禁用但可读.
     ///
     /// 名字**不能**叫 `Body`：`ButtonStyle` 有名为 `Body` 的关联类型，同名嵌套类型会被当成
     /// 那个关联类型去匹配协议要求，而它又是 `private` ⇒ 报
@@ -428,18 +431,21 @@ struct TintedButtonStyle: ButtonStyle {
             configuration.label
                 // 常规号对齐 `.bordered` 默认字号（body），小号（卡片内动作）维持 subheadline.
                 .font(small ? .subheadline.weight(.semibold) : .body.weight(.semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(isEnabled ? tint : Color.secondary)
                 .padding(.horizontal, hPad)
                 .padding(.vertical, vPad)
                 .background(
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(tint.opacity(configuration.isPressed ? pressedOpacity : fillOpacity))
+                        .fill(isEnabled
+                              ? tint.opacity(configuration.isPressed ? pressedOpacity : fillOpacity)
+                              : Color(uiColor: .tertiarySystemFill))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .strokeBorder(tint.opacity(strokeOpacity), lineWidth: 0.5)
+                        .strokeBorder(isEnabled ? tint.opacity(strokeOpacity)
+                                                : Color(uiColor: .separator).opacity(0.5),
+                                      lineWidth: 0.5)
                 )
-                .opacity(isEnabled ? 1 : 0.4)
                 .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         }
     }
