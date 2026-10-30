@@ -105,6 +105,7 @@ struct TequilaDashApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .tint(AppTheme.accent)
         }
     }
 }

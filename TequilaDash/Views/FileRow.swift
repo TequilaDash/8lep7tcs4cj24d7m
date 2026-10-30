@@ -44,7 +44,7 @@ struct FileRow: View {
 
     private var iconColor: Color {
         switch kind {
-        case .directory: return .accentColor
+        case .directory: return AppTheme.accent
         case .image: return .green
         case .pdf: return .red
         case .audio, .video: return .purple

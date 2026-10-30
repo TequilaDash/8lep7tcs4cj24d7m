@@ -113,7 +113,7 @@ struct I4StoreFreeDetailView: View {
                     }
                     HStack(spacing: 6) {
                         if let v = d.version { chip("v\(v)", AppTheme.accent) }
-                        if let c = d.category { chip(c, .gray) }
+                        if let c = d.category { chip(c, .secondary) }
                     }
                 }
                 Spacer(minLength: 6)
@@ -243,8 +243,8 @@ struct I4StoreFreeDetailView: View {
                             Text("v\(v.version)").font(.subheadline.weight(.medium)).lineLimit(1)
                             HStack(spacing: 6) {
                                 // 版本快照日：源数据本就是纯日期（无时刻），故用 `.day` 保留年份.
-                                if let t = DateText.string(from: v.releaseTime, style: .day) { chip(t, .gray) }
-                                if let s = v.sizeText { chip(s, .green) }
+                                if let t = DateText.string(from: v.releaseTime, style: .day) { chip(t, .secondary) }
+                                if let s = v.sizeText { chip(s, .secondary) }
                             }
                             if let n = v.note, !n.isEmpty {
                                 Text(n).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -433,8 +433,8 @@ struct NiuwaStoreDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(app.name).font(.headline).lineLimit(2)
                     HStack(spacing: 6) {
-                        if let v = app.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: AppTheme.categoryDownload, horizontalPadding: 5) }
-                        PackageChip(text: region.title, tint: .orange, horizontalPadding: 5)
+                        if let v = app.version, !v.isEmpty { PackageChip(text: "v\(v)", tint: AppTheme.accent, horizontalPadding: 5) }
+                        PackageChip(text: region.title, tint: .secondary, horizontalPadding: 5)
                     }
                 }
                 Spacer(minLength: 6)
