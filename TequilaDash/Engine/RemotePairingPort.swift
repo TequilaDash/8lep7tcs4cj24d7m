@@ -38,8 +38,8 @@ enum RemotePairingPort {
     /// 解析结果回写键，供 ObjC 侧 TDRPPairingPort() 读取。
     static let resolvedDefaultsKey = "rppairing.resolvedPort"
 
-    private static let bonjourType = "_remotepairing._tcp."
-    private static let bonjourDomain = "local."
+    fileprivate static let bonjourType = "_remotepairing._tcp."
+    fileprivate static let bonjourDomain = "local."
     private static let cacheTTL: TimeInterval = 60
     private static let browseTimeout: TimeInterval = 5
 
