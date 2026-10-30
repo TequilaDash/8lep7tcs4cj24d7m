@@ -1095,7 +1095,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(49152).bigEndian
+        addr.sin_port = in_port_t(RemotePairingPort.current).bigEndian
 
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         CellularTunnelManager.shared.prepareForTunnel()
@@ -1108,7 +1108,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         // 带超时的可达性预检：Rust 侧首个 connect 无超时，隧道不通时会阻塞约 4m45s，
         // 这里不通就快速失败（见 tunnelProbeTimeoutSeconds 注释）.
         guard probeTunnelReachable(&addr) else {
-            throw makeError("隧道端口不可达（\(deviceIP):49152 预检 \(Int(Self.tunnelProbeTimeoutSeconds)) 秒无响应）."
+            throw makeError("隧道端口不可达（\(deviceIP):\(RemotePairingPort.current) 预检 \(Int(Self.tunnelProbeTimeoutSeconds)) 秒无响应）."
                 + "请确认 LocalDevVPN 已连接，然后重试.")
         }
 

@@ -75,7 +75,7 @@ enum LocalDevVPN {
     /// - Parameter timeout: 连接超时（秒）. 默认调用点用 1.0（保持既有行为不变）；
     ///   蜂窝轮询由 `CellularTunnelManager` 传 0.25 —— 对齐 SideStore
     ///   `MinimuxerConstants.defaultTCPProbeTimeoutMs`（250ms），使 2 秒预算内能试更多次.
-    static func isReachable(ip: String, timeout: TimeInterval, port: UInt16 = 49152) -> Bool {
+    static func isReachable(ip: String, timeout: TimeInterval, port: UInt16 = RemotePairingPort.current) -> Bool {
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = in_port_t(port).bigEndian

@@ -844,7 +844,7 @@ final class IPADownloadCenter: ObservableObject {
             }
             if !LocalDevVPN.isTunnelReachable() {
                 LoginLogger.shared.log(
-                    "[下载中心] 隧道预检未通过（\(LocalDevVPN.targetIP):49152），仍继续尝试安装：\(fileName).",
+                    "[下载中心] 隧道预检未通过（\(LocalDevVPN.targetIP):\(RemotePairingPort.current)），仍继续尝试安装：\(fileName).",
                     category: .download)
                 // 对齐上游 91fcb9e94：隧道不通时按需拉起 LocalDevVPN（深链连接后自动回本应用），
                 // 安装链仍由 createTunnel 的退避重试与安装看门狗承接，不新增等待.

@@ -535,7 +535,8 @@ enum DeviceSlimService {
                 appReadIssueFlag = "读不到应用列表：缺少配对文件（重试无效，请先导入配对文件）—— \(raw)"
             } else if raw.localizedCaseInsensitiveContains("VPN")
                         || raw.localizedCaseInsensitiveContains("隧道")
-                        || raw.localizedCaseInsensitiveContains("49152") {
+                        || raw.localizedCaseInsensitiveContains("49152")
+                        || raw.localizedCaseInsensitiveContains("\(RemotePairingPort.current)") {
                 appReadIssueFlag = "读不到应用列表：隧道未建立（重试无效，请先在「本地隧道」里连上 LocalDevVPN）—— \(raw)"
             } else {
                 appReadIssueFlag = "读不到应用列表：\(raw)"

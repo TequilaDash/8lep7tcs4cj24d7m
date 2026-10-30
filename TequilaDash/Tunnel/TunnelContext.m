@@ -20,6 +20,24 @@
 #import "EscRoutePeers.h"
 
 #define RPPPAIRING_PORT 49152
+
+// RPPairing 端口不再固定（iOS 27.2 起设备端可能换端口）。Swift 侧的
+// RemotePairingPort 解析成功后会把结果写进 UserDefaults 的这两个键，
+// 这里按同一套三级策略读取：手动覆盖 → 解析结果 → 49152 回落。
+// 用 UserDefaults 传值而不是直接调 Swift 类，是为了不依赖 Swift 生成头
+// 的导入顺序（同一个 target 里 .m 引用 Swift 需要桥接头，代价更大）。
+static uint16_t TDRPPairingPort(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *override = [[defaults stringForKey:@"rppairing.portOverride"]
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (override.length > 0) {
+        NSInteger value = override.integerValue;
+        if (value > 0 && value <= 65535) { return (uint16_t)value; }
+    }
+    NSInteger resolved = [defaults integerForKey:@"rppairing.resolvedPort"];
+    if (resolved > 0 && resolved <= 65535) { return (uint16_t)resolved; }
+    return RPPPAIRING_PORT;
+}
 #define DEFAULT_TUNNEL_IP @"10.7.0.1"
 
 @implementation TunnelContext {
@@ -368,7 +386,7 @@
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(RPPPAIRING_PORT);
+        addr.sin_port = htons(TDRPPairingPort());
         if (inet_pton(AF_INET, peer.UTF8String, &addr.sin_addr) != 1) {
             // 非法 IP 直接跳过（不静默连 0.0.0.0）。本轮已加载的 pairing file 必须释放。
             rp_pairing_file_free(pairingFile);
@@ -376,7 +394,7 @@
             continue;
         }
         NSLog(@"[TequilaDash] RPPairing tunnel trying %@:%d (%lu/%lu)",
-              peer, RPPPAIRING_PORT,
+              peer, TDRPPairingPort(),
               (unsigned long)candidateIndex, (unsigned long)candidates.count);
 
         struct AdapterHandle *adapter = NULL;

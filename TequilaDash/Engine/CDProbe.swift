@@ -91,10 +91,10 @@ enum CDProbe {
     /// 连接 label（与 `TunnelContext.m` 的 label 用法同源，仅用于设备侧识别）
     private static let connectLabel = "TequilaDashCDProbe"
 
-    /// RPPairing 隧道端口（`10.7.0.1:49152`）。
-    /// 与 `AFCService` / `DeviceControlService` / `DDIMountProbe` / `TunnelContext.m` 同款 ——
+    /// RPPairing 隧道端口。与 `AFCService` / `DeviceControlService` / `DDIMountProbe` 同源，
+    /// 一律取 `RemotePairingPort.current`（iOS 27.2 起不再保证是 49152）。
     /// **不是** lockdown 的 62078（那条路要 lockdown 配对文件，我们手上没有）。
-    private static let rppairingPort: UInt16 = 49152
+    private static var rppairingPort: UInt16 { RemotePairingPort.current }
 
     /// 强制跑一次。返回完整记录，同时落盘 + 记一行摘要到登录日志。
     /// 调用方必须是 SSH 命令处理路径（见 `SSHServerService` 的 `cdprobe`）。
