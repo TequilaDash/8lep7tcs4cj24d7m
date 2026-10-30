@@ -126,7 +126,7 @@ final class MemoryLimitSettings: ObservableObject {
     static let shared = MemoryLimitSettings()
 
     /// Anisette 服务器列表：原有 4 个 + 合并 SideInstaller 社区列表
-    /// （servers.sidestore.io）中我们没有的 11 个.
+    /// （servers.sidestore.io）中我们没有的 10 个.
     static let anisetteServers = [
         // 原有
         "https://ani.sidestore.io",
@@ -136,7 +136,6 @@ final class MemoryLimitSettings: ObservableObject {
         // 合并自 SideInstaller（社区列表）
         "https://ani.sidestore.zip",
         "https://ani.npeg.us",
-        "http://5.249.163.88:6969",
         "https://anisette.wedotstud.io",
         "https://ani.xu30.top",
         "https://ani.owoellen.rocks",
