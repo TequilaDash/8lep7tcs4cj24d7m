@@ -98,6 +98,9 @@ struct PairingSetupView: View {
     /// IncreaseMemoryView 一致），错误只留一个槽，由 importErrorText 归并.
     private var importSection: some View {
         Section {
+            // v0.3.724：两行都必须 `.buttonStyle(.plain)`. List 里裸 Button 会把整个 label
+            // 的前景色换成 accent，于是 `.primary` 解析成深蓝、`.secondary` 解析成同色淡化的
+            // 浅蓝（真机截图取样实测 #3B85F0 / #98BFE6）—— 这就是用户说的「一个深蓝一个浅蓝文本」.
             Button {
                 showImporter = true
             } label: {
@@ -105,6 +108,7 @@ struct PairingSetupView: View {
                           subtitle: "从「文件」中选取 pairingFile.plist 或 iLoader 文件.",
                           systemImage: "doc.badge.plus")
             }
+            .buttonStyle(.plain)
 
             Button {
                 importFromClipboard()
@@ -113,6 +117,7 @@ struct PairingSetupView: View {
                           subtitle: "剪贴板里已是配对文件的文本内容.",
                           systemImage: "doc.on.clipboard")
             }
+            .buttonStyle(.plain)
 
             if let message = importErrorText {
                 AppErrorRow(message: message)
@@ -128,7 +133,9 @@ struct PairingSetupView: View {
 
     private func importRow(title: String, subtitle: String, systemImage: String) -> some View {
         HStack(spacing: 12) {
-            AppRowIcon(systemName: systemImage, tint: AppModule.sign.tint, symbolSize: 17, frameSize: 30)
+            // 这是通用「导入文件」动作，不是签名动作 —— 用签名粉（HSL 338°）在真机上读成
+            // 「红色滥用」（v0.3.724 反馈）. 统一回品牌强调色，本页只留一个彩色.
+            AppRowIcon(systemName: systemImage, tint: AppTheme.accent, symbolSize: 17, frameSize: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(AppFont.bodyEmphasis)

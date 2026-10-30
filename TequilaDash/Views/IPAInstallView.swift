@@ -656,29 +656,6 @@ struct IPAInstallView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                // v0.3.118：自动登录开关/从设置登录独立成区（不再和输入框挤在一起）.
-                // 重构后并入本卡尾部，仍只在「未登录且没有正在登录」时出现.
-                if !service.isSignedIn && !isAutoSigningIn && !isManuallySigningIn {
-                    AppHairline()
-                    Toggle("自动登录（用「设置」里的 Apple ID）", isOn: $autoSignInOn)
-                        .onChange(of: autoSignInOn) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: "IPA.autoSignInEnabled")
-                        }
-                    if MemoryLimitSettings.shared.isLoggedIn {
-                        Button {
-                            autoSignInWithSavedCredentials()
-                        } label: {
-                            Label("从「设置」登录 Apple ID", systemImage: "person.badge.key.fill")
-                                .font(AppFont.footnote)
-                        }
-                        .buttonStyle(.borderless)
-                    } else {
-                        Label("「更多 → 设置」里还没有保存 Apple ID", systemImage: "info.circle")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
         }
     }
