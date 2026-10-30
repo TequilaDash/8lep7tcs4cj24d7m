@@ -52,9 +52,44 @@ struct CrashReportAnalysisView: View {
             }
         }
         .background(AppSurface.page)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                shareMenu
+            }
+        }
         .onAppear {
             if !availablePages.contains(page) { page = .summary }
         }
+    }
+
+    /// 导出：上游 `ReportRenderer` 的三个 public 入口此前零调用点，
+    /// 解析出来的结构化结果只能看、拿不走。这里把 markdown 摘要与
+    /// 符号化 JSON 接到系统分享，原文仍由 `rawText` 负责.
+    private var shareMenu: some View {
+        Menu {
+            ShareLink(item: ReportRenderer.markdown(report)) {
+                Label("分享摘要", systemImage: "text.badge.checkmark")
+            }
+            if let json = modelJSONText {
+                ShareLink(item: json) {
+                    Label("分享 JSON", systemImage: "curlybraces")
+                }
+            }
+            if !rawText.isEmpty {
+                ShareLink(item: rawText) {
+                    Label("分享原文", systemImage: "doc.plaintext")
+                }
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .accessibilityLabel("导出报告")
+        }
+    }
+
+    /// 编码失败时不显示该入口 —— 崩溃报告不该因为导出菜单而多一个错误弹窗.
+    private var modelJSONText: String? {
+        guard let data = try? ReportRenderer.modelJSON(report) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     @ViewBuilder
