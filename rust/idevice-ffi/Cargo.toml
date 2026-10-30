@@ -8,7 +8,7 @@ edition = "2024"
 # Lua 模块宿主（v0.3.95：Rust+mlua 解释器，编进 App；单一 Rust 静态库避免
 # 重复 std 符号）。mlua vendored = 编译捆绑的 Lua 5.4 C 源码，需 CC 指向 iOS SDK。
 mlua = { version = "0.9", features = ["lua54", "vendored", "send"] }
-idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "26a28f6a46b5d85a28043c2e62febfa394c8b0a6", default-features = false }
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "89702099f4d7552f704f93b4526756abda319ceb", default-features = false }
 futures = { version = "0.3", optional = true }
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }

@@ -1975,7 +1975,7 @@ dependencies = [
 [[package]]
 name = "idevice"
 version = "0.1.68"
-source = "git+https://github.com/jkcoxson/idevice.git?rev=26a28f6a46b5d85a28043c2e62febfa394c8b0a6#26a28f6a46b5d85a28043c2e62febfa394c8b0a6"
+source = "git+https://github.com/jkcoxson/idevice.git?rev=89702099f4d7552f704f93b4526756abda319ceb#89702099f4d7552f704f93b4526756abda319ceb"
 dependencies = [
  "aes 0.8.4",
  "async-stream",
@@ -2025,7 +2025,7 @@ name = "idevice-ffi"
 version = "0.1.0"
 dependencies = [
  "futures",
- "idevice 0.1.68 (git+https://github.com/jkcoxson/idevice.git?rev=26a28f6a46b5d85a28043c2e62febfa394c8b0a6)",
+ "idevice 0.1.68 (git+https://github.com/jkcoxson/idevice.git?rev=89702099f4d7552f704f93b4526756abda319ceb)",
  "isideload",
  "libc",
  "mdns-sd",
