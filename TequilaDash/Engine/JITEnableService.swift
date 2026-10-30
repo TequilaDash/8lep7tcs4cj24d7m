@@ -92,6 +92,7 @@ final class JITEnableService: Sendable {
         // 隧道建立失败自动重试（最多 3 次、短退避）：Wi-Fi↔蜂窝切换等
         // 瞬时抖动会导致 RPPairing 握手失败，重试后通常成功
         // （对齐 StikDebug PR #432 的隧道重试思路）.
+        TunnelDiagnostics.begin("JIT 建隧道", "hostname=\(hostname) ip=\(deviceIP)")
         var lastError: NSError?
         for attempt in 0..<3 {
             var tunnel = TunnelHandles()
@@ -114,6 +115,10 @@ final class JITEnableService: Sendable {
             if let ffiError {
                 lastError = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             } else if tunnel.adapter != nil, tunnel.handshake != nil {
+                let hasDebugProxy = serviceAvailable("com.apple.internal.dt.remote.debugproxy",
+                                                     in: tunnel.handshake)
+                TunnelDiagnostics.succeed("JIT 建隧道",
+                                          "attempt=\(attempt + 1) RPPairing 表 debugproxy=\(hasDebugProxy.map { String($0) } ?? "未知")")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -124,7 +129,23 @@ final class JITEnableService: Sendable {
                 usleep(useconds_t(300_000 * (attempt + 1)))
             }
         }
-        throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+        let finalError = lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+        TunnelDiagnostics.fail("JIT 建隧道", error: finalError)
+        throw finalError
+    }
+
+    /// 查一条服务是否出现在给定的 RSD 表里；查不到（表为空或 FFI 报错）返回 nil.
+    ///
+    /// 这是排障的唯一直接证据：iOS 27 起 `com.apple.internal.dt.remote.debugproxy`
+    /// 只在 CoreDevice 那张表里，RPPairing 直连的表里没有.
+    private func serviceAvailable(_ name: String, in handshake: OpaquePointer?) -> Bool? {
+        guard let handshake else { return nil }
+        var available = false
+        if let ffiError = name.withCString({ rsd_service_available(handshake, $0, &available) }) {
+            idevice_error_free(ffiError)
+            return nil
+        }
+        return available
     }
 
     // MARK: - CoreDevice 隧道
@@ -140,7 +161,9 @@ final class JITEnableService: Sendable {
     /// 整条链：CoreDeviceProxy 端口 → adapter_connect → core_device_proxy_new_from_stream
     /// → 取 server_rsd_port → create_tcp_adapter → adapter_connect → rsd_handshake_new.
     private func createCoreDeviceTunnel(from tunnel: TunnelHandles) throws -> CoreDeviceHandles {
+        TunnelDiagnostics.begin("JIT 建 CoreDevice 隧道", "服务=com.apple.internal.devicecompute.CoreDeviceProxy")
         guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
+            TunnelDiagnostics.fail("JIT 建 CoreDevice 隧道", code: 33, message: "隧道未建立")
             throw makeError("隧道未建立")
         }
         let serviceName = "com.apple.internal.devicecompute.CoreDeviceProxy"
@@ -206,8 +229,15 @@ final class JITEnableService: Sendable {
         }
         guard let cdHandshake else {
             adapter_free(cdAdapter)
+            TunnelDiagnostics.fail("JIT 建 CoreDevice 隧道", code: 13, message: "CoreDevice RSD 握手返回空句柄")
             throw makeError("CoreDevice RSD 握手失败")
         }
+        let hasDebugProxy = serviceAvailable("com.apple.internal.dt.remote.debugproxy",
+                                             in: cdHandshake)
+        let hasServiceHub = serviceAvailable("com.apple.instruments.dtservicehub",
+                                             in: cdHandshake)
+        TunnelDiagnostics.succeed("JIT 建 CoreDevice 隧道",
+                                  "rsdPort=\(rsdPort) debugproxy=\(hasDebugProxy.map { String($0) } ?? "未知") dtservicehub=\(hasServiceHub.map { String($0) } ?? "未知")")
         return CoreDeviceHandles(adapter: cdAdapter, handshake: cdHandshake)
     }
 
