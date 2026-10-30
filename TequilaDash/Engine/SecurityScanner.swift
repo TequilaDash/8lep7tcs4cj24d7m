@@ -92,6 +92,14 @@ enum SecurityScanner {
         }
     }
 
+    /// 供「设备信息」页的越狱状态复用：命中返回第一条痕迹路径（未命中 nil）.
+    ///
+    /// v0.3.723：设备信息页原先用 AFC 读设备 /bin 判断越狱，在 App 沙盒内必然失败
+    /// （详见 DeviceInfoService.jailbrokenTrace 注释）. 这里复用本页已固化的 suspiciousFiles
+    /// 名单与四重探测，两处判据保持同源，避免再出现两套口径.
+    static func jailbreakFileTrace() -> String? {
+        existingPaths(SecurityPresets.suspiciousFiles).first
+    }
     // MARK: 1. 越狱商店 URL Scheme（Presets: suspiciousURLSchemes 前 6 白名单 + Reveil 6）
 
     static func checkURLSchemes() -> SecurityCheckResult {

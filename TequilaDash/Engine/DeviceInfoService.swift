@@ -19,9 +19,9 @@ struct DeviceInfoModel {
     var buildVersion: String?      // lockdown BuildVersion: "21G93"
     var systemVersion: String      // iOS 26.x
     var productionDevice: String?  // ProductionSOC bool → "是/否"
-    var jailbroken: Bool?           // afc /bin 是否非空
+    var jailbroken: Bool?           // 本进程内是否观测到越狱痕迹
     /// v0.3.711（R4）：越狱检测失败的原因（nil = 检测成功，此时 `jailbroken` 才可信）.
-    /// 三个 guard 失败分别对应 -50 隧道句柄 / -51 AFC 连接 / -52 读 /bin 失败。
+    /// v0.3.723：改为本进程内痕迹探测后不再有失败分支，恒为 nil；字段保留以免改动下游取值面。
     var jailbrokenError: String?
     var deviceName: String?         // lockdown DeviceName
     var deviceColor: String?         // lockdown DeviceColor
@@ -211,10 +211,10 @@ enum DeviceInfoService {
         let region = Self.parseRegion(lockdown["RegionInfo"] as? String)
         // v0.3.711（R4）：区分「确实未越狱」与「读不到」—— 原先 try? 把三种失败折成 nil，
         // 界面显示「未越狱」，与「就是没越狱」同值。
-        var isJailbroken: Bool?
-        var jailbrokenError: String?
-        do { isJailbroken = try Self.isacJailbroken() }
-        catch { jailbrokenError = error.localizedDescription }
+        // v0.3.723：检测手段换成沙盒内痕迹探测后不存在「读不到」这一态（见 jailbrokenTrace 注释），
+        // 因此 error 恒为 nil；保留字段是为了不动下游取值面与界面分支。
+        let isJailbroken: Bool? = (Self.jailbrokenTrace() != nil)
+        let jailbrokenError: String? = nil
         let productionSOC = lockdown["ProductionSOC"] as? Bool
 
         // MobileGestalt（iOS ≥17.4 已被 Apple 废弃 → 基本恒为 nil，仅留作老系统回退）
@@ -755,39 +755,22 @@ enum DeviceInfoService {
         return dict
     }
 
-    /// 越狱检测（iDescriptor utils.rs:497-502：afc list_dir ../../../../bin 非空）
+    /// 本进程内可观测的越狱痕迹（命中返回第一条路径，未命中返回 nil）.
     ///
-    /// v0.3.711（R4）：三条失败路径原先一律 `return false`，被界面显示成确定的「未越狱」
-    /// —— 与「隧道没连上 / 权限不足」混为一谈。现在分别抛出 -50 / -51 / -52，
-    /// 由调用方区分「确实未越狱」与「读不到」。
-    static func isacJailbroken() throws -> Bool {
-        var tunnel = try makeTunnel()
-        defer { tunnel.free() }
-        guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
-            throw NSError(domain: "DeviceInfo", code: -50,
-                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：隧道句柄不可用"])
-        }
-        var afc: OpaquePointer?
-        guard afc_client_connect_rsd(adapter, handshake, &afc) == nil, let afc else {
-            throw NSError(domain: "DeviceInfo", code: -51,
-                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：AFC 服务连接失败"])
-        }
-        defer { afc_client_free(afc) }
-        var entries: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-        var count = 0
-        guard afc_list_directory(afc, "/bin", &entries, &count) == nil else {
-            throw NSError(domain: "DeviceInfo", code: -52,
-                          userInfo: [NSLocalizedDescriptionKey: "越狱检测：读取 /bin 目录失败"])
-        }
-        defer {
-            if let entries {
-                for i in 0..<count {
-                    if let p = entries[i] { free(p) }
-                }
-                entries.deallocate()
-            }
-        }
-        return count > 0
+    /// v0.3.723：原实现是 `afc_client_connect_rsd` + `afc_list_directory(afc, "/bin")`
+    /// （注释自称移植 iDescriptor utils.rs:497-502）. 那条用法成立的前提是
+    /// **PC 侧 / 已越狱上下文拿到的 root AFC**；本 App 经 RSD 连到的是
+    /// **按 App 沙盒限定**的 AFC 服务（`idevice/src/services/afc/mod.rs:685` 的
+    /// `com.apple.afc.shim.remote`），`/bin` 在沙盒之外 ⇒ 每次都以「读取 /bin 目录失败」
+    /// 收场，界面固定显示「读取失败」，与设备真实状态无关（-50/-51 同理只在隧道异常时出现）.
+    ///
+    /// 改用与「安全扫描」页同一套判据：`SecurityPresets.suspiciousFiles` 的 78 条路径
+    /// （含 `/var/jb/libjailbreak.dylib`、`/Applications/Cydia.app`、`/jb/jailbreakd.plist` 等）
+    /// 走四重 API 探测（fileExists / stat / fopen / access），全部只依赖本进程可达信息、不建隧道.
+    /// 取舍：这样得到的是「本进程能看到的痕迹」，比 PC 侧工具弱，但**不再有假错误态**；
+    /// 且越狱设备上这些路径本就存在，误判方向是「漏报」而非「误报」.
+    static func jailbrokenTrace() -> String? {
+        SecurityScanner.jailbreakFileTrace()
     }
 
     /// DiagnosticsRelay mobilegestalt 取 ECID / MLB / Baseband（一次传 keys 数组）
