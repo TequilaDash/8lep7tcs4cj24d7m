@@ -52,6 +52,19 @@ final class JITEnableService: Sendable {
         }
     }
 
+    /// CoreDevice 隧道句柄：经 CoreDeviceProxy 建出的**第二条** RSD 握手.
+    ///
+    /// 它的服务表（iOS 27.0 实测 85 条）比 RPPairing 直连的 RSD 表（64 条）多出
+    /// 整个 `com.apple.coredevice.*` 块与 `com.apple.internal.dt.remote.debugproxy`.
+    private struct CoreDeviceHandles {
+        var adapter: OpaquePointer?
+        var handshake: OpaquePointer?
+        mutating func free() {
+            if let handshake { rsd_handshake_free(handshake); self.handshake = nil }
+            if let adapter { adapter_free(adapter); self.adapter = nil }
+        }
+    }
+
     private func createTunnel(hostname: String) throws -> TunnelHandles {
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             throw makeError("未检测到配对文件.请到「更多 → 配对文件导入」导入配对文件（需 LocalDevVPN + 开发者模式）.")
@@ -112,6 +125,90 @@ final class JITEnableService: Sendable {
             }
         }
         throw lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
+    }
+
+    // MARK: - CoreDevice 隧道
+
+    /// 经 CoreDeviceProxy 打开第二条 RSD 握手.
+    ///
+    /// 为什么需要它：`com.apple.internal.dt.remote.debugproxy` 在 iOS 27 上**只出现在
+    /// CoreDevice 隧道的服务表里**，RPPairing 直连的 RSD 表里没有这一条 —— 于是
+    /// `debug_proxy_connect_rsd` 对着第一张表查必然 ServiceNotFound. 而
+    /// `com.apple.internal.devicecompute.CoreDeviceProxy` 两张表里都有，可以拿它
+    /// 在**同一条** LocalDevVPN 隧道上再开一层 RSD，那一层的表里才有 debugproxy.
+    ///
+    /// 整条链：CoreDeviceProxy 端口 → adapter_connect → core_device_proxy_new_from_stream
+    /// → 取 server_rsd_port → create_tcp_adapter → adapter_connect → rsd_handshake_new.
+    private func createCoreDeviceTunnel(from tunnel: TunnelHandles) throws -> CoreDeviceHandles {
+        guard let adapter = tunnel.adapter, let handshake = tunnel.handshake else {
+            throw makeError("隧道未建立")
+        }
+        let serviceName = "com.apple.internal.devicecompute.CoreDeviceProxy"
+
+        var available = false
+        if let ffiError = serviceName.withCString({ rsd_service_available(handshake, $0, &available) }) {
+            throw error(from: ffiError, fallback: "查询 CoreDeviceProxy 是否可用失败")
+        }
+        guard available else {
+            throw makeError("设备未提供 CoreDeviceProxy 服务，无法建立 CoreDevice 隧道.")
+        }
+
+        var serviceInfo: UnsafeMutablePointer<CRsdService>?
+        if let ffiError = serviceName.withCString({
+            rsd_get_service_info(handshake, $0, &serviceInfo)
+        }) {
+            throw error(from: ffiError, fallback: "读取 CoreDeviceProxy 端口失败")
+        }
+        guard let serviceInfo else { throw makeError("读取 CoreDeviceProxy 端口失败") }
+        let proxyPort = serviceInfo.pointee.port
+        rsd_free_service(serviceInfo)
+
+        var stream: OpaquePointer?
+        if let ffiError = adapter_connect(adapter, proxyPort, &stream) {
+            throw error(from: ffiError, fallback: "连接 CoreDeviceProxy 失败")
+        }
+        guard stream != nil else { throw makeError("连接 CoreDeviceProxy 失败") }
+
+        var proxy: OpaquePointer?
+        if let ffiError = core_device_proxy_new_from_stream(stream, &proxy) {
+            throw error(from: ffiError, fallback: "CoreDeviceProxy 握手失败")
+        }
+        guard let proxy else { throw makeError("CoreDeviceProxy 握手失败") }
+
+        var rsdPort: UInt16 = 0
+        if let ffiError = core_device_proxy_get_server_rsd_port(proxy, &rsdPort) {
+            core_device_proxy_free(proxy)
+            throw error(from: ffiError, fallback: "读取 CoreDevice RSD 端口失败")
+        }
+
+        var cdAdapter: OpaquePointer?
+        // 注意：本函数会消费 proxy 句柄，成功后不能再 core_device_proxy_free.
+        if let ffiError = core_device_proxy_create_tcp_adapter(proxy, &cdAdapter) {
+            core_device_proxy_free(proxy)
+            throw error(from: ffiError, fallback: "创建 CoreDevice 隧道失败")
+        }
+        guard let cdAdapter else { throw makeError("创建 CoreDevice 隧道失败") }
+
+        var cdStream: OpaquePointer?
+        if let ffiError = adapter_connect(cdAdapter, rsdPort, &cdStream) {
+            adapter_free(cdAdapter)
+            throw error(from: ffiError, fallback: "连接 CoreDevice RSD 端口失败")
+        }
+        guard cdStream != nil else {
+            adapter_free(cdAdapter)
+            throw makeError("连接 CoreDevice RSD 端口失败")
+        }
+
+        var cdHandshake: OpaquePointer?
+        if let ffiError = rsd_handshake_new(cdStream, &cdHandshake) {
+            adapter_free(cdAdapter)
+            throw error(from: ffiError, fallback: "CoreDevice RSD 握手失败")
+        }
+        guard let cdHandshake else {
+            adapter_free(cdAdapter)
+            throw makeError("CoreDevice RSD 握手失败")
+        }
+        return CoreDeviceHandles(adapter: cdAdapter, handshake: cdHandshake)
     }
 
     // MARK: - 应用列表
@@ -302,9 +399,31 @@ final class JITEnableService: Sendable {
         guard let remoteServer else { throw makeError("连接设备服务失败") }
 
         // 2) 连接调试代理（debug_proxy）
+        //
+        // iOS 27 起 `com.apple.internal.dt.remote.debugproxy` 只在 CoreDevice 隧道的 RSD
+        // 服务表里，RPPairing 直连的那张表里没有 ⇒ 老路径必然 ServiceNotFound. 先按老路径
+        // 试一次；失败就经 CoreDeviceProxy 建出第二条 RSD，在它的表里重连同一个服务.
+        // 两条路都失败才上抛第一次的原始错误（保留「设备到底回了什么」）.
+        var coreDevice = CoreDeviceHandles()
+        defer { coreDevice.free() }
+
         var debugProxy: OpaquePointer?
-        if let ffiError = debug_proxy_connect_rsd(adapter, handshake, &debugProxy) {
-            throw error(from: ffiError, fallback: "连接调试代理失败")
+        let primaryError = debug_proxy_connect_rsd(adapter, handshake, &debugProxy)
+        if primaryError != nil || debugProxy == nil {
+            let original = primaryError.map { error(from: $0, fallback: "连接调试代理失败") }
+            debugProxy = nil
+            do {
+                coreDevice = try createCoreDeviceTunnel(from: tunnel)
+                guard let cdAdapter = coreDevice.adapter,
+                      let cdHandshake = coreDevice.handshake else {
+                    throw makeError("CoreDevice 隧道未建立")
+                }
+                if let ffiError = debug_proxy_connect_rsd(cdAdapter, cdHandshake, &debugProxy) {
+                    throw error(from: ffiError, fallback: "连接调试代理失败")
+                }
+            } catch let cdError {
+                throw original ?? cdError
+            }
         }
         defer { debug_proxy_free(debugProxy) }
         guard let debugProxy else { throw makeError("连接调试代理失败") }

@@ -6,12 +6,13 @@ use std::{
 };
 
 use idevice::{
-    IdeviceError, IdeviceService, core_device_proxy::CoreDeviceProxy, provider::IdeviceProvider,
+    Idevice, IdeviceError, IdeviceService, core_device_proxy::CoreDeviceProxy,
+    provider::IdeviceProvider,
 };
 
 use crate::{
-    IdeviceFfiError, IdeviceHandle, ffi_err, provider::IdeviceProviderHandle, run_sync,
-    run_sync_local,
+    IdeviceFfiError, IdeviceHandle, ReadWriteOpaque, ffi_err, provider::IdeviceProviderHandle,
+    run_sync, run_sync_local,
 };
 
 pub struct CoreDeviceProxyHandle(pub CoreDeviceProxy);
@@ -83,6 +84,48 @@ pub unsafe extern "C" fn core_device_proxy_new(
     match r {
         Ok(r) => {
             let boxed = Box::new(CoreDeviceProxyHandle(r));
+            unsafe { *client = Box::into_raw(boxed) };
+            null_mut()
+        }
+        Err(e) => ffi_err!(e),
+    }
+}
+
+/// 从一条已建立的 ReadWrite 连接创建 CoreDeviceProxy 客户端
+///
+/// 与 [`core_device_proxy_new`] 的区别只在入口类型：那个函数要求
+/// [`IdeviceHandle`]（由 `idevice_new_tcp_socket` 直连主机端口产生），
+/// 而经 LocalDevVPN 隧道访问设备时，连接必须由 `adapter_connect` 在既有
+/// adapter 上打开，拿到的是 [`ReadWriteOpaque`] —— 两者无法互转. 本函数就是
+/// 补这个缺口：把 `ReadWriteOpaque` 里的流包成 `Idevice` 再交给
+/// `CoreDeviceProxy::new`.
+///
+/// 用途：iOS 27 起 `com.apple.internal.dt.remote.debugproxy` 只出现在
+/// CoreDevice 隧道的 RSD 服务表里，RPPairing 直连的 RSD 表里没有它.
+///
+/// # Safety
+/// `stream` 必须是本库分配的 ReadWrite 句柄，调用后被消费、不可再使用.
+/// `client` 必须是非空指针，用于接收新建的句柄.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn core_device_proxy_new_from_stream(
+    stream: *mut ReadWriteOpaque,
+    client: *mut *mut CoreDeviceProxyHandle,
+) -> *mut IdeviceFfiError {
+    if stream.is_null() || client.is_null() {
+        return ffi_err!(IdeviceError::FfiInvalidArg);
+    }
+
+    let wrapper = unsafe { &mut *stream };
+    let res: Result<CoreDeviceProxy, IdeviceError> = match wrapper.inner.take() {
+        Some(socket) => run_sync(async move {
+            CoreDeviceProxy::new(Idevice::new(socket, "CoreDeviceProxy")).await
+        }),
+        None => return ffi_err!(IdeviceError::FfiInvalidArg),
+    };
+
+    match res {
+        Ok(proxy) => {
+            let boxed = Box::new(CoreDeviceProxyHandle(proxy));
             unsafe { *client = Box::into_raw(boxed) };
             null_mut()
         }

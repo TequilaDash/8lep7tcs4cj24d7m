@@ -3175,6 +3175,20 @@ struct IdeviceFfiError *core_device_proxy_new(struct IdeviceHandle *socket,
                                               struct CoreDeviceProxyHandle **client);
 
 /**
+ * 从一条已建立的 ReadWrite 连接创建 CoreDeviceProxy 客户端
+ *
+ * 与 \`core_device_proxy_new\` 的区别只在入口类型：那个函数要求
+ * \`IdeviceHandle\`，而经 LocalDevVPN 隧道访问设备时，连接由 \`adapter_connect\`
+ * 在既有 adapter 上打开，拿到的是 \`ReadWriteOpaque\` —— 两者无法互转.
+ *
+ * # Safety
+ * \`stream\` 必须是本库分配的 ReadWrite 句柄，调用后被消费、不可再使用.
+ * \`client\` 必须是非空指针，用于接收新建的句柄.
+ */
+struct IdeviceFfiError *core_device_proxy_new_from_stream(struct ReadWriteOpaque *stream,
+                                                          struct CoreDeviceProxyHandle **client);
+
+/**
  * Sends data through the CoreDeviceProxy tunnel
  *
  * # Arguments
