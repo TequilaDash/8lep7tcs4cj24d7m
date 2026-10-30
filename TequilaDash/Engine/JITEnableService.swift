@@ -119,6 +119,7 @@ final class JITEnableService: Sendable {
                                                      in: tunnel.handshake)
                 TunnelDiagnostics.succeed("JIT 建隧道",
                                           "attempt=\(attempt + 1) RPPairing 表 debugproxy=\(hasDebugProxy.map { String($0) } ?? "未知")")
+                dumpServiceTable(tunnel.handshake, label: "RPPairing")
                 return tunnel
             } else {
                 var incomplete = tunnel
@@ -146,6 +147,53 @@ final class JITEnableService: Sendable {
             return nil
         }
         return available
+    }
+
+    /// 服务表每个 label 只 dump 一次：JIT 可能被连点多次，重复 dump 会冲掉隧道日志缓冲.
+    nonisolated(unsafe) private static var dumpedTables: Set<String> = []
+
+    // MARK: - RSD 服务表（只读内存，不建连）
+
+    /// 把一张 RSD 服务表写进隧道日志，并点名本次修复关心的判据.
+    ///
+    /// 真机上唯一能拿到的直接证据：iOS 27 的 RPPairing 表里没有
+    /// `com.apple.internal.dt.remote.debugproxy`，CoreDevice 那张表里有.
+    /// 只在 JIT 这条路上调用（用户显式触发、频率低），不会冲掉隧道日志缓冲.
+    private func dumpServiceTable(_ handshake: OpaquePointer?, label: String) {
+        guard !Self.dumpedTables.contains(label) else { return }
+        Self.dumpedTables.insert(label)
+        guard let handshake else {
+            TunnelDiagnostics.note("JIT RSD 服务表", "\(label) 握手为空，跳过")
+            return
+        }
+        var servicesArray: UnsafeMutablePointer<CRsdServiceArray>?
+        if let ffiError = rsd_get_services(handshake, &servicesArray) {
+            let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+            let code = Int(ffiError.pointee.code)
+            idevice_error_free(ffiError)
+            TunnelDiagnostics.note("JIT RSD 服务表", "\(label) 读取失败 code=\(code) \(message)")
+            return
+        }
+        guard let servicesArray else {
+            TunnelDiagnostics.note("JIT RSD 服务表", "\(label) 返回空")
+            return
+        }
+        defer { rsd_free_services(servicesArray) }
+        let total = Int(servicesArray.pointee.count)
+        var names: [String] = []
+        if let list = servicesArray.pointee.services {
+            for index in 0..<total {
+                if let namePtr = list[index].name {
+                    names.append(String(cString: namePtr))
+                }
+            }
+        }
+        TunnelDiagnostics.note("JIT RSD 服务表", "\(label) 共 \(total) 条")
+        TunnelDiagnostics.noteServiceTable(names)
+        let debugProxy = "com.apple.internal.dt.remote.debugproxy"
+        let coreDeviceCount = names.filter { $0.hasPrefix("com.apple.coredevice") }.count
+        TunnelDiagnostics.note("JIT RSD 判据",
+                               "\(label) debugproxy=\(names.contains(debugProxy) ? "在表里" : "不在表里") coredevice=\(coreDeviceCount) 条")
     }
 
     // MARK: - CoreDevice 隧道
@@ -238,6 +286,7 @@ final class JITEnableService: Sendable {
                                              in: cdHandshake)
         TunnelDiagnostics.succeed("JIT 建 CoreDevice 隧道",
                                   "rsdPort=\(rsdPort) debugproxy=\(hasDebugProxy.map { String($0) } ?? "未知") dtservicehub=\(hasServiceHub.map { String($0) } ?? "未知")")
+        dumpServiceTable(cdHandshake, label: "CoreDevice")
         return CoreDeviceHandles(adapter: cdAdapter, handshake: cdHandshake)
     }
 
