@@ -167,9 +167,14 @@ enum TunnelDiagnostics {
     // MARK: - 内部
 
     private static let stateLock = NSLock()
-    private static var lastKey = ""
-    private static var lastAt = Date.distantPast
-    private static var suppressed = 0
+
+    // 这三项是**受 stateLock 保护**的全局可变状态：读写全部在 stateLock.lock()/
+    // unlock() 之间，逻辑上没有数据竞争。Swift 6 的并发检查看不到锁，只会看到
+    // 「nonisolated 全局可变状态」，所以必须显式标 nonisolated(unsafe) 才编得过
+    // （CI 实测：#MutableGlobalVariable error）.
+    nonisolated(unsafe) private static var lastKey = ""
+    nonisolated(unsafe) private static var lastAt = Date.distantPast
+    nonisolated(unsafe) private static var suppressed = 0
 
     /// 同一条消息 1.5 秒内重复出现就压掉.
     ///
