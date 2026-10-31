@@ -3,7 +3,7 @@
 //  TequilaDash
 //
 //  SSH 无线调试服务（v0.3.63）——路线 A：app 内嵌 Citadel（swift-nio-ssh）SSH 服务端.
-//  用途：电脑 `ssh escape@<手机IP> -p 2222` 无线连接设备，执行内置诊断命令，
+//  用途：电脑 `ssh TequilaDash@<手机IP> -p 2222` 无线连接设备，执行内置诊断命令，
 //  免去爱思导出日志的来回折腾.
 //
 //  安全模型：
@@ -59,7 +59,9 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
         // 存储属性必须全部先于 super.init() 初始化
         let savedPort = UserDefaults.standard.integer(forKey: "ssh.port")
         port = savedPort > 0 ? savedPort : Self.defaultPort
-        username = UserDefaults.standard.string(forKey: "ssh.username") ?? "escape"
+        // v0.3.726 起密码默认随新品牌（TequilaDash）；老安装里存过的旧默认 escape 就地迁移，避免登录用户名突然对不上.
+        username = UserDefaults.standard.string(forKey: "ssh.username") ?? "TequilaDash"
+        if username == "escape" { username = "TequilaDash" }
         if let saved = UserDefaults.standard.string(forKey: "ssh.password"), !saved.isEmpty {
             password = saved
         } else {
