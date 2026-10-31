@@ -32,6 +32,12 @@ struct SpaceReclaimView: View {
                 LiveCleanTabView(appList: appList, segment: $segment)
             }
         }
+        // 规则 31「引擎不熄火」：本页是用户点名的重灾区（先开 App、再开 VPN → 整页灰死）.
+        // 两个页签各自还接了后续扫描，这里兜底覆盖页签尚未实例化时的就绪翻转 ——
+        // resumeAfterTunnelReady() 自己带幂等闸（待发位 + 非加载中等），重复触发不会重复建隧道.
+        .onTunnelReady {
+            appList.resumeAfterTunnelReady()
+        }
         .navigationTitle("空间回收")
         .navigationBarTitleDisplayMode(.large)
     }

@@ -18,6 +18,10 @@ struct AFCBrowserView: View {
     @State private var renameText = ""
     @State private var confirmDelete: AFCService.Entry?
     @State private var activeSheet: SheetItem?
+    /// 规则 31「引擎不熄火」：隧道没就绪时挂起的动作，就绪翻转当场续跑，不弹错误也不要用户重试.
+    @State private var pendingAction: (() -> Void)?
+    /// 待发动作的说明文案，显示在中性待发行下方.
+    @State private var pendingNote = ""
 
     /// 单一 sheet 入口（分享 / 移动），避免多个 .sheet 修饰符互相覆盖.
     private enum SheetItem: Identifiable {
@@ -52,10 +56,19 @@ struct AFCBrowserView: View {
 
     var body: some View {
         List {
+            if pendingAction != nil {
+                // 规则 31：待发是独立一档状态，不吞掉列表内容.
+                Section {
+                    TunnelPendingRow(detail: pendingNote)
+                }
+            }
             Section {
                 if loading {
                     // 区块级加载态收口到 AppLoadingRow（.block 档：圈升一档 + 上下 AppSpacing.section 留白）.
                     AppLoadingRow(title: "正在连接 AFC 服务…", level: .block)
+                } else if pendingAction != nil {
+                    // 隧道没就绪时不把「目录为空」当结论——列表还没真读过.
+                    EmptyView()
                 } else if let errorMessage {
                     // v0.3.683：区块级错误行统一到 AppErrorRow（info.circle + AppTheme.pending + 重试按钮）.
                     AppErrorRow(message: errorMessage, retry: { reload() })
@@ -145,6 +158,7 @@ struct AFCBrowserView: View {
             }
         }
         .toastHost()
+        .onTunnelReady { resumePending() }
         .onAppear {
             if entries.isEmpty && errorMessage == nil { reload() }
         }
@@ -210,8 +224,12 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "移动失败：\(error.localizedDescription)"
-                    loading = false
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "移动 \(source.name)") { performMove(source: source, to: targetDir) }
+                    } else {
+                        errorMessage = "移动失败：\(error.localizedDescription)"
+                        loading = false
+                    }
                 }
             }
         }
@@ -294,8 +312,12 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "\(error.localizedDescription)"
-                    loading = false
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "读取 AFC 目录") { reload() }
+                    } else {
+                        errorMessage = "\(error.localizedDescription)"
+                        loading = false
+                    }
                 }
             }
         }
@@ -319,8 +341,12 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "上传失败：\(error.localizedDescription)"
-                    loading = false
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "上传 \(name)") { upload(url: url) }
+                    } else {
+                        errorMessage = "上传失败：\(error.localizedDescription)"
+                        loading = false
+                    }
                 }
             }
         }
@@ -348,8 +374,12 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "下载失败：\(error.localizedDescription)"
-                    loading = false
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "下载 \(entry.name)") { download(entry) }
+                    } else {
+                        errorMessage = "下载失败：\(error.localizedDescription)"
+                        loading = false
+                    }
                 }
             }
         }
@@ -369,7 +399,11 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "创建失败：\(error.localizedDescription)"
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "创建目录 \(name)") { createFolder() }
+                    } else {
+                        errorMessage = "创建失败：\(error.localizedDescription)"
+                    }
                 }
             }
         }
@@ -391,7 +425,11 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "重命名失败：\(error.localizedDescription)"
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "重命名 \(target.name)") { doRename() }
+                    } else {
+                        errorMessage = "重命名失败：\(error.localizedDescription)"
+                    }
                 }
             }
         }
@@ -409,9 +447,31 @@ struct AFCBrowserView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "删除失败：\(error.localizedDescription)"
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "删除 \(target.name)") { doDelete() }
+                    } else {
+                        errorMessage = "删除失败：\(error.localizedDescription)"
+                    }
                 }
             }
         }
+    }
+
+    // MARK: - 规则 31 待发队列
+
+    /// 隧道没就绪：记下这次意图并转入中性待发态，页面照常可交互，不弹错误.
+    private func queuePending(note: String, _ run: @escaping () -> Void) {
+        errorMessage = nil
+        pendingNote = note
+        pendingAction = run
+        loading = false
+    }
+
+    /// 就绪翻转当场续跑：只重放挂起的那一个动作，跑完清队列.
+    private func resumePending() {
+        guard let run = pendingAction else { return }
+        pendingAction = nil
+        pendingNote = ""
+        run()
     }
 }

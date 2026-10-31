@@ -21,6 +21,9 @@ struct ReclaimTabView: View {
     @StateObject private var vm = ReclaimTabViewModel()
     @State private var selecting = false
     @State private var searchText = ""
+    /// 规则 31：隧道待发期间的续跑是「读列表 → 扫描」一整条链，
+    /// 列表回来后必须自己把扫描接上，不许停在「立即扫描」按钮前等用户再点一次.
+    @State private var autoScanAfterLoad = false
 
     var body: some View {
         mainContent
@@ -29,6 +32,16 @@ struct ReclaimTabView: View {
         }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用")
         .avoidSearchZoom()
+        // 规则 31：LocalDevVPN 中途开启 —— 就绪位一翻转就续跑，不轮询、不等用户退出重进.
+        .onTunnelReady {
+            autoScanAfterLoad = appList.needsTunnelPending
+            appList.resumeAfterTunnelReady()
+        }
+        .onChange(of: appList.apps.count) { _, count in
+            guard autoScanAfterLoad, count > 0, !vm.isScanning, vm.rows.isEmpty else { return }
+            autoScanAfterLoad = false
+            vm.scan(apps: appList.apps)
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selecting {
@@ -100,7 +113,13 @@ struct ReclaimTabView: View {
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
-            if appList.needsPairing {
+            // 规则 31「引擎不熄火」：VPN 没开时这里不是终态灰卡，是「还在等」——
+            // 就绪翻转后由 onTunnelReady 续跑读列表，列表回来再自动扫描.
+            if appList.needsTunnelPending {
+                Section {
+                    TunnelPendingRow(detail: "读取设备应用，然后扫描可回收空间")
+                }
+            } else if appList.needsPairing {
                 Section {
                     PairingGuideCard(showsBackground: false, note: "建立 LocalDevVPN 隧道后才能扫描设备应用.")
                         .listRowInsets(EdgeInsets())

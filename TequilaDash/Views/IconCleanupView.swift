@@ -22,6 +22,9 @@ struct IconCleanupView: View {
     @State private var confirmClean = false
     @State private var confirmRestore = false
     @State private var backupDate: Date?
+    /// 规则 31「引擎不熄火」：隧道没开时挂起的动作与它的说明，就绪翻转后续跑那一个动作.
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingNote = ""
 
     private var isBusy: Bool { phase == .scanning || phase == .cleaning }
 
@@ -38,6 +41,10 @@ struct IconCleanupView: View {
         .navigationTitle("顽固图标清理")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { backupDate = IconCleanupService.backupDate }
+        // 规则 31：LocalDevVPN 中途开启 —— 就绪位一翻转就把挂起的那一步接着跑完.
+        .onTunnelReady {
+            resumePending()
+        }
         .alert("删除选中的图标？", isPresented: $confirmClean) {
             Button("删除", role: .destructive) { clean() }
             Button("取消", role: .cancel) {}
@@ -67,6 +74,10 @@ struct IconCleanupView: View {
                 Text(statusText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+            if pendingAction != nil {
+                // 隧道没通不是失败：中性待发文案，开启后自动继续，不给重试按钮.
+                TunnelPendingRow(detail: pendingNote)
             }
             if let errorText {
                 // v0.3.683：区块级错误行统一到 AppErrorRow.
@@ -186,9 +197,14 @@ struct IconCleanupView: View {
                 }
             } catch {
                 await MainActor.run {
-                    phase = .idle
-                    statusText = ""
-                    errorText = error.localizedDescription
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "扫描设备图标", phase: .idle) { scan() }
+                        statusText = ""
+                    } else {
+                        phase = .idle
+                        statusText = ""
+                        errorText = error.localizedDescription
+                    }
                 }
             }
         }
@@ -217,8 +233,13 @@ struct IconCleanupView: View {
                 }
             } catch {
                 await MainActor.run {
-                    phase = .ready
-                    errorText = error.localizedDescription
+                    if TunnelPending.isPending(error) {
+                        // 清单已经扫出来了，删除动作挂起即可 —— 留在 ready，别清空结果.
+                        queuePending(note: "删除选中的图标", phase: .ready) { clean() }
+                    } else {
+                        phase = .ready
+                        errorText = error.localizedDescription
+                    }
                 }
             }
         }
@@ -240,10 +261,32 @@ struct IconCleanupView: View {
                 }
             } catch {
                 await MainActor.run {
-                    phase = .idle
-                    errorText = error.localizedDescription
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "恢复图标位置", phase: .idle) { restore() }
+                    } else {
+                        phase = .idle
+                        errorText = error.localizedDescription
+                    }
                 }
             }
         }
+    }
+
+    // MARK: - 隧道待发（规则 31）
+
+    /// 把这次动作挂起来而不是报终态错误：就绪翻转后 resumePending() 当场续跑.
+    /// phase 由调用方决定 —— 扫描失败回 .idle，删除失败留在 .ready 保住已扫出的清单.
+    private func queuePending(note: String, phase next: Phase, _ action: @escaping () -> Void) {
+        pendingNote = note
+        pendingAction = action
+        phase = next
+        errorText = nil
+    }
+
+    private func resumePending() {
+        guard let action = pendingAction else { return }
+        pendingAction = nil
+        pendingNote = ""
+        action()
     }
 }

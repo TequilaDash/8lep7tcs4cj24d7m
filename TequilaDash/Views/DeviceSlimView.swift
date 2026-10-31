@@ -31,6 +31,9 @@ struct DeviceSlimView: View {
     @State private var confirmReinstall = false
     @State private var resultText: String?
     @State private var errorText: String?
+    /// HARD-RULES 31：隧道未就绪导致的失败是「待隧道」，不是终态错误，
+    /// 由 onTunnelReady 自动续跑（无定时器、不靠切前台）.
+    @State private var waitingTunnel = false
     /// v0.3.378：非致命提示（例如「应用大小不可用」——数据仍可用，只是不精确）
     @State private var sizeNote: String?
     @State private var fromCache = false
@@ -104,6 +107,11 @@ struct DeviceSlimView: View {
                 groupSection(group)
             }
             if let errorText {
+            if waitingTunnel, usage == nil {
+                    Section {
+                            TunnelPendingRow(detail: "分析设备空间占用")
+                    }
+            }
                 Section {
                     // v0.3.630：改用 AppErrorRow（自带「重试」按钮，且取色统一为 pending 橙）。
                     // 原先是红字 + 旁边一个独立按钮，与 AppErrorRow 的形态重复。
@@ -138,6 +146,13 @@ struct DeviceSlimView: View {
         }
         .toastHost()
         .task { await bootstrap() }
+        // HARD-RULES 31：LocalDevVPN 中途开启时自动续跑扫描.
+        .onTunnelReady {
+                if waitingTunnel {
+                        waitingTunnel = false
+                        Task { await bootstrap() }
+                }
+        }
     }
 
     // MARK: - 1. 环形图 + 图例（同一张卡）
@@ -488,7 +503,12 @@ struct DeviceSlimView: View {
             mergeUsageIssueNote()
             await probeAvailability()
         } catch {
-            errorText = "读取失败：\(error.localizedDescription)"
+            if TunnelPending.isPending(error) {
+                waitingTunnel = true
+                errorText = nil
+            } else {
+                errorText = "读取失败：\(error.localizedDescription)"
+            }
         }
     }
 
@@ -550,6 +570,8 @@ struct DeviceSlimView: View {
         }
         phase = .scanning
         statusText = "正在扫描设备…"
+        // 手动重试同样覆盖「待隧道」提示，避免新一轮已在跑还挂着旧提示.
+        waitingTunnel = false
         errorText = nil
         resultText = nil
         // v0.3.708：**sizeNote 一起清** —— 它是「上一轮数字不完整」的说明，且会被下一轮
@@ -565,7 +587,13 @@ struct DeviceSlimView: View {
             await apply(snapshot: snap, fromCache: false)
         } catch {
             phase = .ready
-            errorText = "扫描失败：\(error.localizedDescription)"
+            // 隧道没通属于可恢复状态：记成待隧道，等就绪翻转自动重扫（HARD-RULES 31）.
+            if TunnelPending.isPending(error) {
+                waitingTunnel = true
+                errorText = nil
+            } else {
+                errorText = "扫描失败：\(error.localizedDescription)"
+            }
         }
     }
 

@@ -21,6 +21,9 @@ final class AppListViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var needsPairing = false
+    /// 规则 31「引擎不熄火」：隧道没开导致的加载失败挂成待发，不是错误 ——
+    /// 就绪翻转后由 resumeAfterTunnelReady() 当场续跑，页面靠它显示「等待隧道」而不是「未找到应用」.
+    @Published var needsTunnelPending = false
     @Published var icons: [String: UIImage] = [:]
     @Published var uninstallStatus: String?
     /// v0.3.181：应用类型（AppStore/企业/AdHoc/开发/未知），key=bundleID.
@@ -28,22 +31,15 @@ final class AppListViewModel: ObservableObject {
 
     private let discovery = AppDiscovery()
     private let uninstaller = UninstallService.shared
-    /// 加载失败后的自动重试任务（LocalDevVPN 开启后无需手动点重试）.
-    private var retryTask: Task<Void, Never>?
 
     var hasPairingFile: Bool { discovery.hasPairingFile }
 
     var canUninstall: Bool { discovery.canUninstallApps() }
 
-    /// 停止自动重试（页面消失时调用）.
-    func stopAutoRetry() {
-        retryTask?.cancel()
-        retryTask = nil
-    }
-
     func reload() {
         isLoading = true
         errorMessage = nil
+        needsTunnelPending = false
         needsPairing = false
         uninstallStatus = nil
         // Swift 6：主线程先取好 discovery 再进后台闭包（类已标 @MainActor，
@@ -58,51 +54,44 @@ final class AppListViewModel: ObservableObject {
                     self.apps = found
                     self.errorMessage = nil
                     self.icons = [:]
-                    // 成功：取消自动重试.
-                    self.stopAutoRetry()
                 }
                 self.loadIcons(discovery, for: found)
                 self.loadAppTypes(for: found)
             } catch let e as AppDiscoveryError {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    if case .noPairingFile = e {
+                    if TunnelPending.isPending(e) {
+                        // 隧道没通：挂待发而不是报错 —— 就绪翻转后 resumeAfterTunnelReady() 当场续跑.
+                        self.needsTunnelPending = true
+                        self.errorMessage = nil
+                    } else if case .noPairingFile = e {
                         self.needsPairing = true
-                        // 配对文件缺失：不再自动重试（等用户导入）.
-                        self.stopAutoRetry()
                     } else {
                         self.errorMessage = e.localizedDescription
-                        self.scheduleAutoRetry()
                     }
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.errorMessage = error.localizedDescription
-                    self.scheduleAutoRetry()
+                    if TunnelPending.isPending(error) {
+                        self.needsTunnelPending = true
+                        self.errorMessage = nil
+                    } else {
+                        self.errorMessage = error.localizedDescription
+                    }
                 }
             }
         }
     }
 
-    /// 加载失败后自动重试（v0.2.108 修正）：
-    /// - 单次调度：本次 retry 触发 reload 并等其完成后，再由 reload 的 catch
-    ///   块决定是否继续下一次.避免旧 `while` 循环在 reload 尚未完成时就调度
-    ///   下一个 Task，导致多个 retry 并发、互相覆盖甚至把 tunnel 资源耗尽.
-    /// - 间隔 3 秒.v0.2.106 的「端口可达预检」已移除；RSD tunnel_create_rppairing
-    ///   自带 3 次重试，直接重试更可靠.
-    /// - 配对文件缺失（needsPairing）时不重试.
-    private func scheduleAutoRetry() {
-        guard retryTask == nil else { return }
-        retryTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard let self, !Task.isCancelled else { return }
-            await MainActor.run { [weak self] in
-                guard let self, !Task.isCancelled else { return }
-                self.retryTask = nil
-                self.reload()
-            }
-        }
+    /// 规则 31「引擎不熄火」：VPN 中途开启后由页面侧 onTunnelReady 调用，当场续跑.
+    /// 取代 v0.2.108 起的 3 秒定时重试 —— 定时重试违反规则 31（禁止定时轮询/重试），
+    /// 且「先开 App 再开 VPN」时它会一直空转，隧道就绪反而没有确定的续跑点.
+    /// 幂等：只在确实挂着待发位时才 reload，多次就绪不会重复建隧道.
+    func resumeAfterTunnelReady() {
+        guard needsTunnelPending, !isLoading else { return }
+        needsTunnelPending = false
+        reload()
     }
 
     /// Fetch icons concurrently and publish each one as soon as it arrives.
@@ -432,6 +421,14 @@ struct AppListView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
+                // 规则 31「引擎不熄火」：隧道没开时不要把「还在等」说成「未找到应用」——
+                // 先挂中性待发文案，VPN 开启后由下面的 onTunnelReady 当场续跑.
+                if viewModel.needsTunnelPending {
+                    Section {
+                        TunnelPendingRow(detail: "读取设备应用")
+                    }
+                }
+
                 // v0.3.245：配对文件缺失引导统一走 PairingGuideCard（独立卡片板块，
                 // 图标块+标题+描述+钥匙导航行，与其余功能页同一视觉）
                 if viewModel.needsPairing {
@@ -445,7 +442,7 @@ struct AppListView: View {
                     // 区块级加载态收口到 AppLoadingRow（裸 List 行、无 Section 卡片，用默认 .inline 档）.
                     AppLoadingRow(title: status)
                 }
-                if visible.isEmpty {
+                if visible.isEmpty && !viewModel.needsTunnelPending {
                     Text(emptyListMessage)
                         .foregroundStyle(.secondary)
                 } else {
@@ -577,6 +574,10 @@ struct AppListView: View {
         // 与缩短后的 15s 超时配合，能更快从"开 App 后才连 VPN"的场景恢复.
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             viewModel.reload()
+        }
+        // 规则 31：App 留在前台时把 LocalDevVPN 打开，就绪位一翻转就当场续跑，不靠回到前台、不轮询.
+        .onTunnelReady {
+            viewModel.resumeAfterTunnelReady()
         }
     }
 

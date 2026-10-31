@@ -18,6 +18,9 @@ struct DeviceInfoView: View {
     @State private var info: DeviceInfoModel?
     @State private var errorText: String?
     @State private var loading = true
+    /// HARD-RULES 31：隧道未就绪导致的失败是「待隧道」，不是终态错误.
+    /// 挂起期间由 onTunnelReady 自动续跑，不开定时器、不等用户切回前台.
+    @State private var waitingTunnel = false
     /// v0.3.531：保修期限（爱思服务端按设备 SN 查表，见 `I4WarrantyClient`）.
     /// 面板先出，联网结果到了再刷新该行；未取到则保持 nil -> 显示原来的「—」.
     @State private var warrantyTime: String?
@@ -32,6 +35,8 @@ struct DeviceInfoView: View {
                 if loading {
                     AppLoadingRow(title: "正在读取设备信息…", level: .page)
                 } else if let info {
+                } else if waitingTunnel, info == nil {
+                        TunnelPendingRow(detail: "读取设备信息", level: .page)
                     hero(info)
                     ForEach(sections(info)) { section in
                         DeviceInfoSectionCard(section: section,
@@ -80,10 +85,18 @@ struct DeviceInfoView: View {
             }
         }
         .task { await load() }
+        // HARD-RULES 31：LocalDevVPN 中途开启时自动续跑挂在隧道上的读取.
+        .onTunnelReady {
+                if waitingTunnel {
+                        waitingTunnel = false
+                        Task { await load() }
+                }
+        }
     }
 
     private func load() async {
         loading = true
+        waitingTunnel = false
         warrantyTime = nil
         defer { loading = false }
         do {
@@ -103,7 +116,13 @@ struct DeviceInfoView: View {
                 }
             }
         } catch {
-            errorText = error.localizedDescription
+            // 隧道没通属于可恢复状态：记成待隧道，等就绪翻转自动重跑（HARD-RULES 31）.
+            if TunnelPending.isPending(error) {
+                waitingTunnel = true
+                errorText = nil
+            } else {
+                errorText = error.localizedDescription
+            }
         }
     }
 

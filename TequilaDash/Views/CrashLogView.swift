@@ -41,6 +41,9 @@ struct CrashLogView: View {
     private let clusterScanLimit = 60
     /// 聚类结果页呈现开关.
     @State private var showClusters = false
+    /// 隧道未就绪时暂存待执行动作（HARD-RULES 31 引擎不熄火）：LocalDevVPN 开启后自动续跑.
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingNote = ""
     /// 明暗模式：进度遮罩卡投影走 `AppShadow.raised`，需显式传入.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -55,6 +58,8 @@ struct CrashLogView: View {
             Section {
                 if loading {
                     AppLoadingRow(title: "正在连接崩溃日志服务…", level: .block)
+                } else if pendingAction != nil {
+                    EmptyView()
                 } else if let errorMessage {
                     if PairingGate.isPairingError(errorMessage) {
                         PairingGuideCard(showsBackground: false, note: "崩溃分析还需要 LocalDevVPN 已连接.")
@@ -78,7 +83,7 @@ struct CrashLogView: View {
             } header: {
                 Text(currentDir.map { "目录：\($0)" } ?? "目录：/")
             } footer: {
-                if !loading && errorMessage == nil {
+                if !loading && errorMessage == nil && pendingAction == nil {
                     Text("对应「设置 → 隐私与安全性 → 分析与改进」.支持批量导出 / 删除.")
                 }
             }
@@ -207,6 +212,7 @@ struct CrashLogView: View {
             Text("删除后无法恢复.")
         }
         .toastHost()
+        .onTunnelReady { resumePending() }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索日志文件名")
         .avoidSearchZoom()
         .sheet(isPresented: $showShareSheet) {
@@ -308,7 +314,11 @@ struct CrashLogView: View {
             } catch {
                 DispatchQueue.main.async {
                     shareLoading = false
-                    ToastCenter.shared.show("无法打开：\(error.localizedDescription)")
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "分享日志 \(entry.name)") { share(entry) }
+                    } else {
+                        ToastCenter.shared.show("无法打开：\(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -375,7 +385,11 @@ struct CrashLogView: View {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = "\(error.localizedDescription)"
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "拉取崩溃日志目录") { reload() }
+                    } else {
+                        errorMessage = "\(error.localizedDescription)"
+                    }
                     loading = false
                 }
             }
@@ -422,7 +436,11 @@ struct CrashLogView: View {
                 DispatchQueue.main.async {
                     previewEntry = nil
                     previewLoading = false
-                    ToastCenter.shared.show("无法打开：\(error.localizedDescription)")
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "查看日志 \(entry.name)") { open(entry) }
+                    } else {
+                        ToastCenter.shared.show("无法打开：\(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -511,7 +529,11 @@ struct CrashLogView: View {
                 DispatchQueue.main.async {
                     busy = false
                     exporting = false
-                    ToastCenter.shared.show("导出失败：\(error.localizedDescription)")
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "导出选中日志") { exportSelected() }
+                    } else {
+                        ToastCenter.shared.show("导出失败：\(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -540,9 +562,31 @@ struct CrashLogView: View {
             } catch {
                 DispatchQueue.main.async {
                     busy = false
-                    ToastCenter.shared.show("删除失败：\(error.localizedDescription)")
+                    if TunnelPending.isPending(error) {
+                        queuePending(note: "删除选中日志") { deleteSelected() }
+                    } else {
+                        ToastCenter.shared.show("删除失败：\(error.localizedDescription)")
+                    }
                 }
             }
         }
+    }
+
+    // MARK: - 隧道待发（HARD-RULES 31 引擎不熄火）
+
+    /// 隧道未就绪时记下动作，等就绪翻转自动续跑；不定时轮询，也不把它当终态错误.
+    private func queuePending(note: String, _ action: @escaping () -> Void) {
+        pendingNote = note
+        pendingAction = action
+        errorMessage = nil
+        loading = false
+    }
+
+    private func resumePending() {
+        guard let action = pendingAction else { return }
+        pendingAction = nil
+        pendingNote = ""
+        loading = true
+        action()
     }
 }

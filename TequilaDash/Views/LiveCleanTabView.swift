@@ -33,6 +33,9 @@ struct LiveCleanTabView: View {
     @StateObject private var vm = LiveCleanTabViewModel()
     @State private var selecting = false
     @State private var searchText = ""
+    /// 规则 31：隧道待发期间续跑的是一整条链（读列表 → 发现 LiveContainer → 扫描），
+    /// 列表回来后必须自己接上下一步，不许停在按钮前等用户再点.
+    @State private var autoRunAfterLoad = false
 
     private var filteredRows: [LiveCleanAppRank] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -52,6 +55,16 @@ struct LiveCleanTabView: View {
         }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索 LiveContainer 应用")
         .avoidSearchZoom()
+        // 规则 31：LocalDevVPN 中途开启 —— 就绪位一翻转就续跑，不轮询、不等退出重进.
+        .onTunnelReady {
+            autoRunAfterLoad = appList.needsTunnelPending
+            appList.resumeAfterTunnelReady()
+        }
+        .onChange(of: appList.apps.count) { _, count in
+            guard autoRunAfterLoad, count > 0, !vm.isScanning, !vm.didRun else { return }
+            autoRunAfterLoad = false
+            vm.discover(apps: appList.apps)
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selecting {
@@ -123,7 +136,13 @@ struct LiveCleanTabView: View {
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
-            if appList.needsPairing {
+            // 规则 31「引擎不熄火」：隧道没开时这一页不是终态，是「还在等」——
+            // 就绪翻转后 onTunnelReady 续跑读列表，列表回来自动接发现与扫描.
+            if appList.needsTunnelPending {
+                Section {
+                    TunnelPendingRow(detail: "读取设备应用，然后扫描 LiveContainer 容器")
+                }
+            } else if appList.needsPairing {
                 Section {
                     PairingGuideCard(showsBackground: false, note: "建立 LocalDevVPN 隧道后才能扫描 LiveContainer 容器.")
                         .listRowInsets(EdgeInsets())
