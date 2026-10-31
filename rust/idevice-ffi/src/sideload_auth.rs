@@ -14,12 +14,12 @@ use std::sync::Arc;
 use isideload::{
     anisette::{remote_v3::RemoteV3AnisetteProvider, AnisetteDataGenerator, AnisetteProvider},
     auth::apple_account::{
-        AppleAccount, AppToken, TwoFactorCallback, TwoFactorCallbackParams, TwoFactorCallbackResponse,
+        AppleAccount, AppToken, TwoFactorCallbackParams, TwoFactorCallbackResponse,
     },
     auth::grandslam::GrandSlam,
     dev::{developer_session::DeveloperSession, devices::DevicesApi},
     sideload::{builder::MaxCertsBehavior, sideloader::Sideloader, SideloaderBuilder, TeamSelection},
-    util::fs_storage::FsStorage,
+    util::{callbacks::TwoFactorCallback, fs_storage::FsStorage},
 };
 
 /// `int (*)(void *ctx, char *out_buf, size_t buf_len)` — 把 2FA 验证码写进
@@ -53,31 +53,38 @@ unsafe fn opt(p: *const c_char, default: &str) -> String {
     CStr::from_ptr(p).to_str().unwrap_or(default).to_string()
 }
 
-/// 构建桥接到 Swift 的 2FA 闭包（适配 isideload 0.2.25 的新回调签名：
-/// `TwoFactorCallbackParams -> TwoFactorCallbackResponse`）。
-pub(crate) fn make_2fa(cb: TwoFactorCb, ctx: TwoFaCtx) -> TwoFactorCallback {
+/// 构建桥接到 Swift 的 2FA 闭包（适配 isideload 0.5.2 的回调签名：
+/// `TwoFactorCallbackParams -> Future<Output = Result<TwoFactorCallbackResponse, Report>>`，
+/// trait 定义挪到了 `util::callbacks`，闭包经 blanket impl 自动满足）.
+pub(crate) fn make_2fa(cb: TwoFactorCb, ctx: TwoFaCtx) -> impl TwoFactorCallback {
     // 用 Box 包装：TwoFaCtx 有 unsafe Send+Sync impl，Box<TwoFaCtx> 同样
     // Send+Sync；闭包捕获整个 Box 变量（Deref 访问不触发字段级精确捕获），
     // 不会退化成捕获裸指针字段 `*mut c_void`（非 Send/Sync）。
     let ctx = Box::new(ctx);
-    Box::new(move |_params: TwoFactorCallbackParams| {
+    move |_params: TwoFactorCallbackParams| async move {
         let Some(cb) = cb else {
-            return TwoFactorCallbackResponse::Abort;
+            return respond(TwoFactorCallbackResponse::Abort);
         };
         let ctx_ptr = (*ctx).0;
         let mut buf = vec![0u8; 128];
         let rc = cb(ctx_ptr, buf.as_mut_ptr() as *mut c_char, buf.len());
         if rc == 0 {
-            return TwoFactorCallbackResponse::Abort;
+            return respond(TwoFactorCallbackResponse::Abort);
         }
         let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         let s = String::from_utf8_lossy(&buf[..end]).trim().to_string();
         if s.is_empty() {
-            TwoFactorCallbackResponse::Abort
+            respond(TwoFactorCallbackResponse::Abort)
         } else {
-            TwoFactorCallbackResponse::SubmitCode(s)
+            respond(TwoFactorCallbackResponse::SubmitCode(s))
         }
-    })
+    }
+}
+
+/// 固定 Future 输出类型为 `Result<_, rootcause::Report>`（0.5.2 trait 要求），
+/// 同时避免在闭包体里显式构造 Report.
+fn respond(r: TwoFactorCallbackResponse) -> Result<TwoFactorCallbackResponse, rootcause::Report> {
+    Ok(r)
 }
 
 /// 在首次 TLS 使用前显式选择 rustls crypto provider。

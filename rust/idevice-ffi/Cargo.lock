@@ -1773,6 +1773,7 @@ dependencies = [
  "once_cell",
  "plist",
  "plist_ffi",
+ "rootcause",
  "rustls",
  "serde_json",
  "tokio",
