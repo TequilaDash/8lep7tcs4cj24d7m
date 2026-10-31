@@ -93,7 +93,11 @@ impl HostSource {
 }
 
 /// Total wall clock the whole candidate sweep may spend, across every round.
-const DIAL_BUDGET: Duration = Duration::from_secs(18);
+///
+/// 实时性判据（用户 2026-10-31，硬规则）：对端全是本机地址（loopback / VPN 对端 /
+/// 本机 LAN），健康监听的应答是毫秒级。这个预算只给「SYN 黑洞」的对端一个
+/// **失败上限**——到点立刻报错返回。它不是给用户等的窗口，更不是重试拖时间的余量。
+const DIAL_BUDGET: Duration = Duration::from_secs(2);
 
 /// Cap on a single `connect()`.
 ///
@@ -105,12 +109,13 @@ const DIAL_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(800);
 
 /// Pause between rounds. The device's listener is occasionally not accepting
 /// yet when `createListener` returns, which is the only thing dialling the same
-/// host again can fix.
-const DIAL_ROUND_DELAY: Duration = Duration::from_millis(700);
+/// host again can fix. 250ms：只补「监听刚起、accept 队列未就绪」的竞态，不做拖时重试.
+const DIAL_ROUND_DELAY: Duration = Duration::from_millis(250);
 
 /// Rounds over the whole candidate list, so each candidate gets this many
-/// attempts in total.
-const DIAL_MAX_ROUNDS: u32 = 6;
+/// attempts in total. 2 轮封顶：第 1 轮失败 + 1 次短延后补射；健康的本地监听
+/// 不需要更多轮，多轮只会在对端黑洞时把卡死时间放大 6 倍（真机 15s 挂死实证）.
+const DIAL_MAX_ROUNDS: u32 = 2;
 
 /// Cap on TLS-PSK/CDTunnel handshakes attempted in one sweep. Each one burns
 /// the listener `createListener` opened and needs a replacement, so this bounds

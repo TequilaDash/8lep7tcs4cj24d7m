@@ -63,6 +63,12 @@ enum TunnelGate {
     /// （消除缓存 1.5 秒陈旧窗口的误报），仍不通 → 立即抛人话错误（代替旧的 75 秒～4 分 45 秒挂死）.
     static func guardReady() throws {
         if isReady { return }
+        // 主线程探测器：谁在主线程同步建隧道，隧道日志立刻点名（HARD-RULES 29：
+        // 主线程任何等待都是卡死；这里只记日志不拦截，修复责任在调用方）.
+        if Thread.isMainThread {
+            let frames = Thread.callStackSymbols.dropFirst(2).prefix(3).joined(separator: " <- ")
+            TunnelDiagnostics.note("主线程隧道调用", frames.isEmpty ? "guardReady 在主线程同步等待" : frames)
+        }
         let reachable = LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: probeTimeout, port: RemotePairingPort.current)
         if reachable {
             setReady(true)
