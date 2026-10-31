@@ -265,7 +265,14 @@ pub unsafe fn sign_ipa(
             tracing::info!("Signing IPA at {ipa_path}");
             let (signed, _special) = session
                 .sideloader
-                .sign_app(PathBuf::from(&ipa_path), None, false)
+                .sign_app(
+                    PathBuf::from(&ipa_path),
+                    None,
+                    false,
+                    None::<fn(f32) -> std::future::Ready<()>>,
+                    None,
+                    None,
+                )
                 .await
                 .map_err(|e| format!("sign_app failed: {e}"))?;
             Ok::<_, String>(signed.to_string_lossy().to_string())

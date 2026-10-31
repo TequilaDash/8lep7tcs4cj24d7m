@@ -35,6 +35,7 @@ struct RootView: View {
             NavigationStack {
                 HomeView(appList: viewModel)
             }
+            .avoidSearchZoom()
             .tabItem {
                 Label("主页", systemImage: "house.fill")
             }
@@ -49,6 +50,7 @@ struct RootView: View {
                     selectedTab = .home
                 })
             }
+            .avoidSearchZoom()
             .tabItem {
                 Label("更多", systemImage: "ellipsis")
             }

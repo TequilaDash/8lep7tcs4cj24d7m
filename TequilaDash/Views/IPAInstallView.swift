@@ -678,7 +678,7 @@ struct IPAInstallView: View {
                 HStack(alignment: .top, spacing: 12) {
                     AppRowIcon(systemName: "info.circle", tint: AppTheme.pending, symbolSize: 18, frameSize: 34)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("安装没有完成")
+                        Text("操作未能完成")
                             .font(AppFont.subheadlineEmphasis)
                         Text(error)
                             .font(AppFont.caption)
