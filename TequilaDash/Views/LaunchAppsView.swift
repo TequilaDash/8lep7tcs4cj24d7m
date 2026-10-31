@@ -27,8 +27,11 @@ struct LaunchAppsView: View {
     private var hasPairing: Bool { TunnelContext.shared.hasPairingFile }
 
     private var filteredApps: [JITAppInfo] {
-        // 三层匹配（精确子串 -> 容错拼写 -> 子序列），"siro" 能容错命中 "Siri"（AppSearchMatcher）.
-        AppSearchMatcher.filter(apps, query: searchText)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return apps }
+        return apps.filter {
+            $0.name.lowercased().contains(query) || $0.bundleID.lowercased().contains(query)
+        }
     }
 
     var body: some View {
