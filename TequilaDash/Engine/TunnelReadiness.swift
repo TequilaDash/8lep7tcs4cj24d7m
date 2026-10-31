@@ -55,6 +55,9 @@ enum TunnelGate {
         lock.unlock()
     }
 
+    /// 建隧道前现场补探测的超时（失败路径 0.5 秒封顶，硬规则 29）.
+    private static let probeTimeout: TimeInterval = 0.5
+
     /// 建隧道前的同步闸门：
     /// 缓存说通 → 放行（零等待，消除旧 3 秒预检）；说不通 → 现场补**一次** 0.5 秒权威探测
     /// （消除缓存 1.5 秒陈旧窗口的误报），仍不通 → 立即抛人话错误（代替旧的 75 秒～4 分 45 秒挂死）.
@@ -97,7 +100,9 @@ final class TunnelReadiness: ObservableObject {
     /// 单次探测超时（非阻塞 connect + poll）.
     private static let probeTimeout: TimeInterval = 0.5
 
-    private init() {}
+    /// nonisolated：`nonisolated(unsafe) static let shared = TunnelReadiness()` 的初始化
+    /// 跑在非隔离上下文，@MainActor 隔离的 init 会让全文件编译失败（CI 124497181277 实锤）.
+    private nonisolated init() {}
 
     // MARK: - 生命周期
 
