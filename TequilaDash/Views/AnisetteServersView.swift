@@ -28,7 +28,6 @@ struct AnisetteServersView: View {
     @State private var customText: String = ""
     @State private var status: Status = .checking
     @State private var statusTask: Task<Void, Never>?
-undefined
 
     /// 服务器连通性检测结果.
     enum Status: Equatable {
