@@ -37,9 +37,12 @@
 
   2026-10-30 机制升级（不变量不变）：iOS 26/27 上 drawer 搜索框一旦激活（有焦点 / 有文字），
   系统会把整页内容缩进居中圆角卡（search zoom presentation），旁边还露出其它卡的碎片 ——
-  用户截图实锤。该页因此弃用系统 drawer，改为**自绘常驻搜索条**（`TextField(text: $searchText)`
-  挂在 `.safeAreaInset(edge: .top)` 上）。常驻的判定从「`.always`」放宽为
-  「`.always` 或 自绘搜索条」，顶部让位不变量保留。
+  用户截图实锤。
+
+  2026-10-31 终版（HARD-RULES 30）：自绘常驻搜索条被用户**明令禁止**（曾短暂换上后被勒令
+  回退），判定收回到「`.always`」单选；缩卡改由系统官方开关压制 —— 页面在 `.searchable`
+  之后挂 `.avoidSearchZoom()`（Shared/AvoidSearchZoom.swift =
+  searchPresentationToolbarBehavior(.avoidHidingContent)）。常驻 + 让位 + 防缩卡三项都查。
 
 判据只认**符号/结构**，不绑行号、不绑文案。扫描前先用状态机把注释屏蔽为空白（字符串保留），
 故注释 / 文档里写 `displayMode: .always` 不会误报。
@@ -166,24 +169,25 @@ def check(root):
                         ".scrollContent)`）把搜索框高度让出来"
                         % (rel, _line_of(masked, k)))
 
-        # S2：本页修复落点的回归 tripwire —— 「搜索框常驻」不变量，两种实现二选一：
-        #   (a) 系统搜索框：`displayMode: .always`（常驻）+ 顶部让位；
-        #   (b) 自绘搜索条：`TextField` 绑定 `$searchText`，挂在顶部安全区（常驻由结构保证，
-        #       且永不触发系统 search zoom presentation）。
-        # 无论哪种，顶部让位都必须在（`ScrollView` 容器，网格第一行不能被压住）。
+        # S2：本页修复落点的回归 tripwire（HARD-RULES 30 后定型）——
+        #   ① 系统搜索框且常驻：`displayMode: .always`（自绘常驻搜索条已被用户明令禁止）；
+        #   ② 顶部让位：`ScrollView` 容器的网格第一行不能被搜索框压住；
+        #   ③ 防缩卡：必须挂 `avoidSearchZoom()`（= searchPresentationToolbarBehavior
+        #      (.avoidHidingContent)，iOS 26/27 搜索放大态抑制），不许拿缩卡换外观.
         if rel == LAUNCH_FILE:
             launch_seen = True
-            has_custom_search = ("TextField(" in masked) and ("$searchText" in masked)
-            resident = (ALWAYS_FP in masked) or has_custom_search
-            if not resident:
-                errs.append("[S2] %s 缺少常驻搜索框 —— 用户要求搜索框常驻：需 `%s` 或自绘"
-                            "搜索条（TextField 绑定 $searchText）；改掉它搜索框就会收起"
+            if ALWAYS_FP not in masked:
+                errs.append("[S2] %s 缺少 `%s` —— 用户要求搜索框常驻，且禁止自绘搜索条"
+                            "（HARD-RULES 30）；改掉它搜索框就会收起"
                             % (rel, ALWAYS_FP))
             if not has_top_inset:
                 errs.append("[S2] %s 缺少 `%s` —— 本页是 `ScrollView` 容器，常驻搜索框必须"
-                            "配一个顶部让位（自绘条直接挂在顶部安全区也算），否则网格第一行"
-                            "会被搜索框盖住"
+                            "配一个顶部让位，否则网格第一行会被搜索框盖住"
                             % (rel, TOP_INSET_FP))
+            if ("avoidSearchZoom(" not in masked) and ("AvoidSearchZoom" not in masked):
+                errs.append("[S2] %s 缺少 `.avoidSearchZoom()` —— iOS 26/27 搜索放大态会把整页"
+                            "缩成圆角卡（用户截图实锤），系统搜索框页必须挂防缩卡修饰器"
+                            % rel)
 
     if not launch_seen:
         errs.append("[S2] 找不到 %s —— S2 无法校验（文件被改名 / 删除？）" % LAUNCH_FILE)
@@ -207,7 +211,7 @@ def main():
         print("命中：%d（S1 滚动容器用 .always 必须让位 / S2 拉起应用页常驻与让位成对）" % len(errs))
         return 1
     print("S1 滚动容器页的 `.always` 均已让位（List 容器 或 顶部 safeAreaInset）：OK")
-    print("S2 拉起应用页常驻搜索框（系统 `.always` 或自绘条）+ 顶部让位成对：OK")
+    print("S2 拉起应用页系统常驻搜索框 + 顶部让位 + avoidSearchZoom 成对：OK")
     print("命中：0")
     return 0
 
