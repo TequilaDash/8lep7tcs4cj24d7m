@@ -29,7 +29,7 @@ struct AnisetteServersView: View {
     @State private var status: Status = .checking
     @State private var statusTask: Task<Void, Never>?
     /// 「重置 ADI 票据」的确认弹窗（用户 2026-10-31 批准的自救入口）.
-    @State private var showAdiResetConfirm = false
+    /// 「重置 ADI 票据」的确认弹窗（用户 2026-10-31 批准的自救入口）.
     @State private var showAdiResetConfirm = false
 
     /// 服务器连通性检测结果.
