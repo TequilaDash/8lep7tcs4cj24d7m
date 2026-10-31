@@ -29,6 +29,8 @@ struct AnisetteServersView: View {
     @State private var status: Status = .checking
     @State private var statusTask: Task<Void, Never>?
     @State private var showAdiResetConfirm: Bool = false
+    /// SideStore 同名开关：勾选时重置只清 adi.pb，保留自定义 client-info（默认勾选）.
+    @State private var keepAnisetteHeaders: Bool = true
 
     /// 服务器连通性检测结果.
     enum Status: Equatable {
@@ -305,21 +307,18 @@ struct AnisetteServersView: View {
                 Text("重置adi.pb")
             }
         }
-        .confirmationDialog("重置adi.pb？", isPresented: $showAdiResetConfirm, titleVisibility: .visible) {
-            Button("重置（保留头部自定义）", role: .destructive) {
+        .sheet(isPresented: $showAdiResetConfirm) {
+            AdiResetSheet {
+                // SideStore 的 Reset ADI 语义（SideStore ResetAdiAlertController）：
+                // 一个破坏性「重置」按钮 + 勾选「保留头部自定义」，没有第二种重置.
+                if !keepAnisetteHeaders {
+                    UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
+                }
                 AnisetteProvider.shared.resetProvisioning()
                 statusTask?.cancel()
                 statusTask = Task { await refreshStatus() }
             }
-            Button("重置并清除头部自定义", role: .destructive) {
-                UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
-                AnisetteProvider.shared.resetProvisioning()
-                statusTask?.cancel()
-                statusTask = Task { await refreshStatus() }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("只清除配给票据与服务器绑定，设备身份保留.「头部自定义」指设置里的自定义 client-info.")
+            .presentationDetents([.medium])
         }
     }
 
@@ -402,5 +401,40 @@ struct AnisetteServersView: View {
         } catch {
             status = .failed("连接失败")
         }
+    }
+}
+
+
+/// 重置 adi.pb 确认卡（对齐 SideStore 的 Reset ADI 弹窗：勾选 + 单个破坏性按钮 + 取消）.
+private struct AdiResetSheet: View {
+    var onReset: () -> Void
+    @State private var keepHeaders = true
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("重置 adi.pb?")
+                .font(.headline)
+            Text("这会清除 ADI 配给票据.重置后需要重新联网验证，Apple ID 与设备身份保留.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Toggle(isOn: $keepHeaders) {
+                Text("保留 Anisette 头部自定义")
+                    .font(.subheadline)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .buttonStyle(.plain)
+                Button("重置") {
+                    onReset()
+                    dismiss()
+                }
+                .foregroundStyle(AppTheme.danger)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDragIndicator(.visible)
     }
 }

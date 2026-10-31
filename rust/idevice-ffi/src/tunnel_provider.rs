@@ -724,7 +724,7 @@ pub unsafe extern "C" fn tunnel_create_remotexpc(
             .await
             .map_err(|_| {
                 IdeviceError::InternalError(format!(
-                    "RSD connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                    "RSD connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪）"
                 ))
             })?
             .map_err(|e| IdeviceError::InternalError(format!("RSD connect: {e}")))?;
@@ -741,7 +741,7 @@ pub unsafe extern "C" fn tunnel_create_remotexpc(
             .await
             .map_err(|_| {
                 IdeviceError::InternalError(format!(
-                    "tunnel service: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                    "tunnel service: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪）"
                 ))
             })?
             .map_err(|e| IdeviceError::InternalError(format!("tunnel service: {e}")))?;
@@ -907,7 +907,7 @@ pub unsafe extern "C" fn tunnel_create_rppairing_multihost(
                 return Err(TunnelFailure::new(
                     TunnelFailureKind::TunnelFailureRsdUnreachable,
                     IdeviceError::InternalError(format!(
-                        "connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                        "connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪）"
                     )),
                 ));
             }

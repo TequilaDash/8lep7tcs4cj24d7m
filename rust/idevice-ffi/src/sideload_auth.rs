@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use isideload::{
-    anisette::{remote_v3::RemoteV3AnisetteProvider, AnisetteDataGenerator, AnisetteProvider},
+    anisette::{
+        remote_v3::RemoteV3AnisetteProvider, AnisetteClientInfo, AnisetteDataGenerator, AnisetteProvider,
+    },
     auth::apple_account::{
         AppleAccount, AppToken, TwoFactorCallbackParams, TwoFactorCallbackResponse,
     },
@@ -157,7 +159,16 @@ pub unsafe fn apple_signin(
                 Box::new(FsStorage::new(PathBuf::from(&storage_dir))),
                 "0".to_string(),
             )
-            .map_err(|e| format!("anisette provider: {e}"))?;
+            .map_err(|e| format!("anisette provider: {e}"))?
+            .set_client_info_override(Some(
+                AnisetteClientInfo {
+                    // Apple 的 GSA 边缘节点自 2026-09 起对含 com.apple.dt.Xcode 的
+                    // X-Mme-Client-Info 一律回 503（上游 a19f5f0 / AltStore#1790 同因同修）.
+                    // 服务器下发的 client_info 不受控，这里强制走 akd 口径.
+                    client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+                        .to_string(),
+                    user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
+                });
 
             tracing::info!("Apple ID: logging in {apple_id}");
             let mut account = AppleAccount::builder(&apple_id)
@@ -364,7 +375,16 @@ pub unsafe fn signin_with_session(
                 Box::new(FsStorage::new(PathBuf::from(&storage_dir))),
                 "0".to_string(),
             )
-            .map_err(|e| format!("anisette provider: {e}"))?;
+            .map_err(|e| format!("anisette provider: {e}"))?
+            .set_client_info_override(Some(
+                AnisetteClientInfo {
+                    // Apple 的 GSA 边缘节点自 2026-09 起对含 com.apple.dt.Xcode 的
+                    // X-Mme-Client-Info 一律回 503（上游 a19f5f0 / AltStore#1790 同因同修）.
+                    // 服务器下发的 client_info 不受控，这里强制走 akd 口径.
+                    client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+                        .to_string(),
+                    user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
+                });
 
             tracing::info!("Session: constructing GrandSlam client");
             let client_info = provider

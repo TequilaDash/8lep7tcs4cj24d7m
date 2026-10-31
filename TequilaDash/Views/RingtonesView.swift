@@ -57,7 +57,13 @@ struct RingtonesView: View {
 
     var body: some View {
         List {
-            if let errorMessage {
+            if !TunnelGate.isReady {
+                // 规则 34：隧道未就绪是「待发」不是错误 —— 图四口径（用户 2026-11-01 判定唯一正确形态）.
+                Section {
+                    TunnelPendingRow(detail: "读取铃声目录", level: .block)
+                }
+                .listRowInsets(EdgeInsets())
+            } else if let errorMessage {
                 Section {
                     if PairingGate.isPairingError(errorMessage) {
                         PairingGuideCard(showsBackground: false)
@@ -90,6 +96,10 @@ struct RingtonesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .onTunnelReady {
+            guard ringtones.isEmpty && errorMessage == nil else { return }
+            reload()
+        }
         .navigationTitle("铃声管理")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -218,6 +228,12 @@ struct RingtonesView: View {
     // MARK: - 操作
 
     private func reload() {
+        // 规则 34：未就绪不发起（Rust 侧快速失败也不该打进来）；就绪翻转由 onTunnelReady 自动续跑.
+        guard TunnelGate.isReady else {
+            loading = false
+            errorMessage = nil
+            return
+        }
         loading = true
         errorMessage = nil
         DispatchQueue.global(qos: .userInitiated).async {
