@@ -34,9 +34,9 @@ struct DeviceInfoView: View {
             VStack(spacing: 16) {
                 if loading {
                     AppLoadingRow(title: "正在读取设备信息…", level: .page)
-                } else if let info {
                 } else if waitingTunnel, info == nil {
-                        TunnelPendingRow(detail: "读取设备信息", level: .page)
+                    TunnelPendingRow(detail: "读取设备信息", level: .page)
+                } else if let info {
                     hero(info)
                     ForEach(sections(info)) { section in
                         DeviceInfoSectionCard(section: section,

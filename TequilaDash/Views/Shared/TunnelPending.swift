@@ -22,7 +22,9 @@ enum TunnelPending {
     /// 2 与 3 只在就绪位还没翻到 ready 时算待发：已经 ready 还失败就是真故障，必须照旧上屏，不许挂成永久待发.
     static func isPending(_ error: Error) -> Bool {
         if error is TunnelReadinessError { return true }
-        guard !TunnelReadiness.shared.isReady else { return false }
+        // 用 TunnelGate 的 NSLock 缓存读（同一面就绪旗）：isPending 会被非隔离上下文调到，
+        // 不能走 @MainActor 的 TunnelReadiness.shared.isReady（CI 实测 actor 隔离报错）.
+        guard !TunnelGate.isReady else { return false }
         if let e = error as? AppDiscoveryError, case .heartbeatFailed = e { return true }
         if let e = error as? IconCleanupService.CleanupError, case .tunnelFailed = e { return true }
         return false
