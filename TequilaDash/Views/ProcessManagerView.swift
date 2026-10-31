@@ -70,19 +70,10 @@ struct ProcessManagerView: View {
     /// 隧道未就绪的页内横幅（替代弹窗；重试按钮手动补拍，就绪翻转也会自动补拍）.
     @ViewBuilder
     private var tunnelBanner: some View {
+        // 与全仓待发态同款（Shared/TunnelPending.swift）—— 同一状态只允许一种长相；
+        // 就绪翻转已由 onReceive(TunnelReadiness.shared.$isReady) 自动 refresh，不再要手动重试钮.
         if let notice = viewModel.tunnelNotice {
-            HStack(spacing: 10) {
-                Image(systemName: "circle.trianglebadge.exclamationmark")
-                    .foregroundStyle(AppTheme.pending)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("隧道未就绪").font(.subheadline).weight(.medium)
-                    Text(notice).font(.footnote).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("重试") { viewModel.refresh() }
-                    .buttonStyle(.borderless)
-            }
-            .padding(.vertical, 4)
+            TunnelPendingRow(detail: notice, level: .inline)
         }
     }
 
