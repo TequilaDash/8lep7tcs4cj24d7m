@@ -99,6 +99,8 @@ enum DeveloperModeService {
     }
 
     private static func createTunnel(hostname: String = "TequilaDashDevMode") throws -> Tunnel {
+        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
+        try TunnelGate.guardReady()
         let pairingPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("pairingFile.plist").path
         guard FileManager.default.fileExists(atPath: pairingPath) else {

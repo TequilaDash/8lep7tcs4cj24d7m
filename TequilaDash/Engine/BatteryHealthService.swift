@@ -72,6 +72,8 @@ enum BatteryHealthService {
     }
     /// 建隧道（3 次退避重试，参照 RSD 铁律）
     private static func createTunnel() throws -> TunnelHandles {
+        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
+        try TunnelGate.guardReady()
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             throw makeError("未检测到配对文件.请先在「应用管理」导入配对文件（需 LocalDevVPN + 开发者模式）.")
         }

@@ -36,6 +36,9 @@ struct TequilaDashApp: App {
         // v0.3.725：iOS 27.2 起 RPPairing 端口不再固定 49152，启动即后台解析一次
         // （_remotepairing._tcp.）。current 只读缓存，解析不阻塞这里.
         RemotePairingPort.warmUp()
+        // v0.3.726：隧道就绪状态机 —— 后台持续探测（不通 1.5s 一拍 / 通 20s 保活），
+        // 各 createTunnel 的 TunnelGate.guardReady() 读缓存：通了零等待，没通快速失败.
+        TunnelReadiness.shared.start()
         // v0.3.543：装配 kbsync 生成器 —— `ent/download` 免登录下载链的唯一前置。
         // 用 storeagent 解释执行生成机器绑定凭据（见 Services/AppleAuth/KBSyncProvider.swift）。
         // 装配失败不报错：`ent/download` 那一跳会静默跳过，下载照常走旧链。

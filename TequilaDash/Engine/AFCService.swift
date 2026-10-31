@@ -60,6 +60,8 @@ final class AFCService {
     }
 
     private func createTunnel() throws -> TunnelHandles {
+        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
+        try TunnelGate.guardReady()
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             throw makeError("未检测到配对文件.请到「更多 → 配对文件导入」导入（需 LocalDevVPN + 开发者模式）.")
         }

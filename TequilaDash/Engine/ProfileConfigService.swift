@@ -54,6 +54,8 @@ enum ProfileConfigService {
     ///（`ProvisioningProfileStore.tunnelQueue`），各建一条等于没保护.
     /// 只锁「建隧道」这一步（理由同 v0.3.376 FileSharingService.tunnelQueue）.
     private static func createTunnel() throws -> (adapter: OpaquePointer, handshake: OpaquePointer) {
+        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
+        try TunnelGate.guardReady()
         try ProvisioningProfileStore.tunnelQueue.sync {
             try createTunnelLocked()
         }

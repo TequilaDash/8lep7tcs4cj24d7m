@@ -79,6 +79,8 @@ enum DeviceEnrichService {
 
     /// 建隧道（3 次退避重试，遵循 RSD 铁律：一次业务操作只建一条隧道）
     private static func createTunnel() throws -> TunnelHandles {
+        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
+        try TunnelGate.guardReady()
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             throw makeError("未检测到配对文件，请先导入配对文件（需 LocalDevVPN + 开发者模式）")
         }

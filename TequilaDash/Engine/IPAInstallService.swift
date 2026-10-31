@@ -1105,12 +1105,24 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
-        // 带超时的可达性预检：Rust 侧首个 connect 无超时，隧道不通时会阻塞约 4m45s，
-        // 这里不通就快速失败（见 tunnelProbeTimeoutSeconds 注释）.
-        guard probeTunnelReachable(&addr) else {
-            throw makeError("隧道端口不可达（\(deviceIP):\(RemotePairingPort.current) 预检 \(Int(Self.tunnelProbeTimeoutSeconds)) 秒无响应）."
-                + "请确认 LocalDevVPN 已连接，然后重试.")
+        // v0.3.726 可达性预检改为缓存优先（TunnelReadiness 后台探测）：
+        //  - 缓存说通 → 直接放行，消除旧版「每次安装先白等 3 秒」；
+        //  - 缓存说不通 → 给安装链一个「等隧道就绪」窗口（最多 8 秒，200ms 一拍），
+        //    LocalDevVPN 在窗口内起来就自动继续，用户不用手动重试；
+        //  - 窗口耗尽仍不通 → 现场补一次带超时探测后快速失败
+        //    （Rust 侧首个 connect 无超时，隧道不通会挂约 4m45s，绝不能放过去）.
+        if !TunnelGate.isReady {
+            let deadline = Date().addingTimeInterval(8)
+            while !TunnelGate.isReady && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
         }
+        guard TunnelGate.isReady || probeTunnelReachable(&addr) else {
+            TunnelGate.setReady(false)
+            throw makeError("隧道端口不可达（\(deviceIP):\(RemotePairingPort.current) 探测不可达）."
+                + "请打开 LocalDevVPN，就绪后本页自动恢复，然后重试.")
+        }
+        TunnelGate.setReady(true)
 
         var lastError: NSError?
         TunnelDiagnostics.begin("安装隧道")
