@@ -1047,7 +1047,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 期间安装链全程无进展，用户看到的就是「永远转圈」。这里先用**带超时**的 socket
     /// `connect` 预检一次，不通就快速失败，不把调用线程挂在那儿
     /// （与 `LocalDevVPN.isTunnelReachable` 同款：`SO_SNDTIMEO`/`SO_RCVTIMEO` + `connect`）.
-    private static let tunnelProbeTimeoutSeconds: TimeInterval = 3
+    /// 0.5 秒：局域网内端口真开着的 connect 50ms 内必回；0.5s 已是 10 倍裕量.
+    /// 硬规则 29：失败路径上的超时也要抠 —— 隧道真不通时用户最多等 0.5 秒就看到结论.
+    private static let tunnelProbeTimeoutSeconds: TimeInterval = 0.5
 
     /// 用带超时的 socket `connect` 探测 `addr`（RPPairing 端口）是否可达.
     /// 与 `LocalDevVPN.isTunnelReachable` 同款实现，地址取本函数已构造好的 `sockaddr_in`.
@@ -1105,18 +1107,11 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
-        // v0.3.726 可达性预检改为缓存优先（TunnelReadiness 后台探测）：
-        //  - 缓存说通 → 直接放行，消除旧版「每次安装先白等 3 秒」；
-        //  - 缓存说不通 → 给安装链一个「等隧道就绪」窗口（最多 8 秒，200ms 一拍），
-        //    LocalDevVPN 在窗口内起来就自动继续，用户不用手动重试；
-        //  - 窗口耗尽仍不通 → 现场补一次带超时探测后快速失败
-        //    （Rust 侧首个 connect 无超时，隧道不通会挂约 4m45s，绝不能放过去）.
-        if !TunnelGate.isReady {
-            let deadline = Date().addingTimeInterval(8)
-            while !TunnelGate.isReady && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.2)
-            }
-        }
+        // v0.3.727 可达性判定全部实时（硬规则 29：禁止任何人为等待窗口）：
+        //  - 后台状态机（TunnelReadiness）持续把探测结论写进缓存，缓存说通 → 零等待放行；
+        //  - 缓存未就绪（冷启动/状态翻转中）→ 就地做一次带超时探测，结论即真实：
+        //    通了立刻放行，不通立刻失败 —— 绝不「等 X 秒再看」；
+        //  - Rust 侧首个 connect 无超时，隧道不通会挂约 4m45s，所以失败前必须补探测.
         guard TunnelGate.isReady || probeTunnelReachable(&addr) else {
             TunnelGate.setReady(false)
             throw makeError("隧道端口不可达（\(deviceIP):\(RemotePairingPort.current) 探测不可达）."

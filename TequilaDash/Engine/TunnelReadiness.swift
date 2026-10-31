@@ -119,18 +119,6 @@ final class TunnelReadiness: ObservableObject {
         TunnelDiagnostics.note("隧道就绪", "后台探测已启动（target=\(LocalDevVPN.targetIP):\(RemotePairingPort.current)）")
     }
 
-    // MARK: - 异步等待（安装链路用）
-
-    /// 等到隧道就绪或超时；等待期间只轮询缓存，不阻塞任何线程.
-    func waitReady(timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if isReady { return true }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-        }
-        return isReady
-    }
-
     // MARK: - 探测
 
     /// 立即探测一次（socket 在后台线程跑，结论回主线程发布 + 写入 TunnelGate 缓存）.
