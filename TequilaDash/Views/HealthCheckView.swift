@@ -43,6 +43,10 @@ struct HealthCheckView: View {
         .onAppear {
             if phase == .idle { startScan() }
         }
+        // 实时：隧道就绪翻转（含进入页面时的当前值）自动补跑隧道项，无需退出重进.
+        .onReceive(TunnelReadiness.shared.$isReady) { ready in
+            if ready { recheckWhenTunnelReady() }
+        }
     }
 
     // MARK: 扫描进度卡（灵动环 + 当前项）
@@ -153,44 +157,70 @@ struct HealthCheckView: View {
         }
     }
 
-    // MARK: 扫描执行（逐项动画推进）
+    // MARK: 扫描执行（逐项推进）
     private func startScan() {
         phase = .scanning
         currentCheckIndex = 0
         results = []
         let ids = SecurityScanner.checkIDs
-        // 用串行 async 逐项执行，UI 显示推进
-        Task {
-            for (i, id) in ids.enumerated() {
-                try? await Task.sleep(nanoseconds: 300_000_000)  // 每项节奏
-                let result: SecurityCheckResult
-                switch id {
-                case "urlscheme": result = SecurityScanner.checkURLSchemes()
-                case "files": result = SecurityScanner.checkSuspiciousFiles()
-                case "writable": result = SecurityScanner.checkSystemDirsWritable()
-                case "dyld": result = SecurityScanner.checkDYLDInjection()
-                case "objc": result = SecurityScanner.checkSuspiciousObjCClasses()
-                case "interpreters": result = SecurityScanner.checkAccessibleInterpreters()
-                case "symlink": result = SecurityScanner.checkSuspiciousSymbolicLinks()
-                case "fork": result = SecurityScanner.checkFork()
-                case "executables": result = SecurityScanner.checkSuspiciousExecutables()
-                case "ports": result = SecurityScanner.checkSuspiciousPorts()
-                case "env": result = SecurityScanner.checkEnvironmentVariables()
-                case "libraryNames": result = SecurityScanner.checkSuspiciousLibraryNames()
-                case "mainExe": result = SecurityScanner.checkMainExecutableIntegrity()
-                case "taskPorts": result = SecurityScanner.checkExceptionPorts()
-                case "provisioning": result = SecurityScanner.checkProvisioningProfiles()
-                case "entitlements": result = SecurityScanner.checkEntitlements()
-                default: continue
-                }
+        let scoreBinding = score
+        // 规则 29/主线程纪律：检测项里有要建隧道的（provisioning），Task {} 写在 View 里
+        // 会继承 MainActor —— 2026-10-31 真机实证卡死在 14/16 后被看门狗杀掉。
+        // 所以整条扫描跑在 detached 任务里，只在每项完成后回主线程刷一次 UI。
+        // 不加任何「每项节奏」sleep：项与项的真实耗时就是节奏。
+        Task.detached(priority: .userInitiated) {
+            var collected: [SecurityCheckResult] = []
+            for id in ids {
+                guard let result = Self.perform(id) else { continue }
+                collected.append(result)
+                let snapshot = collected
                 await MainActor.run {
-                    currentCheckIndex = i + 1
-                    results.append(result)
+                    currentCheckIndex = snapshot.count
+                    results = snapshot
                 }
             }
+            let final = max(0, 100 - collected.reduce(0) { $0 + $1.penalty })
             await MainActor.run {
-                finalScore = max(0, 100 - results.reduce(0) { $0 + $1.penalty })
+                finalScore = final
                 phase = .done
+                scoreBinding?.wrappedValue = final
+            }
+        }
+    }
+
+    /// 单项执行（nonisolated：跑在调用方给的线程上，绝不上主线程）。
+    nonisolated private static func perform(_ id: String) -> SecurityCheckResult? {
+        switch id {
+        case "urlscheme": return SecurityScanner.checkURLSchemes()
+        case "files": return SecurityScanner.checkSuspiciousFiles()
+        case "writable": return SecurityScanner.checkSystemDirsWritable()
+        case "dyld": return SecurityScanner.checkDYLDInjection()
+        case "objc": return SecurityScanner.checkSuspiciousObjCClasses()
+        case "interpreters": return SecurityScanner.checkAccessibleInterpreters()
+        case "symlink": return SecurityScanner.checkSuspiciousSymbolicLinks()
+        case "fork": return SecurityScanner.checkFork()
+        case "executables": return SecurityScanner.checkSuspiciousExecutables()
+        case "ports": return SecurityScanner.checkSuspiciousPorts()
+        case "env": return SecurityScanner.checkEnvironmentVariables()
+        case "libraryNames": return SecurityScanner.checkSuspiciousLibraryNames()
+        case "mainExe": return SecurityScanner.checkMainExecutableIntegrity()
+        case "taskPorts": return SecurityScanner.checkExceptionPorts()
+        case "provisioning": return SecurityScanner.checkProvisioningProfiles()
+        case "entitlements": return SecurityScanner.checkEntitlements()
+        default: return nil
+        }
+    }
+
+    /// 实时复检：隧道就绪翻转的瞬间，正在扫/已扫完的页面自动补跑一次，
+    /// 「待复检」的隧道项当场补上 —— 不用用户退出重进，也不需要定时器。
+    private func recheckWhenTunnelReady() {
+        guard TunnelReadiness.shared.isReady, phase != .scanning else { return }
+        Task.detached(priority: .userInitiated) {
+            guard let fresh = Self.perform("provisioning") else { return }
+            await MainActor.run {
+                guard let idx = results.firstIndex(where: { $0.id == "provisioning" }) else { return }
+                results[idx] = fresh
+                finalScore = max(0, 100 - results.reduce(0) { $0 + $1.penalty })
                 score?.wrappedValue = finalScore
             }
         }

@@ -186,7 +186,9 @@ struct HomeView: View {
             I4AdvancedView()
         }
         // v0.3.200：进入主页自动静默体检（灵动球分数即时显示）
-        .task(id: "auto-check") {
+        // v0.3.729：task id 直接绑隧道就绪状态 —— VPN 一开，分数扫描立刻自动重跑
+        //（未开时 provisioning 项被闸门秒回「待复检」，不会撞隧道，也不卡主线程）.
+        .task(id: TunnelReadiness.shared.isReady) {
             let total = await Task.detached(priority: .userInitiated) {
                 SecurityScanner.runAll().1
             }.value

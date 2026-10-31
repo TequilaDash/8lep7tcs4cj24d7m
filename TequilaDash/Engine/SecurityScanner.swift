@@ -408,6 +408,14 @@ extension SecurityScanner {
     /// 设备上安装的 provisioning profile 是否与白名单哈希一致（Presets secureMobileProvisioningProfileHashes）.
     /// 读全量 profile 需 misagent + RSD 配对（TequilaDash 已具备）；无配对/失败时标 uncertain.
     static func checkProvisioningProfiles() -> SecurityCheckResult {
+        // 规则 29/实时判据：本项是全扫描里唯一要建隧道的。隧道没就绪就**绝不发起**——
+        // 闸门读的是 TunnelGate 缓存（非阻塞），秒回「待复检」项，扫描照常往下走；
+        // VPN 一开（TunnelReadiness 翻 ready），调用方会自动复检本项。
+        if !TunnelGate.isReady {
+            return SecurityCheckResult(id: "provisioning", title: "权限配置文件",
+                detail: "等待 LocalDevVPN 隧道（开启后自动复检本项）",
+                passed: true, warn: true, uncertain: true)
+        }
         let profiles = (try? ProvisioningProfileStore.fetchAllProfiles()) ?? []
         if profiles.isEmpty {
             return SecurityCheckResult(id: "provisioning", title: "权限配置文件",

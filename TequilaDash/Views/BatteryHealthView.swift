@@ -73,6 +73,10 @@ struct BatteryHealthView: View {
             pollTask?.cancel()
             pollTask = nil
         }
+        // 实时：VPN 一开立即补一拍，不再干等下一个 10 秒轮询.
+        .onReceive(TunnelReadiness.shared.$isReady) { ready in
+            if ready { Task { await load(silent: true) } }
+        }
     }
 
     private static let timeFormatter: DateFormatter = {
