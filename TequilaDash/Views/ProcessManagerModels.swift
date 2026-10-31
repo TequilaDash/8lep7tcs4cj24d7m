@@ -83,7 +83,7 @@ enum ProcessControlAction: String {
         switch self {
         case .resume: return .green
         case .pause:  return .orange
-        case .kill:   return .red
+        case .kill:   return AppTheme.danger
         }
     }
 

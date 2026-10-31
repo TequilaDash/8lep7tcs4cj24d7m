@@ -268,7 +268,7 @@ struct GestaltView: View {
                 ForEach(backupFiles, id: \.self) { url in
                     HStack(spacing: 10) {
                         Image(systemName: "archivebox")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppTheme.accent)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(url.lastPathComponent)
                                 .font(.footnote)

@@ -383,7 +383,7 @@ struct AppStoreDetailView: View {
     private func phaseTint(_ phase: IPADownloadCenter.Phase) -> Color {
         switch phase {
         case .downloading: return AppTheme.categoryDownload
-        case .installing:  return AppTheme.categorySign
+        case .installing:  return AppTheme.pending
         case .paused:      return AppTheme.unselected
         case .waiting:     return .secondary
         case .done:        return AppTheme.success

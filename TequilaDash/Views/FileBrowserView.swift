@@ -496,7 +496,7 @@ struct FileBrowserView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .foregroundColor(destructive && enabled ? .red : nil)
+            .foregroundColor(destructive && enabled ? AppTheme.danger : nil)
         }
         .disabled(!enabled)
     }

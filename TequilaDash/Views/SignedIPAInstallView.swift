@@ -84,7 +84,7 @@ struct SignedIPAInstallView: View {
                         Label("在线安装", systemImage: "arrow.down.circle.fill")
                     }
                         .buttonStyle(.plain)
-                    .foregroundColor(AppTheme.categorySign)
+                    .foregroundColor(AppTheme.accent)
 
                     Button {
                         self.install(mode: .upgrade)
@@ -92,7 +92,7 @@ struct SignedIPAInstallView: View {
                         Label("覆盖升级 / 降级安装", systemImage: "arrow.up.arrow.down.circle")
                     }
                         .buttonStyle(.plain)
-                    .foregroundColor(AppTheme.categorySign)
+                    .foregroundColor(AppTheme.accent)
                 } header: {
                     Label("执行安装", systemImage: "hammer")
                 } footer: {

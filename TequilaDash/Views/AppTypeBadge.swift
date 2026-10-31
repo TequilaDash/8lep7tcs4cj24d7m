@@ -4,7 +4,7 @@ import SwiftUI
 /// v0.3.184 7 类（细分 App Store 正版 / 共享 + 隐藏应用）.
 /// v0.3.364：文案改走 `AppType.displayName`（对齐爱思；`.appStore` 兜底不再显示
 /// 「AppStore」，与苹果正版同文案），并新增「越狱版」（红/粉系）.
-/// 配色：蓝=正版/紫=共享/橙=企业/绿=开发/粉=越狱/灰=系统或兜底.
+/// 配色：品牌蓝=正版/紫=共享/橙=企业/绿=开发/橙状态=越狱/灰=系统或兜底.
 struct AppTypeBadge: View {
     let type: AppType
     var compact: Bool = false
@@ -13,16 +13,16 @@ struct AppTypeBadge: View {
     ///
     /// Step 3 批 6-B：底色由「色 + 内联 opacity」拆成「纯色 + 不透明度」两项，
     /// 与 `SizePill(tint:fillOpacity:)` 的口径对齐（该组件默认 12%）；
-    /// 6 类色（blue 12% / purple 14% / orange 14% / green 14% / pink 16% /
+    /// 6 类色（accent 12% / purple 14% / orange 14% / green 14% / pending 16% /
     /// secondary 10%）逐一保留原值，不做归一，故收敛后逐类型渲染零变化.
     private var palette: (text: Color, fillOpacity: Double) {
         switch type {
-        case .appStorePersonal: return (.blue,      0.12)
+        case .appStorePersonal: return (AppTheme.accent, 0.12)
         case .appStoreShared:   return (.purple,    0.14)
-        case .appStore:         return (.blue,      0.12)
+        case .appStore:         return (AppTheme.accent, 0.12)
         case .enterprise:       return (.orange,    0.14)
         case .development:      return (.green,     0.14)
-        case .jailbroken:       return (.pink,      0.16)
+        case .jailbroken:       return (AppTheme.pending, 0.16)
         case .hidden:           return (.secondary, 0.10)
         case .unknown:          return (.secondary, 0.10)
         }

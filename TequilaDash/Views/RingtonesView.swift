@@ -168,7 +168,7 @@ struct RingtonesView: View {
         let isPlaying = player.playingID == entry.id
         return HStack(spacing: 12) {
             Image(systemName: isPlaying ? "speaker.wave.2.fill" : "music.note")
-                .foregroundColor(isPlaying ? .green : .blue)
+                .foregroundColor(isPlaying ? AppTheme.success : AppTheme.accent)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
@@ -186,7 +186,7 @@ struct RingtonesView: View {
             Spacer()
             Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle")
                 .font(.title3)
-                .foregroundColor(isPlaying ? .red : .secondary)
+                .foregroundColor(isPlaying ? AppTheme.accent : .secondary)
         }
         .contentShape(Rectangle())
         .onTapGesture {

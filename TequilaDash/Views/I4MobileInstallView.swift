@@ -723,7 +723,7 @@ struct I4MobileInstallView: View {
     private var stageTint: Color {
         switch stage {
         case .idle: return .secondary
-        case .installing: return AppTheme.categorySign
+        case .installing: return AppTheme.pending
         case .succeeded: return AppTheme.trSuccess
         case .failed: return AppTheme.trDanger
         }

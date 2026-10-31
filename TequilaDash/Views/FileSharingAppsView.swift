@@ -271,7 +271,7 @@ struct FileSharingAppsView: View {
         typeClass(app)?.rawValue ?? "识别中"
     }
 
-    /// v0.3.364：类型胶囊配色——正版蓝 / 共享紫 / 个人签名绿 / 企业签名橙 / 越狱版粉 / 系统灰.
+    /// v0.3.364：类型胶囊配色——正版品牌蓝 / 共享紫 / 个人签名绿 / 企业签名橙 / 越狱版状态橙 / 系统灰.
     private func typeTint(_ app: FileSharingApp) -> Color {
         guard let type = typeClass(app) else { return .secondary }   // 识别中 → 灰
         switch type {
@@ -279,7 +279,7 @@ struct FileSharingAppsView: View {
         case .appStoreShared:   return .purple
         case .development:      return .green
         case .enterprise:       return .orange
-        case .jailbroken:       return .pink
+        case .jailbroken:       return AppTheme.pending
         case .system:           return .gray
         case .unrecognized:     return .secondary
         }

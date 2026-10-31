@@ -201,7 +201,7 @@ struct IPADownloadActionsSheet: View {
     /// 在线安装同样不该在包还没落地时另起一次。所以这两行只在有本地文件时可点。
     private var installRows: [RowSpec] {
         [
-            RowSpec(icon: "arrow.down.app.fill", tint: .blue, title: "覆盖安装",
+            RowSpec(icon: "arrow.down.app.fill", tint: AppTheme.accent, title: "覆盖安装",
                     trailing: pendingStageTrailing,
                     disabled: isPendingDownload) {
                 onOverwriteInstall()
@@ -259,7 +259,7 @@ struct IPADownloadActionsSheet: View {
     private var otherRows: [RowSpec] {
         [
             extractLinkRow,
-            RowSpec(icon: "trash", tint: .red, title: "删除", titleTint: .red) {
+            RowSpec(icon: "trash", tint: AppTheme.danger, title: "删除", titleTint: AppTheme.danger) {
                 showDeleteConfirm = true
             }
         ]

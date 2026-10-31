@@ -196,9 +196,9 @@ struct DeviceControlView: View {
 
     private func actionTint(_ action: DeviceAction) -> Color {
         switch action {
-        case .respringKill, .webCrash: return .blue
+        case .respringKill, .webCrash: return AppTheme.accent
         case .restart: return .orange
-        case .shutdown: return .red
+        case .shutdown: return AppTheme.danger
         case .recovery: return .purple
         }
     }

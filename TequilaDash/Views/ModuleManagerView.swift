@@ -248,7 +248,7 @@ struct ModuleManagerView: View {
                     AppStateSection(state: .empty("该模块没有可打开的 Web 页面",
                                                   message: "该模块没有静态 webroot，也没有正在运行的本地服务.",
                                                   icon: "globe"))
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
