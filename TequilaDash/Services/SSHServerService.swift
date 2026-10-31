@@ -60,8 +60,9 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
         let savedPort = UserDefaults.standard.integer(forKey: "ssh.port")
         port = savedPort > 0 ? savedPort : Self.defaultPort
         // v0.3.726 起密码默认随新品牌（TequilaDash）；老安装里存过的旧默认 escape 就地迁移，避免登录用户名突然对不上.
-        username = UserDefaults.standard.string(forKey: "ssh.username") ?? "TequilaDash"
-        if username == "escape" { username = "TequilaDash" }
+        var migratedName = UserDefaults.standard.string(forKey: "ssh.username") ?? "TequilaDash"
+        if migratedName == "escape" { migratedName = "TequilaDash" }
+        username = migratedName
         if let saved = UserDefaults.standard.string(forKey: "ssh.password"), !saved.isEmpty {
             password = saved
         } else {
