@@ -18,9 +18,6 @@ struct LaunchAppsView: View {
     @State private var searchText = ""
     @State private var launchingBundleIDs: Set<String> = []
     @State private var feedback: LaunchFeedback?
-    /// 常驻搜索框在滚动内容区顶部实测的遮挡高度（由 `SearchBarInsetProbe` 从系统视图树量出，不写死）.
-    /// 首帧为 0；探针量到后立刻回填，内容区随即让位 —— 量到之前也不会比「不占位」更差.
-    @State private var searchBarInset: CGFloat = 0
     /// 明暗模式：底部提示条的浮层投影走 `AppShadow.raised`（深色下更重），需显式传入.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -32,6 +29,38 @@ struct LaunchAppsView: View {
         return apps.filter {
             $0.name.lowercased().contains(query) || $0.bundleID.lowercased().contains(query)
         }
+    }
+
+    /// 自绘常驻搜索条：替代 `.searchable(navigationBarDrawer(displayMode: .always))`.
+    /// 为什么不用系统搜索框：iOS 26/27 上 drawer 搜索框一旦激活（有焦点 / 有文字），系统会把
+    /// 整页内容缩进一张居中圆角卡（search zoom presentation），旁边还露出别的卡的碎片 ——
+    /// 用户 2026-10-30 截图报「UI 问题」即此（灰带 62.6% 宽 + 右缘异卡，像素实测）。
+    /// 自绘后页面永不进入系统搜索呈现；常驻由 `.safeAreaInset(edge: .top)` 保证.
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField("搜索应用或 Bundle ID", text: $searchText)
+                .font(AppFont.subheadline)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button {
+                    AppHaptics.tap()
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Capsule(style: .continuous).fill(AppTheme.surfaceSunken))
     }
 
     var body: some View {
@@ -77,29 +106,20 @@ struct LaunchAppsView: View {
             .padding(.horizontal, AppTheme.pageInset)
             .padding(.top, 4)
             .padding(.bottom, 32)
-            // 测量探针：0 高度、不参与布局，只挂在内容里（这样能顺着 UIKit 视图树找到本页滚动视口）.
-            .background(alignment: .top) {
-                SearchBarInsetProbe(inset: $searchBarInset)
-                    .frame(height: 0)
-                    .allowsHitTesting(false)
-            }
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.surfaceBase)
-        // 常驻搜索框的占位：把滚动内容区顶部让出「搜索框实测高度」，网格第一行不再被压住.
-        // 高度来自 `SearchBarInsetProbe`（机型 / 横竖屏 / 动态字号自适应），不写死.
+        // 自绘常驻搜索条（见 `searchBar` 注释）：挂在顶部安全区，滚动时保持常驻 ——
+        // 常驻诉求（用户 2026-10-13）继续满足，且不再进系统搜索呈现.
         .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: searchBarInset)
+            searchBar
+                .padding(.horizontal, AppTheme.pageInset)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+                .background(AppTheme.surfaceBase)
         }
         .navigationTitle("拉起应用")
         .navigationBarTitleDisplayMode(.inline)
-        // 搜索框常驻（`displayMode: .always`）——用户 2026-10-13 要求「回到之前那样常驻」.
-        // 本页容器是 `ScrollView`（全仓唯一一个「滚动容器 + 搜索框」的页面，其余同款搜索框页面
-        // 都是 `List`）：`List` 会把常驻搜索框计入内容安全区，`ScrollView` 不会，直接 `.always`
-        // 搜索框就成了压在内容上的常驻浮层、网格第一行被盖住（2026-10-12 回归）。
-        // 所以常驻必须与上面的 `.safeAreaInset(edge: .top)` 成对出现：由探针量出搜索框实际
-        // 遮挡高度后让位 —— 既常驻，又不遮挡. 与 `FileSharingAppsView.swift` v0.3.289 同根因.
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用或 Bundle ID")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -223,132 +243,4 @@ private struct LaunchFeedback: Identifiable {
     let id = UUID()
     let message: String
     let success: Bool
-}
-
-// MARK: - 常驻搜索框遮挡高度探针
-
-/// 实测「常驻搜索框压在滚动内容上的高度」，把这段高度交给 `.safeAreaInset(edge: .top)` 占位.
-///
-/// 为什么需要：`.searchable(placement: .navigationBarDrawer(displayMode: .always))` 的常驻搜索框
-/// 在 `List` 里由系统计入内容安全区；本页容器是 `ScrollView`，系统不做这一步，搜索框会浮在
-/// 滚动内容上、网格第一行被压住。这里自己从 UIKit 视图树量出真实遮挡高度。
-///
-/// ⚠️ 遮挡量 = **搜索框底边 − 导航栏底边**（= 搜索框自身占的那一条），**不是**「搜索框底边 −
-/// 滚动视口顶边」：`ScrollView` 的 frame 全出血顶到屏幕顶，而系统已把「状态栏 + 导航栏」这段
-/// 高度算进了内容安全区，内容实际从**导航栏底边**开始。旧算法没扣掉这段 ⇒ 顶部多出一大片空白
-/// （2026-10-13 用户报「拉起应用 空旷的地方」）.
-///
-/// 高度**不写死**：量的是 `UISearchBar` / `UISearchTextField` 相对同页导航栏的高度（随机型、
-/// 横竖屏、动态字号变化）。量不到搜索框则回 0 —— 此时也不存在常驻搜索框，0 正是正确值。
-///
-/// 布局期不直接改 SwiftUI 状态（会触发「在视图更新中改状态」），一律下一轮主线程回填；
-/// 且只在数值真正变化时回填，避免「回填 → 重排 → 再回填」的自激循环.
-private struct SearchBarInsetProbe: UIViewRepresentable {
-    @Binding var inset: CGFloat
-
-    func makeUIView(context: Context) -> ProbeView {
-        let view = ProbeView()
-        view.onMeasure = Self.publisher(for: $inset)
-        return view
-    }
-
-    func updateUIView(_ uiView: ProbeView, context: Context) {
-        uiView.onMeasure = Self.publisher(for: $inset)
-        uiView.measure()
-    }
-
-    /// 只在数值变化（容差 0.5pt）时回填，异步回主线程，避免自激.
-    private static func publisher(for binding: Binding<CGFloat>) -> @MainActor (CGFloat) -> Void {
-        { value in
-            guard abs(value - binding.wrappedValue) > 0.5 else { return }
-            binding.wrappedValue = value
-        }
-    }
-
-    final class ProbeView: UIView {
-        var onMeasure: (@MainActor (CGFloat) -> Void)?
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            measure()
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            measure()
-        }
-
-        func measure() {
-            guard let window else { return }
-            // ① 本页滚动视口：从探针沿 superview 上溯找最近的 UIScrollView.
-            var node: UIView? = superview
-            while let current = node, !(current is UIScrollView) { node = current.superview }
-            guard let scrollView = node as? UIScrollView else { return }
-
-            // ② 同一页的导航栏 / 搜索框：沿滚动视口上溯，找到第一层含导航 chrome 的祖先即停
-            //    （避免上溯到 window 根、误取其它页面的搜索框）.
-            var searchFrame: CGRect?
-            var navBottom: CGFloat?
-            var ancestor = scrollView.superview
-            while let current = ancestor {
-                let chrome = Self.navigationChrome(in: current, skipping: scrollView)
-                if chrome.search != nil || chrome.navBar != nil {
-                    if let search = chrome.search {
-                        searchFrame = search.convert(search.bounds, to: window)
-                    }
-                    if let navBar = chrome.navBar {
-                        navBottom = navBar.convert(navBar.bounds, to: window).maxY
-                    }
-                    break
-                }
-                ancestor = current.superview
-            }
-
-            // ③ 真实遮挡量 = 搜索框底边 − **导航栏底边**（不是滚动视口顶边）.
-            //
-            //    关键：`ScrollView` 的 frame 全出血顶到屏幕顶，系统已把「状态栏 + 导航栏」这段
-            //    高度算进了内容安全区 —— 内容实际从**导航栏底边**开始。故需要额外让出的只是
-            //    「搜索框自身高度」这一条。旧实现量「搜索框底边 − 滚动视口顶边」，把系统已经让过
-            //    的「状态栏 + 导航栏」又加了一遍 ⇒ 顶部多出一大片空白（2026-10-13 用户报）.
-            let value: CGFloat
-            if let searchFrame {
-                if let navBottom {
-                    value = max(0, searchFrame.maxY - navBottom)
-                } else {
-                    // 无导航栏兜底：搜索框自身高度即它压在内容上的高度.
-                    value = max(0, searchFrame.height)
-                }
-            } else {
-                // 没有常驻搜索框 ⇒ 无需让位.
-                value = 0
-            }
-            Task { @MainActor [weak self] in
-                self?.onMeasure?(value)
-            }
-        }
-
-        /// 在 `root` 子树里找**搜索框**与**导航栏**；`skip` 及其子树跳过，避免误取本页滚动内容.
-        ///
-        /// 两者都要：搜索框底边给出它压到哪，导航栏底边给出系统已经让过的内容顶边 —— 二者相减
-        /// 才是需要额外让出的高度（见 `measure()` ③）。`UISearchBar` 优先于 `UISearchTextField`
-        /// （前者含内边距，高度更接近真实占位）。
-        private static func navigationChrome(in root: UIView, skipping skip: UIView) -> (search: UIView?, navBar: UIView?) {
-            var searchBar: UIView?
-            var searchField: UIView?
-            var navBar: UIView?
-            var stack: [UIView] = [root]
-            while let current = stack.popLast() {
-                if current === skip { continue }
-                if current is UISearchBar {
-                    if searchBar == nil { searchBar = current }
-                } else if current is UISearchTextField {
-                    if searchField == nil { searchField = current }
-                } else if current is UINavigationBar, navBar == nil {
-                    navBar = current
-                }
-                stack.append(contentsOf: current.subviews)
-            }
-            return (searchBar ?? searchField, navBar)
-        }
-    }
 }

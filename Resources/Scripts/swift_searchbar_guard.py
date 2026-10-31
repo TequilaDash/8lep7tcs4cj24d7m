@@ -32,9 +32,14 @@
         (a) 是 `List` 容器页（同文件内出现 `List {` 或 `List(`，系统会自动内缩）；
         (b) 同文件内出现 `.safeAreaInset(edge: .top`（自己把搜索框高度让出来）。
       两条都不满足 ⇒ 视为「搜索框浮在滚动内容上、第一行被盖住」⇒ 报错。
-  S2  **本页 tripwire**：`TequilaDash/Views/LaunchAppsView.swift` 必须**同时**保留
-      `displayMode: .always`（常驻）与 `.safeAreaInset(edge: .top`（让位）。少任一条即报错 ——
-      少 `.always` 就退回「搜索框会收起」，少让位就让网格第一行被压住。
+  S2  **本页 tripwire**：`TequilaDash/Views/LaunchAppsView.swift` 必须有**常驻搜索框**（两种
+      实现二选一）+ 顶部让位。少让位 ⇒ 网格第一行被压住；搜索框会收起 ⇒ 报错。
+
+  2026-10-30 机制升级（不变量不变）：iOS 26/27 上 drawer 搜索框一旦激活（有焦点 / 有文字），
+  系统会把整页内容缩进居中圆角卡（search zoom presentation），旁边还露出其它卡的碎片 ——
+  用户截图实锤。该页因此弃用系统 drawer，改为**自绘常驻搜索条**（`TextField(text: $searchText)`
+  挂在 `.safeAreaInset(edge: .top)` 上）。常驻的判定从「`.always`」放宽为
+  「`.always` 或 自绘搜索条」，顶部让位不变量保留。
 
 判据只认**符号/结构**，不绑行号、不绑文案。扫描前先用状态机把注释屏蔽为空白（字符串保留），
 故注释 / 文档里写 `displayMode: .always` 不会误报。
@@ -161,15 +166,23 @@ def check(root):
                         ".scrollContent)`）把搜索框高度让出来"
                         % (rel, _line_of(masked, k)))
 
-        # S2：本页修复落点的回归 tripwire —— 常驻（.always）与让位（顶部 safeAreaInset）必须成对
+        # S2：本页修复落点的回归 tripwire —— 「搜索框常驻」不变量，两种实现二选一：
+        #   (a) 系统搜索框：`displayMode: .always`（常驻）+ 顶部让位；
+        #   (b) 自绘搜索条：`TextField` 绑定 `$searchText`，挂在顶部安全区（常驻由结构保证，
+        #       且永不触发系统 search zoom presentation）。
+        # 无论哪种，顶部让位都必须在（`ScrollView` 容器，网格第一行不能被压住）。
         if rel == LAUNCH_FILE:
             launch_seen = True
-            if ALWAYS_FP not in masked:
-                errs.append("[S2] %s 缺少 `%s` —— 用户要求搜索框常驻；改掉它搜索框就会收起"
+            has_custom_search = ("TextField(" in masked) and ("$searchText" in masked)
+            resident = (ALWAYS_FP in masked) or has_custom_search
+            if not resident:
+                errs.append("[S2] %s 缺少常驻搜索框 —— 用户要求搜索框常驻：需 `%s` 或自绘"
+                            "搜索条（TextField 绑定 $searchText）；改掉它搜索框就会收起"
                             % (rel, ALWAYS_FP))
             if not has_top_inset:
                 errs.append("[S2] %s 缺少 `%s` —— 本页是 `ScrollView` 容器，常驻搜索框必须"
-                            "配一个顶部让位，否则网格第一行会被搜索框盖住"
+                            "配一个顶部让位（自绘条直接挂在顶部安全区也算），否则网格第一行"
+                            "会被搜索框盖住"
                             % (rel, TOP_INSET_FP))
 
     if not launch_seen:
@@ -194,7 +207,7 @@ def main():
         print("命中：%d（S1 滚动容器用 .always 必须让位 / S2 拉起应用页常驻与让位成对）" % len(errs))
         return 1
     print("S1 滚动容器页的 `.always` 均已让位（List 容器 或 顶部 safeAreaInset）：OK")
-    print("S2 拉起应用页 `.always`（常驻）+ `.safeAreaInset(edge: .top)`（让位）成对：OK")
+    print("S2 拉起应用页常驻搜索框（系统 `.always` 或自绘条）+ 顶部让位成对：OK")
     print("命中：0")
     return 0
 
