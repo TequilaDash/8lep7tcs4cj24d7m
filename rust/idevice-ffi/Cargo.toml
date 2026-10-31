@@ -33,9 +33,12 @@ mdns-sd = { version = "0.19", optional = true }
 # 唯一改动是给 `DeveloperSession` 增加公开的 `get_adsid()` / `get_token()`，
 # 用于把 dsid + xcode.auth token 暴露给 Swift 持久化，实现 IPA 登录免重复登录。
 # 上游把这两个字段设为私有，无法从外部读取。
+# tokio-mt 必须开：上游 remote_v3 的 websocket 模块无条件引用 tokio_tungstenite，
+# 而该依赖挂在 tokio-mt feature 后面（上游自己用 default features 编译所以没发现）.
 isideload = { git = "https://github.com/AmorCool/isideload.git", rev = "961338ae535d09a55135b0ff77a20a5230977773", package = "isideload", default-features = false, features = [
   "install",
   "fs-storage",
+  "tokio-mt",
 ] }
 # rustls 显式依赖：我们的 default features 是 ring，而 isideload 依赖链
 # （reqwest 0.13 rustls-tls）会启用 aws-lc-rs —— 两个 provider feature 同时开
