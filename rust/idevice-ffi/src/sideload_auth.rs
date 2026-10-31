@@ -17,8 +17,9 @@ use isideload::{
         AppleAccount, AppToken, TwoFactorCallbackParams, TwoFactorCallbackResponse,
     },
     auth::grandslam::GrandSlam,
-    dev::{developer_session::DeveloperSession, devices::DevicesApi},
-    sideload::{builder::MaxCertsBehavior, sideloader::Sideloader, SideloaderBuilder, TeamSelection},
+    dev::{certificates::DevelopmentCertificate, developer_session::DeveloperSession, devices::DevicesApi},
+    sideload::builder::{ExtensionsBehavior, ExtensionsBehaviorSelection, MaxCertsBehavior},
+    sideload::{bundle::Bundle, sideloader::Sideloader, SideloaderBuilder, TeamSelection},
     util::{callbacks::TwoFactorCallback, fs_storage::FsStorage},
 };
 
@@ -27,10 +28,19 @@ use isideload::{
 pub type TwoFactorCb =
     Option<extern "C" fn(ctx: *mut c_void, out_buf: *mut c_char, buf_len: usize) -> i32>;
 
+/// Sideloader 0.5.x 带 C/E 两个回调泛型。我们固定用 Error / Fixed 行为，
+/// 两个 Prompt 回调永远不会被调，但类型上仍要占位 —— 用函数指针类型满足
+/// Fn 超trait（手工 impl Fn 不稳定）.
+type NeverMaxCertFuture = std::future::Ready<Result<Option<Vec<String>>, rootcause::Report>>;
+type NeverExtFuture = std::future::Ready<Result<ExtensionsBehavior, rootcause::Report>>;
+type NeverMaxCertCb = fn(Vec<DevelopmentCertificate>) -> NeverMaxCertFuture;
+type NeverExtCb = fn(&[Bundle]) -> NeverExtFuture;
+type AppSideloader = Sideloader<NeverMaxCertCb, NeverExtCb>;
+
 /// 不透明句柄：持有 tokio runtime 与构建好的 Sideloader。
 pub struct SignSession {
     rt: tokio::runtime::Runtime,
-    sideloader: Sideloader,
+    sideloader: AppSideloader,
     /// `Sideloader` 不暴露 machine_name，保留它以对齐 SideInstaller。
     #[allow(dead_code)]
     machine_name: String,
@@ -57,15 +67,18 @@ unsafe fn opt(p: *const c_char, default: &str) -> String {
 /// `TwoFactorCallbackParams -> Future<Output = Result<TwoFactorCallbackResponse, Report>>`，
 /// trait 定义挪到了 `util::callbacks`，闭包经 blanket impl 自动满足）.
 pub(crate) fn make_2fa(cb: TwoFactorCb, ctx: TwoFaCtx) -> impl TwoFactorCallback {
-    // 用 Box 包装：TwoFaCtx 有 unsafe Send+Sync impl，Box<TwoFaCtx> 同样
-    // Send+Sync；闭包捕获整个 Box 变量（Deref 访问不触发字段级精确捕获），
-    // 不会退化成捕获裸指针字段 `*mut c_void`（非 Send/Sync）。
-    let ctx = Box::new(ctx);
-    move |_params: TwoFactorCallbackParams| async move {
+    // trait 要求 Fn（可多次调用），所以共享状态必须每次调用克隆：
+    // TwoFaCtx 有 unsafe Send+Sync impl，Arc<TwoFaCtx> 同样 Send+Sync；
+    // 整个 Arc 进闭包（Deref 访问不触发字段级精确捕获），不会退化成
+    // 捕获裸指针字段 `*mut c_void`（非 Send/Sync）。cb 是 Copy 函数指针.
+    let ctx = std::sync::Arc::new(ctx);
+    move |_params: TwoFactorCallbackParams| {
+        let ctx = std::sync::Arc::clone(&ctx);
+        async move {
         let Some(cb) = cb else {
             return respond(TwoFactorCallbackResponse::Abort);
         };
-        let ctx_ptr = (*ctx).0;
+        let ctx_ptr = ctx.0;
         let mut buf = vec![0u8; 128];
         let rc = cb(ctx_ptr, buf.as_mut_ptr() as *mut c_char, buf.len());
         if rc == 0 {
@@ -77,6 +90,7 @@ pub(crate) fn make_2fa(cb: TwoFactorCb, ctx: TwoFaCtx) -> impl TwoFactorCallback
             respond(TwoFactorCallbackResponse::Abort)
         } else {
             respond(TwoFactorCallbackResponse::SubmitCode(s))
+        }
         }
     }
 }
@@ -158,12 +172,16 @@ pub unsafe fn apple_signin(
                 .map_err(|e| format!("developer session: {e}"))?;
             tracing::info!("Developer session OK; building sideloader (first team)");
 
-            let mut sideloader = SideloaderBuilder::new(dev_session, apple_id.clone())
-                .team_selection(TeamSelection::First)
-                .max_certs_behavior(MaxCertsBehavior::Error)
-                .storage(Box::new(FsStorage::new(PathBuf::from(&storage_dir))))
-                .machine_name(machine_name.clone())
-                .build();
+            let mut sideloader =
+                SideloaderBuilder::<NeverMaxCertCb, NeverExtCb>::new(dev_session, apple_id.clone())
+                    .team_selection(TeamSelection::First)
+                    .max_certs_behavior(MaxCertsBehavior::Error)
+                    .extensions_behavior(ExtensionsBehaviorSelection::Fixed(
+                        ExtensionsBehavior::ReuseMain,
+                    ))
+                    .storage(Box::new(FsStorage::new(PathBuf::from(&storage_dir))))
+                    .machine_name(machine_name.clone())
+                    .build();
 
             let team = sideloader
                 .get_team()
@@ -354,7 +372,7 @@ pub unsafe fn signin_with_session(
                 .await
                 .map_err(|e| format!("client info: {e}"))?;
             let client = Arc::new(
-                GrandSlam::new(client_info, false)
+                GrandSlam::new(client_info, false, None)
                     .await
                     .map_err(|e| format!("grandslam: {e}"))?,
             );
@@ -370,12 +388,16 @@ pub unsafe fn signin_with_session(
                 AnisetteDataGenerator::new(Arc::new(tokio::sync::RwLock::new(provider))),
             );
 
-            let mut sideloader = SideloaderBuilder::new(dev, email.clone())
-                .team_selection(TeamSelection::First)
-                .max_certs_behavior(MaxCertsBehavior::Error)
-                .storage(Box::new(FsStorage::new(PathBuf::from(&storage_dir))))
-                .machine_name(machine_name.clone())
-                .build();
+            let mut sideloader =
+                SideloaderBuilder::<NeverMaxCertCb, NeverExtCb>::new(dev, email.clone())
+                    .team_selection(TeamSelection::First)
+                    .max_certs_behavior(MaxCertsBehavior::Error)
+                    .extensions_behavior(ExtensionsBehaviorSelection::Fixed(
+                        ExtensionsBehavior::ReuseMain,
+                    ))
+                    .storage(Box::new(FsStorage::new(PathBuf::from(&storage_dir))))
+                    .machine_name(machine_name.clone())
+                    .build();
 
             let team = sideloader
                 .get_team()
