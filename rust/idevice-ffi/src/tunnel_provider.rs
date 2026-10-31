@@ -720,8 +720,13 @@ pub unsafe extern "C" fn tunnel_create_remotexpc(
 
     let res = run_sync_local(async {
         // RSD handshake to discover tunnel service
-        let rsd_stream = tokio::net::TcpStream::connect(socket_addr)
+        let rsd_stream = tokio::time::timeout(DIAL_ATTEMPT_TIMEOUT, tokio::net::TcpStream::connect(socket_addr))
             .await
+            .map_err(|_| {
+                IdeviceError::InternalError(format!(
+                    "RSD connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                ))
+            })?
             .map_err(|e| IdeviceError::InternalError(format!("RSD connect: {e}")))?;
         let rsd_handshake = RsdHandshake::new(rsd_stream).await?;
 
@@ -732,8 +737,13 @@ pub unsafe extern "C" fn tunnel_create_remotexpc(
 
         // Connect to tunnel service via RemoteXPC
         let ts_addr = std::net::SocketAddr::new(socket_addr.ip(), ts.port);
-        let ts_stream = tokio::net::TcpStream::connect(ts_addr)
+        let ts_stream = tokio::time::timeout(DIAL_ATTEMPT_TIMEOUT, tokio::net::TcpStream::connect(ts_addr))
             .await
+            .map_err(|_| {
+                IdeviceError::InternalError(format!(
+                    "tunnel service: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                ))
+            })?
             .map_err(|e| IdeviceError::InternalError(format!("tunnel service: {e}")))?;
         let mut conn = RemoteXpcClient::new(ts_stream).await?;
         conn.do_handshake().await?;
@@ -875,17 +885,33 @@ pub unsafe extern "C" fn tunnel_create_rppairing_multihost(
     let res = run_sync_local(async {
         // Connect directly and use raw RPPairing protocol
         info!("tunnel dial: opening the RPPairing connection to {socket_addr}");
-        let stream = TcpStream::connect(socket_addr).await.map_err(|e| {
-            warn!(
-                "tunnel dial: RPPairing connect to {socket_addr} failed: {e} (kind {:?}, os error {:?})",
-                e.kind(),
-                e.raw_os_error()
-            );
-            TunnelFailure::new(
-                TunnelFailureKind::TunnelFailureRsdUnreachable,
-                IdeviceError::InternalError(format!("connect: {e}")),
-            )
-        })?;
+        // v0.3.730：直连必须带预算。这里曾是无超时 connect——对端是 LocalDevVPN 的 TUN 地址，
+        // VPN 未开/转发未就绪时 SYN 黑洞要挂满系统级 75s 才 ETIMEDOUT，Swift 侧的 3 次重试
+        // 会放大成 225s（真机日志实证：定位隧道 76s、设备信息 150s）。健康链路毫秒级应答，
+        // 超过 DIAL_ATTEMPT_TIMEOUT 就是不就绪，快速失败（硬规则 29/31）.
+        let stream = match tokio::time::timeout(DIAL_ATTEMPT_TIMEOUT, TcpStream::connect(socket_addr)).await {
+            Ok(Ok(stream)) => stream,
+            Ok(Err(e)) => {
+                warn!(
+                    "tunnel dial: RPPairing connect to {socket_addr} failed: {e} (kind {:?}, os error {:?})",
+                    e.kind(),
+                    e.raw_os_error()
+                );
+                return Err(TunnelFailure::new(
+                    TunnelFailureKind::TunnelFailureRsdUnreachable,
+                    IdeviceError::InternalError(format!("connect: {e}")),
+                ));
+            }
+            Err(_) => {
+                warn!("tunnel dial: RPPairing connect to {socket_addr} blackholed past {DIAL_ATTEMPT_TIMEOUT:?} — tunnel not ready, failing fast");
+                return Err(TunnelFailure::new(
+                    TunnelFailureKind::TunnelFailureRsdUnreachable,
+                    IdeviceError::InternalError(format!(
+                        "connect: no answer within {DIAL_ATTEMPT_TIMEOUT:?}（隧道未就绪，已快速失败）"
+                    )),
+                ));
+            }
+        };
         let conn = RpPairingSocket::new(stream);
 
         let mut rpc = RemotePairingClient::new(conn, &host);

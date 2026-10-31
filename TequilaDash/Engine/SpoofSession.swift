@@ -1,3 +1,4 @@
+import Combine
 import CoreLocation
 import Foundation
 import MapKit
@@ -141,6 +142,10 @@ final class SpoofSession: ObservableObject {
         case manual = "手动"
     }
 
+    /// 引擎不熄火（硬规则 31）：隧道未就绪时挂起的待发坐标，就绪翻转自动重发.
+    private var pendingCoordinate: CLLocationCoordinate2D?
+    private var readinessCancellable: AnyCancellable?
+
     /// 重发间隔：ON 档 3s，OFF 档保持 8s.
     private var resendInterval: TimeInterval { locationGuard ? 3 : 8 }
     /// 健康检查间隔：ON 档 5s，OFF 档保持 12s.
@@ -153,6 +158,18 @@ final class SpoofSession: ObservableObject {
         speedMultiplier = storedSpeed > 0 ? min(4.0, max(0.25, storedSpeed)) : 1.0
         routeLoopEnabled = UserDefaults.standard.bool(forKey: "escape.routeLoopEnabled")
         locationGuard = UserDefaults.standard.bool(forKey: "escape.locationGuard")
+        // 引擎不熄火（硬规则 31）：隧道就绪翻转是「油门」——挂着待发的坐标立即重发，
+        // 不做任何定时重试。VPN 中途开启的场景（先放图钉后开 VPN）在这里自动接上.
+        readinessCancellable = TunnelReadiness.shared.$isReady
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ready in
+                guard ready else { return }
+                Task { @MainActor in
+                    guard let self, let pending = self.pendingCoordinate, !self.isBusy else { return }
+                    self.pendingCoordinate = nil
+                    self.apply(pending, markRecent: false)
+                }
+            }
         // 回前台立刻重发一次（守护 ON 且正在模拟时生效）。挂在单例上而不是某个页面，
         // 这样离开虚拟定位页、退后台再回来同样会被守护覆盖.
         NotificationCenter.default.addObserver(
@@ -482,16 +499,37 @@ final class SpoofSession: ObservableObject {
             status = .connecting
         }
         isBusy = true
+        // 硬规则 31：主线程绝不等待隧道。LocationEngine.set（内部 queue.sync）全留在后台线程，
+        // 完成后回 MainActor 落地状态；隧道未就绪的失败留在 pendingCoordinate，就绪翻转自动重发.
+        pendingCoordinate = coordinate
         let systemCoordinate = ChinaCoordinateTransform.mapCoordinateToSystemCoordinate(coordinate)
-        let result = LocationEngine.set(
-            latitude: systemCoordinate.latitude,
-            longitude: systemCoordinate.longitude,
-            pairingPath: pairingPath,
-            deviceIP: LocalDevVPN.targetIP
-        )
+        let pairingPath = self.pairingPath
+        let deviceIP = LocalDevVPN.targetIP
+        let lat = systemCoordinate.latitude
+        let lon = systemCoordinate.longitude
+        Task.detached(priority: .userInitiated) {
+            // 只捕获 Sendable（Double/String/Bool），LocationEngineError 不跨隔离域.
+            // 蜂窝下先有界等隧道就绪（守卫 R6）；在后台线程做，不占主线程（硬规则 31）.
+            CellularTunnelManager.shared.prepareForTunnel()
+            var ok = false
+            var message = ""
+            switch LocationEngine.set(latitude: lat, longitude: lon, pairingPath: pairingPath, deviceIP: deviceIP) {
+            case .success:
+                ok = true
+            case .failure(let error):
+                message = error.localizedDescription
+            }
+            let landed = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            await self.finishApply(coordinate: landed, markRecent: markRecent, ok: ok, message: message)
+        }
+    }
+
+    /// apply 的收尾（MainActor）：只做状态落地，不再阻塞等待.
+    private func finishApply(coordinate: CLLocationCoordinate2D, markRecent: Bool,
+                             ok: Bool, message: String) {
         isBusy = false
-        switch result {
-        case .success:
+        if ok {
+            pendingCoordinate = nil
             simulated = coordinate
             pin = coordinate
             status = .active
@@ -505,11 +543,11 @@ final class SpoofSession: ObservableObject {
             if markRecent {
                 pushRecent(coordinate)
             }
-        case .failure(let error):
-            lastError = error.localizedDescription
+        } else {
+            lastError = message
             if simulated != nil {
-                status = .dropped(error.localizedDescription)
-                postDropNotification(error.localizedDescription)
+                status = .dropped(message)
+                postDropNotification(message)
             } else {
                 status = .idle
             }
@@ -609,19 +647,29 @@ final class SpoofSession: ObservableObject {
     /// 重发当前坐标并记录来源（复用同一条隧道）.
     /// OFF 档不计数、不写日志，与历史行为完全一致.
     private func resend(_ coordinate: CLLocationCoordinate2D, source: GuardTrigger) {
+        // 硬规则 31：重发也绝不占主线程（计时器在 MainActor 触发，set 是同步阻塞调用）.
+        let guardOn = locationGuard
         let hadSession = LocationEngine.isSessionActive
         let systemCoordinate = ChinaCoordinateTransform.mapCoordinateToSystemCoordinate(coordinate)
-        let result = LocationEngine.set(
-            latitude: systemCoordinate.latitude,
-            longitude: systemCoordinate.longitude,
-            pairingPath: pairingPath,
-            deviceIP: LocalDevVPN.targetIP
-        )
-        guard locationGuard else { return }
-        var ok = false
-        if case .success = result { ok = true }
-        // 重发前链路已不在 → 记为一次「疑似复位」命中.
-        noteGuardResend(source, ok: ok, resetSuspected: !hadSession)
+        let pairingPath = self.pairingPath
+        let deviceIP = LocalDevVPN.targetIP
+        let lat = systemCoordinate.latitude
+        let lon = systemCoordinate.longitude
+        let sourceRaw = source.rawValue
+        Task.detached(priority: .utility) {
+            CellularTunnelManager.shared.prepareForTunnel()
+            var ok = false
+            switch LocationEngine.set(latitude: lat, longitude: lon, pairingPath: pairingPath, deviceIP: deviceIP) {
+            case .success: ok = true
+            case .failure: ok = false
+            }
+            await MainActor.run {
+                guard guardOn else { return }
+                // 重发前链路已不在 → 记为一次「疑似复位」命中.
+                let source = GuardTrigger(rawValue: sourceRaw) ?? .manual
+                self.noteGuardResend(source, ok: ok, resetSuspected: !hadSession)
+            }
+        }
     }
 
     /// 守护日志：来源 + 累计重发次数 + 疑似复位命中次数（前缀「[增强守护]」便于过滤）.
