@@ -28,6 +28,7 @@ struct AnisetteServersView: View {
     @State private var customText: String = ""
     @State private var status: Status = .checking
     @State private var statusTask: Task<Void, Never>?
+    /// 「重置 ADI 票据」的确认弹窗（用户 2026-10-31 批准的自救入口）.
 
     /// 服务器连通性检测结果.
     enum Status: Equatable {
@@ -295,6 +296,25 @@ struct AnisetteServersView: View {
             } label: {
                 Text("恢复默认服务器（ani.stikstore.app）")
             }
+            Button {
+                showAdiResetConfirm = true
+            } label: {
+                Text("重置 ADI 票据（保留设备身份）")
+            }
+        } header: {
+            Text("自救")
+        } footer: {
+            Text("取票据报 -80045 且换服务器无效时，先重置票据再登录.下次取票据会自动重新配给，设备身份不变.")
+        }
+        .confirmationDialog("重置 ADI 票据？", isPresented: $showAdiResetConfirm, titleVisibility: .visible) {
+            Button("重置票据", role: .destructive) {
+                AnisetteProvider.shared.resetProvisioning()
+                statusTask?.cancel()
+                statusTask = Task { await refreshStatus() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只清除配给票据与服务器绑定，保留设备身份.与登出不同，Apple ID 与已装应用不受影响.")
         }
     }
 

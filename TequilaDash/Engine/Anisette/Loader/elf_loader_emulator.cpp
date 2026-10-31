@@ -1398,6 +1398,7 @@ void run_library_constructors(EmulatorVM *vm) {
 }
 
 uint64_t get_vm_symbol_address(EmulatorVM *vm, const std::string &name) {
+    if (!vm) return 0;
     for (const auto &lib : vm->loaded_libraries) {
         auto it = lib.symbols.find(name);
         if (it != lib.symbols.end()) return it->second;
