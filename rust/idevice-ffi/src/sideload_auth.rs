@@ -168,7 +168,7 @@ pub unsafe fn apple_signin(
                     client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
                         .to_string(),
                     user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
-                });
+                }));
 
             tracing::info!("Apple ID: logging in {apple_id}");
             let mut account = AppleAccount::builder(&apple_id)
@@ -384,7 +384,7 @@ pub unsafe fn signin_with_session(
                     client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
                         .to_string(),
                     user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
-                });
+                }));
 
             tracing::info!("Session: constructing GrandSlam client");
             let client_info = provider
