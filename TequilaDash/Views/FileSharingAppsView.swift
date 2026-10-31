@@ -76,6 +76,7 @@ struct FileSharingAppsView: View {
         // v0.3.289：displayMode .always → .automatic——always 时搜索框常驻悬浮，
         // 列表首行会被压在搜索框下面（用户截图实锤「显示不全」）；automatic 随滚动收起.
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索应用")
+        .avoidSearchZoom()
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)   // v0.3.214：系统搜索框替代自绘
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {

@@ -436,6 +436,7 @@ struct CustomRestoreSheet: View {
                     }
                     .listStyle(.insetGrouped)
                     .searchable(text: $searchText, prompt: "搜索应用名或 Bundle ID")
+                    .avoidSearchZoom()
                 }
             }
             .navigationTitle("选择恢复目标")

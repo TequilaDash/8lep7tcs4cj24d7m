@@ -53,6 +53,7 @@ struct AdvancedGestaltEditor: View {
         }
         .navigationTitle("Advanced Field Editor")
         .searchable(text: $searchText, prompt: "Search key or value")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {

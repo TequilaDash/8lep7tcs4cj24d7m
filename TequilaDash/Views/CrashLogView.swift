@@ -208,6 +208,7 @@ struct CrashLogView: View {
         }
         .toastHost()
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索日志文件名")
+        .avoidSearchZoom()
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText])
         }

@@ -96,6 +96,7 @@ struct PurchaseHistoryView: View {
             }
             .listStyle(.insetGrouped)
             .searchable(text: $keyword, prompt: "名称 / Bundle ID / App ID")
+            .avoidSearchZoom()
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .navigationTitle("已购列表")

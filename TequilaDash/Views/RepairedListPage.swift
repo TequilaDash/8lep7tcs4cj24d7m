@@ -117,6 +117,7 @@ struct RepairedListPage: View {
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索包名 / 应用标识")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {

@@ -358,7 +358,8 @@ struct GestaltView: View {
                         .textSelection(.enabled)
                 }
             }
-            VStack(alignment: .leading, spacing: 4) {
+            // 与同 Section 上方三行（:330 / :342 / :353）同一「标签-值」角色，间距收齐到 2.
+            VStack(alignment: .leading, spacing: 2) {
                 Text("手动覆盖 App Group（空则使用自动探测）")
                     .font(.caption2).foregroundStyle(.secondary)
                 TextField("group.com.example.app", text: $appGroupOverride)

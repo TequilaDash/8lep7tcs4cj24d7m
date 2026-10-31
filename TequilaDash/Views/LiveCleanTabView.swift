@@ -51,6 +51,7 @@ struct LiveCleanTabView: View {
             vm.refreshRanksFromCache()
         }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索 LiveContainer 应用")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selecting {

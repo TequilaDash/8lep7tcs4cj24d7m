@@ -160,6 +160,7 @@ struct FileBrowserView: View {
         .navigationTitle(selecting ? selectionTitle : vm.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "筛选此目录")
+        .avoidSearchZoom()
         .toolbar { browserToolbar }
         .safeAreaInset(edge: .bottom) {
             if selecting {

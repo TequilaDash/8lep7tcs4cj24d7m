@@ -30,7 +30,9 @@ struct CertificateView: View {
 
     var body: some View {
         List {
-            headerSection
+            if !settings.isLoggedIn {
+                loginStatusRow
+            }
             // v0.3.131：自动撤销（统一撤销接口的管控开关）+ 白名单（仅一个）、（白名单与 SideStore/AltStore 标识的证书放行）遇 7460 情况使用
             Section(header: Text("自动撤销"), footer: Text("配额满时自动吊销旧证书.")) {
                 Toggle("自动撤销证书", isOn: $certStore.autoRevokeEnabled)
@@ -38,9 +40,7 @@ struct CertificateView: View {
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
             }
-            if !settings.isLoggedIn {
-                notSignedInSection
-            } else {
+            if settings.isLoggedIn {
                 teamSection
                 // 团队栏自己已展示失败原因，这里只在团队加载成功后补全局错误，
                 // 避免同一条消息在页面上出现两次.
@@ -119,8 +119,6 @@ struct CertificateView: View {
                         }
                     }
                     .disabled(manager.isWorking)
-                } else {
-                    Button("登录") { showLogin = true }
                 }
             }
         }
@@ -201,38 +199,26 @@ struct CertificateView: View {
         }
     }
 
-    // MARK: - 头部
+    // MARK: - 登录状态行
 
-    private var headerSection: some View {
+    /// 页顶登录状态一行，也是本页唯一的登录入口（硬规则 28 第 4 条同源原则）.
+    ///
+    /// 原来这里是一个 hero 大块头：图标 + 「证书管理」标题 + 说明 + 登录按钮，与导航标题
+    /// （:88「证书管理」）信息重复，登录入口还在工具条与未登录卡片里各出现一次.现在删掉 hero，
+    /// 已登录时页面状态由「开发者团队」栏自己表达，未登录时只留这一行.
+
+    private var loginStatusRow: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    AppRowIcon(systemName: "checkmark.seal.fill", tint: AppTheme.categorySign, symbolSize: 20, frameSize: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("证书管理")
-                            .font(.headline)
-                        Text(settings.isLoggedIn
-                             ? (manager.teamSummary ?? "已登录 Apple ID")
-                             : "管理 Apple ID 的 iOS 开发证书（列出 / 吊销）")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                if !settings.isLoggedIn {
-                    Button {
-                        showLogin = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.fill.badge.key")
-                            Text("登录 Apple ID")
-                        }
-                    }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
-                    .controlSize(.regular)
-                }
+            HStack(spacing: AppSpacing.row) {
+                Image(systemName: "person.badge.key.fill")
+                    .foregroundStyle(AppTheme.pending)
+                Text("尚未登录")
+                    .font(.subheadline)
+                Spacer()
+                Button("登录") { showLogin = true }
             }
-            .padding(.vertical, 6)
+        } footer: {
+            Text("登录后可查看并吊销账号开发证书.登录需两步验证，凭据仅存本机钥匙串.")
         }
     }
 
@@ -291,31 +277,20 @@ struct CertificateView: View {
         }
     }
 
-    // MARK: - 未登录
+    // MARK: - 批量选择
 
     /// 是否已全选（批量模式用）.
     private var allSelected: Bool {
         !manager.certs.isEmpty && selected.count == manager.certs.count
     }
 
-    private var notSignedInSection: some View {
-        Section {
-            InfoActionCard(
-                icon: "lock.fill",
-                iconTint: AppTheme.categorySign,
-                title: "尚未登录",
-                message: "登录后可查看并吊销账号开发证书.登录需两步验证，凭据仅存本机钥匙串."
-            )
-        }
-    }
-
     // MARK: - 空状态
 
     private var emptySection: some View {
         Section {
+            // 中性空态（判据 E5）：图标取 InfoActionCard 默认 AppTheme.accent，不写行级 tint.
             InfoActionCard(
                 icon: "checkmark.seal",
-                iconTint: AppTheme.categorySign,
                 title: "没有证书",
                 message: "这个 Apple ID 下没有可吊销的 iOS 开发证书."
             )
@@ -425,72 +400,63 @@ struct CertificateView: View {
         }
     }
 
+    /// 批量模式下切换单张证书的选中态（行、勾选圈两处点击共用）.
+    private func toggleSelection(_ cert: DeveloperCertificate) {
+        if selected.contains(cert.id) {
+            selected.remove(cert.id)
+        } else {
+            selected.insert(cert.id)
+        }
+    }
+
+    /// 证书行：固定图标列 + 统一内容列 + 行尾状态列（round8 结构性整改）.
+    ///
+    /// 整改前图标、标题块、明细块各自为政（spacing 10 / 12 / 3 / 4 混用、白名单与已过期
+    /// 两枚胶囊不同档），吊销还是占满整行的大按钮.现在列宽与间距全部走 AppSpacing 与共享组件.
     private func certRow(_ cert: DeveloperCertificate) -> some View {
         let revoking = manager.revokingID == cert.id
         let isSelected = selected.contains(cert.id)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+        return VStack(alignment: .leading, spacing: AppSpacing.row) {
+            // 三列结构（round8）：固定图标列 → 统一内容列 → 行尾状态列.
+            // 图标列用 AppRowIcon 默认 30 宽底，保证跨行左边界一致；间距只取 AppSpacing 档位.
+            HStack(alignment: .top, spacing: AppSpacing.row) {
                 if selecting {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
                         .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.unselected)
-                        .onTapGesture {
-                            if isSelected {
-                                selected.remove(cert.id)
-                            } else {
-                                selected.insert(cert.id)
-                            }
-                        }
-                        .padding(.top, 2)
+                        .onTapGesture { toggleSelection(cert) }
                 }
-                Image(systemName: "seal.fill")
-                    .font(.title3)
-                    .foregroundStyle(cert.isExpired ? AppTheme.pending : AppTheme.success)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(cert.displayName)
-                            .font(.subheadline.weight(.semibold))
-                        if isWhitelisted(cert) {
-                            // v0.3.131：白名单胶囊标签（自动撤销时放行）
-                            // Step 3 批 6-B：手写胶囊收编到共享 `SizePill` 的 `.compact` 档
-                            // （caption2 + 6 / 2）。字重原为 `.bold`、底色原为 15%，均用覆盖项钉住.
-                            SizePill(text: "白名单",
-                                     tint: AppTheme.categorySign,
-                                     level: .compact,
-                                     weight: .bold,
-                                     fillOpacity: 0.15)
-                        }
-                    }
+                AppRowIcon(systemName: "seal.fill",
+                           tint: cert.isExpired ? AppTheme.pending : AppTheme.success)
+                VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                    Text(cert.displayName)
+                        .font(.subheadline.weight(.semibold))
                     if let machine = cert.machineLabel {
                         Label(machine, systemImage: "desktopcomputer")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Spacer()
-                if cert.isExpired {
-                    // Step 3 批 6-B：与左侧「白名单」同页并列，不再保留非档位的 9 / 4；
-                    // 归 `.regular` 档（caption + 10 / 5），字重 `.bold` 与底色 16% 用覆盖项钉住.
-                    SizePill(text: "已过期",
-                             tint: AppTheme.pending,
-                             level: .regular,
-                             weight: .bold,
-                             fillOpacity: 0.16)
+                Spacer(minLength: AppSpacing.tight)
+                VStack(alignment: .trailing, spacing: AppSpacing.tight) {
+                    if isWhitelisted(cert) {
+                        // v0.3.131：白名单胶囊（自动撤销时放行）.
+                        // round8：本页状态胶囊统一 SizePill 的 `.compact` 档、不带覆盖项，
+                        // 取色只用 success / pending / danger.白名单=放行保留，取 success.
+                        SizePill(text: "白名单", tint: AppTheme.success, level: .compact)
+                    }
+                    if cert.isExpired {
+                        SizePill(text: "已过期", tint: AppTheme.pending, level: .compact)
+                    }
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                if selecting {
-                    if isSelected {
-                        selected.remove(cert.id)
-                    } else {
-                        selected.insert(cert.id)
-                    }
-                }
+                if selecting { toggleSelection(cert) }
             }
 
             if cert.expiration != nil || !cert.serialNumber.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppSpacing.tight) {
                     if let expiry = cert.expiration {
                         Label("到期 \(expiry.formatted(date: .abbreviated, time: .omitted))",
                               systemImage: "calendar")
@@ -506,26 +472,28 @@ struct CertificateView: View {
             }
 
             if !selecting {
-                Button(role: .destructive) {
-                    pendingRevoke = cert
-                } label: {
-                    HStack(spacing: 6) {
-                        if revoking {
-                            ProgressView().controlSize(.small)
-                            Text("吊销中")
-                        } else {
-                            Image(systemName: "trash")
-                            Text("吊销")
+                // round8：吊销从「占满整行的大按钮」降为行尾小按钮，确认对话框照旧保留.
+                HStack(spacing: AppSpacing.tight) {
+                    Spacer()
+                    Button(role: .destructive) {
+                        pendingRevoke = cert
+                    } label: {
+                        HStack(spacing: AppSpacing.tight) {
+                            if revoking {
+                                ProgressView().controlSize(.mini)
+                                Text("吊销中")
+                            } else {
+                                Image(systemName: "trash")
+                                Text("吊销")
+                            }
                         }
+                        .font(.footnote.weight(.medium))
                     }
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.borderless)
+                    .disabled(revoking || manager.isWorking || manager.revokingID != nil)
                 }
-                .buttonStyle(TintedButtonStyle(tint: AppTheme.danger))
-                .controlSize(.regular)
-                .disabled(revoking || manager.isWorking || manager.revokingID != nil)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.tight)
     }
 }

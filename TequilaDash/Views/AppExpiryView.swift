@@ -112,6 +112,7 @@ struct AppExpiryView: View {
         .navigationTitle("描述文件管理")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索证书名 / 名称 / UUID")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 if isEditing {

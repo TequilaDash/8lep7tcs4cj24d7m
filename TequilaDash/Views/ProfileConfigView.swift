@@ -92,6 +92,7 @@ struct ProfileConfigView: View {
         .navigationTitle("配置描述管理")
         .navigationBarTitleDisplayMode(.large)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索名称/UUID/描述/文件ID/版本")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 14) {

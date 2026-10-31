@@ -1322,6 +1322,9 @@ enum AppSpacing {
     static let row: CGFloat = 12
     /// 紧凑元素之间.
     static let tight: CGFloat = 6
+    /// 标题 → 副标题的微间距（全仓实测众数 2/3/4；tight=6 会把标题栈撑高近一倍，
+    /// round8 普查后新增档位，新代码一律用它）.
+    static let captionPair: CGFloat = 2
     /// 卡片 / 行标题 → 副标题（TRApp 实测 14；规范 §1.3）.
     static let titleToSubtitle: CGFloat = 14
     /// 开关行右侧留白（TRApp 实测 18；规范 §1.3 / §③组件 6）.

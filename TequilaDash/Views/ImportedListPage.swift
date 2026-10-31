@@ -140,6 +140,7 @@ struct ImportedListPage: View {
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索包名 / 应用标识")
+        .avoidSearchZoom()
         .toolbar {
             // 向上箭头是**额外**入口；系统返回按钮与左滑手势都保留
             //（不隐藏返回键，否则会禁掉左滑）.

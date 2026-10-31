@@ -59,6 +59,7 @@ struct AppFavoritesView: View {
         .environment(\.editMode, editMode)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索名称 / AppID / BundleID")
+        .avoidSearchZoom()
         .navigationTitle("收藏栏")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

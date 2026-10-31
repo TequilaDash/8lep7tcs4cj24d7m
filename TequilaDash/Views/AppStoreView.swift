@@ -142,6 +142,7 @@ struct AppStoreView: View {
         // v0.3.367：用户要求「无论下滑状态都能搜索」→ 搜索栏常驻（原 .automatic 下滑会收起）。
         // 形态对齐主页「应用」板块的 `.searchable(..., displayMode: .always)`。
         .searchable(text: $keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用名 / BundleID")
+        .avoidSearchZoom()
         .onSubmit(of: .search) { runSearch() }
         .onAppear(perform: syncRegionWithAccount)
         .onChange(of: kind) { _, _ in Task { await loadCharts() } }

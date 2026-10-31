@@ -177,6 +177,7 @@ struct SignSourceAppListView: View {
         .searchable(text: $keyword,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("筛选") { showFilter = true }

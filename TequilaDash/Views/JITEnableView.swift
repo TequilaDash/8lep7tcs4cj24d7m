@@ -93,6 +93,7 @@ struct JITEnableView: View {
         .navigationTitle("启用 JIT")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用或 Bundle ID")
+        .avoidSearchZoom()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {

@@ -167,6 +167,7 @@ struct I4StoreFreeView: View {
         .searchable(text: $keyword,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: searchPrompt)
+        .avoidSearchZoom()
         .onSubmit(of: .search) { runSearch() }
         .onChange(of: rank) { _, _ in Task { await load() } }
         // v0.3.540：NB 榜切换分组要重拉（走的是 Apple RSS，与爱思那份数据无关）.

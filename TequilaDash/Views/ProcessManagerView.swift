@@ -41,6 +41,7 @@ struct ProcessManagerView: View {
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "搜索进程"
             )
+            .avoidSearchZoom()
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.refresh() }) {

@@ -525,6 +525,7 @@ struct AppListView: View {
         // 结果是这两页的 List 走系统默认样式，与其余 59 个页面观感不一致。
         .listStyle(.insetGrouped)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用")
+        .avoidSearchZoom()
         .toolbar {
             if selecting {
                 ToolbarItem(placement: .navigationBarLeading) {

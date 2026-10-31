@@ -106,6 +106,7 @@ struct AppFileBrowserView: View {
         .navigationTitle(scope == .documents ? appName : "\(appName) · \(scope.rawValue)")
         .navigationBarTitleDisplayMode(.large)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索当前目录")
+        .avoidSearchZoom()
         .toolbar {
             // v0.3.223：对齐空间回收板块——独立 ToolbarItem + HStack，
             // 禁用 ToolbarItemGroup 多按钮玻璃胶囊组（用户永久雷点：割裂/遮挡视线）

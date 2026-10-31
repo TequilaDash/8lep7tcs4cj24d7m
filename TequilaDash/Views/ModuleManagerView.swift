@@ -297,6 +297,7 @@ struct ModuleManagerView: View {
         .listSectionSpacing(.compact)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "搜索模块 / 作者 / 描述")
+        .avoidSearchZoom()
     }
 
     /// KernelSU 风格模块卡片：名称+Toggle / 版本作者 / 描述 / 动作 / 打开+卸载

@@ -34,7 +34,8 @@ extension I4StoreFreeView {
                         .background(Color.secondary.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    // nbOffSaleRow（:90）与 nbRankRow（:229）同角色标题栈都是 3，本行离群 -> 收齐.
+                    VStack(alignment: .leading, spacing: 3) {
                         Text("App Store ID \(trackID)").font(.body).lineLimit(1)
                         Text(package.sinfBase64 == nil ? "已取到直链（无 sinf）" : "已取到直链 + sinf")
                             .font(.caption).foregroundStyle(.secondary)
@@ -55,7 +56,7 @@ extension I4StoreFreeView {
                 .controlSize(.small)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
     }
 
     /// **下架应用**的结果行（v0.3.549）.
