@@ -251,6 +251,9 @@ jobs:
           if [ -z "$XCODE_APP" ]; then XCODE_APP="$(pick _26)"; fi
           if [ -z "$XCODE_APP" ]; then XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n1 || true)"; fi
           echo "Selecting Xcode: $XCODE_APP"
+          echo "--- 构建环境指纹（回答「用的哪个 SDK」只用看这里）---"
+          "$XCODE_APP/Contents/Developer/usr/bin/xcodebuild" -version || true
+          "$XCODE_APP/Contents/Developer/usr/bin/xcodebuild" -showsdks | grep -i iphoneos || true
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
           echo "=== 部署目标（应为 18.0，本试验的关键点）==="
