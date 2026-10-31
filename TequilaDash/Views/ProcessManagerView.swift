@@ -54,20 +54,42 @@ struct ProcessManagerView: View {
             // 与「描述文件管理」（AppExpiryView）一致，可透视下方滚动内容.
             .task { viewModel.startAutoRefresh() }
             .onDisappear { viewModel.stopAutoRefresh() }
+            // 引擎不熄火（硬规则 31）：VPN 一就绪立即自动补一拍，横幅随之自动消失.
+            .onReceive(TunnelReadiness.shared.$isReady) { ready in
+                if ready { viewModel.refresh() }
+            }
             .alert(item: $viewModel.alertItem) { item in
                 Alert(
                     title: Text(item.title),
                     message: Text(item.message),
-                    dismissButton: .default(Text("好"), action: {
-                        if item.title == "加载进程失败" { viewModel.refresh() }
-                    })
+                    dismissButton: .default(Text("好"))
                 )
             }
+    }
+
+    /// 隧道未就绪的页内横幅（替代弹窗；重试按钮手动补拍，就绪翻转也会自动补拍）.
+    @ViewBuilder
+    private var tunnelBanner: some View {
+        if let notice = viewModel.tunnelNotice {
+            HStack(spacing: 10) {
+                Image(systemName: "circle.trianglebadge.exclamationmark")
+                    .foregroundStyle(AppTheme.pending)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("隧道未就绪").font(.subheadline).weight(.medium)
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("重试") { viewModel.refresh() }
+                    .buttonStyle(.borderless)
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         List {
+            tunnelBanner
             if viewModel.processes.isEmpty && !viewModel.isRefreshing {
                 Section {
                     if !hasPairing {

@@ -507,6 +507,10 @@ final class SpoofSession: ObservableObject {
         let deviceIP = LocalDevVPN.targetIP
         let lat = systemCoordinate.latitude
         let lon = systemCoordinate.longitude
+        // 图钉/落点必须回显「用户放的原始坐标」（WGS-84 地图坐标）；lat/lon 是系统坐标系
+        // （GCJ-02）转换值，只喂给引擎，拿它当显示坐标会在国内地图上偏移几百米.
+        let displayLat = coordinate.latitude
+        let displayLon = coordinate.longitude
         Task.detached(priority: .userInitiated) {
             // 只捕获 Sendable（Double/String/Bool），LocationEngineError 不跨隔离域.
             // 蜂窝下先有界等隧道就绪（守卫 R6）；在后台线程做，不占主线程（硬规则 31）.
@@ -519,7 +523,7 @@ final class SpoofSession: ObservableObject {
             case .failure(let error):
                 message = error.localizedDescription
             }
-            let landed = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            let landed = CLLocationCoordinate2D(latitude: displayLat, longitude: displayLon)
             await self.finishApply(coordinate: landed, markRecent: markRecent, ok: ok, message: message)
         }
     }

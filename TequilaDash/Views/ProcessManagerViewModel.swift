@@ -33,6 +33,8 @@ final class ProcessManagerViewModel: ObservableObject {
     /// 统一的提示弹窗通道（操作结果 / 错误）.v0.2.106：此前双 .alert 并存，
     /// 后注册覆盖先注册导致「进程已结束」等操作弹窗从不弹出.
     @Published var alertItem: ProcessAlert?
+    /// 隧道未就绪的页内横幅（不弹窗——用户 2026-10-31：弹窗烦人且挡返回）.
+    @Published private(set) var tunnelNotice: String?
 
     private var refreshTask: Task<Void, Never>?
     private var controlTimeoutTask: Task<Void, Never>?
@@ -121,6 +123,7 @@ final class ProcessManagerViewModel: ObservableObject {
                 await MainActor.run {
                     guard let self else { return }
                     self.processes = entries
+                    self.tunnelNotice = nil
                     self.isRefreshing = false
                 }
                 // 内存异步后补（不阻塞刷新流程；受监控开关控制）——需在主 actor 上调用
@@ -139,7 +142,12 @@ final class ProcessManagerViewModel: ObservableObject {
                         self.isRefreshing = false
                         return
                     }
-                    self.alertItem = ProcessAlert(title: "加载进程失败", message: error.localizedDescription)
+                    if error.localizedDescription.contains("隧道未就绪") {
+                        // 隧道未就绪走页内横幅，不弹窗（弹窗会被 10s 自动刷新反复拉起，挡住返回）.
+                        self.tunnelNotice = error.localizedDescription
+                    } else {
+                        self.alertItem = ProcessAlert(title: "加载进程失败", message: error.localizedDescription)
+                    }
                     self.isRefreshing = false
                 }
             }

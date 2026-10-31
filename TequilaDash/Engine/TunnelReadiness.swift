@@ -32,7 +32,7 @@ struct TunnelReadinessError: LocalizedError {
     let port: UInt16
 
     var errorDescription: String? {
-        "隧道未就绪（\(ip):\(port) 探测不可达）. 打开 LocalDevVPN 后约 1 秒自动恢复，重试即可，无需重启 App."
+        "隧道未就绪（\(ip):\(port) 探测不可达）. 连接回环工具后重试."
     }
 }
 
