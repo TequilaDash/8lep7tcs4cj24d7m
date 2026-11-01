@@ -507,7 +507,7 @@ struct InfoActionCard: View {
     var disabled: Bool = false
     /// 内容组的水平对齐。默认 `.leading`（v0.3.736 起卡片拉满宽，左贴是正常排版）；
     /// 空态占位（日志板块等）传 `.center` 让「图标 + 文字」整组居中.
-    var contentAlignment: HorizontalAlignment = .leading
+    var contentAlignment: Alignment = .leading
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -918,7 +918,7 @@ struct AppStateSection: View {
     /// 让它作为外层 Section 的一行渲染 —— 与「裸 Text 空态」原来的层级一致。
     var wrapsSection: Bool = true
     /// 透传给 InfoActionCard 的内容组水平对齐（空态居中场景用 `.center`）.
-    var contentAlignment: HorizontalAlignment = .leading
+    var contentAlignment: Alignment = .leading
 
     var body: some View {
         switch state {
