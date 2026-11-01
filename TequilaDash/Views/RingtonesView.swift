@@ -63,7 +63,6 @@ struct RingtonesView: View {
                     TunnelPendingRow(detail: "读取铃声目录", level: .block)
                 }
                 .listSectionSpacing(.compact)
-                .listRowInsets(EdgeInsets())
             } else {
                 if let errorMessage {
                     Section {

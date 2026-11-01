@@ -16,6 +16,8 @@ struct AppStoreView: View {
     /// 搜不到时回落到**已购列表**的匹配项 —— 下架应用在公开 search/lookup 里天然缺席，
     /// 但只要买过（许可在账号里）就仍能下载。
     @State private var ownedMatches: [AppStoreItem] = []
+    /// 搜索序号：快速连搜时，让慢的已购补挂任务过期作废，不许旧结果覆盖新搜索.
+    @State private var searchSeq = 0
     @State private var searching = false
     @State private var showDisclaimer = false
     @State private var showI4 = false
@@ -548,6 +550,9 @@ struct AppStoreView: View {
         let term = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { searchResults = []; ownedMatches = []; return }
         searching = true
+        ownedMatches = []
+        searchSeq += 1
+        let seq = searchSeq
         Task {
             do {
                 searchResults = try await AppStoreService.search(term: term)
@@ -555,13 +560,19 @@ struct AppStoreView: View {
                 searchResults = []
                 errorText = error.localizedDescription
             }
+            // 在架结果先上屏：搜索本体（iTunes search）是亚秒级，不该陪已购链路一起等.
+            searching = false
             // 已购（含下架）**无条件**并入：公开 search 天然查不到已下架应用，
             // 若只在 searchResults 为空时才回落，同名的在架应用一命中，下架那条就永远搜不到。
             // 与在架结果按 id 去重，避免同一个 App 出现两次。
+            // 并入**异步补挂**：SAP setup 端点被 Apple 回 5xx 时每次要吃满超时，
+            // 同步等它曾把整页搜索拖到几十秒（SSH 日志 10:00:58→10:01:35 实锤）。
             let listedIds = Set(searchResults.map(\.id))
-            ownedMatches = await fallbackOwnedMatches(for: term)
-                .filter { !listedIds.contains($0.id) }
-            searching = false
+            Task {
+                let owned = await fallbackOwnedMatches(for: term)
+                    .filter { !listedIds.contains($0.id) }
+                if seq == searchSeq { ownedMatches = owned }
+            }
         }
     }
 

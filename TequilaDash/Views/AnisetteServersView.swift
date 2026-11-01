@@ -79,6 +79,20 @@ struct AnisetteServersView: View {
             Task { await oda.installEngineIfNeeded() }
         }
         .onDisappear { statusTask?.cancel() }
+        // sheet 挂 List 根：挂 Section 上时页内状态一刷新首次呈现即被回收（弹出即消失 bug）.
+        .sheet(isPresented: $showAdiResetConfirm) {
+            AdiResetSheet {
+                // SideStore 的 Reset ADI 语义（SideStore ResetAdiAlertController）：
+                // 一个破坏性「重置」按钮 + 勾选「保留头部自定义」，没有第二种重置.
+                if !keepAnisetteHeaders {
+                    UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
+                }
+                AnisetteProvider.shared.resetProvisioning()
+                statusTask?.cancel()
+                statusTask = Task { await refreshStatus() }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     // MARK: - Status
@@ -295,19 +309,6 @@ struct AnisetteServersView: View {
             } label: {
                 Text("重置adi.pb")
             }
-        }
-        .sheet(isPresented: $showAdiResetConfirm) {
-            AdiResetSheet {
-                // SideStore 的 Reset ADI 语义（SideStore ResetAdiAlertController）：
-                // 一个破坏性「重置」按钮 + 勾选「保留头部自定义」，没有第二种重置.
-                if !keepAnisetteHeaders {
-                    UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
-                }
-                AnisetteProvider.shared.resetProvisioning()
-                statusTask?.cancel()
-                statusTask = Task { await refreshStatus() }
-            }
-            .presentationDetents([.medium])
         }
     }
 

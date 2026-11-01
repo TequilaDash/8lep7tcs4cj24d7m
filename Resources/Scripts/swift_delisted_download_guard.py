@@ -371,11 +371,29 @@ def check(root):
                 errs.append("[D5] runSearch 没有回落查已购（fallbackOwnedMatches）"
                             " —— 下架应用在公开 search 里天然缺席，搜不到就永远搜不到")
             else:
-                # D8：回落那一行必须直接并入 ownedMatches，且不得再被 searchResults.isEmpty 门控
+                # D8：回落结果必须并入 ownedMatches（两种形态二选一），且不得再被
+                # searchResults.isEmpty 门控。2026-11-01 起允许异步补挂形态：
+                #   单行：ownedMatches = await fallbackOwnedMatches(for: term)...
+                #   两步：let owned = await fallbackOwnedMatches(for: term)
+                #         ... if seq == searchSeq { ownedMatches = owned }
+                #  （同步等已购链路曾把搜索拖到几十秒 —— SSH 日志 10:00:58→10:01:35 实锤）
                 line_start = body.rfind("\n", 0, call) + 1
                 line_end = body.find("\n", call)
                 line = body[line_start: line_end if line_end >= 0 else len(body)]
-                if "ownedMatches" not in line:
+                merged = "ownedMatches" in line
+                if not merged:
+                    window_end = line_end if line_end >= 0 else len(body)
+                    for _ in range(4):
+                        nxt = body.find("\n", window_end + 1)
+                        nxt2 = body.find("\n", nxt + 1)
+                        seg = body[window_end + 1: nxt2 if nxt2 >= 0 else len(body)]
+                        if "ownedMatches" in seg and "=" in seg:
+                            merged = True
+                            break
+                        window_end = nxt2 if nxt2 >= 0 else len(body)
+                        if nxt2 < 0:
+                            break
+                if not merged:
                     errs.append("[D8] runSearch 的回落结果没有赋给 ownedMatches —— 搜到的已购项没进列表")
                 if "isEmpty" in line:
                     errs.append("[D8] runSearch 仍用 searchResults.isEmpty 门控回落 —— "
