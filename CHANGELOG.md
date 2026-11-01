@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.734] - 2026-11-01
+
+### 修复
+
+- **拉起应用搜索缩卡根修**：页面容器从 `ScrollView` 改为 `List` 承载网格（外观不变）.
+  对照实证：进程管理（List）搜索不缩卡、本页（全仓唯一 ScrollView+网格搜索页）缩卡 ——
+  iOS 26/27 的搜索缩卡呈现只对 ScrollView 容器触发，修饰器层管不住；同时删掉为旧容器
+  服务的 `SearchBarInsetProbe` 测高让位链（约 120 行）.
+
+### 改进
+
+- **Anisette 服务器表对照四家上游全量重整**（SideStore / SideInstaller / AltStore classic /
+  iLoader，清单与 servers.sidestore.io 同源）：14 台（含 2 死）→ **19 台全部探活 200**；
+  剔除三台死的（win.ani.sidestore.io 502 / ani.owoellen.rocks DNS 失败 / ani.neoarz.com 超时），
+  新增 macOS ADI 主力（new.ani.sidestore.io / ani3、ani2.stikstore.app / ani.iloader.app /
+  mac-ani、ani.jkcoxson.com / omni.ethxn.xyz）。默认服务器改为 `new.ani.sidestore.io`
+  （上游钦定首选）；已自选过服务器的用户不受影响.
+
 ## [0.3.733] - 2026-11-01
 
 ### 修复
