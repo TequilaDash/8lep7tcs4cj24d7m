@@ -125,25 +125,36 @@ enum MemoryLimitError: LocalizedError {
 final class MemoryLimitSettings: ObservableObject {
     static let shared = MemoryLimitSettings()
 
-    /// Anisette 服务器列表：原有 4 个 + 合并 SideInstaller 社区列表
-    /// （servers.sidestore.io）中我们没有的 10 个.
+    /// Anisette 服务器列表：2026-11-01 对照 SideStore / SideInstaller / AltStore(classic) /
+    /// iLoader 四家上游全量重整（清单源 = SideInstaller ios-app/AnisetteServers.swift 的社区
+    /// 快照，与 servers.sidestore.io 同源），每台都做过 GET 探活；三台死的已剔
+    /// （win.ani.sidestore.io 502 / ani.owoellen.rocks DNS 失败 / ani.neoarz.com 超时），
+    /// 清单里混进的 RFC 5737 文档地址一并剔除.
+    /// 排序依据：2026-10-21 起 Apple 拒绝 Android ADI 库的 anisette（-80046），Windows 服务器
+    /// 已陆续改跑 macOS 库 —— macOS ADI 的排前面，SideStore 主站（Android ADI 遗留）靠后.
     static let anisetteServers = [
-        // 原有
-        "https://ani.sidestore.io",
+        // macOS ADI（当前可用主力）
+        "https://new.ani.sidestore.io",
+        "https://ani3.stikstore.app",
+        "https://ani2.stikstore.app",
+        "https://ani.iloader.app",
+        "https://mac-ani.jkcoxson.com",
+        "https://ani.jkcoxson.com",
         "https://ani.stikstore.app",
+        // SideStore 主站与镜像
         "https://ani.sidestore.app",
-        "https://ani.846969.xyz",
-        // 合并自 SideInstaller（社区列表）
         "https://ani.sidestore.zip",
+        "https://ani.846969.xyz",
+        "https://ani.sidestore.io",
+        // 社区（探活 200）
         "https://ani.npeg.us",
         "https://anisette.wedotstud.io",
         "https://ani.xu30.top",
-        "https://ani.owoellen.rocks",
         "https://ani.idevicehacked.com",
-        "https://ani.neoarz.com",
         "https://ani3server.fly.dev",
         "https://ani.jaydenha.uk",
-        "https://anisette.crystall1ne.dev"
+        "https://anisette.crystall1ne.dev",
+        "https://omni.ethxn.xyz"
     ]
 
     /// Strips the scheme (http/https) from an Anisette server URL for display.
@@ -153,7 +164,7 @@ final class MemoryLimitSettings: ObservableObject {
             .replacingOccurrences(of: "http://", with: "")
     }
 
-    @AppStorage("AnisetteServer") var anisetteServer: String = "https://ani.stikstore.app"
+    @AppStorage("AnisetteServer") var anisetteServer: String = "https://new.ani.sidestore.io"
 
     @Published private(set) var isLoggedIn: Bool = false
     @Published private(set) var appleID: String = ""
