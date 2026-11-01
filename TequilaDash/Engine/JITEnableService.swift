@@ -618,9 +618,11 @@ final class JITAppIconLoader {
             // Swift 6：显式 @Sendable 让闭包按非隔离推断，不再作为主 actor 隔离值
             // 传入 actor 方法 withPermit（修 sending）；闭包体只捕获 Sendable 的 bundleID.
             let img = await semaphore.withPermit { @Sendable in
-                await Task.detached(priority: .utility) {
+                let raw = await Task.detached(priority: .utility) {
                     try? JITEnableService.shared.getAppIcon(bundleID: bundleID)
                 }.value
+                // preparingForDisplay 把位图解码留在取图线程，主线程只贴图 —— 滑动不卡顿.
+                return raw?.preparingForDisplay() ?? raw
             }
             if let img { cache[bundleID] = img }
             inFlight[bundleID] = nil

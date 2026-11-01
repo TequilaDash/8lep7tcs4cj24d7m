@@ -60,7 +60,7 @@ struct RingtonesView: View {
             if !TunnelGate.isReady {
                 // 规则 34：隧道未就绪是「待发」不是错误 —— 图四口径（用户 2026-11-01 判定唯一正确形态）.
                 Section {
-                    TunnelPendingRow(detail: "读取铃声目录", level: .block)
+                    TunnelPendingRow(detail: "读取铃声目录", level: .inline)
                 }
                 .listSectionSpacing(.compact)
             } else {

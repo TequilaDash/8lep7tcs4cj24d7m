@@ -53,10 +53,24 @@ extension View {
     /// 隧道就绪翻转即续跑：只在翻到 ready 时触发，不轮询、不发初始值、不带定时器.
     /// 调用方自己在 action 里判「本页是否有待发动作」，没有就 no-op，避免每次就绪都重跑.
     func onTunnelReady(_ action: @escaping () -> Void) -> some View {
-        onReceive(TunnelReadiness.shared.$isReady) { ready in
-            if ready {
-                action()
+        modifier(TunnelReadyWatcher(action: action))
+    }
+}
+
+/// 双保险触发：① 就绪翻转（原始语义）；② 回到前台时若已就绪补一脚 ——
+/// 后台期间发生的翻转可能只留下最新值，页面没有其它状态变化就不重算；
+/// 覆盖「去开 VPN → 回 App，页面停在待发」的真机路径（2026-11-01 用户复现）.
+/// action 由调用方自带幂等守卫，重复触发是 no-op.
+private struct TunnelReadyWatcher: ViewModifier {
+    let action: () -> Void
+    @Environment(\.scenePhase) private var scenePhase
+    func body(content: Content) -> some View {
+        content
+            .onReceive(TunnelReadiness.shared.$isReady) { ready in
+                if ready { action() }
             }
-        }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && TunnelGate.isReady { action() }
+            }
     }
 }

@@ -46,7 +46,33 @@ enum PurchaseHistoryService {
     // Configurator (34) 列移动应用；Mac App Store (13) 另列 Mac 软件与 Apple silicon 上可跑的移动应用。
     static let storefronts = ["34", "13"]
 
+    /// 同邮箱已购拉取单飞：并发第二个调用方直接等第一班结果，不再各自过会话租约门。
+    /// ① 消灭「25 秒强制接管」造成的双持有者重叠 —— 账号对象与 SAP 签名器（Unicorn 模拟）
+    ///    被两条链路并发使用，是「搜索后点已购闪退」的直接来源（2026-11-01 用户报告）；
+    /// ② 搜索异步补挂与已购页共享同一次拉取，不再各等 20 秒.
+    private static let ownedFlights = OwnedAppsFlight()
+
+    private actor OwnedAppsFlight {
+        private var running: [String: Task<[OwnedApp], Error>] = [:]
+        func run(email: String, _ op: @escaping @Sendable () async throws -> [OwnedApp]) async throws -> [OwnedApp] {
+            let key = email.lowercased()
+            if let existing = running[key] {
+                return try await existing.value
+            }
+            let task = Task { try await op() }
+            running[key] = task
+            defer { running[key] = nil }
+            return try await task.value
+        }
+    }
+
     static func ownedApps(email: String) async throws -> [OwnedApp] {
+        try await ownedFlights.run(email: email) {
+            try await ownedAppsOnce(email: email)
+        }
+    }
+
+    private static func ownedAppsOnce(email: String) async throws -> [OwnedApp] {
         try await StoreAccountSession.withAccount(email: email) { account in
             var first: [OwnedApp] = []
             do {

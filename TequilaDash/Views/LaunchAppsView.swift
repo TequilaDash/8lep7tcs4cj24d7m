@@ -76,25 +76,36 @@ struct LaunchAppsView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 } else {
-                    VStack(alignment: .leading, spacing: 16) {
-                        AppSectionHeader("全部应用",
-                                         subtitle: "共 \(filteredApps.count) 个",
-                                         symbol: "app.grid.3x3",
-                                         tint: AppModule.device.tint)
-                        AppAdaptiveGrid(items: filteredApps, minimum: 92, spacing: 12) { app in
+                    AppSectionHeader("全部应用",
+                                     subtitle: "共 \(filteredApps.count) 个",
+                                     symbol: "app.grid.3x3",
+                                     tint: AppModule.device.tint)
+                        .padding(.horizontal, AppTheme.pageInset)
+                        .padding(.top, 4)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    // 分块行：每 24 个一节、一节一个 List 行 —— List 逐行实现，图标拉取与
+                    // 位图解码跟着滚动推进。整网格一行时 LazyVGrid 在 List 行内被全量物化，
+                    // 进场瞬间上百个 .task 齐发 = 滑动卡顿（2026-11-01 用户报告）.
+                    ForEach(Array(stride(from: 0, to: filteredApps.count, by: 24)), id: \.self) { start in
+                        let chunk = Array(filteredApps[start..<min(start + 24, filteredApps.count)])
+                        AppAdaptiveGrid(items: chunk, minimum: 92, spacing: 12) { app in
                             launchTile(app)
                         }
-                        Text("点击应用即前台拉起（普通启动，不启用 JIT）.")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
+                        .padding(.horizontal, AppTheme.pageInset)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
-                    .padding(.horizontal, AppTheme.pageInset)
-                    .padding(.top, 4)
-                    .padding(.bottom, 32)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    Text("点击应用即前台拉起（普通启动，不启用 JIT）.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppTheme.pageInset + 4)
+                        .padding(.bottom, 32)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
         }

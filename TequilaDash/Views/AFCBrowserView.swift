@@ -84,10 +84,6 @@ struct AFCBrowserView: View {
                 }
             } header: {
                 Text(pathText)
-            } footer: {
-                if !loading && errorMessage == nil {
-                    Text("AFC 根目录 = 设备的 /var/mobile/media（照片、下载、录音等）.支持下载 / 导出（分享）、移动、删除.")
-                }
             }
         }
         .listStyle(.insetGrouped)
