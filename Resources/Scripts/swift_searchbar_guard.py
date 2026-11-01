@@ -169,20 +169,24 @@ def check(root):
                         ".scrollContent)`）把搜索框高度让出来"
                         % (rel, _line_of(masked, k)))
 
-        # S2：本页修复落点的回归 tripwire（HARD-RULES 30 后定型）——
+        # S2：本页修复落点的回归 tripwire（HARD-RULES 30 后定型；2026-11-01 容器改 List）——
         #   ① 系统搜索框且常驻：`displayMode: .always`（自绘常驻搜索条已被用户明令禁止）；
-        #   ② 顶部让位：`ScrollView` 容器的网格第一行不能被搜索框压住；
-        #   ③ 防缩卡：必须挂 `avoidSearchZoom()`（= searchPresentationToolbarBehavior
-        #      (.avoidHidingContent)，iOS 26/27 搜索放大态抑制），不许拿缩卡换外观.
+        #   ② 顶部让位：`ScrollView` 容器的网格第一行不能被搜索框压住 —— 容器若已是 `List`，
+        #      系统会把常驻搜索框计入内容安全区，无需手动让位；
+        #   ③ 防缩卡：必须挂 `avoidSearchZoom()`（iOS 26/27 搜索放大态抑制），不许拿缩卡换外观.
+        #   注：本页 2026-11-01 起容器为 `List`（iOS 26/27 搜索缩卡只对 ScrollView 触发，
+        #   List 被豁免；进程管理 List 页对照实证），顶部让位检查对 List 容器自动放行.
         if rel == LAUNCH_FILE:
             launch_seen = True
+            is_list_container = "List {" in masked
             if ALWAYS_FP not in masked:
                 errs.append("[S2] %s 缺少 `%s` —— 用户要求搜索框常驻，且禁止自绘搜索条"
                             "（HARD-RULES 30）；改掉它搜索框就会收起"
                             % (rel, ALWAYS_FP))
-            if not has_top_inset:
+            if (not has_top_inset) and (not is_list_container):
                 errs.append("[S2] %s 缺少 `%s` —— 本页是 `ScrollView` 容器，常驻搜索框必须"
-                            "配一个顶部让位，否则网格第一行会被搜索框盖住"
+                            "配一个顶部让位（改用 `List` 容器也可，系统自动计入安全区），"
+                            "否则网格第一行会被搜索框盖住"
                             % (rel, TOP_INSET_FP))
             if ("avoidSearchZoom(" not in masked) and ("AvoidSearchZoom" not in masked):
                 errs.append("[S2] %s 缺少 `.avoidSearchZoom()` —— iOS 26/27 搜索放大态会把整页"
