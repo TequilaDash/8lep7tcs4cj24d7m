@@ -102,7 +102,11 @@ struct RingtonesView: View {
         }
         .listStyle(.insetGrouped)
         .onTunnelReady {
-            guard ringtones.isEmpty && errorMessage == nil else { return }
+            guard ringtones.isEmpty && errorMessage == nil else {
+                LoginLogger.shared.log("[铃声] 就绪续跑跳过：已有数据 ringtones=\(ringtones.count) errorMessage=\(errorMessage == nil ? "无" : "有")")
+                return
+            }
+            LoginLogger.shared.log("[铃声] 就绪续跑：发起拉取")
             reload()
         }
         .navigationTitle("铃声管理")
