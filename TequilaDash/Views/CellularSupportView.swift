@@ -27,19 +27,17 @@ struct CellularSupportView: View {
 
     @State private var showGuide = false
 
-    /// 名字输入框的预填：读到的是**生效值**（留空时引擎回落默认名），写回的是原始值.
+    /// 名字输入框：**读原始存储值**（可以为空），默认名只作占位符.
+    ///
+    /// v0.3.743：旧实现读「生效值」（留空即回落默认名），用户把输入框清空后立刻又被填回
+    /// 默认名 —— 看上去就是「预填字段不能清空，除非什么都不填返回」。现在空 = 用默认名，
+    /// 默认名写在占位符里；要恢复默认清空即可.
     private var offNameBinding: Binding<String> {
-        Binding(
-            get: { CellularTunnelManager.shared.turnOffShortcutName },
-            set: { turnOffShortcut = $0 }
-        )
+        Binding(get: { turnOffShortcut }, set: { turnOffShortcut = $0 })
     }
 
     private var onNameBinding: Binding<String> {
-        Binding(
-            get: { CellularTunnelManager.shared.turnOnShortcutName },
-            set: { turnOnShortcut = $0 }
-        )
+        Binding(get: { turnOnShortcut }, set: { turnOnShortcut = $0 })
     }
 
     /// 延时的预填：同样读生效值（已过 0...30 夹取），写回时再夹一次.

@@ -97,6 +97,9 @@ enum StoreAccountSession {
         }
         do {
             try Task.checkCancellation()
+            // v0.3.743 面包屑：拿到租约之后、取账号会话之前 —— 与调用方的
+            // 「申请账号租约…」配对，用来区分「门排队」和「取账号会话」两段.
+            LoginLogger.shared.log("[会话] 租约已获得，取账号会话…", category: .appleID)
             guard var account = AppStoreDownloadStore.shared.account(for: email) else {
                 throw StoreAuthenticationError.accountChanged
             }

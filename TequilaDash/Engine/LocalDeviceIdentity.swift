@@ -163,11 +163,26 @@ enum LocalDeviceIdentity {
     ///
     /// 后果：**首次下载**（缓存还冷）那次的日志里 `serialNumber=` 会是默认的 `0`；
     /// 第二次起由本函数补上真值。这个字段不进请求，所以只影响可读性。
+    /// 写 `Configuration.deviceSerialNumber` 的串行锁（v0.3.743）.
+    ///
+    /// 为什么需要：这个全局 `String` 由 vendor 在**下载任务**里读，而我们这边每条下载链
+    /// 都会在**自己的任务**里写。单条链没问题，但两条下载并发（或一条下载 + 一次已购拉取）
+    /// 就是两个线程同时给同一个 Swift `String` 赋值 —— 非原子、retain/release 会互相踩，
+    /// 踩坏之后任意一次释放都会跳到无效地址。真机崩溃报告
+    /// （LiveProcess-2026-11-01-225359：PC=0、协作线程、崩溃点落在「下载链路启动」之后、
+    /// 「账号租约已获得」之前）就是这种形状.
+    /// 加锁只让写入串行，不引入等待窗口（临界区就是一次字符串赋值）.
+    private static let serialLock = NSLock()
+
     @discardableResult
     static func applyIfCached() -> Snapshot? {
         guard let snap = cachedSnapshot() else { return nil }
         if let sn = snap.serialNumber, !sn.isEmpty {
-            Configuration.deviceSerialNumber = sn
+            serialLock.lock()
+            if Configuration.deviceSerialNumber != sn {
+                Configuration.deviceSerialNumber = sn
+            }
+            serialLock.unlock()
         }
         return snap
     }

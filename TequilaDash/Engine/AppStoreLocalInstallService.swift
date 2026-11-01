@@ -68,6 +68,10 @@ enum AppStoreLocalInstallService {
 
         // 计时锚点：这一时刻之前的时间 = 账号租约门的排队等待（不是隧道）。
         let leaseWaitStarted = Date()
+        // v0.3.743 面包屑：真机崩溃（LiveProcess-2026-11-01-225359）落在「下载链路启动」
+        // 之后、「账号租约已获得」之前，1.6 秒内进程被杀。这一段有三个候选：门排队、
+        // 取账号会话、闭包体。加这一行把窗口一分为二，下次崩溃就能直接定位到哪一段.
+        onLog?("[计时] 申请账号租约…")
         let output = try await StoreAccountSession.withAccount(email: email) { account in
             // 本闭包的第一句 —— 它跑起来就说明租约已经拿到。
             // 于是「上面的锚点 → 这里」正好等于**门等待**，与后面的设备身份步骤彻底分开。

@@ -46,7 +46,7 @@ struct IPAInstallView: View {
     @State private var twoFactorCode = ""
     /// 自动登录开关（持久化在 UserDefaults；默认开）
     @State private var autoSignInOn: Bool =
-        UserDefaults.standard.object(forKey: "IPA.autoSignInEnabled") as? Bool ?? true
+        IPAInstallService.isAutoSignInEnabled
     /// 2FA 等待代际：每次弹窗自增；超时定时器只在代际未变时生效（防旧定时器误取消新等待）
     @State private var twoFactorGeneration = 0
     /// 手动登录进行中（区别于自动登录，进度文案不同）
@@ -147,7 +147,7 @@ struct IPAInstallView: View {
                     }
                     Button {
                         autoSignInOn.toggle()
-                        UserDefaults.standard.set(autoSignInOn, forKey: "IPA.autoSignInEnabled")
+                        UserDefaults.standard.set(autoSignInOn, forKey: IPAInstallService.autoSignInKey)
                     } label: {
                         Label("自动登录（用「设置」里的 Apple ID）",
                               systemImage: autoSignInOn ? "checkmark.circle.fill" : "circle")
@@ -872,7 +872,7 @@ struct IPAInstallView: View {
     /// 2) 恢复失败（token 过期等）才回退用邮箱+密码完整登录（可能弹 2FA）.
     /// 自动登录总开关（设置里可关；默认开）
     private var autoSignInEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: "IPA.autoSignInEnabled") as? Bool ?? true }
+        get { IPAInstallService.isAutoSignInEnabled }
     }
 
     /// 手动登录：用输入框里的 Apple ID + 密码（2FA 走弹窗）.

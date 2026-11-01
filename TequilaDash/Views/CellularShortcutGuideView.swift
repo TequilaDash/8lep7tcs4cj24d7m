@@ -35,7 +35,8 @@ struct CellularShortcutGuideView: View {
         List {
             Section {
                 InfoActionCard(
-                    icon: "bolt.badge.plus",
+                    // v0.3.743：原 "bolt.badge.plus" 不是有效 SF Symbol，渲染成空白方块.
+                    icon: "plus.circle.fill",
                     iconTint: AppTheme.categorySettings,
                     title: "创建两个快捷指令",
                     message: "蜂窝网络下，iOS 会限制回环 VPN 访问本机服务，所以要先临时关掉蜂窝数据."

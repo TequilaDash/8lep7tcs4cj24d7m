@@ -140,6 +140,9 @@ struct RootView: View {
     private func warmUpAutoLogin() {
         let settings = MemoryLimitSettings.shared
         guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
+        // v0.3.743：自动登录关掉时，冷启动不再自动恢复任何会话（含证书链）——
+        // 此前只挡了页面内的自动登录，启动预热照跑，用户会莫名其妙被登录/弹 2FA.
+        guard IPAInstallService.isAutoSignInEnabled else { return }
         IPAInstallService.shared.warmUp()
         CertificateManager.shared.warmUp()
     }

@@ -22,6 +22,17 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     static let shared = IPAInstallService()
     private init() {}
 
+    // MARK: - 自动登录开关
+
+    /// 自动登录总开关的存储键（「更多 → IPA 侧载」页里的那个开关；默认开）.
+    /// 集中一处，避免 RootView / IPAInstallView / 服务层各写一遍字面量而漂移.
+    static let autoSignInKey = "IPA.autoSignInEnabled"
+
+    /// 自动登录是否开启（未写过该键 ⇒ 默认开，与页面上的默认值一致）.
+    static var isAutoSignInEnabled: Bool {
+        UserDefaults.standard.object(forKey: autoSignInKey) as? Bool ?? true
+    }
+
     // MARK: - 2FA 桥接
 
     /// 主线程回调：弹出 2FA 输入；reply(nil) 表示取消.
@@ -386,6 +397,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     func warmUp() {
         let settings = MemoryLimitSettings.shared
         guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
+        // v0.3.743：开关关掉就**什么都不做**. 此前 App 冷启动的预热不看这个开关，
+        // 用户关了自动登录、每次启动仍会被自动登录（还会弹 2FA）.
+        guard Self.isAutoSignInEnabled else { return }
         guard !isSignedIn else { return }
         guard !isWarmingUp else { return }
         let id = settings.appleID
