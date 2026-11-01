@@ -4,6 +4,10 @@ import UIKit
 @main
 struct TequilaDashApp: App {
     init() {
+        // v0.3.742：先装崩溃现场记录 —— 越早越好，启动期崩溃也要抓得到.
+        // 写 Documents/LoginLogs/crash.log（信号 + 栈帧地址），SSH 可直接 cat.
+        CrashGuard.install()
+        let previousCrashCount = CrashGuard.previousCrashCount()
         // v0.3.481：注册宿主内置的「模块原生 SwiftUI 界面」.
         // 模块清单（module.json）里 `ui.view` 写的是**注册名**，SwiftUI 视图没法从
         // zip 加载，必须编译进宿主；注册必须在任何 UI 构建之前完成 —— 模块卡片的
@@ -53,6 +57,10 @@ struct TequilaDashApp: App {
             + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
             + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?") + ") 启动",
             category: .general)
+        if previousCrashCount > 0 {
+            LoginLogger.shared.log("[崩溃] 上次运行留下 \(previousCrashCount) 条崩溃记录（LoginLogs/crash.log）",
+                                   category: .general)
+        }
         // v0.3.164：后台保活恢复——开关已开但上次进程已死时，启动即恢复保活
         // （audio 静音播放，UIBackgroundModes audio）; 否则开关开了也没人 start.
         if KeepAliveManager.shared.isEnabled {
