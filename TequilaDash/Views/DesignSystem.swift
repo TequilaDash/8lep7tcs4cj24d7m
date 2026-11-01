@@ -505,6 +505,9 @@ struct InfoActionCard: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
     var disabled: Bool = false
+    /// 内容组的水平对齐。默认 `.leading`（v0.3.736 起卡片拉满宽，左贴是正常排版）；
+    /// 空态占位（日志板块等）传 `.center` 让「图标 + 文字」整组居中.
+    var contentAlignment: HorizontalAlignment = .leading
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -531,7 +534,7 @@ struct InfoActionCard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: contentAlignment)
         .padding(.vertical, 6)
     }
 }
@@ -914,6 +917,8 @@ struct AppStateSection: View {
     /// （外层带 header/footer，内层又起一个分组）。这些位置传 `false`，只输出 `InfoActionCard`，
     /// 让它作为外层 Section 的一行渲染 —— 与「裸 Text 空态」原来的层级一致。
     var wrapsSection: Bool = true
+    /// 透传给 InfoActionCard 的内容组水平对齐（空态居中场景用 `.center`）.
+    var contentAlignment: HorizontalAlignment = .leading
 
     var body: some View {
         switch state {
@@ -967,7 +972,8 @@ struct AppStateSection: View {
                        title: title,
                        message: message,
                        actionTitle: actionTitle,
-                       action: action)
+                       action: action,
+                       contentAlignment: contentAlignment)
     }
 }
 

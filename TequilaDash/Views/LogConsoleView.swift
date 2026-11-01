@@ -143,7 +143,8 @@ struct LogConsoleView: View {
         // v0.3.644：改用统一空态组件（原先手写 VStack + 图标 + 文字）。
         AppStateSection(state: .empty("暂无日志",
                                       message: "当前没有可显示的日志输出.",
-                                      icon: "apple.terminal"))
+                                      icon: "apple.terminal"),
+                        contentAlignment: .center)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)
     }
