@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.743] - 2026-11-02
+
+### 修复
+
+- **商店搜索 → 点下载闪退（内核 Invalid Page 杀进程）**。真机 .ips 取证 + 符号表还原：
+  崩溃线程 PC 落在不属于任何镜像的地址，内核按 `CODESIGNING / Invalid Page` 直接 SIGKILL；
+  同一时刻另一条线程正停在 Unicorn 的 `tcg_qemu_tb_exec`。根因是**两台 Unicorn 引擎并发执行** ——
+  SAP 签名链每个 `SAPContext` 建一台引擎、Anisette 链一台，而 Unicorn 的 TCG 翻译缓冲带进程级
+  共享状态，一方 `tb_flush` 会回收另一方正在跑的翻译块。新增 `Engine/EmulatorGate.h` 进程级闸门，
+  `SapMachine::Invoke` 与 `elf_loader` 的 `uc_emu_start` 共用 ⇒ 全进程只有一台引擎在跑。
+- **下载链设备序列号写入加锁**（`LocalDeviceIdentity`）：两条下载并发赋值会踩坏全局 String 的引用计数。
+- 下载链补两处面包屑（申请账号租约 / 租约已获得取会话），下次崩溃能直接定位停在哪一段。
+
+### 修复（同批）
+
+- **蜂窝支持二级页**：快捷指令名输入框可以清空（占位符只作提示，不再把默认名写回真实值）；
+  「创建两个快捷指令」卡片图标由无效 SF Symbol（空白方块）改为 `plus.circle.fill`。
+- **IPA 侧载的自动登录开关真正生效**：此前只挡了页面内自动登录，冷启动预热仍会跑；
+  现在 `warmUp()` 与 `RootView` 冷启动预热都读同一个开关。
+
 ## [0.3.738] - 2026-11-01
 
 ### 修复
