@@ -19,6 +19,16 @@
 // v0.3.636：建连改为多候选，候选来源之一是路由表枚举（C 垫片）。
 #import "EscRoutePeers.h"
 
+// v0.3.742：Rust FFI 的错误串是 UTF-8，而 NSString 的 %s 按系统默认 C 字符串编码
+// （MacRoman）解码 ⇒ 中文必然乱码。所有 C 串必须过这个函数后用 %@。
+static NSString *TDUTF8(const char *s) {
+    if (!s) return @"";
+    NSString *v = [NSString stringWithUTF8String:s];
+    if (v) return v;
+    return [[NSString alloc] initWithCString:s encoding:NSISOLatin1StringEncoding] ?: @"";
+}
+
+
 #define RPPPAIRING_PORT 49152
 
 // RPPairing 端口不再固定（iOS 27.2 起设备端可能换端口）。Swift 侧的
@@ -135,7 +145,7 @@ static uint16_t TDRPPairingPort(void) {
     struct RpPairingFileHandle *pf = NULL;
     struct IdeviceFfiError *err = rp_pairing_file_read(path.fileSystemRepresentation, &pf);
     if (err) {
-        NSString *raw = [NSString stringWithFormat:@"%s (code %d)", err->message, err->code];
+        NSString *raw = [NSString stringWithFormat:@"%@ (code %d)", TDUTF8(err->message), err->code];
         idevice_error_free(err);
         if (pf) rp_pairing_file_free(pf);
         // Rust 侧的 plist 字段错误直接抛英文串，用户看不懂。这里翻成人话，
@@ -328,7 +338,7 @@ static uint16_t TDRPPairingPort(void) {
     struct RpPairingFileHandle *pf = NULL;
     struct IdeviceFfiError *err = rp_pairing_file_read(path.fileSystemRepresentation, &pf);
     if (err) {
-        if (error) *error = [self _error:[NSString stringWithFormat:@"Failed to read pairing file: %s", err->message] code:err->code];
+        if (error) *error = [self _error:[NSString stringWithFormat:@"Failed to read pairing file: %@", TDUTF8(err->message)] code:err->code];
         idevice_error_free(err);
         return NULL;
     }
@@ -411,9 +421,9 @@ static uint16_t TDRPPairingPort(void) {
         );
 
         if (err) {
-            lastError = [self _error:[NSString stringWithFormat:@"%s", err->message] code:err->code];
-            NSLog(@"[TequilaDash] RPPairing tunnel failed on %@: %s (code %d)",
-                  peer, err->message, err->code);
+            lastError = [self _error:[NSString stringWithFormat:@"%@", TDUTF8(err->message)] code:err->code];
+            NSLog(@"[TequilaDash] RPPairing tunnel failed on %@: %@ (code %d)",
+                  peer, TDUTF8(err->message), err->code);
             idevice_error_free(err);
             if (handshake) rsd_handshake_free(handshake);
             if (adapter) adapter_free(adapter);
@@ -520,7 +530,7 @@ static uint16_t TDRPPairingPort(void) {
     struct IdevicePairingFile *pf = NULL;
     struct IdeviceFfiError *err = idevice_pairing_file_read(path.fileSystemRepresentation, &pf);
     if (err) {
-        if (error) *error = [self _error:[NSString stringWithFormat:@"Failed to read pairing file: %s", err->message] code:err->code];
+        if (error) *error = [self _error:[NSString stringWithFormat:@"Failed to read pairing file: %@", TDUTF8(err->message)] code:err->code];
         idevice_error_free(err);
         return NO;
     }

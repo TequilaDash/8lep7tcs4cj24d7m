@@ -5,7 +5,8 @@ import SwiftUI
 /// 用户要求（2026-11-01）：一级页只留入口，开关与全部配置都搬到这里；
 /// 首次进入自动弹创建引导（支持跳过），页内提供「重新引导示范」.
 /// 字段对齐 SideStore 的 User Customizations → CELLULAR REFRESH：
-/// 总开关 / 关·开快捷指令名 / 关·开基础延时 / 恢复默认.
+/// 总开关 / 开·关快捷指令名 / 开·关基础延时 / 恢复默认.
+/// 输入框**预填当前生效值**（不是占位符）—— 用户要求「你得帮我预填入」.
 ///
 /// 为什么快捷指令要用户自建：iOS 没有给第三方 App 创建快捷指令的公开 API
 /// （App Intents 只能暴露自家动作），引擎只能按名字跑
@@ -26,23 +27,49 @@ struct CellularSupportView: View {
 
     @State private var showGuide = false
 
+    /// 名字输入框的预填：读到的是**生效值**（留空时引擎回落默认名），写回的是原始值.
+    private var offNameBinding: Binding<String> {
+        Binding(
+            get: { CellularTunnelManager.shared.turnOffShortcutName },
+            set: { turnOffShortcut = $0 }
+        )
+    }
+
+    private var onNameBinding: Binding<String> {
+        Binding(
+            get: { CellularTunnelManager.shared.turnOnShortcutName },
+            set: { turnOnShortcut = $0 }
+        )
+    }
+
+    /// 延时的预填：同样读生效值（已过 0...30 夹取），写回时再夹一次.
+    private var offDelayBinding: Binding<Double> {
+        Binding(
+            get: { CellularTunnelManager.shared.turnOffBaseDelay },
+            set: { turnOffDelay = CellularTunnelManager.sanitizeBaseDelay($0) }
+        )
+    }
+
+    private var onDelayBinding: Binding<Double> {
+        Binding(
+            get: { CellularTunnelManager.shared.turnOnBaseDelay },
+            set: { turnOnDelay = CellularTunnelManager.sanitizeBaseDelay($0) }
+        )
+    }
+
     var body: some View {
         List {
             Section {
-                Toggle("Cellular 隧道支持", isOn: $enabled)
+                Toggle("蜂窝刷新", isOn: $enabled)
             } header: {
                 Text("总开关")
             } footer: {
-                Text("关闭时引擎全部 no-op，行为与不开这个功能时完全一致.")
+                Text("刷新时通过快捷指令自动开关蜂窝数据.")
             }
 
             Section {
-                TextField(CellularTunnelManager.defaultTurnOffShortcut, text: $turnOffShortcut)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                TextField(CellularTunnelManager.defaultTurnOnShortcut, text: $turnOnShortcut)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                nameRow(title: "开蜂窝快捷指令", placeholder: CellularTunnelManager.defaultTurnOnShortcut, text: onNameBinding)
+                nameRow(title: "关蜂窝快捷指令", placeholder: CellularTunnelManager.defaultTurnOffShortcut, text: offNameBinding)
                 NavigationLink {
                     CellularShortcutGuideView()
                 } label: {
@@ -51,31 +78,31 @@ struct CellularSupportView: View {
             } header: {
                 Text("快捷指令")
             } footer: {
-                Text("名称必须与快捷指令 App 里完全一致（区分大小写），留空用默认名 TurnOffData / TurnOnData.")
+                Text("快捷指令 App 里的指令名，区分大小写.")
             }
 
             Section {
-                delayRow(title: "关蜂窝后等待", value: $turnOffDelay)
-                delayRow(title: "开蜂窝后等待", value: $turnOnDelay)
+                delayRow(title: "开蜂窝基础延时", value: onDelayBinding)
+                delayRow(title: "关蜂窝基础延时", value: offDelayBinding)
             } header: {
                 Text("基础延时")
             } footer: {
-                Text("单位秒，范围 0-30.跑完快捷指令后等多久再探隧道；网络切换慢就调大，默认 1 秒.")
+                Text("执行快捷指令后等待的秒数，范围 0 到 30.")
             }
 
             Section {
-                Button {
-                    showGuide = true
-                } label: {
-                    Label("重新引导示范", systemImage: "questionmark.circle")
-                }
                 Button {
                     resetDefaults()
                 } label: {
                     Label("恢复默认", systemImage: "arrow.counterclockwise")
                 }
+                Button {
+                    showGuide = true
+                } label: {
+                    Label("重新引导示范", systemImage: "questionmark.circle")
+                }
             } footer: {
-                Text("恢复默认会把两个名称清空（回到 TurnOffData / TurnOnData）并把延时改回 1 秒，不动总开关.")
+                Text("名称回到 TurnOffData / TurnOnData，延时回到 1 秒，不影响总开关.")
             }
         }
         .listStyle(.insetGrouped)
@@ -93,6 +120,19 @@ struct CellularSupportView: View {
                         }
                     }
             }
+        }
+    }
+
+    /// 名字行：左标题 + 右输入框（预填生效值，单行不换行）.
+    private func nameRow(title: String, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+            Spacer(minLength: 8)
+            TextField(placeholder, text: text)
+                .multilineTextAlignment(.trailing)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .frame(maxWidth: 180)
         }
     }
 

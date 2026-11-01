@@ -10,6 +10,16 @@
 #include <stdlib.h>
 #include <string.h>
 #import "applist.h"
+
+// v0.3.742：Rust FFI 的错误串是 UTF-8，而 NSString 的 %s 按系统默认 C 字符串编码
+// （MacRoman）解码 ⇒ 中文必然乱码。所有 C 串必须过这个函数后用 %@。
+static NSString *TDUTF8(const char *s) {
+    if (!s) return @"";
+    NSString *v = [NSString stringWithUTF8String:s];
+    if (v) return v;
+    return [[NSString alloc] initWithCString:s encoding:NSISOLatin1StringEncoding] ?: @"";
+}
+
 static NSString *extractAppName(plist_t app)
 {
     plist_t displayNameNode = plist_dict_get_item(app, "CFBundleDisplayName");
@@ -158,7 +168,7 @@ static NSDictionary<NSString*, NSString*> *performAppQuery(struct AdapterHandle 
         // list_installed_apps / list_all_apps / list_hidden_system_apps 把调用方的
         // error 指针原样透传下来，而 TunnelContext 侧存在传 NULL 的调用点
         // （只要返回值不看错因）。传 NULL 时这一句就是写地址 0 = 段错误。
-        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         return nil;
     }
@@ -167,7 +177,7 @@ static NSDictionary<NSString*, NSString*> *performAppQuery(struct AdapterHandle 
     size_t count = 0;
     err = installation_proxy_get_apps(client, NULL, NULL, 0, (void*)&apps, &count);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         installation_proxy_client_free(client);
         return nil;
@@ -265,7 +275,7 @@ NSDictionary *getAllAppsInfoFromProvider(struct IdeviceProviderHandle *provider,
     InstallationProxyClientHandle *client = NULL;
     struct IdeviceFfiError *err = installation_proxy_connect(provider, &client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to installation proxy: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         return nil;
     }
@@ -275,7 +285,7 @@ NSDictionary *getAllAppsInfoFromProvider(struct IdeviceProviderHandle *provider,
     err = installation_proxy_get_apps(client, NULL, NULL, 0, &apps, &count);
     if (err) {
         installation_proxy_client_free(client);
-        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get apps: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         return nil;
     }
@@ -301,7 +311,7 @@ UIImage *getAppIconFromProvider(struct IdeviceProviderHandle *provider, NSString
     SpringBoardServicesClientHandle *client = NULL;
     struct IdeviceFfiError *err = springboard_services_connect(provider, &client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"Failed to connect to SpringBoard Services: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to connect to SpringBoard Services: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         return nil;
     }
@@ -311,7 +321,7 @@ UIImage *getAppIconFromProvider(struct IdeviceProviderHandle *provider, NSString
     err = springboard_services_get_icon(client, [bundleID UTF8String], &pngData, &dataLen);
     if (err) {
         springboard_services_free(client);
-        if (error) *error = [NSString stringWithFormat:@"Failed to get app icon: %s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"Failed to get app icon: %@", TDUTF8(err->message)];
         idevice_error_free(err);
         return nil;
     }
@@ -327,14 +337,14 @@ BOOL uninstall_app(struct AdapterHandle *adapter, struct RsdHandshakeHandle *han
     InstallationProxyClientHandle *client = NULL;
     struct IdeviceFfiError *err = installation_proxy_connect_rsd(adapter, handshake, &client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"无法连接安装代理（RPPairing）：%s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"无法连接安装代理（RPPairing）：%@", TDUTF8(err->message)];
         idevice_error_free(err);
         return NO;
     }
     err = installation_proxy_uninstall(client, [bundleID UTF8String], NULL);
     installation_proxy_client_free(client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"卸载失败（RPPairing）：%s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"卸载失败（RPPairing）：%@", TDUTF8(err->message)];
         idevice_error_free(err);
         return NO;
     }
@@ -345,14 +355,14 @@ BOOL uninstall_app_from_provider(struct IdeviceProviderHandle *provider, NSStrin
     InstallationProxyClientHandle *client = NULL;
     struct IdeviceFfiError *err = installation_proxy_connect(provider, &client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"无法连接安装代理（lockdown）：%s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"无法连接安装代理（lockdown）：%@", TDUTF8(err->message)];
         idevice_error_free(err);
         return NO;
     }
     err = installation_proxy_uninstall(client, [bundleID UTF8String], NULL);
     installation_proxy_client_free(client);
     if (err) {
-        if (error) *error = [NSString stringWithFormat:@"卸载失败（lockdown）：%s", err->message];
+        if (error) *error = [NSString stringWithFormat:@"卸载失败（lockdown）：%@", TDUTF8(err->message)];
         idevice_error_free(err);
         return NO;
     }
