@@ -56,8 +56,6 @@ struct LaunchAppsView: View {
                             message: "点击右上角刷新重试；仍为空请确认 LocalDevVPN 已连接、配对文件有效."
                         )
                         .appCard()
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, AppTheme.pageInset)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -98,6 +96,7 @@ struct LaunchAppsView: View {
                 }
             }
         }
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(AppTheme.surfaceBase)
         .navigationTitle("拉起应用")

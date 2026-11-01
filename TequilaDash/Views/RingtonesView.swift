@@ -64,36 +64,38 @@ struct RingtonesView: View {
                 }
                 .listSectionSpacing(.compact)
                 .listRowInsets(EdgeInsets())
-            } else if let errorMessage {
-                Section {
-                    if PairingGate.isPairingError(errorMessage) {
-                        PairingGuideCard(showsBackground: false)
-                            .listRowInsets(EdgeInsets())
-                    } else {
-                        // v0.3.683：区块级错误行统一到 AppErrorRow.
-                        AppErrorRow(message: errorMessage, retry: { reload() })
+            } else {
+                if let errorMessage {
+                    Section {
+                        if PairingGate.isPairingError(errorMessage) {
+                            PairingGuideCard(showsBackground: false)
+                                .listRowInsets(EdgeInsets())
+                        } else {
+                            // v0.3.683：区块级错误行统一到 AppErrorRow.
+                            AppErrorRow(message: errorMessage, retry: { reload() })
+                        }
                     }
                 }
-            }
 
-            Section {
-                if loading {
-                    // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
-                    AppLoadingRow(title: "正在扫描铃声…", level: .block)
-                } else if ringtones.isEmpty {
-                    AppStateSection(state: .empty(
-                        "没有找到文件",
-                        message: "已扫描 iTunes_Control/Ringtones、PublicStaging、Downloads 与媒体根.点右上角导入音频（自动转 .m4r）.",
-                        icon: "bell"), wrapsSection: false)
-                } else {
-                    ForEach(ringtones) { entry in
-                        row(entry)
+                Section {
+                    if loading {
+                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        AppLoadingRow(title: "正在扫描铃声…", level: .block)
+                    } else if ringtones.isEmpty {
+                        AppStateSection(state: .empty(
+                            "没有找到文件",
+                            message: "已扫描 iTunes_Control/Ringtones、PublicStaging、Downloads 与媒体根.点右上角导入音频（自动转 .m4r）.",
+                            icon: "bell"), wrapsSection: false)
+                    } else {
+                        ForEach(ringtones) { entry in
+                            row(entry)
+                        }
                     }
+                } header: {
+                    Text("铃声（/var/mobile/media）")
+                } footer: {
+                    Text("导入音频（mp3/wav/m4a，超 40 秒自动截取）转为 .m4r 注册铃声库.在「设置 → 声音 → 铃声」查看；未出现可重启设备.")
                 }
-            } header: {
-                Text("铃声（/var/mobile/media）")
-            } footer: {
-                Text("导入音频（mp3/wav/m4a，超 40 秒自动截取）转为 .m4r 注册铃声库.在「设置 → 声音 → 铃声」查看；未出现可重启设备.")
             }
         }
         .listStyle(.insetGrouped)

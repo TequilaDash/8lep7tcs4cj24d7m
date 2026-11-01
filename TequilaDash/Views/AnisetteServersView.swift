@@ -163,14 +163,8 @@ struct AnisetteServersView: View {
 
     // MARK: - Client Info
 
-    /// SideSign 实测可用的 Android 形态 client info（PR #5，2026-10-13）.
-    /// GSA 指纹识别 adi 库后，这个值能让既有 anisette 服务器恢复可用.
-    private static let androidClientInfo =
-        "<Pixel 8><Android; 14; UQ1A.240205.004><com.apple.AuthKit/1 (com.apple.android.music/4.9.6)>"
-
     private var clientInfoSection: some View {
-        Section(header: Text("客户端标识"),
-                footer: Text("发给 Apple 的 X-MMe-Client-Info.留空则用内置默认值.如果登录报 -80045，可试试点「填入 Android 形态」——该值经 SideSign 实测可绕过 GSA 对 adi 库的指纹识别.")) {
+        Section(header: Text("客户端标识")) {
             HStack(spacing: 10) {
                 TextField("留空 = 内置默认", text: $customClientInfo)
                     .autocapitalization(.none)
@@ -183,9 +177,6 @@ struct AnisetteServersView: View {
                 Text(customClientInfo.isEmpty ? "内置默认" : "自定义")
                     .foregroundStyle(.secondary)
             }
-            Button("填入 Android 形态") {
-                customClientInfo = Self.androidClientInfo
-            }
             Button("恢复内置默认") {
                 customClientInfo = ""
             }
@@ -197,9 +188,7 @@ struct AnisetteServersView: View {
     // MARK: - 本机 Anisette
 
     private var onDeviceSection: some View {
-        Section(header: Text("本机 Anisette"),
-                footer: Text("本机 Anisette 在本机跑 ADI 模拟，不依赖 Anisette header 服务器，也不依赖设备配对文件."
-    + "打开开关会自动从元数据地址下载并校验引擎；首次登录时会联网做一次配给，之后即可本机生成.")) {
+        Section(header: Text("本机 Anisette")) {
             Toggle("本机 Anisette", isOn: $oda.isEnabled)
             HStack {
                 Text("就绪状态")

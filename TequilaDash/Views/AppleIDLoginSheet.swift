@@ -70,8 +70,6 @@ struct AppleIDLoginSheet: View {
                     Toggle(isOn: $rememberAccount) {
                         Label("记住账户", systemImage: "bookmark")
                     }
-                } footer: {
-                    Text("开启后，登录成功的账户会保存在「最近登录」列表中，之后可从下拉菜单一键登录；未开启则不记录.")
                 }
 
                 Section {
@@ -88,8 +86,8 @@ struct AppleIDLoginSheet: View {
                     .disabled(email.isEmpty || password.isEmpty || ctrl.isAuthenticating)
                 }
 
-                Section(header: Text("SideStore"), footer: Text("从 SideStore 设置中导出账户 JSON，可免去手动输入账号密码，并直接带入设备认证所需的 adi.pb 与本地标识.")) {
-                    Button("导入 SideStore 账户文件") {
+                Section(header: Text("导入")) {
+                    Button("导入账户文件（JSON）") {
                         showImporter = true
                     }
                 }

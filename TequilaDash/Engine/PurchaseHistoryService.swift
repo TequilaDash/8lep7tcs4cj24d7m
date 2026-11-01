@@ -110,6 +110,12 @@ enum PurchaseHistoryService {
                 lastError = error
                 LoginLogger.shared.log("[已购] storefront \(store) 未取到（\(error.localizedDescription)），继续",
                                        category: .appStore)
+                // 5xx = SAP 端点本身拒了（两个 storefront 打同一端点，结果必然相同）：
+                // 立即断循环，不再让第二家白等一轮 —— 空已购合并优雅降级.
+                if case let PurchaseHistoryError.badResponse(what) = error, what.contains("HTTP 5") {
+                    LoginLogger.shared.log("[已购] storefront 端点 5xx，跳过余下 storefront", category: .appStore)
+                    break
+                }
             }
         }
         if !succeeded, let lastError { throw lastError }
@@ -317,6 +323,8 @@ enum PurchaseHistoryService {
         private func perform(_ original: URLRequest) async throws -> (Data, HTTPURLResponse) {
             try Task.checkCancellation()
             var request = original
+            // 规则 29：失败路径超时 10s 封顶 —— SAP 端点 5xx 慢响应曾把 storefront 循环拖到几十秒.
+            request.timeoutInterval = 10
             request.httpShouldHandleCookies = false
             request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
             if let url = request.url {
