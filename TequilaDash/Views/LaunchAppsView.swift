@@ -43,6 +43,8 @@ struct LaunchAppsView: View {
                 } else if apps.isEmpty && !isLoading {
                     if !hasPairing {
                         PairingGuideCard(showsBackground: false, note: "拉起应用需已连接 LocalDevVPN.")
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, AppTheme.pageInset)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -54,6 +56,8 @@ struct LaunchAppsView: View {
                             message: "点击右上角刷新重试；仍为空请确认 LocalDevVPN 已连接、配对文件有效."
                         )
                         .appCard()
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, AppTheme.pageInset)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -66,6 +70,8 @@ struct LaunchAppsView: View {
                         message: "换名称或 Bundle ID 重试."
                     )
                     .appCard()
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, AppTheme.pageInset)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
