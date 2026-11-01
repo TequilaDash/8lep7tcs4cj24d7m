@@ -70,7 +70,14 @@ private struct TunnelReadyWatcher: ViewModifier {
                 if ready { action() }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active && TunnelGate.isReady { action() }
+                guard phase == .active else { return }
+                if TunnelGate.isReady {
+                    action()
+                } else {
+                    // 规则 37：回前台但旗标还没翻（App 挂起期间探测停摆）→ 立即加拍探测，
+                    // 不等下一个 1.5 秒节拍；翻转会经 @ObservedObject/事件双路通知页面.
+                    Task { @MainActor in await TunnelReadiness.shared.probeOnce() }
+                }
             }
     }
 }

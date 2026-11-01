@@ -54,10 +54,13 @@ struct RingtonesView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let service = RingtonesService.shared
+    /// 规则 37：待发分支必须直接观察就绪旗标（@ObservedObject）——翻转发布即重算 body，
+    /// 回调路径（onTunnelReady）只负责续跑拉取，不负责切换分支；回调错过也绝不会停在待发.
+    @ObservedObject private var readiness = TunnelReadiness.shared
 
     var body: some View {
         List {
-            if !TunnelGate.isReady {
+            if !readiness.isReady {
                 // 规则 34：隧道未就绪是「待发」不是错误 —— 图四口径（用户 2026-11-01 判定唯一正确形态）.
                 Section {
                     TunnelPendingRow(detail: "读取铃声目录", level: .inline)
