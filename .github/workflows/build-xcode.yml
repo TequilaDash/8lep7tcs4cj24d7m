@@ -707,6 +707,13 @@ jobs:
           #             且扩展 .appex 内也携带自己的 NE entitlements（否则隧道起不来）
           # 故无需第二次 xcodebuild，只需对同一份 .app 用不同 entitlements 各打一次包。
 
+
+          # ── 符号表工件（.ips 离线符号化用）──
+          # 崩溃报告的 imageOffset 对 nm 地址差（image base 0x100000000）即得函数名；
+          # 不必下载 IPA。Rust 静态区（Unicorn/模拟器）也在主二进制里，一并覆盖。
+          nm -nC "$BIN" > /tmp/symbols.nm.txt 2>/dev/null || true
+          otool -l "$BIN" > /tmp/symbols.otool.txt 2>/dev/null || true
+          wc -l /tmp/symbols.nm.txt /tmp/symbols.otool.txt || true
           echo "=== lipo -info ==="
           lipo -info "$BIN" 2>/dev/null || true
 
@@ -768,6 +775,15 @@ jobs:
         with:
           name: xcode-package-log
           path: /tmp/package.log
+
+      - name: Upload symbol table (offline .ips symbolication)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tequiladash-symbols
+          path: |
+            /tmp/symbols.nm.txt
+            /tmp/symbols.otool.txt
 
       - name: Verify SAP assets inside IPA
         # 本地 SAP 登录依赖 bundle 内 SAPAssets —— 缺了登录必然失败（invalidConfiguration）。
