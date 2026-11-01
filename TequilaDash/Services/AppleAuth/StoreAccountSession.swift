@@ -2,7 +2,17 @@ import Foundation
 
 /// Account cookie mutations are transactions. Actor reentrancy alone does not serialize awaits.
 private actor StoreAccountRequestGate {
-    private var owners: Set<String> = []
+    /// email → 持有者令牌集合。**必须是令牌而非裸 email**（v0.3.742 修复）：
+    /// 旧实现用 `Set<String>`，强制接管那条路**不插入自己的 entry**（`insert` 失败），
+    /// 于是接管者手里有租约、门里却没有它的记录 —— 一旦它 `release` 清掉僵尸 entry，
+    /// 门就变成空集，**任何并发调用都能立刻拿到租约**，同一账号又回到「多持有者并发」，
+    /// 正是「搜索 → 点下载」两条链同时持账号会话、进而闪退的形状（33429ee 只给已购链加了单飞）。
+    /// 改成令牌后：每次 acquire 都插入自己的令牌，release 只删自己的令牌，
+    /// 强制接管时**清掉该 email 下所有旧令牌再插入自己的** —— 门不会再永久失信.
+    private var owners: [String: Set<UInt64>] = [:]
+
+    /// 下一个令牌（单调递增，进程内唯一）.
+    private var nextToken: UInt64 = 0
 
     /// 取锁等待的**上限**。超时后**强制接管**（宁可变慢/偶发并发，绝不永久卡死）。
     ///
@@ -27,23 +37,41 @@ private actor StoreAccountRequestGate {
     /// 让它不再是一条死代码。
     private(set) var forcedAcquires = 0
 
-    /// 取锁。返回 `true` 表示「是超时夺来的」（调用方应记日志）。
-    func acquire(_ email: String) async -> Bool {
+    /// 取锁。返回 `(令牌, 是否超时夺来)`；调用方**必须**用同一令牌 release.
+    func acquire(_ email: String) async -> (token: UInt64, forced: Bool) {
         let deadline = Date().addingTimeInterval(Self.acquireTimeout)
         while true {
-            if owners.insert(email).inserted { return false }
+            var set = owners[email] ?? []
+            if set.isEmpty {
+                nextToken &+= 1
+                let token = nextToken
+                set.insert(token)
+                owners[email] = set
+                return (token, false)
+            }
             if Date() >= deadline {
                 forcedAcquires += 1
-                // 不在这里改 owners：那个 entry 属于（已经被挂起/回收的）旧持有者，
-                // 由本次调用方的 release 统一清掉 —— 这样下一次取锁就是正常快路径。
-                return true
+                nextToken &+= 1
+                let token = nextToken
+                // 强制接管：旧持有者几乎必然已挂起/被回收（永远不会 release），
+                // 这里直接把该 email 下的旧令牌全部清掉，只留本次这一个 ——
+                // 既清僵尸，又保证「接管者也在门里」，不会让门退化成无锁.
+                owners[email] = [token]
+                return (token, true)
             }
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
     }
 
-    func release(_ email: String) {
-        owners.remove(email)
+    /// 释放**自己那一个**令牌。别的持有者的令牌不受影响.
+    func release(_ email: String, token: UInt64) {
+        guard var set = owners[email] else { return }
+        set.remove(token)
+        if set.isEmpty {
+            owners[email] = nil
+        } else {
+            owners[email] = set
+        }
     }
 
     /// 供诊断日志读取的强制接管次数（actor 的隔离属性不能跨隔离域直读）.
@@ -57,8 +85,8 @@ enum StoreAccountSession {
     static func withAccount<T>(email: String,
                                operation: (inout AppStoreAccount) async throws -> T) async throws -> T {
         let gateKey = email.lowercased()
-        let forcedByTimeout = await gate.acquire(gateKey)
-        if forcedByTimeout {
+        let lease = await gate.acquire(gateKey)
+        if lease.forced {
             // 强制接管：上一个持有者很可能因 App 进后台被挂起/回收而未释放租约；
             // 本次结束时 release 会把它清掉，所以一次超时之后链路自行恢复。
             let forcedCount = await gate.forcedAcquireCount()
@@ -80,10 +108,10 @@ enum StoreAccountSession {
                 throw error
             }
             AppStoreDownloadStore.shared.update(account)
-            await gate.release(gateKey)
+            await gate.release(gateKey, token: lease.token)
             return result
         } catch {
-            await gate.release(gateKey)
+            await gate.release(gateKey, token: lease.token)
             throw error
         }
     }
