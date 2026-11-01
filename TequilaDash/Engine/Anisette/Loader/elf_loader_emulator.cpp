@@ -6,6 +6,7 @@
 //  Copyright © 2026 Magesh K. All rights reserved.
 //
 
+#include "../../EmulatorGate.h"
 #include "elf_loader_emulator.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1455,6 +1456,8 @@ int32_t run_vm_procedure(EmulatorVM *vm, uint64_t proc_addr, const std::vector<u
     LOG_UC("[Emulator] Starting emu at 0x%llx (insn=0x%08x), SP=0x%llx, LR=0x%llx...\n",
            (unsigned long long)proc_addr, first_insn, (unsigned long long)stack_top, (unsigned long long)kReturnAddress);
 
+    // v0.3.743：与 SAP 侧共用进程级仿真闸门（禁止两台 Unicorn 引擎并发）. 
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
     uc_err err = uc_emu_start(vm->uc, proc_addr, kReturnAddress, timeout_us, max_count);
 
     uint64_t pc = 0;

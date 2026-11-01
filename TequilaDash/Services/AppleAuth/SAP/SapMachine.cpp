@@ -1,5 +1,6 @@
 // Adapted from Sorvigolova/ipatool; see Resources/Licenses/ipatool.txt.
 #include "SapMachine.h"
+#include "../../../Engine/EmulatorGate.h"
 
 #include <unicorn/unicorn.h>
 
@@ -772,6 +773,10 @@ SapMachine::~SapMachine() {
 
 uint64_t SapMachine::Invoke(uint64_t fn, std::initializer_list<uint64_t> args) {
     if (!fn) throw std::runtime_error("SAP entry point is zero");
+
+    // v0.3.743：进程级仿真闸门 —— 与 Anisette 侧共用，禁止两台 Unicorn 引擎并发执行
+    // （并发时 tb_flush 会回收对方正在跑的翻译块，内核按 CODESIGNING/Invalid Page 杀进程）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
     shims_->BeforeInvoke();
 
