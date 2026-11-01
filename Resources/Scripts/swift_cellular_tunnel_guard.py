@@ -71,6 +71,9 @@ import sys
 
 MANAGER_REL = os.path.join("TequilaDash", "Engine", "CellularTunnelManager.swift")
 ROOTVIEW_REL = os.path.join("TequilaDash", "Views", "RootView.swift")
+# v0.3.741：开关从设置页一级条目搬进二级页（用户 2026-11-01 要求「更多里的开关改成入口，
+# 二级界面才给开关」），故 @AppStorage 与 Toggle 允许落在这两处之一，RootView 必须留入口。
+SUPPORT_REL = os.path.join("TequilaDash", "Views", "CellularSupportView.swift")
 DISCOVERY_REL = os.path.join("TequilaDash", "Engine", "AppDiscovery.swift")
 UNINSTALL_REL = os.path.join("TequilaDash", "Engine", "UninstallService.swift")
 LOCATION_REL = os.path.join("TequilaDash", "Engine", "LocationEngine.swift")
@@ -206,31 +209,54 @@ def check_multi_candidate_probe(path):
     return findings
 
 
-def check_settings_toggle(path):
-    """R2/R3：设置页 @AppStorage 默认 false + Toggle 绑定该变量."""
-    findings = []
-    if not os.path.isfile(path):
-        findings.append(("R2", "找不到 %s." % ROOTVIEW_REL.replace("\\", "/")))
-        return findings
-    stripped = strip_comments(read(path))
+DECL_RE = re.compile(
+    r'@AppStorage\s*\(\s*CellularTunnelManager\.enabledKey\s*\)'
+    r'\s*(?:private\s+|public\s+|internal\s+)?var\s+(\w+)\s*=\s*(\w+)')
 
-    # 匹配 @AppStorage(CellularTunnelManager.enabledKey) private var <name> = <默认值>
-    m = re.search(
-        r'@AppStorage\s*\(\s*CellularTunnelManager\.enabledKey\s*\)'
-        r'\s*(?:private\s+|public\s+|internal\s+)?var\s+(\w+)\s*=\s*(\w+)',
-        stripped)
-    if not m:
-        findings.append(("R2", "%s 找不到绑定 CellularTunnelManager.enabledKey 的 @AppStorage 声明." %
-                         ROOTVIEW_REL.replace("\\", "/")))
+
+def _collect_toggle_hosts(root):
+    """收集两处（设置页 / 二级页）的 @AppStorage 声明与 Toggle 绑定情况."""
+    hosts = []
+    for rel in (ROOTVIEW_REL, SUPPORT_REL):
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            continue
+        stripped = strip_comments(read(path))
+        m = DECL_RE.search(stripped)
+        if not m:
+            continue
+        var_name = m.group(1)
+        has_toggle = bool(re.search(r'Toggle\s*\([^)]*isOn\s*:\s*\$' + re.escape(var_name) + r'\b',
+                                    stripped))
+        hosts.append((rel.replace("\\", "/"), var_name, m.group(2), has_toggle))
+    return hosts
+
+
+def check_settings_toggle(root):
+    """R2/R3：@AppStorage 默认 false + Toggle 绑定该变量 + 二级页化后设置页留入口."""
+    findings = []
+    hosts = _collect_toggle_hosts(root)
+    if not hosts:
+        findings.append(("R2", "%s 与 %s 都找不到绑定 CellularTunnelManager.enabledKey 的 "
+                               "@AppStorage 声明." % (ROOTVIEW_REL.replace("\\", "/"),
+                                                     SUPPORT_REL.replace("\\", "/"))))
         return findings
-    var_name, default_value = m.group(1), m.group(2)
-    if default_value != "false":
-        findings.append(("R2", "%s 的 @AppStorage(%s) 默认值为 %s —— 必须默认 false（默认关 ⇒ "
-                               "开关不开时全部 no-op，不改变 Wi-Fi 下既有行为）." % (
-                                   ROOTVIEW_REL.replace("\\", "/"), var_name, default_value)))
-    if not re.search(r'Toggle\s*\([^)]*isOn\s*:\s*\$' + re.escape(var_name) + r'\b', stripped):
-        findings.append(("R3", "%s 找不到绑定 $%s 的 Toggle（开关没接上设置页）." % (
-            ROOTVIEW_REL.replace("\\", "/"), var_name)))
+    for rel, var_name, default_value, _has_toggle in hosts:
+        if default_value != "false":
+            findings.append(("R2", "%s 的 @AppStorage(%s) 默认值为 %s —— 必须默认 false（默认关 ⇒ "
+                                   "开关不开时全部 no-op，不改变 Wi-Fi 下既有行为）." % (
+                                       rel, var_name, default_value)))
+    toggle_hosts = [h for h in hosts if h[3]]
+    if not toggle_hosts:
+        findings.append(("R3", "%s / %s 都找不到绑定 $%s 的 Toggle（开关没接上）." % (
+            ROOTVIEW_REL.replace("\\", "/"), SUPPORT_REL.replace("\\", "/"), hosts[0][1])))
+    elif toggle_hosts[0][0].endswith("CellularSupportView.swift"):
+        root_path = os.path.join(root, ROOTVIEW_REL)
+        root_src = strip_comments(read(root_path)) if os.path.isfile(root_path) else ""
+        if "CellularSupportView()" not in root_src:
+            findings.append(("R3", "%s 没有 NavigationLink 指向 CellularSupportView() —— "
+                                   "开关搬进二级页后，设置页必须留入口，否则用户找不到开关." %
+                             ROOTVIEW_REL.replace("\\", "/")))
     return findings
 
 
@@ -355,7 +381,7 @@ def main():
     findings = []
     findings += check_manager(os.path.join(root, MANAGER_REL))
     findings += check_multi_candidate_probe(os.path.join(root, MANAGER_REL))
-    findings += check_settings_toggle(os.path.join(root, ROOTVIEW_REL))
+    findings += check_settings_toggle(root)
     findings += check_shortcut_dependency_present(root)
     findings += check_shortcut_name_configurable(root)
     findings += check_wiring(os.path.join(root, DISCOVERY_REL), "应用列表")

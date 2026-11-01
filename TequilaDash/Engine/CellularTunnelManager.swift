@@ -83,7 +83,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 其中多数在同步上下文里。改成 async 会波及 28 个文件的调用链，风险远大于收益。
     /// 故内部用 `DispatchSemaphore` 等 async 结果 —— 与 `isWiFiSatisfied` 同款手法。
     ///
-    /// ⚠️ 这样会在蜂窝模式下阻塞调用线程最多 `readyTimeout + shortcutBaseDelay`。
+    /// ⚠️ 这样会在蜂窝模式下阻塞调用线程最多 `readyTimeout + baseDelay`。
     /// 蜂窝本来就是「准备阶段多等一会」的场景，可接受；Wi-Fi 下第一道闸门就返回，零开销。
     @discardableResult
     func prepareForTunnel() -> Bool {
@@ -168,8 +168,10 @@ final class CellularTunnelManager: @unchecked Sendable {
             box.set(await body())
             semaphore.signal()
         }
-        // 上限 = 快捷指令等待 + 就绪轮询，避免极端情况下永久挂死。
-        _ = semaphore.wait(timeout: .now() + .seconds(Int(shortcutBaseDelay + readyTimeout + 2)))
+        // 上限 = 配置的快捷指令等待（关/开取大者，已夹到 0...30s）+ 就绪轮询 + 2s 余量，
+        // 避免极端情况下永久挂死；v0.3.741 起延时可配置，故按实际配置算而不是写死 1s.
+        let ceiling = Self.configuredBaseDelayCeiling + readyTimeout + 2
+        _ = semaphore.wait(timeout: .now() + .seconds(Int(ceiling)))
         return box.value
     }
     static func isWiFiSatisfied(timeout: TimeInterval = 0.5) -> Bool {
@@ -205,7 +207,43 @@ final class CellularTunnelManager: @unchecked Sendable {
 
     /// 关/开蜂窝后各等多久再探隧道（对齐 SideStore
     /// `defaultTurnOffDataBaseDelay` / `defaultTurnOnDataBaseDelay` = 1.0s）.
-    private static let shortcutBaseDelay: TimeInterval = 1.0
+    ///
+    /// v0.3.741：从写死 1.0s 改为可配置（与 SideStore 设置页同款两栏），
+    /// 键与 UI 同源；取值统一过 `sanitizeBaseDelay` 夹到 0...30 秒.
+    static let turnOffBaseDelayKey = "TurnOffDataBaseDelay"
+    static let turnOnBaseDelayKey = "TurnOnDataBaseDelay"
+    static let defaultBaseDelay: TimeInterval = 1.0
+    /// 允许范围：0 = 不等待；上限 30 秒（防手滑填 9999 把刷新拖死）.
+    static let baseDelayRange: ClosedRange<Double> = 0...30
+
+    /// 夹取延时到合法范围；非有限值回落默认.
+    static func sanitizeBaseDelay(_ raw: Double) -> TimeInterval {
+        guard raw.isFinite else { return defaultBaseDelay }
+        return min(max(raw, baseDelayRange.lowerBound), baseDelayRange.upperBound)
+    }
+
+    /// 关/开两档延时里的较大者（同步等待的上限用）.
+    private static var configuredBaseDelayCeiling: TimeInterval {
+        let off = UserDefaults.standard.object(forKey: turnOffBaseDelayKey) as? Double
+            ?? defaultBaseDelay
+        let on = UserDefaults.standard.object(forKey: turnOnBaseDelayKey) as? Double
+            ?? defaultBaseDelay
+        return sanitizeBaseDelay(max(off, on))
+    }
+
+    /// 用户配置的「关蜂窝后等待」秒数.
+    var turnOffBaseDelay: TimeInterval {
+        Self.sanitizeBaseDelay(
+            UserDefaults.standard.object(forKey: Self.turnOffBaseDelayKey) as? Double
+                ?? Self.defaultBaseDelay)
+    }
+
+    /// 用户配置的「开蜂窝后等待」秒数.
+    var turnOnBaseDelay: TimeInterval {
+        Self.sanitizeBaseDelay(
+            UserDefaults.standard.object(forKey: Self.turnOnBaseDelayKey) as? Double
+                ?? Self.defaultBaseDelay)
+    }
 
     /// 本次会话内是否已经关过蜂窝. 用锁保护（`turnOff/OnDataIfNeeded` 可能被不同线程调）.
     private let stateLock = NSLock()
@@ -312,7 +350,7 @@ final class CellularTunnelManager: @unchecked Sendable {
 
         didTurnOffData = true
         // 等蜂窝真正断掉：SideStore 用 `sleep(baseDelay)`（默认值见 AppConstants.Shortcuts）。
-        try? await Task.sleep(nanoseconds: UInt64(Self.shortcutBaseDelay * 1_000_000_000))
+        try? await Task.sleep(nanoseconds: UInt64(turnOffBaseDelay * 1_000_000_000))
         return true
     }
 
@@ -345,7 +383,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         LoginLogger.shared.log("[Cellular] 执行开蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
         if ok { didTurnOffData = false }
-        try? await Task.sleep(nanoseconds: UInt64(Self.shortcutBaseDelay * 1_000_000_000))
+        try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
         return ok
     }
 

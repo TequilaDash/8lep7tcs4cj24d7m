@@ -194,9 +194,6 @@ struct SettingsForm: View {
     /// 「Cellular隧道支持」：默认关 ⇒ 开关不开时引擎层全部 no-op，零行为变化.
     /// 键与引擎层同源（`CellularTunnelManager.enabledKey`），对齐 `TunnelManager.kindKey` 的用法.
     @AppStorage(CellularTunnelManager.enabledKey) private var cellularTunnelSupport = false
-    /// v0.3.613：关/开蜂窝所用的快捷指令名（留空 = 用默认 TurnOffData / TurnOnData）.
-    @AppStorage(CellularTunnelManager.turnOffShortcutKey) private var turnOffShortcut = ""
-    @AppStorage(CellularTunnelManager.turnOnShortcutKey) private var turnOnShortcut = ""
     // v0.3.434：日志上限（可配置）+ 一键清空
     @StateObject private var logLimit = LogLimitSettings.shared
     @State private var fileLimitText = ""
@@ -289,25 +286,18 @@ struct SettingsForm: View {
             // 放在「本地隧道」设备 IP 之前：先选隧道方式，再填对端 IP。
             TunnelPickerView()
 
-            // v0.3.650：本区改为如实描述「需要自建快捷指令」。
-            //
-            // 旧 footer 写「不切换飞行模式、不跳转其他 App」，读起来像「什么都不做」；
-            // 而 v0.3.647 起蜂窝下**确实**会去跑快捷指令（照 SideStore），
-            // 只是没建指令时会先拦下来引导创建，不再硬跳。
-            Section(header: Text("Cellular隧道支持"),
-                    footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复).iOS 不允许第三方代建快捷指令，故需你手动创建一次；创建后会记住，不再提示.")) {
-                Toggle("Cellular隧道支持", isOn: $cellularTunnelSupport)
-
-                // 已开开关但快捷指令未建 ⇒ 给出创建入口
-                // （而不是等建隧道时才撞见「未找到指令」弹窗）
-                if cellularTunnelSupport,
-                   !CellularShortcutInstaller.isShortcutInstalled("TurnOffData")
-                    || !CellularShortcutInstaller.isShortcutInstalled("TurnOnData") {
-                    NavigationLink {
-                        CellularShortcutGuideView()
-                    } label: {
-                        Label("创建蜂窝快捷指令（需 1 分钟）", systemImage: "bolt.badge.plus")
-                            .foregroundStyle(AppTheme.pending)
+            // v0.3.741：用户要求一级页只留入口 —— 开关与全部配置搬进二级页
+            // （CellularSupportView：总开关 / 快捷指令名 / 基础延时 / 引导示范）。
+            Section(header: Text("蜂窝网络"),
+                    footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复).点进去可以开关、改快捷指令名与等待时间.")) {
+                NavigationLink {
+                    CellularSupportView()
+                } label: {
+                    HStack {
+                        Label("Cellular 隧道支持", systemImage: "antenna.radiowaves.left.and.right")
+                        Spacer(minLength: 8)
+                        Text(cellularTunnelSupport ? "已开启" : "已关闭")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

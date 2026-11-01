@@ -27,6 +27,10 @@ struct CellularShortcutGuideView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmed: Set<String> = []
 
+    /// 引擎实际会调用的名字（用户在二级页改过就是自定义名，留空则回落默认）.
+    private var offName: String { CellularTunnelManager.shared.turnOffShortcutName }
+    private var onName: String { CellularTunnelManager.shared.turnOnShortcutName }
+
     var body: some View {
         List {
             Section {
@@ -42,11 +46,11 @@ struct CellularShortcutGuideView: View {
 
             Section {
                 stepRow(index: 1,
-                        name: "TurnOffData",
+                        name: offName,
                         action: "设定蜂窝数据 → 关",
                         hint: "建隧道前跑它")
                 stepRow(index: 2,
-                        name: "TurnOnData",
+                        name: onName,
                         action: "设定蜂窝数据 → 开",
                         hint: "用完恢复网络")
             } header: {
@@ -57,11 +61,11 @@ struct CellularShortcutGuideView: View {
             }
 
             Section {
-                Button { openCreateShortcut(name: "TurnOffData") } label: {
-                    Label("去创建 TurnOffData", systemImage: "arrow.up.forward.app")
+                Button { openCreateShortcut(name: offName) } label: {
+                    Label("去创建 \(offName)", systemImage: "arrow.up.forward.app")
                 }
-                Button { openCreateShortcut(name: "TurnOnData") } label: {
-                    Label("去创建 TurnOnData", systemImage: "arrow.up.forward.app")
+                Button { openCreateShortcut(name: onName) } label: {
+                    Label("去创建 \(onName)", systemImage: "arrow.up.forward.app")
                 }
             } header: {
                 Text("一键跳转")
@@ -72,9 +76,9 @@ struct CellularShortcutGuideView: View {
 
             Section {
                 Button {
-                    CellularShortcutInstaller.markShortcutInstalled("TurnOffData")
-                    CellularShortcutInstaller.markShortcutInstalled("TurnOnData")
-                    confirmed = ["TurnOffData", "TurnOnData"]
+                    CellularShortcutInstaller.markShortcutInstalled(offName)
+                    CellularShortcutInstaller.markShortcutInstalled(onName)
+                    confirmed = [offName, onName]
                     AppHaptics.success()
                 } label: {
                     Label("我已创建完成", systemImage: "checkmark.circle.fill")
