@@ -137,15 +137,6 @@ struct RootView: View {
     /// app 启动后后台预热「IPA 侧载」与「证书管理」的 Apple ID 登录态，
     /// 用户进入对应页面时无需再等十几秒的登录/列表加载.
     /// 只走免 2FA 的会话恢复与静默加载；失败不影响 app 正常使用.
-    /// 「Apple ID 账户」入口行的状态文案.
-    private var userAccountEntryText: String {
-        if let email = AppleUserAccountStore.shared.activeEmail {
-            let count = AppleUserAccountStore.shared.accounts.count
-            return count > 1 ? "\(count) 个账户 · \(email)" : email
-        }
-        return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
-    }
-
     private func warmUpAutoLogin() {
         let settings = MemoryLimitSettings.shared
         guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
@@ -184,6 +175,15 @@ struct SettingsForm: View {
     /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）。
     var onResetPairing: () throws -> Void
     @StateObject private var memorySettings = MemoryLimitSettings.shared
+    /// 「Apple ID 账户」入口行的状态文案.
+    private var userAccountEntryText: String {
+        if let email = AppleUserAccountStore.shared.activeEmail {
+            let count = AppleUserAccountStore.shared.accounts.count
+            return count > 1 ? "\(count) 个账户 · \(email)" : email
+        }
+        return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
+    }
+
     /// v0.3.122：开发证书状态观察（创建成功/失败即时刷新 UI）
     @StateObject private var certStore = DeveloperCertStore.shared
     @State private var certTask: Task<Void, Never>?

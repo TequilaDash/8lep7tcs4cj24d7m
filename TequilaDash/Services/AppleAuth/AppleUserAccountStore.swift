@@ -32,7 +32,9 @@ struct AppleUserAccount: Codable, Identifiable, Equatable {
 /// （CertificateManager / IPAInstallService.warmUp / 商店链）不改读取方式.
 @MainActor
 final class AppleUserAccountStore: ObservableObject {
-    nonisolated(unsafe) static let shared = AppleUserAccountStore()
+    // 全部消费方（View / MemoryLimitSettings / IPAInstallService.warmUp）均在 MainActor，
+    // 单例随类隔离即可；nonisolated(unsafe) 反而把 MainActor init 变成非隔离上下文报错.
+    static let shared = AppleUserAccountStore()
 
     @Published private(set) var accounts: [AppleUserAccount] = []
     /// 当前账户邮箱（小写）；nil = 未登录.
