@@ -88,27 +88,27 @@ struct AppleUserAccountsView: View {
                         .accessibilityLabel("当前使用")
                 }
             } else {
-                HStack(spacing: 12) {
-                    AppRowIcon(systemName: "person.crop.circle.badge.xmark",
-                               tint: Color(uiColor: .secondaryLabel), symbolSize: 17, frameSize: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("未登录")
-                            .font(AppFont.bodyEmphasis)
-                        Text("添加账户后，侧载与证书即可使用.")
-                            .font(AppFont.footnote)
-                            .foregroundStyle(.secondary)
+                Button {
+                    // v0.3.746：未登录时的页内入口保留（此时右上角菜单也被隐藏），
+                    // 已登录后去掉这行——添加入口只留右上角菜单，页面不再重复.
+                    showAddSheet = true
+                } label: {
+                    HStack(spacing: 12) {
+                        AppRowIcon(systemName: "person.crop.circle.badge.xmark",
+                                   tint: Color(uiColor: .secondaryLabel), symbolSize: 17, frameSize: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("未登录")
+                                .font(AppFont.bodyEmphasis)
+                                .foregroundStyle(.primary)
+                            Text("点按登录 Apple ID，侧载与证书即可使用.")
+                                .font(AppFont.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                }
-            }
-            Button {
-                showAddSheet = true
-            } label: {
-                Label(store.hasAccounts ? "添加另一个账户" : "登录 Apple ID",
-                      systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.accent)
         }
     }
 
