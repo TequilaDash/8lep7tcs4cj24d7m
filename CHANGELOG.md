@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.747] - 2026-11-03
+
+### 修复
+
+- **下载闪退（CODESIGNING Invalid Page）根修第三轮**：真凶是 iOS 27.2 beta（24B5089g）上 Foundation 把 `Date.>=` / `Date.<=` 编译成 weak import——beta 系统的 Foundation 还没有这两个新 ABI 符号，GOT 为空时 `br x16` 直呼空地址，PC=0 被系统杀.两次复现（21:57 与 22:39）的崩溃调用链逐字一致，都落在账户请求门 `StoreAccountRequestGate.acquire` 轮询的 `Date() >= deadline`.对整二进制枚举出全部 5 处 Date 比较调用点（anisette 轮询、账户请求门、下载库同包去重、修补镜像 mtime 判新旧、提示音暂存目录清理），统一改走 `timeIntervalSinceReferenceDate` 时间戳比较——编译为普通浮点比较，彻底绕开 weak 符号.
+
 ## [0.3.746] - 2026-11-02
 
 ### 修复

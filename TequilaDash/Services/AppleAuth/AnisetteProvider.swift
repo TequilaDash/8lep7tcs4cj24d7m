@@ -62,7 +62,8 @@ final class AnisetteProvider {
             let deadline = Date().addingTimeInterval(timeout)
             while true {
                 if acquireIfFree() { return true }
-                if Date() >= deadline { return false }
+                // iOS 27.2 beta: Date.>= 编译为 weak import（GOT 为空即崩），不得直接用比较符.
+                if Date().timeIntervalSinceReferenceDate >= deadline.timeIntervalSinceReferenceDate { return false }
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }

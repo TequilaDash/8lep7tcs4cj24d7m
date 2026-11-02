@@ -925,7 +925,8 @@ enum DeviceSlimService {
         for item in library {
             guard let bid = item.bundleId, !bid.isEmpty else { continue }
             // 同一 bundleId 有多份包时取**最新**的那份
-            if let old = byBundle[bid], old.downloadedAt >= item.downloadedAt { continue }
+            // iOS 27.2 beta: Date.>= 编译为 weak import（GOT 为空即崩），不得直接用比较符.
+            if let old = byBundle[bid], old.downloadedAt.timeIntervalSinceReferenceDate >= item.downloadedAt.timeIntervalSinceReferenceDate { continue }
             byBundle[bid] = item
         }
 

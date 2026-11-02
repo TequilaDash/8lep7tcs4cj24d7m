@@ -49,7 +49,8 @@ private actor StoreAccountRequestGate {
                 owners[email] = set
                 return (token, false)
             }
-            if Date() >= deadline {
+            // iOS 27.2 beta: Date.>= 编译为 weak import（GOT 为空即崩），不得直接用比较符.
+            if Date().timeIntervalSinceReferenceDate >= deadline.timeIntervalSinceReferenceDate {
                 forcedAcquires += 1
                 nextToken &+= 1
                 let token = nextToken

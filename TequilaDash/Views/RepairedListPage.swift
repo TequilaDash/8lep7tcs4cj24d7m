@@ -658,7 +658,8 @@ enum RepairedProductStore {
                 .contentModificationDate
             let dstDate = (try? dest.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate
-            if let s = srcDate, let d = dstDate, d >= s { return true }
+            // iOS 27.2 beta: Date.>= 编译为 weak import（GOT 为空即崩），不得直接用比较符.
+            if let s = srcDate, let d = dstDate, d.timeIntervalSinceReferenceDate >= s.timeIntervalSinceReferenceDate { return true }
             try? fm.removeItem(at: dest)
         }
         do {

@@ -358,7 +358,7 @@ actor AirliftToneTransport {
                 forKeys: [.isDirectoryKey, .contentModificationDateKey]
             ), values.isDirectory == true,
                let modified = values.contentModificationDate,
-               modified <= cutoff else { continue }
+               modified.timeIntervalSinceReferenceDate <= cutoff.timeIntervalSinceReferenceDate else { continue } // iOS 27.2 beta: Date.<= 是 weak import（GOT 为空即崩），不得直接用比较符.
             try? manager.removeItem(at: entry)
         }
     }
