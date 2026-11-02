@@ -9,6 +9,7 @@
 #include "anisette_core.h"
 #include "anisette_base.h"
 #include "Loader/elf_loader_emulator.h"
+#include "../EmulatorGate.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -215,6 +216,9 @@ int32_t get_anisette_headers_uc(
     }
 
     std::lock_guard<std::mutex> lock(g_vm_mutex);
+    // 引擎级总闸：setup_vm_and_adi / uc_mem_write / uc_emu_start 整段序列化，
+    // 与 SAP 侧任何 Unicorn 活动互斥（tb_flush 类全局状态不可并发）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
     EmulatorVM *vm = nullptr;
     std::string uuid_prov_dir, err;
@@ -333,6 +337,9 @@ int32_t start_provision_uc(
     }
 
     std::lock_guard<std::mutex> lock(g_vm_mutex);
+    // 引擎级总闸：setup_vm_and_adi / uc_mem_write / uc_emu_start 整段序列化，
+    // 与 SAP 侧任何 Unicorn 活动互斥（tb_flush 类全局状态不可并发）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
     EmulatorVM *vm = nullptr;
     std::string uuid_prov_dir, err;
@@ -440,6 +447,9 @@ int32_t end_provision_uc(
     }
 
     std::lock_guard<std::mutex> lock(g_vm_mutex);
+    // 引擎级总闸：setup_vm_and_adi / uc_mem_write / uc_emu_start 整段序列化，
+    // 与 SAP 侧任何 Unicorn 活动互斥（tb_flush 类全局状态不可并发）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
     EmulatorVM *vm = nullptr;
     std::string uuid_prov_dir, err;
@@ -525,6 +535,9 @@ int32_t cancel_provision_uc(
     }
 
     std::lock_guard<std::mutex> lock(g_vm_mutex);
+    // 引擎级总闸：setup_vm_and_adi / uc_mem_write / uc_emu_start 整段序列化，
+    // 与 SAP 侧任何 Unicorn 活动互斥（tb_flush 类全局状态不可并发）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
     // v0.3.662：原来这里直接对 g_shared_vm 取符号，从不调用 setup_vm_and_adi.
     // 后果：VM 还没建、或库还没装载（g_libraries_initialized == false）时，

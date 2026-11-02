@@ -43,6 +43,8 @@ struct IPAInstallView: View {
 
     // 2FA
     @State private var showTwoFactor = false
+    /// 菜单里的「登录 Apple ID」弹出的登录页（此前错误地走静默复用，用户点了毫无反应）.
+    @State private var showAppleIDLogin = false
     @State private var twoFactorCode = ""
     /// 自动登录开关（持久化在 UserDefaults；默认开）
     @State private var autoSignInOn: Bool =
@@ -152,12 +154,10 @@ struct IPAInstallView: View {
                         Label("自动登录（用「设置」里的 Apple ID）",
                               systemImage: autoSignInOn ? "checkmark.circle.fill" : "circle")
                     }
-                    if MemoryLimitSettings.shared.isLoggedIn {
-                        Button {
-                            autoSignInWithSavedCredentials()
-                        } label: {
-                            Label("从「设置」登录 Apple ID", systemImage: "person.badge.key.fill")
-                        }
+                    Button {
+                        showAppleIDLogin = true
+                    } label: {
+                        Label("登录 Apple ID", systemImage: "person.badge.key.fill")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -170,6 +170,9 @@ struct IPAInstallView: View {
             if let url = urls.first {
                 importIPA(from: url)
             }
+        }
+        .sheet(isPresented: $showAppleIDLogin) {
+            AppleIDLoginSheet()
         }
         .onAppear {
             // v0.3.116 修卡死：signIn 跑在 Task.detached（后台线程），

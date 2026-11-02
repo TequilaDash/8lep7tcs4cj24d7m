@@ -1,6 +1,7 @@
 #import "SAPContext.h"
 #import <CommonCrypto/CommonDigest.h>
 #include "SapMachine.h"
+#include "../../../Engine/EmulatorGate.h"
 #include <cstring>
 #include <string>
 
@@ -147,6 +148,8 @@ static void SetError(NSError **error, const std::exception &exception) {
     if (!self) return nil;
     @synchronized([SAPContext class]) { [AssetNotes() removeAllObjects]; }
     try {
+        // 引擎级总闸：Create（uc_open/映射/重定位）到 Initialize 全程串行.
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
         if (hardwareID.length != 6) throw std::runtime_error("Invalid SAP device identifier.");
         auto bytes = static_cast<const uint8_t *>(hardwareID.bytes);
         _hardwareID.assign(bytes, bytes + hardwareID.length);
@@ -169,6 +172,7 @@ static void SetError(NSError **error, const std::exception &exception) {
 
 - (NSData *)exchangeData:(NSData *)data version:(uint32_t)version error:(NSError **)error {
     try {
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
         if (!_machine || version != 200 || _exchanges >= 2 || !data.length || data.length > 1024 * 1024)
             throw std::runtime_error("Invalid SAP handshake.");
         auto [output, state] = _machine->Exchange(version, _hardwareID, _context, {static_cast<const uint8_t *>(data.bytes), data.length});
@@ -184,6 +188,7 @@ static void SetError(NSError **error, const std::exception &exception) {
 
 - (NSData *)signData:(NSData *)data error:(NSError **)error {
     try {
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
         if (!_complete || data.length > 1024 * 1024) throw std::runtime_error("SAP session is not ready.");
         auto signature = _machine->Sign(_context, {static_cast<const uint8_t *>(data.bytes), data.length});
         if (signature.empty()) throw std::runtime_error("SAP returned an empty signature.");
@@ -196,7 +201,10 @@ static void SetError(NSError **error, const std::exception &exception) {
 
 - (void)dealloc {
     if (_machine && _context) {
-        try { _machine->Teardown(_context); } catch (...) { /* Destructors must not throw. */ }
+        try {
+            std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
+            _machine->Teardown(_context);
+        } catch (...) { /* Destructors must not throw. */ }
     }
 }
 @end
@@ -240,6 +248,7 @@ static std::unique_ptr<SapMachine> MakeStoreAgentMachine(NSURL *directory,
     try {
         if (hardwareID.length != 6) throw std::runtime_error("Invalid SAP device identifier.");
         if (dpInfo.length == 0) throw std::runtime_error("StoreAgent dpInfo is empty.");
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
         // `storeagent` 是独立可执行 Mach-O，跟另外四个资产在**同一个目录**。
         // 它同时也是第十个 fileSpec（见 prepare.sap.py 的 ASSETS）。
@@ -261,6 +270,7 @@ static std::unique_ptr<SapMachine> MakeStoreAgentMachine(NSURL *directory,
         if (chunk.length == 0) return [NSData data];
         if (chunk.length > SapMachine::StoreAgent::kChunkSize)
             throw std::runtime_error("StoreAgent chunk exceeds 0x8000 bytes.");
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
         std::vector<uint8_t> buffer(static_cast<const uint8_t *>(chunk.bytes),
                                     static_cast<const uint8_t *>(chunk.bytes) + chunk.length);
@@ -274,7 +284,10 @@ static std::unique_ptr<SapMachine> MakeStoreAgentMachine(NSURL *directory,
 
 - (void)closeDecrypter {
     if (_agent) {
-        try { _agent->Close(); } catch (...) { /* Destructors must not throw. */ }
+        try {
+            std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
+            _agent->Close();
+        } catch (...) { /* Destructors must not throw. */ }
         _agent.reset();
     }
 }
@@ -299,6 +312,8 @@ static std::unique_ptr<SapMachine> MakeStoreAgentMachine(NSURL *directory,
         // 上游第一道硬门（`kbsync.go:22-24`）。在这里也拦一次，是为了让 Swift 侧
         // 拿到「DSID 非数值/为 0」这句明确报错，而不是等到 guest 里跑出个看不懂的码。
         if (dsid == 0) throw std::runtime_error("kbsync requires a nonzero account DSID.");
+        // 引擎级总闸：kbsync 整台机器的建、跑、拆全程串行.
+        std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
 
         auto machine = MakeStoreAgentMachine(storeAgentURL, hardwareID);
         auto hw = std::span<const uint8_t>(static_cast<const uint8_t *>(hardwareID.bytes), hardwareID.length);
