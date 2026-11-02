@@ -336,6 +336,11 @@ final class MemoryLimitSettings: ObservableObject {
         keychain.set(password, for: "pw:" + email)
         addLoginHistory(email)
         refresh()
+        // v0.3.745 账户体系：同步多账户台账（登录即保持，切换免重登）.
+        AppleUserAccountStore.shared.upsertFromKeychain(
+            email: email, password: password,
+            swiftDSID: session.dsid, swiftAuthToken: session.authToken,
+            name: account.name)
     }
 
     /// 保存 isideload（IPA 侧载）完整登录拿到的 dsid + `com.apple.gs.xcode.auth`
@@ -403,6 +408,25 @@ final class MemoryLimitSettings: ObservableObject {
             return keychain.string(for: "applePassword")
         }
         return nil
+    }
+
+    /// v0.3.745 账户体系：把台账中某账户的完整双链会话写回 keychain 主键
+    /// （AppleUserAccountStore.switchActive 调用）.与 completeSignIn 的区别：
+    /// 不写 pw:<email> 历史、不动登录历史、sessionOwner 按会话有无推断.
+    func restoreAccountSession(email: String, password: String,
+                               dsid: String, authToken: String,
+                               sideloadDSID: String, sideloadAuthToken: String,
+                               accountName: String?) {
+        let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        keychain.set(email, for: "appleID")
+        keychain.set(password, for: "applePassword")
+        if !dsid.isEmpty { keychain.set(dsid, for: "dsid") }
+        if !authToken.isEmpty { keychain.set(authToken, for: "authToken") }
+        if !sideloadDSID.isEmpty { keychain.set(sideloadDSID, for: "sideloadDSID") }
+        if !sideloadAuthToken.isEmpty { keychain.set(sideloadAuthToken, for: "sideloadAuthToken") }
+        if let accountName, !accountName.isEmpty { keychain.set(accountName, for: "accountName") }
+        keychain.set(true, for: "isLoggedIn")
+        refresh()
     }
 
     // MARK: - SideStore import

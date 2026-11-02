@@ -34,25 +34,13 @@ struct IPAInstallView: View {
     /// 待确认删除的 IPA.
     @State private var pendingDeleteIPA: SavedIPA?
 
-    // Apple ID
-    @State private var appleID = ""
-    @State private var password = ""
-    @State private var showPassword = false
-    /// 正在用设置里保存的 Apple ID 自动登录.
-    @State private var isAutoSigningIn = false
-
-    // 2FA
+    // v0.3.745 账户体系：本页不再自带登录 UI，签名账户 = 「更多 → Apple ID 账户」的当前账户.
+    @ObservedObject private var accountStore = AppleUserAccountStore.shared
+    // 2FA（会话恢复失败回退完整登录时仍可能触发）
     @State private var showTwoFactor = false
-    /// 菜单里的「登录 Apple ID」弹出的登录页（此前错误地走静默复用，用户点了毫无反应）.
-    @State private var showAppleIDLogin = false
     @State private var twoFactorCode = ""
-    /// 自动登录开关（持久化在 UserDefaults；默认开）
-    @State private var autoSignInOn: Bool =
-        IPAInstallService.isAutoSignInEnabled
     /// 2FA 等待代际：每次弹窗自增；超时定时器只在代际未变时生效（防旧定时器误取消新等待）
     @State private var twoFactorGeneration = 0
-    /// 手动登录进行中（区别于自动登录，进度文案不同）
-    @State private var isManuallySigningIn = false
     @State private var twoFactorReply: ((String?) -> Void)?
 
     // 流程
@@ -147,18 +135,6 @@ struct IPAInstallView: View {
                     } label: {
                         Label("刷新状态", systemImage: "arrow.clockwise")
                     }
-                    Button {
-                        autoSignInOn.toggle()
-                        UserDefaults.standard.set(autoSignInOn, forKey: IPAInstallService.autoSignInKey)
-                    } label: {
-                        Label("自动登录（用「设置」里的 Apple ID）",
-                              systemImage: autoSignInOn ? "checkmark.circle.fill" : "circle")
-                    }
-                    Button {
-                        showAppleIDLogin = true
-                    } label: {
-                        Label("登录 Apple ID", systemImage: "person.badge.key.fill")
-                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -171,13 +147,10 @@ struct IPAInstallView: View {
                 importIPA(from: url)
             }
         }
-        .sheet(isPresented: $showAppleIDLogin) {
-            AppleIDLoginSheet()
-        }
         .onAppear {
-            // v0.3.116 修卡死：signIn 跑在 Task.detached（后台线程），
-            // 此前直接在此改 @State → 主线程外更新 SwiftUI 状态 → 弹窗不出现
-            // 且永久等待验证码 → 界面像卡住.改为切主线程更新，并加超时兜底.
+            refreshSavedIPAs()
+            // 页内 2FA 弹窗（isideload 会话恢复失败回退完整登录时触发；v0.3.116 修卡死的
+            // 主线程切换 + 5 分钟超时兜底保持不变）.
             service.twoFactorPrompt = { reply in
                 Task { @MainActor in
                     twoFactorGeneration += 1
@@ -185,7 +158,6 @@ struct IPAInstallView: View {
                     twoFactorCode = ""
                     twoFactorReply = reply
                     showTwoFactor = true
-                    // 5 分钟没人填就取消本次登录（防弹窗被忽略后永久挂起）.
                     Task.detached {
                         try? await Task.sleep(nanoseconds: 300 * 1_000_000_000)
                         await MainActor.run {
@@ -194,17 +166,11 @@ struct IPAInstallView: View {
                             let pending = twoFactorReply
                             twoFactorReply = nil
                             pending?(nil)
-                            errorMessage = "2FA 验证码等待超时，已取消自动登录（可在设置里重新登录 Apple ID）"
+                            errorMessage = "2FA 验证码等待超时，已取消本次登录（可到「更多 → Apple ID 账户」重试）"
                         }
                     }
                 }
             }
-            refreshSavedIPAs()
-            // v0.3.116：每次进入都尝试自动登录（设置里重新登录后切回即生效）.
-            autoSignInWithSavedCredentials()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            autoSignInWithSavedCredentials()
         }
         .onDisappear {
             service.twoFactorPrompt = nil
@@ -580,6 +546,8 @@ struct IPAInstallView: View {
 
     // MARK: - 签名账号
 
+    /// 签名账号卡：只读展示「Apple ID 账户」的当前账户（v0.3.745 账户体系）.
+    /// 登录/切换/退出全部收敛到「更多 → Apple ID 账户」二级页.
     private var accountCard: some View {
         sectionCard(title: "签名账号", icon: "person.crop.circle.badge.checkmark", tint: AppTheme.categorySign) {
             VStack(alignment: .leading, spacing: 10) {
@@ -587,7 +555,7 @@ struct IPAInstallView: View {
                     HStack(spacing: 12) {
                         AppRowIcon(systemName: "checkmark.seal.fill", tint: AppTheme.success, symbolSize: 17, frameSize: 30)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("已登录")
+                            Text(accountStore.activeAccount.map { $0.accountName?.isEmpty == false ? $0.accountName! : $0.email } ?? "已登录")
                                 .font(AppFont.bodyEmphasis)
                             Text(service.teamSummary ?? "签名会话已就绪.")
                                 .font(AppFont.footnote)
@@ -595,69 +563,25 @@ struct IPAInstallView: View {
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 6)
-                        Button("退出") {
-                            service.signOut()
-                            appleID = ""
-                            password = ""
-                        }
-                        .font(AppFont.footnote)
-                        .buttonStyle(.borderless)
                     }
-                } else if isAutoSigningIn || isManuallySigningIn {
-                    // 区块级加载收敛到共享 AppLoadingRow：
-                    // 原来手写的「圈 + 标题 + 说明」与组件形态一一对应.
-                    AppLoadingRow(title: isManuallySigningIn ? "正在登录 Apple ID…"
-                                                            : "正在用「设置」里的 Apple ID 自动登录…",
-                                  detail: "如需两步验证，会自动弹出验证码输入框.",
+                } else if service.isWarmingUp {
+                    AppLoadingRow(title: "正在恢复签名会话…",
+                                  detail: "使用「Apple ID 账户」里的当前账户，如需两步验证会自动弹出.",
                                   level: .inline)
                 } else {
-                    // v0.3.118：邮箱恒为明文（邮箱不是机密；旧实现错误地跟随密码的
-                    // showPassword，导致小眼睛把两栏都变星号）
-                    TextField("Apple ID 邮箱", text: $appleID)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .textInputAutocapitalization(.never)
-                        .submitLabel(.next)
-                        .textFieldStyle(.roundedBorder)
-                    HStack(spacing: 8) {
-                        Group {
-                            if showPassword {
-                                TextField("密码", text: $password)
-                            } else {
-                                SecureField("密码", text: $password)
-                            }
+                    HStack(spacing: 12) {
+                        AppRowIcon(systemName: "person.crop.circle.badge.xmark",
+                                   tint: Color(uiColor: .secondaryLabel), symbolSize: 17, frameSize: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("未登录")
+                                .font(AppFont.bodyEmphasis)
+                            Text("在「更多 → Apple ID 账户」登录后，回到本页即可签名安装.")
+                                .font(AppFont.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .submitLabel(.go)
-                        .onSubmit { manualLogin() }          // v0.3.118：回车即登录
-                        .textFieldStyle(.roundedBorder)
-                        Button {
-                            showPassword.toggle()
-                        } label: {
-                            // 图标 = 当前显示状态：eye=明文可见，eye.slash=已隐藏
-                            Image(systemName: showPassword ? "eye" : "eye.slash")
-                                .foregroundStyle(AppTheme.accent)
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(showPassword ? "隐藏密码" : "显示密码")
+                        Spacer(minLength: 6)
                     }
-                    Button {
-                        manualLogin()
-                    } label: {
-                        Label("登录", systemImage: "person.crop.circle.badge.checkmark")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySign, radius: AppRadius.button))
-                    .controlSize(.large)
-                    .disabled(appleID.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
-
-                    Text("登录用于获取签名证书与描述文件，2FA 验证码在安装时弹出.")
-                        .font(AppFont.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -716,10 +640,7 @@ struct IPAInstallView: View {
 
     /// 可安装判据与原实现逐字一致（只多一个 trim 归一），不引入新的行为拦截.
     private var canInstall: Bool {
-        !isRunning
-            && ipaURL != nil
-            && (service.isSignedIn
-                || !(appleID.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty))
+        !isRunning && ipaURL != nil && service.isSignedIn
     }
 
     /// 底部提示：只在「还差什么」时给一句，全齐了就不啰嗦.
@@ -730,9 +651,8 @@ struct IPAInstallView: View {
         if !pairingFileExists {
             return "还没有配对文件，先到「更多 → 配对文件导入」."
         }
-        if !service.isSignedIn
-            && (appleID.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty) {
-            return "先登录 Apple ID 或填好凭据."
+        if !service.isSignedIn {
+            return "先到「更多 → Apple ID 账户」登录."
         }
         return nil
     }
@@ -863,105 +783,7 @@ struct IPAInstallView: View {
     /// 重新扫描已存 IPA、刷新登录态与局域网信息.
     private func refreshStatus() {
         refreshSavedIPAs()
-        // 重新尝试登录/恢复会话（内部幂等：已登录则直接返回）
-        autoSignInWithSavedCredentials()
         SSHServerService.shared.refreshNetworkInfo()
-    }
-
-    // MARK: - 自动登录（复用「更多 → 设置」的 Apple ID）
-
-    /// 复用「更多 → 设置」已保存的 Apple ID，**不重复登录/2FA**：
-    /// 1) 优先用 dsid + authToken 恢复 isideload 签名会话（免登录免 2FA）；
-    /// 2) 恢复失败（token 过期等）才回退用邮箱+密码完整登录（可能弹 2FA）.
-    /// 自动登录总开关（设置里可关；默认开）
-    private var autoSignInEnabled: Bool {
-        get { IPAInstallService.isAutoSignInEnabled }
-    }
-
-    /// 手动登录：用输入框里的 Apple ID + 密码（2FA 走弹窗）.
-    /// 成功后持久化凭据，下次自动登录/免 2FA 恢复可用.
-    private func manualLogin() {
-        let id = appleID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pw = password
-        guard !service.isSignedIn, !id.isEmpty, !pw.isEmpty, !isRunning else { return }
-        guard !isAutoSigningIn, !isManuallySigningIn, !service.isWarmingUp else { return }
-        isManuallySigningIn = true
-        errorMessage = nil
-        Task {
-            do {
-                let ani = MemoryLimitSettings.shared.anisetteServer
-                try await Task.detached(priority: .userInitiated) {
-                    try IPAInstallService.shared.signIn(appleID: id, password: pw, anisetteURL: ani)
-                }.value
-                let dsid = service.lastSessionDSID ?? ""
-                let authToken = service.lastSessionAuthToken ?? ""
-                await MainActor.run {
-                    MemoryLimitSettings.shared.saveSessionCredentials(
-                        email: id, password: pw, dsid: dsid, authToken: authToken)
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "登录失败：\(error.localizedDescription)"
-                }
-            }
-            await MainActor.run { isManuallySigningIn = false }
-        }
-    }
-
-    private func autoSignInWithSavedCredentials() {
-        guard !service.isSignedIn, !isRunning else { return }
-        // v0.3.116：用户明确要求可禁用自动登录（会触发 2FA 打断操作）
-        guard autoSignInEnabled else { return }
-        // warmUp（App 启动后台恢复）正在执行：不重复联网，等它完成——
-        // 完成时 @Published isSignedIn 变化会自动刷新页面（v0.2.106 去重）.
-        guard !service.isWarmingUp else { return }
-        let settings = MemoryLimitSettings.shared
-        guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
-        let id = settings.appleID
-        let ani = settings.anisetteServer
-        isAutoSigningIn = true
-        Task {
-            do {
-                // 路径 1：已有 dsid/authToken → 免 2FA 恢复会话.
-                // （预热已失败过则跳过——token 大概率过期，白等一次注定失败的请求）
-                // v0.2.112：读 isideload 专用键；dsid/authToken 属于 Swift 认证
-                // 引擎（证书管理/增加内存用），两套 Anisette 机器标识不同不能混用.
-                if !service.sessionRestoreFailed,
-                   let dsid = settings.sideloadDSID, let authToken = settings.sideloadAuthToken,
-                   !dsid.isEmpty, !authToken.isEmpty {
-                    do {
-                        try await Task.detached(priority: .userInitiated) {
-                            try IPAInstallService.shared.signInWithSession(
-                                email: id, dsid: dsid, authToken: authToken, anisetteURL: ani)
-                        }.value
-                        isAutoSigningIn = false
-                        return
-                    } catch {
-                        // token 失效，回退完整登录.
-                    }
-                }
-                // 路径 2：邮箱+密码完整登录（2FA 走弹窗）.
-                let pw = settings.password(forHistory: id) ?? ""
-                guard !pw.isEmpty else {
-                    isAutoSigningIn = false
-                    return
-                }
-                try await Task.detached(priority: .userInitiated) {
-                    try IPAInstallService.shared.signIn(appleID: id, password: pw, anisetteURL: ani)
-                }.value
-                // 完整登录成功 → 持久化本次拿到的 dsid/authToken，
-                // 下次进入（含 App 重启后 warmUp）即可免登录恢复.
-                let dsid = service.lastSessionDSID ?? ""
-                let authToken = service.lastSessionAuthToken ?? ""
-                await MainActor.run {
-                    MemoryLimitSettings.shared.saveSessionCredentials(
-                        email: id, password: pw, dsid: dsid, authToken: authToken)
-                }
-            } catch {
-                errorMessage = "自动登录失败：\(error.localizedDescription)"
-            }
-            isAutoSigningIn = false
-        }
     }
 
     // MARK: - 安装流程
@@ -993,27 +815,15 @@ struct IPAInstallView: View {
         step = .idle
         installProgress = 0
 
-        let id = appleID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pw = password
-        let anisetteURL = MemoryLimitSettings.shared.anisetteServer
-
         Task {
             do {
-                // 1. 登录（如未登录）
-                if !service.isSignedIn {
-                    step = .signingIn
-                    try await Task.detached(priority: .userInitiated) {
-                        try IPAInstallService.shared.signIn(appleID: id, password: pw, anisetteURL: anisetteURL)
-                    }.value
-                    // 登录成功 → 把邮箱/密码 **以及** 本次登录拿到的 dsid +
-                    // xcode.auth token 一起持久化（v0.2.111，isideload fork 暴露）.
-                    // 之后 warmUp / 自动登录都能用这两个值免登录免 2FA 恢复.
-                    let dsid = service.lastSessionDSID ?? ""
-                    let authToken = service.lastSessionAuthToken ?? ""
-                    await MainActor.run {
-                        MemoryLimitSettings.shared.saveSessionCredentials(
-                            email: id, password: pw, dsid: dsid, authToken: authToken)
-                    }
+                // v0.3.745 账户体系：登录态来自「更多 → Apple ID 账户」的当前账户
+                // （warmUp 已在 App 启动时恢复）；未登录直接提示，不再页内登录.
+                guard service.isSignedIn else {
+                    step = .idle
+                    isRunning = false
+                    errorMessage = "尚未登录 Apple ID：请到「更多 → Apple ID 账户」登录后再安装."
+                    return
                 }
                 // 2. 签名
                 step = .signing

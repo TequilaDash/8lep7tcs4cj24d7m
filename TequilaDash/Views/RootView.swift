@@ -137,6 +137,15 @@ struct RootView: View {
     /// app 启动后后台预热「IPA 侧载」与「证书管理」的 Apple ID 登录态，
     /// 用户进入对应页面时无需再等十几秒的登录/列表加载.
     /// 只走免 2FA 的会话恢复与静默加载；失败不影响 app 正常使用.
+    /// 「Apple ID 账户」入口行的状态文案.
+    private var userAccountEntryText: String {
+        if let email = AppleUserAccountStore.shared.activeEmail {
+            let count = AppleUserAccountStore.shared.accounts.count
+            return count > 1 ? "\(count) 个账户 · \(email)" : email
+        }
+        return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
+    }
+
     private func warmUpAutoLogin() {
         let settings = MemoryLimitSettings.shared
         guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
@@ -189,8 +198,6 @@ struct SettingsForm: View {
     @State private var showNoPairingAlert = false
     /// v0.3.673：重置配对文件失败的原因（建连进行中时 TunnelContext 返回 -8）.
     @State private var resetPairingError: String?
-    @State private var showLoginSheet = false
-    @State private var showAccountDetails = false
     /// v0.2.112：左上角登录日志入口（排查Apple 登录 / Anisette 失败用）.
     @State private var showLoginLog = false
     @AppStorage(KeepAliveManager.enabledKey) private var keepAliveEnabled = false
@@ -204,39 +211,17 @@ struct SettingsForm: View {
 
     var body: some View {
         Form {
-            Section(header: Text("Apple ID 账户"), footer: Text("登录后，部分功能可统一调用此账户.")) {
-                if memorySettings.isLoggedIn {
+            // v0.3.745 账户体系重做：多账户保持 + 一键切换 + 侧载/证书共用，入口收敛为二级页.
+            Section(header: Text("Apple ID 账户"),
+                    footer: Text("登录过的账户全部保持，可批量登录并随时切换；IPA 侧载与开发证书统一使用当前账户.")) {
+                NavigationLink {
+                    AppleUserAccountsView()
+                } label: {
                     HStack {
-                        Text("账号")
-                        Spacer()
-                        Text(showAccountDetails ? memorySettings.appleID : memorySettings.maskedAppleID())
+                        Label("账户管理", systemImage: "person.crop.circle")
+                        Spacer(minLength: 8)
+                        Text(userAccountEntryText)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Button {
-                            showAccountDetails.toggle()
-                        } label: {
-                            Image(systemName: showAccountDetails ? "eye.slash.fill" : "eye.fill")
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(showAccountDetails ? "隐藏账号" : "显示账号")
-                    }
-                    if showAccountDetails {
-                        HStack {
-                            Text("凭证")
-                            Spacer()
-                            Text("Apple ID 密码已保存于钥匙串")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    Button("退出登录", role: .destructive) {
-                        memorySettings.signOut()
-                        showAccountDetails = false
-                    }
-                } else {
-                    Button("登录 Apple ID") {
-                        showLoginSheet = true
                     }
                 }
             }
@@ -423,9 +408,6 @@ struct SettingsForm: View {
                 }
                 .accessibilityLabel("登录日志")
             }
-        }
-        .sheet(isPresented: $showLoginSheet) {
-            AppleIDLoginSheet()
         }
         .sheet(isPresented: $showLoginLog) {
             // 这个入口就是「登录日志」（页面标题「登录诊断日志」）→ 只显示 AppleID 登录/认证引擎那一类。

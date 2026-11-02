@@ -395,22 +395,22 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// @MainActor：MemoryLimitSettings 是 MainActor 隔离类，读取其属性需在主线程.
     @MainActor
     func warmUp() {
-        let settings = MemoryLimitSettings.shared
-        guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
-        // v0.3.743：开关关掉就**什么都不做**. 此前 App 冷启动的预热不看这个开关，
-        // 用户关了自动登录、每次启动仍会被自动登录（还会弹 2FA）.
+        // v0.3.745 账户体系：账户源从 keychain 单账户改为多账户台账的「当前账户」；
+        // keychain 主键仍由 AppleUserAccountStore.switchActive 写回，双轨兼容.
+        let store = AppleUserAccountStore.shared
+        guard let acc = store.activeAccount else { return }
         guard Self.isAutoSignInEnabled else { return }
         guard !isSignedIn else { return }
         guard !isWarmingUp else { return }
-        let id = settings.appleID
-        let ani = settings.anisetteServer
+        let id = acc.email
+        let ani = MemoryLimitSettings.shared.anisetteServer
 
         // 路径 A：有 token → 免 2FA 恢复.
-        // v0.2.112：必须读 isideload 专用键（sideloadDSID/sideloadAuthToken）.
-        // `dsid`/`authToken` 是 Swift 认证引擎的会话，两套 Anisette 机器标识不同，
-        // 混用会导致 isideload 侧登录失败.
+        // v0.2.112：必须读 isideload 专用会话（sideloadDSID/sideloadAuthToken）.
+        // `swiftDSID`/`swiftAuthToken` 是 Swift 认证引擎的会话，两套 Anisette
+        // 机器标识不同，混用会导致 isideload 侧登录失败.
         if !sessionRestoreFailed,
-           let dsid = settings.sideloadDSID, let authToken = settings.sideloadAuthToken,
+           let dsid = acc.sideloadDSID, let authToken = acc.sideloadAuthToken,
            !dsid.isEmpty, !authToken.isEmpty {
             isWarmingUp = true
             // Swift 6：外层 Task 继承本方法（@MainActor）的隔离 —— isWarmingUp 的
@@ -433,7 +433,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
 
         // 路径 B：无 token 但有密码 → 后台完整登录（2FA 弹窗未就绪，失败静默）.
-        let pw = settings.password(forHistory: id) ?? ""
+        let pw = acc.password
         guard !pw.isEmpty else { return }
         isWarmingUp = true
         Task { [weak self] in
@@ -443,12 +443,15 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 try await Task.detached(priority: .utility) {
                     try self.signIn(appleID: id, password: pw, anisetteURL: ani)
                 }.value
-                // 成功后把凭据 + 本次登录的 dsid/authToken 一起持久化，
-                // 下次 App 启动就能走路径 A 免登录恢复.
+                // 成功后把本次登录拿到的 dsid/authToken 回填**台账**（免 2FA 恢复用），
+                // 同时写回 keychain 主键（证书链等老消费方兼容）.
                 let dsid = self.lastSessionDSID ?? ""
                 let authToken = self.lastSessionAuthToken ?? ""
-                MemoryLimitSettings.shared.saveSessionCredentials(
-                    email: id, password: pw, dsid: dsid, authToken: authToken)
+                store.updateSideloadSession(email: id, dsid: dsid, authToken: authToken)
+                await MainActor.run {
+                    MemoryLimitSettings.shared.saveSessionCredentials(
+                        email: id, password: pw, dsid: dsid, authToken: authToken)
+                }
             } catch {
                 // 静默：用户进入 IPA 页时页面内自动登录会再试并展示错误.
             }
