@@ -318,10 +318,15 @@ struct CertificateView: View {
     @ViewBuilder
     private func p12MessageText(_ msg: String) -> some View {
         let isOK = msg.hasPrefix("[完成]")
-        Text(msg)
-            .font(.caption)
-            .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
-            .padding(.horizontal)
+        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
+            Image(systemName: isOK ? "checkmark.circle.fill" : "info.circle.fill")
+                .font(.caption)
+                .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
+            Text(msg)
+                .font(.caption)
+                .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
+        }
+        .padding(.horizontal)
     }
 
     @ViewBuilder
@@ -341,29 +346,71 @@ struct CertificateView: View {
 
     // v0.3.157：本地签名证书（p12）独立分组.作用：模块/文件真证书签名用的
     // 本地证书（导入的 p12 或登录自动签发），与上方 Apple 侧证书列表（吊销对象）区分.
+    // v0.3.746 UI 现代化：状态/导入/删除三行走 round8 三列结构
+    // （AppRowIcon 图标列 → 统一内容列 → 行尾状态胶囊），间距全走 AppSpacing 档位.
     @ViewBuilder
     private var localSigningSection: some View {
         Section {
-            if certStore.hasCert {
-                Label(certStore.localCertSummary, systemImage: "checkmark.seal.fill")
-                    .font(.footnote)
-                    .foregroundColor(AppTheme.success)
-            } else {
-                Label("未设置本地签名证书", systemImage: "info.circle")
-                    .font(.footnote)
-                    .foregroundColor(AppTheme.pending)
+            // 状态行.
+            HStack(alignment: .center, spacing: AppSpacing.row) {
+                AppRowIcon(systemName: "seal.fill",
+                           tint: certStore.hasCert ? AppTheme.success : AppTheme.pending)
+                VStack(alignment: .leading, spacing: AppSpacing.captionPair) {
+                    Text(certStore.hasCert ? "本地签名证书" : "未设置本地签名证书")
+                        .font(AppFont.rowTitle)
+                    if certStore.hasCert {
+                        Text(certStore.localCertSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if let team = certStore.teamId, !team.isEmpty {
+                            Text("TeamID \(team)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Text("导入后用于模块/文件真证书签名")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: AppSpacing.tight)
+                SizePill(text: certStore.hasCert ? "已设置" : "未设置",
+                         tint: certStore.hasCert ? AppTheme.success : AppTheme.pending,
+                         level: .compact)
             }
+            // 导入行.
             Button {
                 showP12Picker = true
             } label: {
-                Label("导入 p12 证书", systemImage: "square.and.arrow.down")
+                HStack(alignment: .center, spacing: AppSpacing.row) {
+                    AppRowIcon(systemName: "square.and.arrow.down", tint: AppTheme.accent)
+                    Text("导入 p12 证书")
+                        .font(AppFont.rowTitle)
+                        .foregroundStyle(AppTheme.accent)
+                    Spacer(minLength: AppSpacing.tight)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.unselected)
+                }
             }
+            .buttonStyle(.plain)
+            // 删除行（仅已设置时）.
             if certStore.hasCert {
                 Button(role: .destructive) {
                     showRemoveCertConfirm = true
                 } label: {
-                    Label("删除已导入证书（仅本地）", systemImage: "trash")
+                    HStack(alignment: .center, spacing: AppSpacing.row) {
+                        AppRowIcon(systemName: "trash", tint: AppTheme.danger)
+                        Text("删除已导入证书（仅本地）")
+                            .font(AppFont.rowTitle)
+                            .foregroundStyle(AppTheme.danger)
+                        Spacer(minLength: 0)
+                    }
                 }
+                .buttonStyle(.plain)
             }
             if let msg = p12Message {
                 p12MessageText(msg)
