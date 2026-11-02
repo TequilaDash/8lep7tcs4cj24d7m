@@ -763,6 +763,10 @@ std::unique_ptr<SapMachine> SapMachine::Build(
 }
 
 SapMachine::~SapMachine() {
+    // v0.3.746：uc_close 会触发 tb_flush（进程级 TCG 状态），必须与其它引擎的
+    // uc_emu_start 串行，否则并发线程会跳进被回收的翻译块 → CODESIGNING Invalid Page.
+    // 递归锁：若析构发生在已持闸的调用栈内也不会自锁.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
     shims_.reset();
     if (uc_) uc_close(uc_);
 }

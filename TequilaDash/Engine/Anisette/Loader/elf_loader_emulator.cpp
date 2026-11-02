@@ -189,6 +189,10 @@ EmulatorVM::EmulatorVM()
       next_import_address(kImportAddress),
       next_guest_fd(10)
 {
+    // v0.3.746：uc_open + 全部 mem_map/hook_add 期间会初始化并写 TCG 全局状态，
+    // 与其它引擎的 uc_emu_start/tb_flush 并发即互踩（CODESIGNING Invalid Page 根因）.
+    // 防御纵深：当前唯一调用方 setup_vm_and_adi 已在闸内，递归锁不会自锁.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
     uc_err err = uc_open(UC_ARCH_ARM64, UC_MODE_ARM, &uc);
     if (err != UC_ERR_OK) {
         // 不再 abort()：缺后端时宿主必须能继续跑（回退远程 Anisette）.
@@ -223,6 +227,9 @@ EmulatorVM::EmulatorVM()
 }
 
 EmulatorVM::~EmulatorVM() {
+    // v0.3.746：uc_close 触发 tb_flush（进程级 TCG 状态），必须与其它引擎的
+    // uc_emu_start 串行（防御纵深：当前唯一调用方 reset_shared_vm 已在闸内）.
+    std::lock_guard<std::recursive_mutex> emulatorGate(UnicornGate());
     if (uc) {
         uc_close(uc);
         uc = nullptr;
