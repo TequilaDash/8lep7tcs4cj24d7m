@@ -140,6 +140,14 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         teamSummary = nil
     }
 
+    /// v0.3.746：切换账户时调用——释放旧会话后，还要把「token 恢复失败过」的
+    /// 全局标记一并清零：它是 UserDefaults 全局单值，不区分账户；旧账户 token
+    /// 失效置位后会错误跳过新账户的免 2FA 恢复（路径 A）.
+    func signOutForAccountSwitch() {
+        signOut()
+        sessionRestoreFailed = false
+    }
+
     deinit {
         if let _session {
             si_sign_session_free(_session)

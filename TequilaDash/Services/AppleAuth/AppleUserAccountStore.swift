@@ -110,6 +110,17 @@ final class AppleUserAccountStore: ObservableObject {
             sideloadDSID: acc.sideloadDSID ?? "", sideloadAuthToken: acc.sideloadAuthToken ?? "",
             accountName: acc.accountName)
         save()
+
+        // v0.3.746：切户后两链已持有的旧会话必须立即失效，否则：
+        // - IPA 侧载页 isSignedIn 仍挂旧 session，warmUp 的 `guard !isSignedIn`
+        //   永远不重恢复（切户后回侧载页显示旧账户已登录）；
+        // - CertificateManager 单例的 hasLoaded/didAutoLoad 还是旧账户的 true，
+        //   页面不在层级时 onChange(settings.appleID) 不触发，重进页 autoLoad 被拦.
+        // 在这里（MainActor）统一失效并后台重恢复新账户，页面无须各自补观察.
+        IPAInstallService.shared.signOutForAccountSwitch()
+        CertificateManager.shared.reset()
+        IPAInstallService.shared.warmUp()
+        CertificateManager.shared.warmUp()
     }
 
     /// 移除单个账户（当前账户则一并清 MemoryLimitSettings 登录态）.
