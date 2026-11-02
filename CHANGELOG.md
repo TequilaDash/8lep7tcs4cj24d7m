@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.744] - 2026-11-02
+
+### 修复
+
+- **下载闪退（Invalid Page）根修第二轮**：v0.3.743 只闸住了两处 `uc_emu_start`，
+  但 SAP 的建引擎/拆引擎/storeagent/kbsync 与 ADI 的 setup 段仍在闸外，两套
+  Unicorn 引擎并发依旧会互相踩翻译缓冲.本轮把 **SAP 全部 8 个入口**（initWith/
+  exchangeData/signData/dealloc/decrypter/decryptChunk/closeDecrypter/generateKBSync）
+  与 **ADI 全部 4 个入口**（get/start/end/cancel_provision）统一收进引擎级递归总闸
+  `UnicornGate`——两套引擎从此全串行，不可能再并发（回答「为什么不能共用/并行」：
+  Unicorn 1.x 进程内不线程安全，共用一台=每次拆装镜像更慢更险，正解=两台+总闸）.
+- **IPA 侧载菜单「登录 Apple ID」点了没反应**：此前错误调用静默凭据复用（不弹任何
+  界面，像卡住）.现改为真正弹出登录页.
+
 ## [0.3.743] - 2026-11-02
 
 ### 修复
