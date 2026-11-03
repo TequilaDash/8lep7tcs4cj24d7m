@@ -709,6 +709,17 @@ enum DeviceInfoService {
     // 让调用方的 `try?` 拿到 nil —— 与原先「各自建隧道、失败返回 nil」的行为一致，
     // 只是不再重复尝试建隧道。
 
+    /// v0.3.752：真机 UDID（lockdown `UniqueDeviceID`，`00008101-…` 形）.
+    /// 8220 取证结论：RP 配对记录 identifier 是 UUID 形配对标识，签名/设备注册
+    /// 必须用这里的真 UDID；隧道不可用等场景返回 nil，由调用方回退.
+    static func trueDeviceUDID() -> String? {
+        guard var tunnel = try? makeTunnel(),
+              let adapter = tunnel.adapter, let handshake = tunnel.handshake else { return nil }
+        defer { tunnel.free() }
+        guard let dict = try? lockdownFullDictOrFallback(adapter, handshake) else { return nil }
+        return dict["UniqueDeviceID"] as? String
+    }
+
     private static func lockdownFullDictOrFallback(_ adapter: OpaquePointer?,
                                                    _ handshake: OpaquePointer?) throws -> [String: Any] {
         guard let adapter, let handshake else {

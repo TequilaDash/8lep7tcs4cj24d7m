@@ -232,6 +232,46 @@ final class DeviceControlService {
         }
     }
 
+    /// 在设备进程列表里找 cfprefsd 的 PID（可执行路径包含 cfprefsd）.
+    /// cfprefsd 是偏好守护进程，SIGKILL 后 launchd 自动拉起并重建偏好缓存.
+    func cfprefsdPID() throws -> Int? {
+        try withAppService { appService in
+            var processes: UnsafeMutablePointer<ProcessTokenC>?
+            var count = UInt(0)
+            if let ffiError = app_service_list_processes(appService, &processes, &count) {
+                throw error(from: ffiError, fallback: "枚举进程失败")
+            }
+            defer {
+                if let processes { app_service_free_process_list(processes, count) }
+            }
+            guard let processes else { return nil }
+            for index in 0..<Int(count) {
+                let p = processes[index]
+                if let path = p.executable_url.flatMap({ String(cString: $0) }),
+                   path.contains("cfprefsd") {
+                    return Int(p.pid)
+                }
+            }
+            return nil
+        }
+    }
+
+    /// 刷新本地偏好值：对 cfprefsd 发 SIGKILL，launchd 自动拉起，
+    /// 偏好缓存随即写回磁盘 —— 与 respringSpringBoard / restartCommCenter
+    /// 同一套机制（进程管理同原理，无需 root）.
+    func flushCfprefsd() throws {
+        let pid = try cfprefsdPID()
+        guard let pid else { throw makeError("未在进程列表中找到 cfprefsd") }
+        try withAppService { appService in
+            var response: UnsafeMutablePointer<SignalResponseC>?
+            let ffiError = app_service_send_signal(appService, UInt32(pid), UInt32(SIGKILL), &response)
+            if let ffiError {
+                throw error(from: ffiError, fallback: "发送 SIGKILL 给 cfprefsd 失败")
+            }
+            defer { if let response { app_service_free_signal_response(response) } }
+        }
+    }
+
     /// 在设备进程列表里找 SpringBoard 的 PID（可执行路径包含 SpringBoard）.
     func springBoardPID() throws -> Int? {
         try withAppService { appService in

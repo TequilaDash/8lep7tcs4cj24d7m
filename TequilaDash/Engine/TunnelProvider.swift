@@ -554,7 +554,7 @@ enum VPNPermissionProbe {
             if error == nil { return .absent("entitlement 不在当前签名里") }
             return .unknown
         }
-        // ★ Packet Tunnel 权限：必须校验数组里**含** packet-tunnel-provider.
+        // Packet Tunnel 权限：必须校验数组里**含** packet-tunnel-provider.
         //   只看 key 在不在，会把「数组里只有 dns-proxy 之类」的签名误判成可用.
         if key == packetTunnelKey {
             let values = (value as? [String]) ?? []

@@ -124,6 +124,7 @@ final class AppleUserAccountStore: ObservableObject {
     /// 移除单个账户（当前账户则一并清 MemoryLimitSettings 登录态）.
     func remove(_ email: String, options: AppleAccountSignOutOptions = .init()) {
         let key = email.lowercased()
+        LoginLogger.shared.log("[账户] 移除账户 \(email)（证书=\(options.keepCertificate ? "保留" : "删除")，Anisette=\(options.keepAnisetteData ? "保留" : "重置")，请求头=\(options.keepAnisetteHeaders ? "保留" : "清除")）")
         accounts.removeAll { $0.id == key }
         MemoryLimitSettings.shared.removeLoginHistory(email)
         if activeEmail == key {
@@ -153,6 +154,7 @@ final class AppleUserAccountStore: ObservableObject {
     /// 退出全部（含 isideload 签名会话释放）.
     func signOutAll(options: AppleAccountSignOutOptions = .init()) {
         let removedEmails = accounts.map(\.email)
+        LoginLogger.shared.log("[账户] 退出全部账户（\(removedEmails.joined(separator: ", "))；证书=\(options.keepCertificate ? "保留" : "删除")，Anisette=\(options.keepAnisetteData ? "保留" : "重置")）")
         for account in accounts { MemoryLimitSettings.shared.removeLoginHistory(account.email) }
         accounts.removeAll()
         activeEmail = nil

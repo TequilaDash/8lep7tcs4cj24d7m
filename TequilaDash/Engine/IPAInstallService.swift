@@ -155,8 +155,28 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// 从配对文件 plist 读取设备 UDID（RPPairing 记录的 identifier）.
+    /// 签名/设备注册用的 UDID.
+    ///
+    /// v0.3.752（8220 根因修复）：RemotePairing 配对记录的 `identifier` 在 iOS 17+
+    /// 是 UUID 形**配对标识**，不是开发者门户认识的设备号 —— 用它注册设备
+    /// Apple 会收下，但生成描述文件时按无效设备过滤 ⇒ 团队恒「无设备」⇒
+    /// `Developer error 8220`。真 UDID（`00008101-…` 形）从 lockdown
+    /// `UniqueDeviceID` 读取（设备不变则值不变，取到后缓存），取不到才回退
+    /// 配对标识（保底老行为，至少设备列表可列）.
     private var deviceUDID: String? {
+        if let cached = UserDefaults.standard.string(forKey: "SigningTrueUDID"), !cached.isEmpty {
+            return cached
+        }
+        let fallback = pairingIdentifier
+        guard FileManager.default.fileExists(atPath: pairingPath),
+              let real = DeviceInfoService.trueDeviceUDID(), !real.isEmpty else { return fallback }
+        UserDefaults.standard.set(real, forKey: "SigningTrueUDID")
+        LoginLogger.shared.log("[签名] 采用 lockdown 真 UDID（尾号 \(real.suffix(6))）—— 旧配对标识为 UUID 形，会导致 8220")
+        return real
+    }
+
+    /// 从配对文件 plist 读取设备配对标识（RPPairing 记录的 identifier，UUID 形）.
+    private var pairingIdentifier: String? {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)),
               let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let udid = dict["identifier"] as? String, !udid.isEmpty else { return nil }

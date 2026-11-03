@@ -49,7 +49,7 @@ struct SignSourceAppListView: View {
     /// 之一即 `ais_startManifestNetworkRefreshFromUserPull:` 的 block）。
     @State private var announcementText: String?
     @State private var keyword = ""
-    /// 分类分段索引（0 = 全部）。**与 `type` 等值匹配**，不是语义映射（规格 §6 ★）。
+    /// 分类分段索引（0 = 全部）。**与 `type` 等值匹配**，不是语义映射（规格 §6）。
     @State private var typeFilter: AppTypeFilter = .all
     @State private var priceFilter: PriceFilter = .all
     /// 排序段（抄全能签新增，规格 §6 / §0.1 裁决 4）。
@@ -209,7 +209,7 @@ struct SignSourceAppListView: View {
             }
         }
 
-        // 分类：**等值匹配** `type == 分段索引`（规格 §6 ★，绝不做语义映射）
+        // 分类：**等值匹配** `type == 分段索引`（规格 §6 等值匹配，绝不做语义映射）
         if typeFilter != .all {
             result = result.filter { $0.type == typeFilter.rawValue }
         }
@@ -378,7 +378,7 @@ struct SignSourceAppListView: View {
                     .labelsHidden()
                 }
                 // 类型：**独立分组 + 布尔开关**（否定式），刻意不用 `Picker` ——
-                // 避免与上面两个等值筛选混淆（规格 §6 ★ 的等值匹配只适用于分类 / 价格）。
+                // 避免与上面两个等值筛选混淆（规格 §6 的等值匹配只适用于分类 / 价格）。
                 Section {
                     Toggle("排除不可下载", isOn: $excludeNonDownloadable)
                     // 「屏蔽公告」：开启后顶部公告 `Section` 不渲染（用户原话「开启了后公告位 banner 隐藏」）。

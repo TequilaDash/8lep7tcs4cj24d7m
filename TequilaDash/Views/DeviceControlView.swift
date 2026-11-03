@@ -19,6 +19,7 @@ struct DeviceControlView: View {
         case restart = "重启设备"
         case shutdown = "关机"
         case recovery = "进入恢复模式"
+        case cfprefsFlush = "刷新 cfprefsd"
 
         var id: String { rawValue }
 
@@ -29,6 +30,7 @@ struct DeviceControlView: View {
             case .restart: return "power.circle.fill"
             case .shutdown: return "power"
             case .recovery: return "wrench.and.screwdriver.fill"
+            case .cfprefsFlush: return "gearshape.arrow.circlepath"
             }
         }
 
@@ -39,6 +41,7 @@ struct DeviceControlView: View {
             case .restart: return "发送重启指令"
             case .shutdown: return "发送关机指令"
             case .recovery: return "设备进入恢复模式"
+            case .cfprefsFlush: return "刷新本地偏好值"
             }
         }
 
@@ -49,6 +52,7 @@ struct DeviceControlView: View {
             case .restart: return "重启设备？"
             case .shutdown: return "关机？"
             case .recovery: return "进入恢复模式？"
+            case .cfprefsFlush: return "刷新 cfprefsd？"
             }
         }
 
@@ -64,6 +68,8 @@ struct DeviceControlView: View {
                 return "设备将关机，需要长按电源键开机"
             case .recovery:
                 return "设备将进入恢复模式"
+            case .cfprefsFlush:
+                return "部分App可能正在运行/写入操作，建议关掉相关后台，不建议频繁使用，也请勿在App高频写入时操作！"
             }
         }
     }
@@ -97,6 +103,14 @@ struct DeviceControlView: View {
                 Text("重启 SpringBoard")
             } footer: {
                 Text("重启 SpringBoard 方式.")
+            }
+
+            Section {
+                actionRow(.cfprefsFlush)
+            } header: {
+                Text("偏好设置")
+            } footer: {
+                Text("结束 cfprefsd 进程后系统自动拉起，本地偏好值随即落盘.")
             }
 
             Section {
@@ -181,9 +195,20 @@ struct DeviceControlView: View {
         HStack(spacing: 12) {
             AppRowIcon(systemName: action.icon, tint: actionTint(action), symbolSize: 20, frameSize: 36)
             VStack(alignment: .leading, spacing: 3) {
-                Text(action.rawValue)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.primary)
+                HStack(spacing: 6) {
+                    Text(action.rawValue)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+                    if action == .cfprefsFlush {
+                        Text("风险")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppTheme.danger)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.danger.opacity(0.14), in: Capsule())
+                            .accessibilityLabel("风险操作")
+                    }
+                }
                 Text(action.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -200,6 +225,7 @@ struct DeviceControlView: View {
         case .restart: return .orange
         case .shutdown: return AppTheme.danger
         case .recovery: return .purple
+        case .cfprefsFlush: return .orange
         }
     }
 
@@ -207,7 +233,7 @@ struct DeviceControlView: View {
         switch action {
         case .webCrash:
             showWebCrash = true
-        case .respringKill, .restart, .shutdown, .recovery:
+        case .respringKill, .restart, .shutdown, .recovery, .cfprefsFlush:
             runViaTunnel(action)
         }
     }
@@ -230,6 +256,8 @@ struct DeviceControlView: View {
                     try DeviceControlService.shared.shutdownDevice()
                 case .recovery:
                     try DeviceControlService.shared.enterRecovery()
+                case .cfprefsFlush:
+                    try DeviceControlService.shared.flushCfprefsd()
                 case .webCrash:
                     break
                 }

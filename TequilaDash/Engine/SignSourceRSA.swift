@@ -49,7 +49,7 @@ enum SignSourceRSA {
     /// 完整串（单行，勿换行；末尾 `=` padding 必须保留）。
     private static let embeddedPrivateKeyBase64 = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRQ1JiYVo5bDEwWFhuSTkKalZrSzF4ZGpzRDBnckZDNngzRlZDTGllR0N3U3lkdks0Mm92cUdRV2tadkk3UExScERLSGQ1WnJCbk5BS3FIVgplWmJGcTROUVkrQ0QvNjBTekVtOXBrSTY4TXM3R29JYTFDQ1o0eXVBSFowdmR5WmVNMjcyc2JobUx3Ylk2WWlPClRGdW5vU3VKV2xjdkx1clQ5RVFqQVFFcWdxcVdhU1hndEM2TjhwSldqdU5qNHlCM1ZNK3RCVUpCV2dOd090MVcKVjJZNWl3OHFTM2JBb3VqUnlhdlI0dUZVM0FjVzlYbHhBYVZSUXo2cXNYdGx0eC9oWDc2NjE3MDdDR1RnNXUrego1SDJlSWNoUFZ3RXlVT1pXaHpnSGpQNHNSUTVTbjFTVXBlWC9vNWpLQnlBc3BrZnl1Um1GTmxZcFVlZ05iUjY1CldsVXFxYXgvQWdNQkFBRUNnZ0VBQUxTMy9LMHZXQ3JvWERvQ3pqRCsrd2I2RjQvS081MjlLUW13S2duSjZsWWwKQ1F3ZHZteW1NbDl4TzgwMUtMV0M5SUFtaGpRdnBwT04zQXU0RHpHcXJmK0lqdDNxVXVYR0FIa24wZnBzb0JmeQo0K0lHamd2dXlhaVFTNEZrbWtMSUMyUVlRWHpDbUpyV3NDdXo5Sm9PK25FajRkUmFlM3IrbFFpdDZ2YnZRb2EvClhpWlNiVFdiWUJveWxlbHU5eXZXVVJoVGhXRHlxenZ2MGhlcS95NlBJeDI4V2NZUjBxWjZPdnVITHloYXU4a1AKcjJKaC9qQ1BzMmxHWGhJTmJjZG9xWEFDN0xqU1BkR2VNV0pwT0NHQ09hVXFSTXhIQzN2SmRzZmdwRGZxRHpZUwpoczlyTmJ2bDJPak0rcUcyM2FTaFFwQUVYdllaMldRaEpnbGpIM2xKYlFLQmdRREJteVpnMXZuZWdlQVorTEJ2CkRUTUFFUjVpMjlHWVlienJGMDREVlo2ZXhOUmJsbUVkSnlzNDlTbGtLTUlIazNiSUdXTnpTTEJyVmQxWW9yZnIKc3VobVdhOUo2dzlCREQ1Y1YrbVdiM0ZVZjdydEZxVllsWUwvMG51Skl2Uzg1eTUwQ1pmbnNnaXhJRHhmMmN2WQpuYnEyQ05jbzV2WERmTzQrUVpHQWo5OUdYUUtCZ1FEQVM4QVFWbEZsMW1Cci8zc3N0NFhFcngwSktrMTNNVEdPCm1qUDhDdHY0NE84QjNSaW1nQWpYWlB1ckZzemFuNGdYNlZvbzdQT1dnSndDNzdrRWJoMUZybDI5aHJGOUpKODgKckgxOVR4RzloYzdSTjZKUzRjVVVFOFhrQWxjVm8vM3RDdDdDS1VCOHExSy9sSVVyK1ZDV2dVaXhEUjFsKy9FSQpKWm1zbkZEWWl3S0JnQzZ3dVArdnVKREZwNEw3NjZqTWVSa3lCNjcxcmtWZWhNMzVUOUlVQ3UzbE1BVnFiYjgzCkhBQmZkM3oxSzEzaVhVb0NmVzVuQUV6U1oxQWg1ZE1NMFdrbGhkV0F2NndEUk9MR1BNb1AxRGY1bWQzbGtUaWMKemZ2ZUNmYlhuRWdXUktpdFM1b1A0SEsvQUhCcE9QVGpqUXlyY3lBbEd1M3JLaFdQZ0lTTnJkM3RBb0dCQUkvSwpsUTRpWGErWEJIYjlqYSs4Yyt6RlBTTVRYT1hhQlVLckVHQlNCbmN1UzhySzk1blpkOE1KSWgrblp2dTcrMXBXCkJqTkFMRTNJVWVEb1BTT1E2NWFsY2pjOHR3L3JDSitvSkJaRnYvQkdWSWFoNFdHMHJWZjhDU2djajk0QXlPb3UKRExDSGhFODFGU1ZvKzhRTUpEVEc3QUpvMmlqZW9qZ0RWY3g2L3dGTkFvR0JBS0w2TGJ2b3Raamp0OHNTd0dXTApLZEEremxqdERjUUgwNS91VzVBWVY1WEs1S2JyWkJWV0lpMTNYbWs3cWVjU083cDZ3RmVBQkJTVDQybzM0b1F5CmgybCtnK3FGYjZjQzU2T2h3WEpMMDJqL2dYbXpEbWZwbkgyUUVEU0MxV1VPR1pacjFkNEh6d2w3Rm5nMmVzcncKT3RlZ2FPZHkzQVR2RWM0N2hDa1ZrNm1wCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0="
 
-    /// ★ 候选信封键（**按序精确匹配，不做 `lowercased()` 归一**，§4.2）。
+    /// 候选信封键（**按序精确匹配，不做 `lowercased()` 归一**，§4.2）。
     /// 前三个 = 全能签/轻松签系（全小写）；后三个 = 牛蛙系（驼峰）。命中任一 ⇒ 加密信封。
     private static let envelopeKeys = [
         "appstore",      // 全能签 legacy
@@ -63,10 +63,10 @@ enum SignSourceRSA {
     /// 响应顶层若含信封键（**枚举 `envelopeKeys`，各自大小写敏感**）→ 返回解出的源 JSON `Data`。
     /// 返回 nil 表示「无信封键」= 明文分支（调用方直接用原 dict）。
     ///
-    /// ★ 判据双保险（全能签就是两套并行，§4.2）：**JSON 键查找**为主 + **响应体前 8KB 带引号字面量扫描**为辅。
+    /// 判据双保险（全能签就是两套并行，§4.2）：**JSON 键查找**为主 + **响应体前 8KB 带引号字面量扫描**为辅。
     /// 主判据全 miss 时，用辅判据兜底（`body` = 原始响应体）。
     ///
-    /// ★ 信封键 ≠ 加密（§4.8）：同键 `appstore` 有两种形态 —— C1 `base64(json)` 明文封装
+    /// 信封键 ≠ 加密（§4.8）：同键 `appstore` 有两种形态 —— C1 `base64(json)` 明文封装
     /// 与 C2 流密码。故这里**先探明文 JSON**（`looksLikePlainJSON`），命中直接返回（无加密）；
     /// 未命中才走 RSA（A/B）；非 256 对齐由 `decrypt` 抛 `.unsupportedCipher`（C2/D）。
     static func decryptEnvelopeIfPresent(_ root: [String: Any], body: Data? = nil) throws -> Data? {
@@ -108,7 +108,7 @@ enum SignSourceRSA {
 
     /// base64(密文) → 明文 Data（**整源两轮试解**：PKCS#1 优先 → raw 兜底）。
     ///
-    /// ★ **判别粒度 = 整条源**（填充模式是**源的属性**、不是**块的属性**），
+    /// **判别粒度 = 整条源**（填充模式是**源的属性**、不是**块的属性**），
     ///   故**不是**逐块判别 —— 逐块判别会造出「块间模式不一致」这个本不该存在的状态。
     ///
     /// 流程：
@@ -124,7 +124,7 @@ enum SignSourceRSA {
         }
         let block = SecKeyGetBlockSize(key)          // 256（2048-bit）
         guard block > 0 else { throw SignSourceError.rsa("私钥块大小异常") }
-        // ★ 非 256 对齐 ⇒ 不是 RSA 分块 ⇒ 判为「未知/流密码源」**优雅降级**（§4.8）
+        // 非 256 对齐 ⇒ 不是 RSA 分块 ⇒ 判为「未知/流密码源」**优雅降级**（§4.8）
         //   生态普查实证：键 `appstore`（无版本后缀）的载荷 %256 = 113/112/117、熵 7.97
         //   ⇒ 若强行按块解会两轮全失败；这里提前分流，**不崩、不误判成 PKCS1**。
         guard cipher.count % block == 0 else {

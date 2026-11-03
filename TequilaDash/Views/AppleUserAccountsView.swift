@@ -84,7 +84,6 @@ struct AppleUserAccountsView: View {
                     Toggle("保留 Anisette 资料", isOn: $signOutOptions.keepAnisetteData)
                     Toggle("保留 Anisette 请求头设置", isOn: $signOutOptions.keepAnisetteHeaders)
                 }
-                .disabled(hasOtherAccounts)
                 Section {
                     Text("当前项目没有独立的 SideSign 请求头设置，退出时不会创建或删除此类资料.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -97,9 +96,11 @@ struct AppleUserAccountsView: View {
                         showSignOutAllConfirm = false
                     } label: {
                         Text(account == nil ? "退出全部账户" : "移除账户")
+                            .font(AppFont.bodyEmphasis)
+                            .foregroundStyle(AppTheme.danger)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(TintedButtonStyle())
+                    .buttonStyle(.plain)
                 }
             }
             .navigationTitle("退出登录")
