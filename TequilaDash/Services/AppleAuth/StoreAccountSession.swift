@@ -128,7 +128,9 @@ actor StoreLoginBackoff {
 
     func check(_ email: String) throws {
         let key = email.lowercased()
-        if let until = blockedUntil[key], until > Date() {
+        // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+        if let until = blockedUntil[key],
+           until.timeIntervalSinceReferenceDate > Date().timeIntervalSinceReferenceDate {
             // v0.3.5xx：此前这里**静默抛错** —— 日志里一行都没有，用户只看到「点了没反应」。
             // 补一条明确日志（含剩余冷却时长）；冷却窗口内直接失败、不重试（避免重复发送密码），
             // 且不写 email，避免 PII 进日志。

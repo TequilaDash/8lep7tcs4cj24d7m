@@ -45,7 +45,8 @@ struct DeveloperCertificate: Identifiable, Hashable {
     /// 是否已过期.
     var isExpired: Bool {
         guard let expiration else { return false }
-        return expiration < Date()
+        // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+        return expiration.timeIntervalSinceReferenceDate < Date().timeIntervalSinceReferenceDate
     }
 }
 

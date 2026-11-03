@@ -121,7 +121,9 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 只探第一条 utun 会探错隧道）.
     func waitForTunnelReady(timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        // Date 比较一律改比 Double 时间戳：iOS 27.2 beta 上 >=/<= 是 weak import（GOT 空则 PC=0 直接被杀），
+        // < 与 > 今天仍是 strong，但同类雷会随 SDK 挪位置 —— 守卫 swift_date_compare_guard.py 统一拦四个比较符.
+        while Date().timeIntervalSinceReferenceDate < deadline.timeIntervalSinceReferenceDate {
             if LocalDevVPN.isAnyCandidateReachable(timeout: Self.probeTimeout) { return true }
             Thread.sleep(forTimeInterval: Self.pollInterval)
         }

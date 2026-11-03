@@ -19,6 +19,7 @@
 15) swift_version_sync_guard.py        —— 版本号三处同步防复发（project.yml 三个 target + Resources/Info.plist）
 16) swift_ui_copy_guard.py             —— 界面文案硬规则防复发（中文句号 / 警告三角符号 / 星形装饰 / 全宽实心色 banner）
 17) swift_hex_parse_guard.py           —— hex 解析口径防复发（前导正号 / 奇数长度 / 空串三防；参考 BigInt.swift:52）
+18) swift_date_compare_guard.py        —— Date 比较符防复发（beta 上 >=/<= 是 weak import，四个比较符一律改比 Double）
 
 段数口径：**CHECKS 的长度就是唯一口径**，本清单只是给人看的索引（2026-10-19 之前本清单
 曾漏记第 9/14/15/16 项、并写成「现有十项」）。改动 CHECKS 后请同步本清单。
@@ -78,6 +79,7 @@ CHECKS = [
     ("版本号三处同步防复发", "swift_version_sync_guard.py", False),
     ("界面文案硬规则防复发", "swift_ui_copy_guard.py", False),
     ("hex 解析口径防复发", "swift_hex_parse_guard.py", True),
+    ("Date 比较符防复发", "swift_date_compare_guard.py", False),
 ]
 
 

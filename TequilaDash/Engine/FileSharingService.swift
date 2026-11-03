@@ -466,7 +466,9 @@ enum FileSharingService {
                         "单飞复用·缓存命中（\(Self.secs(age))s 前那一条，未再发命令；在飞 \(inFlightCount) 条）")
             }
             // ② 静默期（上一批失败/超时后不立刻重发）
-            if let until = cooldownUntil, Date() < until {
+            // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+            if let until = cooldownUntil,
+               Date().timeIntervalSinceReferenceDate < until.timeIntervalSinceReferenceDate {
                 let remain = max(0, until.timeIntervalSinceNow)
                 lock.unlock()
                 return (.timedOut,

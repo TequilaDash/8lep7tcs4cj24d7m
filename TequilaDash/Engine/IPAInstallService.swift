@@ -1010,7 +1010,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
 
         // 再看过期：过期是更常见的真实原因，优先报它
-        if let exp = profile.expirationDate, exp < Date() {
+        // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+        if let exp = profile.expirationDate,
+           exp.timeIntervalSinceReferenceDate < Date().timeIntervalSinceReferenceDate {
             throw NSError(domain: "IPAInstall", code: -1, userInfo: [NSLocalizedDescriptionKey:
                 "签名用的描述文件已过期（\(profile.formattedDate))."
                 + "请重新签名后再安装；直接安装会以 0xe8008015 失败."])

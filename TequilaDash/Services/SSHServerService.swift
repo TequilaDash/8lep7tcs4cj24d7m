@@ -895,7 +895,9 @@ final class GoCallBox {
         pthread_create(&tid, &attr, goCallEntry, ctx)
         pthread_attr_destroy(&attr)
         let deadline = Date().addingTimeInterval(timeout)
-        while value == nil, Date() < deadline { usleep(100_000) }
+        // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+        while value == nil,
+              Date().timeIntervalSinceReferenceDate < deadline.timeIntervalSinceReferenceDate { usleep(100_000) }
     }
 
     fileprivate func set(_ v: Int32) { lock.lock(); _value = v; lock.unlock() }

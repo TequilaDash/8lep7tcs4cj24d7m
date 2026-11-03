@@ -161,7 +161,9 @@ private final class BonjourPortWorker: NSObject, NetServiceBrowserDelegate, NetS
         browser.searchForServices(ofType: RemotePairingPort.bonjourType,
                                   inDomain: RemotePairingPort.bonjourDomain)
         let deadline = Date().addingTimeInterval(timeout)
-        while resolvedPort == nil && Date() < deadline {
+        // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
+        while resolvedPort == nil,
+              Date().timeIntervalSinceReferenceDate < deadline.timeIntervalSinceReferenceDate {
             _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
         }
         browser.stop()
