@@ -34,6 +34,7 @@ int si_register_device(SignSession *session, const char *udid,
 int si_signin_with_session(const char *email, const char *dsid,
                            const char *auth_token, const char *anisette_url,
                            const char *storage_dir, const char *machine_name,
+                           const char *client_info,
                            SignSession **out_session, char **out_summary,
                            char **out_error);
 
