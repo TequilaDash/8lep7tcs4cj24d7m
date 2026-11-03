@@ -109,6 +109,9 @@ struct CertificateView: View {
                     .disabled(manager.isWorking)
                 } else if settings.isLoggedIn {
                     Button {
+                        // v0.3.749：以前只拉 Apple 证书列表不重读本地 p12 状态，用户点刷新
+                        // 看不到本地证书行变化，像摆设.先对齐本地，再拉列表.
+                        certStore.reloadFromDisk()
                         manager.loadCerts()
                     } label: {
                         if manager.isWorking {
@@ -127,6 +130,10 @@ struct CertificateView: View {
         }
         .onChange(of: showP12Picker) { _, shown in
             guard shown else { return }
+            // v0.3.749：入口即归零.旧实现在「选到文件」的成功路径从不复位，
+            // 旗标永真后再点导入/更换都不触发 onChange——那才是「按多次才生效 /
+            // 失败一次之后点不动」的真根因，contentShape 只治了首次点击.
+            showP12Picker = false
             SharedDocumentPicker.present(allowedTypes: [.data]) { urls in
                 guard let url = urls.first,
                       let data = try? Data(contentsOf: url) else {
@@ -136,9 +143,7 @@ struct CertificateView: View {
                 pendingP12Data = data
                 p12Password = ""
                 showP12Password = true
-            } onCancelled: {
-                showP12Picker = false
-            }
+            } onCancelled: {}
         }
         .alert("p12 密码", isPresented: $showP12Password) {
             TextField("导出时设置的密码", text: $p12Password)
@@ -165,6 +170,7 @@ struct CertificateView: View {
             AppleIDLoginSheet()
         }
         .onAppear {
+            certStore.reloadFromDisk()
             manager.autoLoad()
         }
         .onChange(of: settings.appleID) { _, _ in
@@ -317,15 +323,33 @@ struct CertificateView: View {
 
     @ViewBuilder
     private func p12MessageText(_ msg: String) -> some View {
+        // v0.3.749：chip 化.「[完成] / [失败] 」前缀在显示层剥掉（赋值处保持
+        // 原样供判定），语义交给图标，正文一律灰色（功能行禁色硬规则）.
         let isOK = msg.hasPrefix("[完成]")
+        let body = (msg.hasPrefix("[完成] ") || msg.hasPrefix("[失败] "))
+            ? String(msg.dropFirst(5))
+            : msg
         HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
-            Image(systemName: isOK ? "checkmark.circle.fill" : "info.circle.fill")
-                .font(.caption)
-                .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
-            Text(msg)
-                .font(.caption)
+            Image(systemName: isOK ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(isOK ? AppTheme.success : AppTheme.danger)
+            Text(body)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
+                .fill(AppTheme.surfaceCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.inner, style: .continuous)
+                .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
+        )
         .padding(.horizontal)
     }
 

@@ -10,6 +10,10 @@ struct AppleUserAccountsView: View {
     @State private var showSignOutAllConfirm = false
     /// 待确认移除的账户.
     @State private var pendingRemove: AppleUserAccount?
+    /// v0.3.749：当前账户右滑「注册设备」（SideStore 式预注册手动入口）.
+    @State private var deviceWorking = false
+    @State private var showDeviceSheet = false
+    @State private var deviceResult: (ok: Bool, text: String)?
 
     var body: some View {
         List {
@@ -87,6 +91,19 @@ struct AppleUserAccountsView: View {
                         .foregroundStyle(AppTheme.success)
                         .accessibilityLabel("当前使用")
                 }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    // v0.3.749：保险起见给手动注册入口——预注册在登录/切户时已尽力
+                    // 做过，这里再点一次是幂等的（Rust 侧命中已注册直接返回）.
+                    Button {
+                        startDeviceRegistration()
+                    } label: {
+                        Label("注册设备", systemImage: "iphone")
+                    }
+                    .tint(AppTheme.accent)
+                }
+                .sheet(isPresented: $showDeviceSheet) {
+                    deviceRegisterSheet
+                }
             } else {
                 Button {
                     // v0.3.746：未登录时的页内入口保留（此时右上角菜单也被隐藏），
@@ -160,5 +177,50 @@ struct AppleUserAccountsView: View {
                 Label("移除", systemImage: "trash")
             }
         }
+    }
+
+    // MARK: - 注册设备（v0.3.749，SideStore 式预注册的手动入口）
+
+    private func startDeviceRegistration() {
+        guard !deviceWorking else { return }
+        deviceWorking = true
+        deviceResult = nil
+        showDeviceSheet = true
+        Task { @MainActor in
+            let outcome: (Bool, String)
+            do {
+                let udid = try await IPAInstallService.shared.registerCurrentDevice()
+                outcome = (true, "设备已注册到当前签名团队.\nUDID：\(udid)\n后续签名可直接取到描述文件.")
+            } catch {
+                outcome = (false, error.localizedDescription)
+            }
+            deviceResult = outcome
+            deviceWorking = false
+        }
+    }
+
+    private var deviceRegisterSheet: some View {
+        VStack(spacing: AppSpacing.section) {
+            if deviceWorking {
+                InfoActionCard(icon: "arrow.triangle.2.circlepath",
+                               title: "正在注册设备",
+                               message: "把本机 UDID 写进 Apple 开发者团队，通常几秒完成.")
+            } else if let result = deviceResult {
+                InfoActionCard(icon: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill",
+                               iconTint: result.ok ? AppTheme.success : AppTheme.danger,
+                               title: result.ok ? "注册成功" : "注册异常",
+                               message: result.text)
+            }
+            Button {
+                showDeviceSheet = false
+            } label: {
+                Text("好")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(TintedButtonStyle())
+        }
+        .padding(AppSpacing.section)
+        .presentationDetents([.height(250)])
+        .presentationDragIndicator(.visible)
     }
 }

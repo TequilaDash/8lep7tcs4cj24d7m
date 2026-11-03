@@ -243,6 +243,13 @@ struct AppStoreVersionHistoryView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppTheme.accent)
+            } else if !isCurrent {
+                // v0.3.749（用户：「也没有下载的提示标志」）：三方 API 的版本没有苹果版本标识，
+                // 下不了 —— 旧写法直接不渲染，用户以为功能缺了. 现在留一枚灰色说明标，
+                // 看得见但不可点（功能行禁色，颜色只留给能点的动作）.
+                Text("不可下载")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 3)
@@ -253,7 +260,24 @@ struct AppStoreVersionHistoryView: View {
     }
 
     private func download(_ v: AppStoreVersion) {
-        guard let email = accountEmail, let vid = v.externalVersionID else { return }
+        // v0.3.749（用户：「点下载没反应，没任务也没转圈」）：这两个 guard 原来是**纯静默
+        // return** —— 连日志都没有，是那条现象唯一能解释的路径. 现在每个分支都必须说清原因.
+        guard let vid = v.externalVersionID else {
+            ToastCenter.shared.show("该版本没有苹果版本标识，切到「苹果 API」后才能下载.")
+            return
+        }
+        guard let email = accountEmail else {
+            if source == .catalog {
+                ToastCenter.shared.show("三方 API 不能下载历史版本，请切到「苹果 API」.")
+            } else if AppStoreDownloadStore.shared.usableAccounts.isEmpty {
+                ToastCenter.shared.show("没有可用的 App Store 账号，请到「AppStore 账号管理」登录.")
+            } else {
+                // 有账号但这次加载没建立起会话 —— 当场重跑一次加载（不是定时重试）.
+                ToastCenter.shared.show("账号会话未就绪，正在重新获取.")
+                startLoad()
+            }
+            return
+        }
         IPADownloadCenter.shared.startWithAppleID(item: item, email: email,
                                                   externalVersionID: vid,
                                                   displayVersion: v.version)
@@ -348,9 +372,18 @@ struct AppStoreVersionHistoryView: View {
         if Task.isCancelled { return false }
         // 从已购列表进来时用**持有该已购的账号**，否则回落到全局「当前下载账号」。
         let preferred = (preferredEmail?.isEmpty == false) ? preferredEmail : nil
-        guard let bundleId, !bundleId.isEmpty,
-              let email = preferred ?? AppStoreDownloadStore.shared.selectedEmail
-        else { return false }
+        guard let bundleId, !bundleId.isEmpty else {
+            // v0.3.749：两条 false 出口以前都无痕迹 —— 界面只表现为「悄悄回落到三方 API」.
+            LoginLogger.shared.log("版本历史：账号通道缺 bundleId（\(item.bundleId ?? "nil")）",
+                                   category: .appStore)
+            return false
+        }
+        guard let email = preferred ?? AppStoreDownloadStore.shared.selectedEmail else {
+            LoginLogger.shared.log("版本历史：账号通道没有可用商店会话（preferred=\(preferred ?? "nil")，"
+                                   + "旧轨 selectedEmail 为空）—— 多账户重做后新登录不写旧轨",
+                                   category: .appStore)
+            return false
+        }
         // v0.3.365：整次加载唯一的重登额度**先给身份通道** —— 无论它是否真的用到，
         // 后面的 metadata 批次都不再重登，保证整次加载 rotate 上界 = 1
         // （每帧 metadata 各 rotate 一次的老写法最坏 20 次完整 SAP 登录）。
@@ -437,7 +470,13 @@ struct AppStoreVersionHistoryView: View {
     /// v0.3.365：整批一条都没取到、或重登后仍失效 → **失败即停**（剩下身份标成已读），
     /// 否则用户每点一次就再打 10 发，纯放大（审计结论）。
     private func loadMore() async {
-        guard canLoadMore, !loadingMore, let email = accountEmail else { return }
+        guard canLoadMore, !loadingMore else { return }
+        guard let email = accountEmail else {
+            // v0.3.749：这里也曾静默 return —— 「加载更多」点了像摆设.
+            ToastCenter.shared.show("账号会话未就绪，正在重新获取.")
+            startLoad()
+            return
+        }
         loadingMore = true
         defer { loadingMore = false }
         let pending = identifiers.filter { !loadedIDs.contains($0) }

@@ -333,6 +333,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             lastSessionAuthToken = authTokenOut.map { String(cString: $0) }
             // 完整登录成功 → token 已刷新，恢复失败标志清除.
             sessionRestoreFailed = false
+            // v0.3.749（SideStore 做法）：登录成功即把本机预注册进所选团队，
+            // 让 Apple 的注册传播在用户点签名之前就走完（8220 的根）.
+            preRegisterDeviceBestEffort()
         } else {
             let msg = error.map { String(cString: $0) } ?? "rc=\(rc)"
             LoginLogger.shared.log("[失败] IPA 侧载登录失败: \(msg)")
@@ -381,6 +384,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             // v0.2.119：核对 Rust 是否真的复用了 Swift 共享的机器标识.
             verifySharedAnisetteState()
             sessionRestoreFailed = false
+            // v0.3.749（SideStore 做法）：token 恢复会话同样预注册——切户后 warmUp
+            // 走的就是这条路，签名时不再首撞 8220.
+            preRegisterDeviceBestEffort()
         } else {
             // token 失效等恢复失败：标记，下次自动登录直接走完整登录.
             sessionRestoreFailed = true
@@ -388,6 +394,49 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             LoginLogger.shared.log("[失败] IPA 侧载会话恢复失败: \(msg)")
             throw makeError(msg)
         }
+    }
+
+    // MARK: - 设备预注册（v0.3.749，SideStore 做法：登录/切户即注册，消 8220 传播空窗）
+
+    /// 阻塞的 FFI 注册（只能在 authQueue 内调用）：成功返回本机 UDID.
+    private func performRegisterDevice() throws -> String {
+        guard let session else { throw makeError("尚未登录 Apple ID（签名会话未建立）.") }
+        guard let udid = deviceUDID, !udid.isEmpty else {
+            throw makeError("配对文件里没有设备 UDID（identifier 为空）.")
+        }
+        var error: UnsafeMutablePointer<CChar>?
+        let rc = udid.withCString { u in
+            "".withCString { name in
+                si_register_device(session, u, name, &error)
+            }
+        }
+        defer { if let error { si_string_free(error) } }
+        guard rc == 0 else {
+            throw makeError(error.map { String(cString: $0) } ?? "rc=\(rc)")
+        }
+        return udid
+    }
+
+    /// 登录/恢复成功收尾的尽力预注册：失败只记隧道日志不打扰用户——签名路径里
+    /// sign_ipa 仍会 ensure 兜底，也可以在「更多 → Apple ID 账户 → 当前账户」右滑手动重试.
+    private func preRegisterDeviceBestEffort() {
+        do {
+            let udid = try performRegisterDevice()
+            LoginLogger.shared.log("[完成] 设备已预注册到签名团队（尾号 \(udid.suffix(8))，提前消化 Apple 注册传播空窗）")
+        } catch let e as NSError {
+            LoginLogger.shared.log("[注意] 设备预注册跳过或失败（签名时自动重试）: \(e.localizedDescription)")
+        }
+    }
+
+    /// 「Apple ID 账户」页右滑「注册设备」的手动入口：排队到 authQueue（与登录/签名串行，
+    /// 不并发碰会话），成功返回 UDID 供弹窗展示；失败抛 Apple 原文.
+    func registerCurrentDevice() async throws -> String {
+        // self 是 @unchecked Sendable（warmUp 同款模式），detached 里只进 authQueue 串行段.
+        try await Task.detached(priority: .userInitiated) {
+            try self.authQueue.sync {
+                try self.performRegisterDevice()
+            }
+        }.value
     }
 
     // MARK: - 后台预热（app 启动时调用，免 2FA）

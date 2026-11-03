@@ -38,6 +38,14 @@ int si_apple_signin(const char *apple_id, const char *password,
 int si_sign_ipa(SignSession *session, const char *ipa_path, const char *udid,
                 const char *device_name, char **out_signed_path, char **out_error);
 
+// Registers the device with the signing session's selected team immediately
+// (SideStore approach): call right after sign-in / account switch so Apple's
+// registration-to-provisioning propagation window is over before signing
+// (root cause of developer error 8220). Blocks. Unlike the sign path, an
+// empty/NULL udid is an error (2), never a silent skip. Returns 0 on success.
+int si_register_device(SignSession *session, const char *udid,
+                       const char *device_name, char **out_error);
+
 // Restores a signing session from an existing dsid + xcode.auth token (from the
 // app's Settings sign-in) — no login or 2FA needed. Returns 0 on success.
 int si_signin_with_session(const char *email, const char *dsid,

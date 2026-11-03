@@ -1443,6 +1443,19 @@ int32_t si_sign_ipa(struct SignSession *session,
                     char **out_error);
 
 /**
+ * 把当前设备注册进签名会话所选团队（SideStore 式预注册）。阻塞。
+ * 登录/切户成功后立刻调用，把 Apple 的注册传播空窗挪到签名关键路径之外
+ * （Developer error 8220 的根）。与签名路径不同：空 udid 直接报错，不静默跳过。
+ *
+ * # Safety
+ * 见 `sideload_auth::register_device`。
+ */
+int32_t si_register_device(struct SignSession *session,
+                           const char *udid,
+                           const char *device_name,
+                           char **out_error);
+
+/**
  * 释放签名会话。
  *
  * # Safety

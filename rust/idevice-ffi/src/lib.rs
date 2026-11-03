@@ -619,6 +619,20 @@ pub unsafe extern "C" fn si_sign_ipa(
     }
 }
 
+/// 把当前设备注册进会话所选团队（SideStore 式预注册，消 8220 传播空窗）。阻塞。
+///
+/// # Safety
+/// 见 `sideload_auth::register_device`。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn si_register_device(
+    session: *mut sideload_auth::SignSession,
+    udid: *const c_char,
+    device_name: *const c_char,
+    out_error: *mut *mut c_char,
+) -> i32 {
+    unsafe { sideload_auth::register_device(session, udid, device_name, out_error) }
+}
+
 /// 释放签名会话。
 ///
 /// # Safety

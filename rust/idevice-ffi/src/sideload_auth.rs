@@ -246,6 +246,68 @@ pub unsafe fn apple_signin(
     }
 }
 
+/// 把当前设备注册进会话所选团队（SideStore 做法：登录/切户成功后立刻注册，把 Apple
+/// 的「注册 → 描述文件可用」传播空窗挪到签名关键路径之外——8220 的根）.
+///
+/// 与 `sign_ipa` 里的 ensure 同源（get_team + ensure_device_registered），区别是只注册
+/// 不签名，且空 `udid` 直接报错——签名路径静默跳过是历史行为，预注册不该静默.
+///
+/// # Safety
+/// `session` 必须是 `apple_signin` / `signin_with_session` 返回的有效指针；out 指针有效.
+pub unsafe fn register_device(
+    session: *mut SignSession,
+    udid: *const c_char,
+    device_name: *const c_char,
+    out_error: *mut *mut c_char,
+) -> i32 {
+    if session.is_null() {
+        *out_error = cstr("null session");
+        return 2;
+    }
+    install_rustls_provider();
+    let session = &mut *session;
+    let udid = opt(udid, "");
+    let device_name = opt(device_name, "");
+    if udid.is_empty() {
+        *out_error = cstr("empty udid");
+        return 2;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        session.rt.block_on(async {
+            let team = session
+                .sideloader
+                .get_team()
+                .await
+                .map_err(|e| format!("device registration failed for UDID {udid}: {e}"))?;
+            let name = if device_name.is_empty() {
+                "iPhone"
+            } else {
+                device_name.as_str()
+            };
+            tracing::info!("Pre-registering device {udid} ({name}) on team {}", team.team_id);
+            session
+                .sideloader
+                .get_dev_session()
+                .ensure_device_registered(&team, name, &udid, None)
+                .await
+                .map_err(|e| format!("device registration failed for UDID {udid}: {e}"))?;
+            tracing::info!("Device {udid} pre-registered on team {}", team.team_id);
+            Ok::<_, String>(team.team_id)
+        })
+    }));
+    match result {
+        Ok(Ok(_)) => 0,
+        Ok(Err(e)) => {
+            *out_error = cstr(e);
+            1
+        }
+        Err(_) => {
+            *out_error = cstr("panic during device registration");
+            2
+        }
+    }
+}
+
 /// 签名 `ipa_path` 处的 IPA，把签名后的 `.app` 包路径写入 `*out_signed_path`。
 ///
 /// `udid` 会先注册到团队（空串跳过）——不注册 Apple 会以 8220 拒绝描述文件。

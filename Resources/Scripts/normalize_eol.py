@@ -48,6 +48,15 @@ def changed_files(base):
     return sorted(set(files))
 
 
+def looks_binary(data):
+    """前 8192 字节里出现 NUL 就当二进制 —— PNG/ICO/CAR/ZIP 之类一律不碰 EOL.
+
+    这些文件里本来就可能混有 0x0D0A 字节，按文本「统一换行符」会直接改坏内容
+    （App 图标 PNG 就是踩过的坑：--fix 会把 \\n 撑成 \\r\\n，图标解不出来）.
+    """
+    return b"\x00" in data[:8192]
+
+
 def baseline_eol(base, rel):
     """基线文件的换行风格：返回 b"\\r\\n" 或 b"\\n"；取不到时返回 None。"""
     blob = git("cat-file", "blob", "%s:%s" % (base, rel)).stdout
@@ -69,6 +78,7 @@ def main():
         return 0
 
     bad = []
+    skipped = []
     for rel in files:
         path = os.path.join(REPO, rel.replace("/", os.sep))
         if not os.path.exists(path):
@@ -77,6 +87,9 @@ def main():
         if want is None:
             continue          # 新文件：没有基线，不动
         cur = open(path, "rb").read()
+        if looks_binary(cur):
+            skipped.append(rel)
+            continue          # 二进制文件没有换行符概念，改了就是损坏
         norm = cur.replace(b"\r\n", b"\n")
         target = norm.replace(b"\n", b"\r\n") if want == b"\r\n" else norm
         if target != cur:
@@ -84,6 +97,8 @@ def main():
             if not check_only:
                 open(path, "wb").write(target)
 
+    if skipped:
+        print("跳过 %d 个二进制文件（不参与 EOL 统一）" % len(skipped))
     if not bad:
         print("换行符全部与基线一致（%d 个文件）" % len(files))
         return 0

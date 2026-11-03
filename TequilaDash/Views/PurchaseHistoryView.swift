@@ -184,6 +184,14 @@ struct PurchaseHistoryView: View {
             } label: {
                 Label("复制 App ID", systemImage: "number")
             }
+            // v0.3.749：失败原因以前只在「下载管理」页能看到，而已购是从 sheet 进来的、
+            // 那个页根本不在导航里 ⇒ 长按把原因给出来，用户不用自己找页面.
+            if let last = center.lastFinishedJob(bundleId: app.bundleId.isEmpty ? nil : app.bundleId,
+                                                 name: app.name), last.phase == .failed {
+                Divider()
+                Text("上次未成功：\((last.error ?? "未知原因").prefix(140))")
+                    .font(.caption)
+            }
         }
     }
 
@@ -191,11 +199,22 @@ struct PurchaseHistoryView: View {
     private func downloadButton(_ app: OwnedApp) -> some View {
         let bid = app.bundleId.isEmpty ? nil : app.bundleId
         let busy = center.activeJob(bundleId: bid, name: app.name) != nil
+        // v0.3.749（用户：「点下载没反应」）：任务毫秒级就 .failed 时，旧写法只看 activeJob ⇒
+        // 行立刻变回「下载」胶囊，再加一句无条件的「已开始下载」，感知就是「点了啥也没发生」.
+        // `jobs` 是 @Published ⇒ 阶段翻转当场重算 body，不需要任何人为等待窗口（规则 29）.
+        let last = center.lastFinishedJob(bundleId: bid, name: app.name)
+        let failed = !busy && last?.phase == .failed
         return Button {
             download(app)
         } label: {
             if busy {
                 ProgressView().controlSize(.mini).frame(width: 32)
+            } else if failed {
+                // 中性琥珀（不是错误红 —— 红色只留给破坏性动作，规则 28）；原因在长按菜单里.
+                SizePill(text: "未成功",
+                         tint: AppTheme.pending,
+                         level: .regular,
+                         fillOpacity: 0.14)
             } else {
                 // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.regular` 档（caption + 10 / 5）；
                 // 字重 `.semibold` 与档位默认一致，底色 14% 用覆盖项钉住（默认 12%）.
@@ -207,11 +226,14 @@ struct PurchaseHistoryView: View {
         }
         .buttonStyle(.plain)
         .disabled(busy)
+        .accessibilityLabel(failed ? "上次未成功，长按查看原因" : "下载")
     }
 
     private func download(_ app: OwnedApp) {
         IPADownloadCenter.shared.startWithAppleID(item: storeItem(for: app), email: email)
-        ToastCenter.shared.show("已开始下载")
+        // v0.3.749：这句原来无条件承诺「已开始下载」，而失败在异步链里 —— 属于假 Toast.
+        // 任务确实已同步建出来，所以只说「已加入下载」；成败由行内胶囊当场反映.
+        ToastCenter.shared.show("已加入下载")
     }
 
     /// 已购条目 → 商店条目：详情页与下载都吃同一个 `AppStoreItem`（图标已知就带上）。

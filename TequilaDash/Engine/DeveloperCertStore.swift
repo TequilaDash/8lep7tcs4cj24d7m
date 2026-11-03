@@ -339,6 +339,17 @@ final class DeveloperCertStore: ObservableObject {
         }
     }
 
+    /// v0.3.749：从磁盘上的证书/私钥文件重算发布状态——导入与删除路径自身已同步
+    /// @Published，本方法供页面「刷新」把证书目录被外部改动或进程内状态漂移重新拉齐.
+    /// 主线程调用（与 importP12 / removeLocalCert 同约定）.
+    func reloadFromDisk() {
+        hasCert = FileManager.default.fileExists(atPath: certURL.path)
+                 && FileManager.default.fileExists(atPath: keyURL.path)
+        let team = (try? String(contentsOf: teamURL, encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        teamId = (team?.isEmpty == false) ? team : nil
+    }
+
     /// v0.3.152：导入 p12（同源证书方案）——解析 PKCS12 提取 cert/key PEM，
     /// 配对校验通过后覆盖落盘.用于导入与主程序（LC/SideStore 签发）相同的证书.
     func importP12(data: Data, password: String) -> (ok: Bool, message: String) {

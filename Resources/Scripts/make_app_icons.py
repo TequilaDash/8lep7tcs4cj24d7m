@@ -1,98 +1,112 @@
 #!/usr/bin/env python3
-"""从新源图生成 App 图标（18 个尺寸）.
+"""从品牌源图生成 App 图标（全部尺寸）.
 
-源图：桌面「爱思导出照片/IMG_5514.JPG」（2048x2048，玻璃方块 + 铬带 + 蓝紫渐变）
+源图：`Resources/brand_tequila.png`（1958x1648，用户提供的水彩渐变底 + 白色手写 TequilaDash）
 
-## 两个关键决定
+## 三个关键决定
 
-1. **不做透明背景** —— iOS 不允许 App 图标带 alpha（透明区会被渲染成黑色）。
-   所以保留源图的浅色影棚背景，这也是「通透感」在 iOS 上能做到的最接近形态。
+1. **不补边，只裁方** —— 源图背景是四角不同色的高饱和水彩渐变（实测四角
+   (253,194,214) / (195,231,255) / (223,189,239) / (249,198,213)），用任一角像素补到
+   正方形会在上下或左右留下一条死板色带，比裁掉内容更难看。所以画布边长取
+   `min(W, H)`，只在源图内部裁方。
+2. **裁剪中心 = 字标中心，不是图像中心** —— 高饱和阈值选不出字标（渐变本身
+   sat>90 的地方成片，bbox 会跑到 y=0 的背景上）；实测可靠判据是**白字**：
+   `min(RGB)>232 且 max-min<26` → bbox (366,724,1602,996)。
+3. **不做透明背景** —— iOS 不允许 App 图标带 alpha（透明区渲染成黑色），输出 RGB PNG。
 
-2. **裁剪框按内容定，水印天然落在框外** —— 源图左下角有「文心AI生成」水印
-   （bbox x 33-316, y 1954-2013），而内容（方块 + 投影）在 x 294-1740, y 294-1826。
-   按内容取正方形并把内容放大到画布的 ~88%，算出来的裁剪框下边界在 y≈1931，
-   **水印在框外** —— 不需要修补/涂抹，也就不会留下涂抹痕迹。
-
-## 输出
-
-覆盖 `Resources/AppIcon*.png`（尺寸从**现有文件名**推导，不写死列表，
-避免以后加尺寸时漏改）。输出为 RGB PNG（无 alpha 通道）。
+字标在 1648 画布里占 75% 宽，左右各留 12.5% —— 手写体被 squircle 圆角切掉的是
+纯背景，不伤字。尺寸列表从**现有文件名**推导，不写死，避免以后加尺寸漏改。
+预览图输出到系统临时目录，不污染仓库。
 """
 
 import glob
 import os
 import struct
 import sys
+import tempfile
 
 from PIL import Image
 
-SRC = r"C:\Users\xcrad\Desktop\爱思导出照片\IMG_5514.JPG"
-ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Resources")
+HERE = os.path.dirname(os.path.abspath(__file__))
+RES_DIR = os.path.dirname(HERE)                       # .../Resources
+ICON_DIR = RES_DIR                                    # AppIcon*.png 就在 Resources 下
+SRC = os.path.join(RES_DIR, "brand_tequila.png")
+WHITE_MIN = 232          # 白字判据：三通道最小值下限
+WHITE_SAT_MAX = 26       # 白字判据：饱和度上限（排除渐变背景）
+TARGET_FILL = 0.75       # 字标宽度 / 画布边长
+STEP = 2                 # bbox 探测采样步长（像素）
 
-# 内容在源图中的 bbox（由 numpy 分析得出，见模块 docstring）
-CONTENT = (294, 294, 1741, 1827)   # left, top, right, bottom（右/下开区间）
-CONTENT_FILL = 0.88                # 内容占画布的比例
-MASTER = 1024                      # 母版边长
 
-
-def existing_sizes() -> dict:
-    """{文件名: 边长} —— 从现有 AppIcon*.png 推导."""
+def existing_sizes():
+    """{文件名: 边长} —— 从现有 AppIcon*.png 推导，非正方形跳过."""
     out = {}
     for path in sorted(glob.glob(os.path.join(ICON_DIR, "AppIcon*.png"))):
         with open(path, "rb") as fh:
             head = fh.read(26)
         w, h = struct.unpack(">II", head[16:24])
         if w != h:
-            print(f"  ⚠ {os.path.basename(path)} 不是正方形（{w}x{h}），跳过")
+            print("  ! %s 不是正方形（%dx%d），跳过" % (os.path.basename(path), w, h))
             continue
         out[os.path.basename(path)] = w
     return out
 
 
-def build_master() -> Image.Image:
+def wordmark_bbox(im):
+    """白字 bbox (left, top, right, bottom) —— 自动探测，换图不用改代码."""
+    px = im.load()
+    xs, ys = [], []
+    for y in range(0, im.height, STEP):
+        for x in range(0, im.width, STEP):
+            p = px[x, y]
+            if min(p) > WHITE_MIN and (max(p) - min(p)) < WHITE_SAT_MAX:
+                xs.append(x)
+                ys.append(y)
+    if len(xs) < 200:
+        raise SystemExit("白字像素只有 %d 个 —— 判据或源图不对，拒绝出图" % len(xs))
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def build_master():
     im = Image.open(SRC).convert("RGB")
-    left, top, right, bottom = CONTENT
-    cw, ch = right - left, bottom - top
-    side = max(cw, ch)
-    canvas = int(round(side / CONTENT_FILL))
-    cx, cy = left + cw / 2, top + ch / 2
-    box = (int(round(cx - canvas / 2)), int(round(cy - canvas / 2)),
-           int(round(cx + canvas / 2)), int(round(cy + canvas / 2)))
-    print(f"源图 {im.size} → 裁剪框 {box}（边长 {canvas}）")
-    if box[0] < 0 or box[1] < 0 or box[2] > im.width or box[3] > im.height:
-        print("  ⚠ 裁剪框超出源图边界，已向内收缩")
-        box = (max(0, box[0]), max(0, box[1]),
-               min(im.width, box[2]), min(im.height, box[3]))
-    cropped = im.crop(box)
-    # 裁剪后可能不是正方形（边界收缩时），居中补到正方形
-    if cropped.width != cropped.height:
-        s = max(cropped.width, cropped.height)
-        square = Image.new("RGB", (s, s), cropped.getpixel((0, 0)))
-        square.paste(cropped, ((s - cropped.width) // 2, (s - cropped.height) // 2))
-        cropped = square
-    return cropped.resize((MASTER, MASTER), Image.LANCZOS)
+    x0, y0, x1, y1 = wordmark_bbox(im)
+    cw, ch = x1 - x0, y1 - y0
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    side = min(im.width, im.height)
+    left = max(0, min(im.width - side, cx - side // 2))
+    top = max(0, min(im.height - side, cy - side // 2))
+    box = (left, top, left + side, top + side)
+    fill = cw / side
+    print("源图 %dx%d  字标 bbox=(%d,%d,%d,%d) w=%d h=%d" % (im.width, im.height, x0, y0, x1, y1, cw, ch))
+    print("画布 %d 裁剪框=%s  字标占比 %.3f" % (side, box, fill))
+    if fill > 0.80:
+        print("  ! 字标占比超过 0.80，squircle 圆角可能吃掉笔画末端")
+    return im.crop(box).resize((1024, 1024), Image.LANCZOS)
 
 
-def main() -> int:
+def main():
     sizes = existing_sizes()
     if not sizes:
-        print("没找到现有 AppIcon*.png —— 确认 ICON_DIR 对不对")
+        print("没找到现有 AppIcon*.png —— 确认 ICON_DIR=%s" % ICON_DIR)
         return 1
 
     master = build_master()
-    master.save("_tmp_icon_master.png")
-    print(f"母版 {master.size} → _tmp_icon_master.png")
+    out_dir = tempfile.gettempdir()
+    master.save(os.path.join(out_dir, "icon_master.png"))
 
     for name, size in sizes.items():
-        out = master.resize((size, size), Image.LANCZOS)
-        # 显式转 RGB：不带 alpha 通道（iOS 不允许图标有透明度）
-        out = out.convert("RGB")
-        out.save(os.path.join(ICON_DIR, name), optimize=True)
-        print(f"  ✓ {name:26s} {size}x{size}")
+        master.resize((size, size), Image.LANCZOS).convert("RGB").save(
+            os.path.join(ICON_DIR, name), optimize=True)
+        print("  + %-26s %dx%d" % (name, size, size))
 
-    # 预览：180 与 60 两档，另存一份「圆角后」的样子供肉眼判断
-    master.resize((180, 180), Image.LANCZOS).convert("RGB").save("_tmp_icon_preview_180.png")
-    print("预览 → _tmp_icon_preview_180.png")
+    sheet = Image.new("RGB", (1024 + 3 * 190 + 48, 1024 + 32), (255, 255, 255))
+    sheet.paste(master, (16, 16))
+    xx = 1024 + 26
+    for s in (180, 120, 76):
+        sheet.paste(master.resize((s, s), Image.LANCZOS), (xx, 16 + (180 - s) // 2))
+        xx += s + 12
+    preview = os.path.join(out_dir, "icon_preview_sheet.png")
+    sheet.save(preview)
+    print("共 %d 个尺寸；预览：%s" % (len(sizes), preview))
     return 0
 
 
