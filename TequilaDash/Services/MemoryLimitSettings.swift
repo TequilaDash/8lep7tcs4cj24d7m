@@ -299,11 +299,9 @@ final class MemoryLimitSettings: ObservableObject {
         refresh()
     }
 
-    func signOut() {
+    func signOut(keepAnisetteData: Bool = true, keepAnisetteHeaders: Bool = true) {
         keychain.delete("appleID")
         keychain.delete("applePassword")
-        keychain.delete("adiPb")
-        keychain.delete("identifier")
         keychain.delete("dsid")
         keychain.delete("authToken")
         keychain.delete("sideloadDSID")
@@ -313,9 +311,12 @@ final class MemoryLimitSettings: ObservableObject {
         keychain.delete("firstName")
         keychain.delete("lastName")
         keychain.delete("isLoggedIn")
-        // 清空 AnisetteProvider 的内存缓存，否则重新登录时 provision 会读到
-        // 旧的 clientInfo/mdLu/deviceId，却从 keychain 找不到 identifier 而报 -22421.
-        AnisetteProvider.shared.reset()
+        // 与SideStore一致：设备identifier不随账户退出销毁.
+        if keepAnisetteData { AnisetteProvider.shared.clearMemoryCache() }
+        else { AnisetteProvider.shared.resetProvisioning() }
+        if !keepAnisetteHeaders {
+            UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
+        }
         refresh()
     }
 
@@ -343,29 +344,7 @@ final class MemoryLimitSettings: ObservableObject {
             name: account.name)
     }
 
-    /// 保存 isideload（IPA 侧载）完整登录拿到的 dsid + `com.apple.gs.xcode.auth`
-    /// token.
-    ///
-    /// **v0.2.112 关键修复**：这些凭据由 Rust 侧的 isideload 用自己的 Anisette
-    /// identifier/adiPb 生成，**只能**用于 `si_signin_with_session`，**不能**给
-    /// Swift 的 `AppleDeveloperAPI` 用.因此单独存
-    /// `sideloadDSID`/`sideloadAuthToken`，绝不覆盖 `dsid`/`authToken`
-    /// —— 否则「证书管理」「增加内存限制」会拿到异种 token，Apple 一律回
-    /// resultCode 1100（Your session has expired）.
-    func saveSessionCredentials(email: String, password: String, dsid: String, authToken: String) {
-        let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        keychain.set(email, for: "appleID")
-        keychain.set(password, for: "applePassword")
-        keychain.set(password, for: "pw:" + email)
-        if !dsid.isEmpty { keychain.set(dsid, for: "sideloadDSID") }
-        if !authToken.isEmpty { keychain.set(authToken, for: "sideloadAuthToken") }
-        keychain.set(true, for: "isLoggedIn")
-        keychain.set(SessionOwner.sideload.rawValue, for: "sessionOwner")
-        addLoginHistory(email)
-        refresh()
-    }
 
-    // MARK: - 读取会话凭据
 
     /// Swift 认证引擎（`AppleAuthenticator`）的会话，供证书管理 / 增加内存限制用.
     var dsid: String? { keychain.string(for: "dsid") }
@@ -420,11 +399,21 @@ final class MemoryLimitSettings: ObservableObject {
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         keychain.set(email, for: "appleID")
         keychain.set(password, for: "applePassword")
-        if !dsid.isEmpty { keychain.set(dsid, for: "dsid") }
-        if !authToken.isEmpty { keychain.set(authToken, for: "authToken") }
-        if !sideloadDSID.isEmpty { keychain.set(sideloadDSID, for: "sideloadDSID") }
-        if !sideloadAuthToken.isEmpty { keychain.set(sideloadAuthToken, for: "sideloadAuthToken") }
-        if let accountName, !accountName.isEmpty { keychain.set(accountName, for: "accountName") }
+        // 完整替换目标账户会话，空字段必须删除，不能保留上一账户的凭据.
+        for (key, value) in [("dsid", dsid), ("authToken", authToken),
+                             ("sideloadDSID", sideloadDSID), ("sideloadAuthToken", sideloadAuthToken),
+                             ("accountName", accountName ?? "")] {
+            if value.isEmpty { keychain.delete(key) } else { keychain.set(value, for: key) }
+        }
+        keychain.delete("firstName")
+        keychain.delete("lastName")
+        if !dsid.isEmpty, !authToken.isEmpty {
+            keychain.set(SessionOwner.swift.rawValue, for: "sessionOwner")
+        } else if !sideloadDSID.isEmpty, !sideloadAuthToken.isEmpty {
+            keychain.set(SessionOwner.sideload.rawValue, for: "sessionOwner")
+        } else {
+            keychain.delete("sessionOwner")
+        }
         keychain.set(true, for: "isLoggedIn")
         refresh()
     }

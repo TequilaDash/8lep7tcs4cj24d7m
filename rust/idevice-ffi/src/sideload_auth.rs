@@ -1,34 +1,22 @@
-//! Apple ID 登录 + IPA 签名，通过 `isideload` 的 sign-only 路径。
-//!
-//! 移植自 SideInstaller 的 rust-core/src/account.rs（si_apple_signin /
-//! si_sign_ipa），供「IPA 侧载」功能使用：登录 Apple ID 拿到
-//! `SignSession`，再用它把 IPA 签成带描述文件的 .app 包。安装本身走
-//! 我们自己的 AFC + installation_proxy 隧道（见 Swift 侧）。
+//! IPA signer adapter: consumes Settings credentials, never logs in or provisions.
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{c_char, CStr};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use isideload::{
     anisette::{
-        remote_v3::RemoteV3AnisetteProvider, AnisetteClientInfo, AnisetteDataGenerator, AnisetteProvider,
+        remote_v3::RemoteV3AnisetteProvider, AnisetteClientInfo, AnisetteDataGenerator, AnisetteDataResponse, AnisetteProvider,
     },
-    auth::apple_account::{
-        AppleAccount, AppToken, TwoFactorCallbackParams, TwoFactorCallbackResponse,
-    },
+    auth::apple_account::AppToken,
     auth::grandslam::GrandSlam,
     dev::{certificates::DevelopmentCertificate, developer_session::DeveloperSession, devices::DevicesApi},
     sideload::builder::{ExtensionsBehavior, ExtensionsBehaviorSelection, MaxCertsBehavior},
     sideload::{bundle::Bundle, sideloader::Sideloader, SideloaderBuilder, TeamSelection},
-    util::{callbacks::TwoFactorCallback, fs_storage::FsStorage},
+    util::fs_storage::FsStorage,
 };
-
-/// `int (*)(void *ctx, char *out_buf, size_t buf_len)` — 把 2FA 验证码写进
-/// `out_buf`（NUL 结尾）并返回 1；用户取消返回 0。
-pub type TwoFactorCb =
-    Option<extern "C" fn(ctx: *mut c_void, out_buf: *mut c_char, buf_len: usize) -> i32>;
 
 /// Sideloader 0.5.x 带 C/E 两个回调泛型。我们固定用 Error / Fixed 行为，
 /// 两个 Prompt 回调永远不会被调，但类型上仍要占位 —— 用函数指针类型满足
@@ -53,54 +41,11 @@ pub struct SignSession {
 // 只在自己的 runtime 里使用，Swift 侧单队列串行调用。
 unsafe impl Send for SignSession {}
 
-/// 包装 2FA 回调上下文，使其可跨线程。
-pub(crate) struct TwoFaCtx(pub(crate) *mut c_void);
-unsafe impl Send for TwoFaCtx {}
-unsafe impl Sync for TwoFaCtx {}
-
 unsafe fn opt(p: *const c_char, default: &str) -> String {
     if p.is_null() {
         return default.to_string();
     }
     CStr::from_ptr(p).to_str().unwrap_or(default).to_string()
-}
-
-/// 构建桥接到 Swift 的 2FA 闭包（适配 isideload 0.5.2 的回调签名：
-/// `TwoFactorCallbackParams -> Future<Output = Result<TwoFactorCallbackResponse, Report>>`，
-/// trait 定义挪到了 `util::callbacks`，闭包经 blanket impl 自动满足）.
-pub(crate) fn make_2fa(cb: TwoFactorCb, ctx: TwoFaCtx) -> impl TwoFactorCallback {
-    // trait 要求 Fn（可多次调用），所以共享状态必须每次调用克隆：
-    // TwoFaCtx 有 unsafe Send+Sync impl，Arc<TwoFaCtx> 同样 Send+Sync；
-    // 整个 Arc 进闭包（Deref 访问不触发字段级精确捕获），不会退化成
-    // 捕获裸指针字段 `*mut c_void`（非 Send/Sync）。cb 是 Copy 函数指针.
-    let ctx = std::sync::Arc::new(ctx);
-    move |_params: TwoFactorCallbackParams| {
-        let ctx = std::sync::Arc::clone(&ctx);
-        async move {
-        let Some(cb) = cb else {
-            return respond(TwoFactorCallbackResponse::Abort);
-        };
-        let ctx_ptr = ctx.0;
-        let mut buf = vec![0u8; 128];
-        let rc = cb(ctx_ptr, buf.as_mut_ptr() as *mut c_char, buf.len());
-        if rc == 0 {
-            return respond(TwoFactorCallbackResponse::Abort);
-        }
-        let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-        let s = String::from_utf8_lossy(&buf[..end]).trim().to_string();
-        if s.is_empty() {
-            respond(TwoFactorCallbackResponse::Abort)
-        } else {
-            respond(TwoFactorCallbackResponse::SubmitCode(s))
-        }
-        }
-    }
-}
-
-/// 固定 Future 输出类型为 `Result<_, rootcause::Report>`（0.5.2 trait 要求），
-/// 同时避免在闭包体里显式构造 Report.
-fn respond(r: TwoFactorCallbackResponse) -> Result<TwoFactorCallbackResponse, rootcause::Report> {
-    Ok(r)
 }
 
 /// 在首次 TLS 使用前显式选择 rustls crypto provider。
@@ -114,138 +59,6 @@ pub(crate) fn install_rustls_provider() {
     let _ = CryptoProvider::get_default();
 }
 
-/// 登录 Apple ID、打开开发者会话、构建 Sideloader。返回 0 表示成功；
-/// 用 `si_sign_session_free` 释放 session。
-///
-/// 成功时除 session/summary 外，还会把本次登录拿到的 **dsid** 与
-/// **xcode.auth token** 写入 `out_dsid` / `out_auth_token`，调用方可持久化
-/// 这两个值，之后用 `si_signin_with_session` 免登录免 2FA 恢复会话。
-///
-/// # Safety
-/// 所有 `*const c_char` 参数必须为 null 或合法的 C 字符串；out 指针必须有效。
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn apple_signin(
-    apple_id: *const c_char,
-    password: *const c_char,
-    anisette_url: *const c_char,
-    machine_name: *const c_char,
-    storage_dir: *const c_char,
-    twofa_cb: TwoFactorCb,
-    ctx: *mut c_void,
-    out_session: *mut *mut SignSession,
-    out_summary: *mut *mut c_char,
-    out_dsid: *mut *mut c_char,
-    out_auth_token: *mut *mut c_char,
-    out_error: *mut *mut c_char,
-) -> i32 {
-    install_rustls_provider();
-    let apple_id = opt(apple_id, "");
-    let password = opt(password, "");
-    let anisette_url = opt(anisette_url, "https://ani.sidestore.io");
-    let machine_name = opt(machine_name, "TequilaDash");
-    let storage_dir = opt(storage_dir, ".");
-    let twofa = make_2fa(twofa_cb, TwoFaCtx(ctx));
-
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| format!("failed to start runtime: {e}"))?;
-
-        let (sideloader, summary, dsid, auth_token) = rt.block_on(async {
-            tracing::info!("Apple ID: building anisette provider ({anisette_url})");
-            let anisette = RemoteV3AnisetteProvider::new(
-                &anisette_url,
-                Box::new(FsStorage::new(PathBuf::from(&storage_dir))),
-                "0".to_string(),
-            )
-            .map_err(|e| format!("anisette provider: {e}"))?
-            .set_client_info_override(Some(
-                AnisetteClientInfo {
-                    // Apple 的 GSA 边缘节点自 2026-09 起对含 com.apple.dt.Xcode 的
-                    // X-Mme-Client-Info 一律回 503（上游 a19f5f0 / AltStore#1790 同因同修）.
-                    // 服务器下发的 client_info 不受控，这里强制走 akd 口径.
-                    client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
-                        .to_string(),
-                    user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
-                }));
-
-            tracing::info!("Apple ID: logging in {apple_id}");
-            let mut account = AppleAccount::builder(&apple_id)
-                .anisette_provider(anisette)
-                .login(&password, twofa)
-                .await
-                .map_err(|e| format!("login failed: {e}"))?;
-            tracing::info!("Apple ID: login OK; opening developer session");
-
-            let dev_session = DeveloperSession::from_account(&mut account)
-                .await
-                .map_err(|e| format!("developer session: {e}"))?;
-            tracing::info!("Developer session OK; building sideloader (first team)");
-
-            let mut sideloader =
-                SideloaderBuilder::<NeverMaxCertCb, NeverExtCb>::new(dev_session, apple_id.clone())
-                    .team_selection(TeamSelection::First)
-                    .max_certs_behavior(MaxCertsBehavior::Error)
-                    .extensions_behavior(ExtensionsBehaviorSelection::Fixed(
-                        ExtensionsBehavior::ReuseMain,
-                    ))
-                    .storage(Box::new(FsStorage::new(PathBuf::from(&storage_dir))))
-                    .machine_name(machine_name.clone())
-                    .build();
-
-            let team = sideloader
-                .get_team()
-                .await
-                .map_err(|e| format!("get_team: {e}"))?;
-            let summary = format!(
-                "team: {} ({})",
-                team.name.as_deref().unwrap_or("<unnamed>"),
-                team.team_id
-            );
-
-            // 取出本次登录的 dsid + xcode.auth token，供调用方持久化后免登录恢复。
-            // 依赖 TequilaDash 的 isideload fork 暴露的 DeveloperSession::get_adsid /
-            // get_token（上游未公开这两个字段）。
-            let (dsid, auth_token) = {
-                let dev = sideloader.get_dev_session();
-                (dev.get_adsid().to_string(), dev.get_token().token)
-            };
-            tracing::info!("Apple ID: captured dsid for session persistence");
-
-            Ok::<_, String>((sideloader, summary, dsid, auth_token))
-        })?;
-
-        Ok::<_, String>((rt, sideloader, summary, dsid, auth_token))
-    }));
-
-    match result {
-        Ok(Ok((rt, sideloader, summary, dsid, auth_token))) => {
-            let session = Box::new(SignSession {
-                rt,
-                sideloader,
-                machine_name,
-                storage_dir: PathBuf::from(&storage_dir),
-            });
-            *out_session = Box::into_raw(session);
-            *out_summary = cstr(summary);
-            *out_dsid = cstr(dsid);
-            *out_auth_token = cstr(auth_token);
-            0
-        }
-        Ok(Err(e)) => {
-            *out_error = cstr(e);
-            1
-        }
-        Err(panic) => {
-            // 把 panic 的真实消息传给 Swift，便于定位 isideload 内部崩溃点。
-            let msg = panic_message(&panic);
-            *out_error = cstr(format!("panic during Apple ID sign-in: {msg}"));
-            2
-        }
-    }
-}
-
 /// 把当前设备注册进会话所选团队（SideStore 做法：登录/切户成功后立刻注册，把 Apple
 /// 的「注册 → 描述文件可用」传播空窗挪到签名关键路径之外——8220 的根）.
 ///
@@ -253,7 +66,7 @@ pub unsafe fn apple_signin(
 /// 不签名，且空 `udid` 直接报错——签名路径静默跳过是历史行为，预注册不该静默.
 ///
 /// # Safety
-/// `session` 必须是 `apple_signin` / `signin_with_session` 返回的有效指针；out 指针有效.
+/// `session` 必须是 `signin_with_session` 返回的有效指针；out 指针有效.
 pub unsafe fn register_device(
     session: *mut SignSession,
     udid: *const c_char,
@@ -313,7 +126,7 @@ pub unsafe fn register_device(
 /// `udid` 会先注册到团队（空串跳过）——不注册 Apple 会以 8220 拒绝描述文件。
 ///
 /// # Safety
-/// `session` 必须是 `apple_signin` 返回的有效指针；out 指针有效。
+/// `session` 必须是 `signin_with_session` 返回的有效指针；out 指针有效。
 pub unsafe fn sign_ipa(
     session: *mut SignSession,
     ipa_path: *const c_char,
@@ -394,13 +207,31 @@ pub unsafe fn sign_ipa(
     }
 }
 
+/// Read-only adapter. The sole owner of provisioning is the Settings provider.
+struct SettingsAnisetteProvider(RemoteV3AnisetteProvider);
+
+#[async_trait::async_trait]
+impl AnisetteProvider for SettingsAnisetteProvider {
+    async fn get_anisette_data(&self) -> Result<AnisetteDataResponse, rootcause::Report> {
+        self.0.get_anisette_data().await
+    }
+
+    async fn get_client_info(&self) -> Result<AnisetteClientInfo, rootcause::Report> {
+        self.0.get_client_info().await
+    }
+
+    async fn provision(&mut self, _gs: &Arc<GrandSlam>, _force_recheck: bool) -> Result<(), rootcause::Report> {
+        Err(rootcause::report!("Settings Anisette identity is unavailable; retry in Apple ID settings"))
+    }
+}
+
 /// 用已有的 dsid + xcode.auth token 恢复签名会话——**跳过登录与 2FA**。
 ///
 /// 为什么可行：TequilaDash「更多 → 设置」的 Apple ID 登录（AppleAuthenticator，
 /// GrandSlam 协议）保存的 authToken 就是 `com.apple.gs.xcode.auth` 的 app token。
 /// isideload 的 `DeveloperSession::new(AppToken, adsid, GrandSlam, anisette)`
 /// 可以直接用 token + dsid 构造，无需重新走 SRP 握手/2FA。
-/// 适用于 token 未过期时的"登录一次、全部复用"；过期后请回退 `apple_signin`。
+/// Invalid credentials are reported to Settings; no independent login fallback.
 ///
 /// # Safety
 /// 所有 `*const c_char` 参数必须为 null 或合法的 C 字符串；out 指针必须有效。
@@ -412,6 +243,7 @@ pub unsafe fn signin_with_session(
     anisette_url: *const c_char,
     storage_dir: *const c_char,
     machine_name: *const c_char,
+    client_info: *const c_char,
     out_session: *mut *mut SignSession,
     out_summary: *mut *mut c_char,
     out_error: *mut *mut c_char,
@@ -423,6 +255,7 @@ pub unsafe fn signin_with_session(
     let anisette_url = opt(anisette_url, "https://ani.sidestore.io");
     let storage_dir = opt(storage_dir, ".");
     let machine_name = opt(machine_name, "TequilaDash");
+    let client_info = opt(client_info, "");
 
     let result = catch_unwind(AssertUnwindSafe(|| {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -432,7 +265,10 @@ pub unsafe fn signin_with_session(
 
         let (sideloader, summary) = rt.block_on(async {
             tracing::info!("Session: building anisette provider ({anisette_url})");
-            let provider = RemoteV3AnisetteProvider::new(
+            if email.is_empty() || dsid.is_empty() || token.is_empty() || client_info.is_empty() {
+                return Err("Settings account session is incomplete".to_string());
+            }
+            let mut provider = RemoteV3AnisetteProvider::new(
                 &anisette_url,
                 Box::new(FsStorage::new(PathBuf::from(&storage_dir))),
                 "0".to_string(),
@@ -440,15 +276,24 @@ pub unsafe fn signin_with_session(
             .map_err(|e| format!("anisette provider: {e}"))?
             .set_client_info_override(Some(
                 AnisetteClientInfo {
-                    // Apple 的 GSA 边缘节点自 2026-09 起对含 com.apple.dt.Xcode 的
-                    // X-Mme-Client-Info 一律回 503（上游 a19f5f0 / AltStore#1790 同因同修）.
-                    // 服务器下发的 client_info 不受控，这里强制走 akd 口径.
-                    client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
-                        .to_string(),
-                    user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
+                    client_info: client_info.clone(),
+                    user_agent: "akd/1.0 CFNetwork/978.0.7 Darwin/18.7.0".to_string(),
                 }));
 
-            tracing::info!("Session: constructing GrandSlam client");
+            // Never call RemoteV3::provision: it creates/resets an independent identity.
+            let bytes = std::fs::read(PathBuf::from(&storage_dir).join("anisette_state"))
+                .map_err(|e| format!("Settings anisette snapshot: {e}"))?;
+            let snapshot = plist::Value::from_reader_xml(std::io::Cursor::new(&bytes))
+                .map_err(|e| format!("Settings anisette snapshot: {e}"))?;
+            let dict = snapshot.as_dictionary().ok_or("Settings anisette snapshot is not a dictionary")?;
+            // Upstream's 16-byte deserializer unwraps: validate before invoking it.
+            if dict.get("keychain_identifier").and_then(plist::Value::as_data).map(|v| v.len()) != Some(16)
+                || dict.get("adi_pb").and_then(plist::Value::as_data).is_none_or(|v| v.is_empty()) {
+                return Err("Settings Anisette identity is incomplete".to_string());
+            }
+            provider.state = Some(plist::from_bytes(&bytes).map_err(|e| format!("Settings anisette state: {e}"))?);
+            let provider = SettingsAnisetteProvider(provider);
+            tracing::info!("Session: importing Settings Xcode token (no login/provision)");
             let client_info = provider
                 .get_client_info()
                 .await
@@ -523,7 +368,7 @@ pub unsafe fn signin_with_session(
 /// 释放 `SignSession`。
 ///
 /// # Safety
-/// `session` 必须为 null 或 `apple_signin` 返回的指针。
+/// `session` 必须为 null 或 `signin_with_session` 返回的指针。
 pub unsafe fn sign_session_free(session: *mut SignSession) {
     if !session.is_null() {
         drop(Box::from_raw(session));

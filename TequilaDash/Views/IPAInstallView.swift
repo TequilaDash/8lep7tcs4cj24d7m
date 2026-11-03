@@ -36,13 +36,6 @@ struct IPAInstallView: View {
 
     // v0.3.745 账户体系：本页不再自带登录 UI，签名账户 = 「更多 → Apple ID 账户」的当前账户.
     @ObservedObject private var accountStore = AppleUserAccountStore.shared
-    // 2FA（会话恢复失败回退完整登录时仍可能触发）
-    @State private var showTwoFactor = false
-    @State private var twoFactorCode = ""
-    /// 2FA 等待代际：每次弹窗自增；超时定时器只在代际未变时生效（防旧定时器误取消新等待）
-    @State private var twoFactorGeneration = 0
-    @State private var twoFactorReply: ((String?) -> Void)?
-
     // 流程
     @State private var isRunning = false
     @State private var errorMessage: String?
@@ -149,31 +142,6 @@ struct IPAInstallView: View {
         }
         .onAppear {
             refreshSavedIPAs()
-            // 页内 2FA 弹窗（isideload 会话恢复失败回退完整登录时触发；v0.3.116 修卡死的
-            // 主线程切换 + 5 分钟超时兜底保持不变）.
-            service.twoFactorPrompt = { reply in
-                Task { @MainActor in
-                    twoFactorGeneration += 1
-                    let generation = twoFactorGeneration
-                    twoFactorCode = ""
-                    twoFactorReply = reply
-                    showTwoFactor = true
-                    Task.detached {
-                        try? await Task.sleep(nanoseconds: 300 * 1_000_000_000)
-                        await MainActor.run {
-                            guard generation == twoFactorGeneration, showTwoFactor else { return }
-                            showTwoFactor = false
-                            let pending = twoFactorReply
-                            twoFactorReply = nil
-                            pending?(nil)
-                            errorMessage = "2FA 验证码等待超时，已取消本次登录（可到「更多 → Apple ID 账户」重试）"
-                        }
-                    }
-                }
-            }
-        }
-        .onDisappear {
-            service.twoFactorPrompt = nil
         }
         .alert("删除已下载的 IPA？",
                isPresented: Binding(get: { pendingDeleteIPA != nil },
@@ -189,25 +157,6 @@ struct IPAInstallView: View {
             if let item = pendingDeleteIPA {
                 Text("「\(item.name)」将被永久删除，此操作不可撤销.")
             }
-        }
-        .alert("来自\(IPAInstallService.twoFactorFeature)的 Apple ID 验证请求",
-               isPresented: $showTwoFactor) {
-            TextField("6 位验证码", text: $twoFactorCode)
-                .keyboardType(.numberPad)
-            Button("登录") {
-                let pending = twoFactorReply
-                twoFactorReply = nil
-                showTwoFactor = false
-                pending?(twoFactorCode)
-            }
-            Button("取消", role: .cancel) {
-                let pending = twoFactorReply
-                twoFactorReply = nil
-                showTwoFactor = false
-                pending?(nil)
-            }
-        } message: {
-            Text("输入您的 2FA 验证码以登录")
         }
     }
 
@@ -566,7 +515,7 @@ struct IPAInstallView: View {
                     }
                 } else if service.isWarmingUp {
                     AppLoadingRow(title: "正在恢复签名会话…",
-                                  detail: "使用「Apple ID 账户」里的当前账户，如需两步验证会自动弹出.",
+                                  detail: "复用设置当前账户的会话，不另行登录.",
                                   level: .inline)
                 } else {
                     HStack(spacing: 12) {

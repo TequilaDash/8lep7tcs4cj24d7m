@@ -22,8 +22,6 @@ struct RootView: View {
     @AppStorage("HasAcknowledgedLimits") private var hasAcknowledgedLimits = false
     @State private var selectedTab: MainTab = .home
     @ObservedObject private var copyFeedback = CopyFeedback.shared
-    /// 全局 2FA 输入框：任何页面（含启动预热）触发的验证码请求都弹这里.
-    @StateObject private var twoFactor = TwoFactorPromptCoordinator.shared
     /// v0.3.481：模块「原生 SwiftUI 二级界面」的展示状态.
     /// 二级界面用 `fullScreenCover` 盖住整个 TabView（看不到 App 默认底栏），
     /// 由 `ModuleUIRouter` 驱动；本视图只负责把它盖上来 + 响应「回主页」通知.
@@ -114,24 +112,7 @@ struct RootView: View {
                 viewModel.reload()
             }
         }
-        // 全局 2FA 输入：后台预热 / 任何页面触发的验证码请求都在这里输入.
-        // 标题标明来自哪个功能，避免用户不知道是谁在要验证码.
-        .alert(
-            "来自\(twoFactor.pending?.feature ?? "Apple ID")的 Apple ID 验证请求",
-            isPresented: Binding(
-                get: { twoFactor.pending != nil },
-                set: { presented in
-                    if !presented { twoFactor.cancel() }
-                }
-            )
-        ) {
-            TextField("6 位验证码", text: $twoFactor.code)
-                .keyboardType(.numberPad)
-            Button("登录") { twoFactor.submit() }
-            Button("取消", role: .cancel) { twoFactor.cancel() }
-        } message: {
-            Text("输入您的 2FA 验证码以登录")
-        }
+
     }
 
     /// app 启动后后台预热「IPA 侧载」与「证书管理」的 Apple ID 登录态，
@@ -175,15 +156,15 @@ struct SettingsForm: View {
     /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）。
     var onResetPairing: () throws -> Void
     @StateObject private var memorySettings = MemoryLimitSettings.shared
-    /// 「Apple ID 账户」入口行的状态文案.
-    private var userAccountEntryText: String {
-        if let email = AppleUserAccountStore.shared.activeEmail {
-            let count = AppleUserAccountStore.shared.accounts.count
-            return count > 1 ? "\(count) 个账户 · \(email)" : email
-        }
-        return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
-    }
-
+    /// 「Apple ID 账户」入口行的状态文案.
+    private var userAccountEntryText: String {
+        if let email = AppleUserAccountStore.shared.activeEmail {
+            let count = AppleUserAccountStore.shared.accounts.count
+            return count > 1 ? "\(count) 个账户 · \(email)" : email
+        }
+        return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
+    }
+
     /// v0.3.122：开发证书状态观察（创建成功/失败即时刷新 UI）
     @StateObject private var certStore = DeveloperCertStore.shared
     @State private var certTask: Task<Void, Never>?

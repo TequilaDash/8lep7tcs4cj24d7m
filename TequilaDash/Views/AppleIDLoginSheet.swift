@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 /// 调用本地自带的 Apple 认证引擎（SRP-6a + Anisette v3）完成真实登录，
 /// 而非仅保存凭据.需要两步验证时会弹出验证码输入框.
 struct AppleIDLoginSheet: View {
+    var initialEmail: String? = nil
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var ctrl = AppleLoginController()
@@ -92,7 +93,12 @@ struct AppleIDLoginSheet: View {
                     }
                 }
             }
-            .navigationTitle("登录 Apple ID")
+            .onAppear {
+                guard email.isEmpty, let initialEmail else { return }
+                email = initialEmail
+                password = MemoryLimitSettings.shared.password(forHistory: initialEmail) ?? ""
+            }
+            .navigationTitle(initialEmail == nil ? "登录 Apple ID" : "重新登录 Apple ID")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

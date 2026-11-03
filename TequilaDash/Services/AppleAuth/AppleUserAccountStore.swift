@@ -1,13 +1,20 @@
 import SwiftUI
 
+/// 退出只清凭据；可选清理均为本地资产，不吊销Apple证书.
+struct AppleAccountSignOutOptions {
+    var keepCertificate = true
+    var keepAnisetteData = true
+    var keepAnisetteHeaders = true
+}
+
 // MARK: - 多账户台账（v0.3.745 账户体系重做）
 
 /// 一个已登录并保持的 Apple ID 账户.
 ///
 /// 双链会话各自独立（v0.2.112 的铁律仍然有效）：
 /// - swiftdsid/swiftAuthToken = Swift 认证引擎会话（证书管理/增加内存等用）；
-/// - sideloadDSID/sideloadAuthToken = isideload 签名会话（IPA 侧载用），
-///   两套 Anisette 机器标识不同，绝不混用.
+/// - sideloadDSID/sideloadAuthToken = 历史侧载会话字段（v0.3.750 起签名
+///   直接复用设置身份，仅保留字段兼容旧台账）.
 struct AppleUserAccount: Codable, Identifiable, Equatable {
     /// 邮箱（小写）即 id.
     var id: String { email.lowercased() }
@@ -84,20 +91,11 @@ final class AppleUserAccountStore: ObservableObject {
                 sideloadDSID: nil, sideloadAuthToken: nil,
                 accountName: name, addedAt: now, lastUsedAt: now))
         }
-        setActive(key)
-        save()
+        // 完整登录也必须切换两条活会话；不能只改台账指针后继续持有旧账户.
+        switchActive(to: key)
     }
 
-    /// isideload 完整登录成功后回填侧载会话（免 2FA 恢复用）.
-    func updateSideloadSession(email: String, dsid: String, authToken: String) {
-        let key = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let idx = accounts.firstIndex(where: { $0.id == key }) else { return }
-        if !dsid.isEmpty { accounts[idx].sideloadDSID = dsid }
-        if !authToken.isEmpty { accounts[idx].sideloadAuthToken = authToken }
-        save()
-    }
 
-    // MARK: - 切换 / 退出
 
     /// 切换当前账户：把该账户的双链会话写回 MemoryLimitSettings 主键.
     func switchActive(to email: String) {
@@ -124,28 +122,49 @@ final class AppleUserAccountStore: ObservableObject {
     }
 
     /// 移除单个账户（当前账户则一并清 MemoryLimitSettings 登录态）.
-    func remove(_ email: String) {
+    func remove(_ email: String, options: AppleAccountSignOutOptions = .init()) {
         let key = email.lowercased()
         accounts.removeAll { $0.id == key }
+        MemoryLimitSettings.shared.removeLoginHistory(email)
         if activeEmail == key {
             if let first = accounts.first {
                 switchActive(to: first.email)
             } else {
                 activeEmail = nil
                 UserDefaults.standard.removeObject(forKey: Self.activeKey)
-                MemoryLimitSettings.shared.signOut()
+                IPAInstallService.shared.signOut()
+                CertificateManager.shared.reset()
+                MemoryLimitSettings.shared.signOut(
+                    keepAnisetteData: options.keepAnisetteData,
+                    keepAnisetteHeaders: options.keepAnisetteHeaders)
             }
+        }
+        // 本地证书与机器身份为共享资产；仍有账户时不作破坏性清理.
+        if accounts.isEmpty, !options.keepCertificate {
+            _ = DeveloperCertStore.shared.removeLocalCert()
+        }
+        if accounts.isEmpty {
+            IPAInstallService.shared.removeLocalAuthenticationCache(emails: [key],
+                keepCertificate: options.keepCertificate, keepAnisetteData: options.keepAnisetteData)
         }
         save()
     }
 
     /// 退出全部（含 isideload 签名会话释放）.
-    func signOutAll() {
+    func signOutAll(options: AppleAccountSignOutOptions = .init()) {
+        let removedEmails = accounts.map(\.email)
+        for account in accounts { MemoryLimitSettings.shared.removeLoginHistory(account.email) }
         accounts.removeAll()
         activeEmail = nil
         UserDefaults.standard.removeObject(forKey: Self.activeKey)
         IPAInstallService.shared.signOut()
-        MemoryLimitSettings.shared.signOut()
+        CertificateManager.shared.reset()
+        MemoryLimitSettings.shared.signOut(
+            keepAnisetteData: options.keepAnisetteData,
+            keepAnisetteHeaders: options.keepAnisetteHeaders)
+        if !options.keepCertificate { _ = DeveloperCertStore.shared.removeLocalCert() }
+        IPAInstallService.shared.removeLocalAuthenticationCache(emails: removedEmails,
+            keepCertificate: options.keepCertificate, keepAnisetteData: options.keepAnisetteData)
         save()
     }
 

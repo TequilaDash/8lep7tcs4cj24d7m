@@ -120,6 +120,7 @@ struct AppStoreVersionHistoryView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .toastHost()
         .navigationTitle("历史版本")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -260,28 +261,25 @@ struct AppStoreVersionHistoryView: View {
     }
 
     private func download(_ v: AppStoreVersion) {
-        // v0.3.749（用户：「点下载没反应，没任务也没转圈」）：这两个 guard 原来是**纯静默
-        // return** —— 连日志都没有，是那条现象唯一能解释的路径. 现在每个分支都必须说清原因.
-        guard let vid = v.externalVersionID else {
-            ToastCenter.shared.show("该版本没有苹果版本标识，切到「苹果 API」后才能下载.")
+        guard let vid = v.externalVersionID, !vid.isEmpty else {
+            ToastCenter.shared.show("该版本缺少苹果版本标识，无法下载；可尝试切换查询方式.")
             return
         }
-        guard let email = accountEmail else {
-            if source == .catalog {
-                ToastCenter.shared.show("三方 API 不能下载历史版本，请切到「苹果 API」.")
-            } else if AppStoreDownloadStore.shared.usableAccounts.isEmpty {
-                ToastCenter.shared.show("没有可用的 App Store 账号，请到「AppStore 账号管理」登录.")
-            } else {
-                // 有账号但这次加载没建立起会话 —— 当场重跑一次加载（不是定时重试）.
-                ToastCenter.shared.show("账号会话未就绪，正在重新获取.")
-                startLoad()
-            }
+        // 查询来源只决定版本列表；下载始终使用商店账户，不要求苹果查询先成功.
+        // 已购详情显式带来的账户不能被其他账户替代.
+        let preferred = preferredEmail ?? accountEmail
+        guard let email = AppStoreDownloadStore.shared.emailForDownloads(preferred: preferred) else {
+            ToastCenter.shared.show("没有可用的 App Store 账号，请到「AppStore 账号管理」登录.")
+            return
+        }
+        guard IPADownloadCenter.shared.activeJob(bundleId: item.bundleId, name: item.name) == nil else {
+            ToastCenter.shared.show("该应用已有下载任务，请到下载管理查看.")
             return
         }
         IPADownloadCenter.shared.startWithAppleID(item: item, email: email,
                                                   externalVersionID: vid,
                                                   displayVersion: v.version)
-        ToastCenter.shared.show("已开始下载 \(v.version)")
+        ToastCenter.shared.show("已加入下载 \(v.version)")
     }
 
     // MARK: - 加载
@@ -378,9 +376,16 @@ struct AppStoreVersionHistoryView: View {
                                    category: .appStore)
             return false
         }
-        guard let email = preferred ?? AppStoreDownloadStore.shared.selectedEmail else {
+        // v0.3.750（用户：「账户是正常的，也能下载应用，历史版本就出现这种问题，也不可能是会话问题吧」）：
+        // 这里以前只认旧轨 selectedEmail。多账户重做后新登录不再写旧轨，于是同一个账号从商店
+        // 列表/已购列表能正常下载（那条路径走 usableAccounts），却在版本历史这条路上被判「没有
+        // 可用商店会话」，界面表现就是「账号会话未就绪，正在重新获取.」。改成与下载入口同一口径：
+        // selectedAccount 自带「选中账号不可用就回退第一个可用账号」的兜底。
+        let resolvedEmail = AppStoreDownloadStore.shared.emailForDownloads(preferred: preferred)
+        guard let email = resolvedEmail, !email.isEmpty else {
             LoginLogger.shared.log("版本历史：账号通道没有可用商店会话（preferred=\(preferred ?? "nil")，"
-                                   + "旧轨 selectedEmail 为空）—— 多账户重做后新登录不写旧轨",
+                                   + "台账里 usableAccounts=\(AppStoreDownloadStore.shared.usableAccounts.count)，"
+                                   + "指定账户不存在或没有可用凭据）",
                                    category: .appStore)
             return false
         }

@@ -616,7 +616,7 @@ struct AppStoreView: View {
     /// 榜单 RSS 不带 bundleId（已在加载时批量补全），这里再兜一次按 AppID 反查。
     /// 获取许可证：用「当前下载账号」把该应用加入授权列表（免费应用）
     private func acquireLicense(_ app: AppStoreItem) {
-        guard let email = AppStoreDownloadStore.shared.selectedEmail, !email.isEmpty else {
+        guard let email = AppStoreDownloadStore.shared.emailForDownloads(), !email.isEmpty else {
             ToastCenter.shared.show("先登录一个 Apple ID")
             return
         }

@@ -46,12 +46,7 @@ struct CertificateView: View {
                 // 避免同一条消息在页面上出现两次.
                 if let error = manager.lastError, manager.teamState == .loaded {
                     Section {
-                        InfoActionCard(
-                            icon: manager.lastErrorIsSessionExpired ? "person.badge.key.fill" : "xmark.circle.fill",
-                            iconTint: manager.lastErrorIsSessionExpired ? AppTheme.pending : AppTheme.danger,
-                            title: manager.lastErrorIsSessionExpired ? "需要重新登录" : "出错了",
-                            message: error
-                        )
+                        AppErrorRow(message: error, retry: { manager.loadCerts() })
                     }
                 }
                 if manager.teamState == .loaded {

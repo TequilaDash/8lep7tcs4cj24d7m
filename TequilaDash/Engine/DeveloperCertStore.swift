@@ -320,18 +320,15 @@ final class DeveloperCertStore: ObservableObject {
     /// 仅清除本地 cert/key 文件（签名功能随之不可用），不向 Apple 吊销——
     /// Apple 侧证书状态不受影响（仍占账号名额，需要腾名额请用吊销）.
     func removeLocalCert() -> (ok: Bool, message: String) {
-        let hadCert = hasCert
-        guard hadCert else {
+        let targets = [certURL, keyURL, teamURL]
+        guard targets.contains(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             return (false, "本地没有已导入的签名证书")
         }
         do {
-            if FileManager.default.fileExists(atPath: certURL.path) {
-                try FileManager.default.removeItem(at: certURL)
+            for target in targets where FileManager.default.fileExists(atPath: target.path) {
+                try FileManager.default.removeItem(at: target)
             }
-            if FileManager.default.fileExists(atPath: keyURL.path) {
-                try FileManager.default.removeItem(at: keyURL)
-            }
-            hasCert = false
+            reloadFromDisk()
             LoginLogger.shared.log("[完成] 已删除本地签名证书（Apple 侧未吊销）")
             return (true, "已删除本地签名证书（Apple 侧未吊销. 模块签名不可用，重新导入 p12 或登录创建后恢复）")
         } catch {

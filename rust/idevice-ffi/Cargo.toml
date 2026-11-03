@@ -8,6 +8,7 @@ edition = "2024"
 # isideload 0.5.2 的回调 trait 把 rootcause::Report 写进了关联 Future 类型，
 # 我们的闭包返回类型需要具名它（版本与 isideload 的 "0.12" 要求合并为同一份）.
 rootcause = "0.12"
+async-trait = "0.1.92"
 # Lua 模块宿主（v0.3.95：Rust+mlua 解释器，编进 App；单一 Rust 静态库避免
 # 重复 std 符号）。mlua vendored = 编译捆绑的 Lua 5.4 C 源码，需 CC 指向 iOS SDK。
 mlua = { version = "0.9", features = ["lua54", "vendored", "send"] }

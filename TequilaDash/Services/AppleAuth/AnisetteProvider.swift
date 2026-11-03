@@ -58,13 +58,14 @@ final class AnisetteProvider {
             busy = true
             return true
         }
-        func tryAcquire(timeout: TimeInterval) async -> Bool {
+        func tryAcquire(timeout: TimeInterval) async throws -> Bool {
             let deadline = Date().addingTimeInterval(timeout)
             while true {
+                try Task.checkCancellation()
                 if acquireIfFree() { return true }
                 // iOS 27.2 beta: Date.>= 编译为 weak import（GOT 为空即崩），不得直接用比较符.
                 if Date().timeIntervalSinceReferenceDate >= deadline.timeIntervalSinceReferenceDate { return false }
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try await Task.sleep(nanoseconds: 100_000_000)
             }
         }
         func release() {
@@ -222,11 +223,15 @@ final class AnisetteProvider {
 
     /// 重置：signOut / 切换账号时调用.清空内存缓存并删除 keychain 里的
     /// identifier+adiPb，确保下一次登录重新走完整 provision 并重新生成 identifier.
-    func reset() {
+    func clearMemoryCache() {
         clientInfo = nil
         userAgent = nil
         mdLu = nil
         deviceId = nil
+    }
+
+    func reset() {
+        clearMemoryCache()
         keychain.delete("identifier")
         keychain.delete("adiPb")
         // 身份销毁：清除一库一身份的配对记录（上游 Slots：服务器不再认这份身份）.
@@ -383,15 +388,9 @@ final class AnisetteProvider {
             LoginLogger.shared.log("[本机Anisette] 本机取数失败，回退远程", category: .appleID)
         }
 
-        if refresh {
-            // v0.3.166：refresh = 强制重签 provisioning 票据（作废 adiPb 保留 identifier）.
-            // 背景：ani.846969.xyz 对同一 (identifier, adiPb) 缓存 get_headers 结果，
-            // 旧实现 refresh 只清内存缓存 → 仍命中 keychain 的 identifier+adiPb →
-            // 拿到与上次完全相同的 OTP（真机日志实锤：两次 refresh=true 返回同一
-            // X-Apple-I-MD）→ Apple 边缘判定重放/已标记 → native/fast 301/404.
-            // identifier 必须保留（v0.2.117 铁律：换 identifier = 换虚拟机器 = 风控）.
-            resetProvisioning()
-        }
+        // refresh用于取新的OTP，不能把活会话绑定的机器票据销毁.
+        // 每次fetchAnisetteV3都会联网get_headers；旧服务器缓存OTP应报重放而非换机.
+        if refresh { clearMemoryCache() }
         LoginLogger.shared.log("[开始] getAnisetteData(refresh=\(refresh)) url=\(url?.absoluteString ?? "nil")", category: .appleID)
         guard url != nil else { throw fail("入口", "Anisette 服务器地址为空") }
         if let identifier = keychain.string(for: "identifier"),
@@ -461,8 +460,8 @@ final class AnisetteProvider {
     /// 服务器重试通常就能过.v0.2.114 加的超时只解决"卡死"，解决不了这类
     /// "服务器明确拒绝"，所以这里补上重试 + 轮换.
     ///
-    /// 每次重试前会 `reset()`：清掉内存缓存与 keychain 里的 identifier/adiPb，
-    /// 强制重新生成 identifier 并对新服务器走完整 provision，避免拿旧会话重试.
+    /// 重试保留identifier；同库复用票据，明确不兼容时只重配票据.
+    /// 普通网络错误不自动销毁机器身份.
     /// 单次取数的硬超时（秒）——**小于**整体预算 75s，留出换服务器重试的余量.
     ///
     /// 取值依据：下面三条请求各自的显式 timeout 是 10s（client_info）/ 15s（get_headers）/
@@ -481,6 +480,7 @@ final class AnisetteProvider {
         _ operation: @escaping @Sendable () async throws -> AnisetteData
     ) async throws -> AnisetteData {
         try await withThrowingTaskGroup(of: AnisetteData.self) { group in
+            defer { group.cancelAll() }
             group.addTask { try await operation() }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -501,10 +501,11 @@ final class AnisetteProvider {
         // (clientInfo / userAgent / mdLu / deviceId / lastFailureStage) 同一时刻只有一个写者.
         // 上限 60s：比最长一次流程（3 次尝试 × 35s 硬超时，实际受 75s 总预算约束）留出余量，
         // 但又给了「死等」一个确定终点，不会把新调用者永久挂在锁上.
-        guard await fetchGate.tryAcquire(timeout: 60) else {
+        guard try await fetchGate.tryAcquire(timeout: 60) else {
             throw AppleAPIError.customError(code: -22422, message: "等待上一个 Anisette 取数流程超时（60s）.")
         }
         defer { fetchGate.release() }
+        try Task.checkCancellation()
         let originalServer = currentServer
         let started = Date()
         // v0.2.116：整体时间预算.就算某个请求没被单条 timeout 拦住（例如 WebSocket
@@ -517,6 +518,9 @@ final class AnisetteProvider {
         // 本次流程的 503 按「上报设备」计数（上游 AppleRefusals 判据），进循环前清零.
         Self.clearRefusalLog()
         while attempt < maxAttempts {
+            try Task.checkCancellation()
+            let remaining = budget - Date().timeIntervalSince(started)
+            guard remaining > 0 else { break }
             // 跳过已被 Apple 拒绝两次的服务器（按上报设备计；上游 rulesOut）.
             if Self.isRefusalRuledOut(currentServer) {
                 attempt += 1
@@ -538,12 +542,13 @@ final class AnisetteProvider {
                 //
                 // 现在每次尝试都被一个独立的超时任务竞赛：超时即本任务抛错、
                 // 交给下面的 catch 走「换服务器重试」与「还原服务器」逻辑.
-                let data = try await Self.withAttemptTimeout(Self.attemptTimeout) {
+                let data = try await Self.withAttemptTimeout(min(Self.attemptTimeout, remaining)) {
                     try await Self.shared.getAnisetteData(refresh: refresh)
                 }
                 lastFailureStage = nil
                 return data
             } catch {
+                try Task.checkCancellation()
                 lastError = error
                 attempt += 1
                 let elapsed = Date().timeIntervalSince(started)
@@ -558,18 +563,25 @@ final class AnisetteProvider {
                         break
                     }
                 }
+                let previousServer = currentServer
                 let next = await rotateServer()
                 let stage = lastFailureStage
-                if stage == nil || stage == "provision" {
-                    // stage == nil：错误不是 fail() 抛出的（如 URLSession 超时），
-                    // 无法判断身份是否可用，退回原行为（换身份重来）最稳.
-                    reset()
-                } else if shouldKeepIdentity(for: next) {
+                if sharedAdiPb != nil, !shouldKeepIdentity(for: next) {
+                    // 已有票据不能喂给不同ADI库；网络失败更不能自动销毁它.
+                    UserDefaults.standard.set(previousServer, forKey: "AnisetteServer")
+                    LoginLogger.shared.log("… 跨库回退会更换身份，保留现有票据并停止重试", category: .appleID)
+                    break
+                }
+                if shouldKeepIdentity(for: next) {
                     // 下一服务器与当前身份同库：adiPb 仍可用，保留身份直接重试
                     // （上游判据：同一 ADI 库的身份互通，换同库服务器不重配）.
                     clientInfo = nil
                     userAgent = nil
                     LoginLogger.shared.log("… 下一服务器同库，保留 adiPb 直接重试", category: .appleID)
+                } else if stage == nil {
+                    // 网络超时不证明票据失效，更不能删除identifier重生成机器身份.
+                    clearMemoryCache()
+                    LoginLogger.shared.log("… 网络失败，保留机器身份与票据", category: .appleID)
                 } else {
                     resetProvisioning()
                 }
@@ -664,7 +676,7 @@ final class AnisetteProvider {
 
     // MARK: - V3: get_headers
 
-    func fetchAnisetteV3(identifier: String, adiPb: String) async throws -> AnisetteData {
+    func fetchAnisetteV3(identifier: String, adiPb: String, allowReprovision: Bool = true) async throws -> AnisetteData {
         try await fetchClientInfo()
         guard let base = url else { throw fail("get_headers", "服务器地址为空") }
         var request = URLRequest(url: base.appendingPathComponent("v3").appendingPathComponent("get_headers"))
@@ -676,11 +688,11 @@ final class AnisetteProvider {
         LoginLogger.shared.log("[开始] get_headers POST \(base.appendingPathComponent("v3").appendingPathComponent("get_headers").absoluteString)", category: .appleID)
         let (data, response) = try await session.data(for: request)
         let http = (response as? HTTPURLResponse)?.statusCode ?? -1
-        LoginLogger.shared.log("← get_headers HTTP \(http): \(String(data: data, encoding: .utf8)?.prefix(200) ?? "")", category: .appleID)
-        return try await extractAnisetteData(data, response as? HTTPURLResponse, v3: true)
+        LoginLogger.shared.log("← get_headers HTTP \(http)，响应 \(data.count) 字节", category: .appleID)
+        return try await extractAnisetteData(data, response as? HTTPURLResponse, v3: true, allowReprovision: allowReprovision)
     }
 
-    private func extractAnisetteData(_ data: Data, _ response: HTTPURLResponse?, v3: Bool) async throws -> AnisetteData {
+    private func extractAnisetteData(_ data: Data, _ response: HTTPURLResponse?, v3: Bool, allowReprovision: Bool = true) async throws -> AnisetteData {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw fail("get_headers", "响应不是 JSON: \(String(data: data, encoding: .utf8)?.prefix(200) ?? "")")
         }
@@ -688,6 +700,8 @@ final class AnisetteProvider {
            let message = json["message"] as? String {
             LoginLogger.shared.log("[注意] get_headers 返回错误: \(message)", category: .appleID)
             if message.contains("-45061") {
+                // 新票据验证失败时交给外层有限重试，不能递归配对到超时.
+                guard allowReprovision else { throw fail("get_headers", "新 Anisette 票据被拒绝(-45061)") }
                 // 跨库/过期身份被 Apple 拒收（-45061）：记录配对诊断后删除重配.
                 let paired = Self.pairingServer()
                 keychain.delete("adiPb")
@@ -728,7 +742,7 @@ final class AnisetteProvider {
               let anisette = try? JSONDecoder().decode(AnisetteData.self, from: jsonData) else {
             throw fail("get_headers", "Anisette 字段组装/解码失败: \(formatted.keys.sorted().joined(separator: ","))")
         }
-        LoginLogger.shared.log("[完成] AnisetteData 组装成功: md=\(anisette.machineID.prefix(12))… otp=\(anisette.oneTimePassword.prefix(12))… rinfo=\(anisette.routingInfo)", category: .appleID)
+        LoginLogger.shared.log("[完成] AnisetteData 组装成功（机器标识与 OTP 不写入日志）", category: .appleID)
         return anisette
     }
 
@@ -753,7 +767,7 @@ final class AnisetteProvider {
             throw fail("provision", "provision 后读取 identifier 失败")
         }
         // 先验证再入库（上游判据：配完先验证，烂服务器不会留下垃圾身份）.
-        let headers = try await fetchAnisetteV3(identifier: identifier, adiPb: adiPb)
+        let headers = try await fetchAnisetteV3(identifier: identifier, adiPb: adiPb, allowReprovision: false)
         keychain.set(adiPb, for: "adiPb")
         // 一库一身份：记录当前服务器与这份 adiPb 的配对（同库服务器可复用该身份）.
         Self.setIdentityServer(url?.absoluteString ?? "")
@@ -771,78 +785,51 @@ final class AnisetteProvider {
         LoginLogger.shared.log("[开始] WebSocket 连接 \(wsURL.absoluteString)", category: .appleID)
         let socket = session.webSocketTask(with: wsReq)
         socket.resume()
-        return try await withCheckedThrowingContinuation { continuation in
-            receiveProvisioningMessages(from: socket, startURL: startURL, endURL: endURL, continuation: continuation)
-        }
-    }
-
-    private func receiveProvisioningMessages(from socket: URLSessionWebSocketTask,
-                                             startURL: URL, endURL: URL,
-                                             continuation: CheckedContinuation<String, Error>) {
-        socket.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .failure(let err):
-                LoginLogger.shared.log("[失败] WebSocket 接收失败: \(err.localizedDescription)", category: .appleID)
-                continuation.resume(throwing: self.fail("provision", "WebSocket 接收失败: \(err.localizedDescription)"))
-                socket.cancel(with: .normalClosure, reason: nil)
-            case .success(let message):
-                switch message {
-                case .string(let str):
-                    // Swift 6：Task（@Sendable）不能捕获非 Sendable 的 self ——
-                    // 本类是 private init 的单例（self === Self.shared 恒成立），
-                    // 改经静态访问进入流程，行为不变（修 sending 'self'）.
-                    Task { [socket, str, startURL, endURL, continuation] in
-                        do {
-                            let done = try await Self.shared.handleProvisioningMessage(str, socket: socket,
-                                                                                       startURL: startURL, endURL: endURL,
-                                                                                       continuation: continuation)
-                            if !done {
-                                Self.shared.receiveProvisioningMessages(from: socket, startURL: startURL, endURL: endURL, continuation: continuation)
-                            }
-                        } catch {
-                            continuation.resume(throwing: error)
-                            socket.cancel(with: .normalClosure, reason: nil)
-                        }
-                    }
-                default:
-                    LoginLogger.shared.log("[失败] WebSocket 收到非文本消息", category: .appleID)
-                    continuation.resume(throwing: self.fail("provision", "WebSocket 收到非文本消息"))
-                    socket.cancel(with: .normalClosure, reason: nil)
+        defer { socket.cancel(with: .normalClosure, reason: nil) }
+        // 任务组的超时只有在底层等待也能取消时才生效.
+        return try await withTaskCancellationHandler(operation: {
+            while true {
+                try Task.checkCancellation()
+                let message = try await socket.receive()
+                guard case .string(let text) = message else {
+                    throw Self.shared.fail("provision", "WebSocket 收到非文本消息")
+                }
+                if let adiPb = try await Self.shared.handleProvisioningMessage(
+                    text, socket: socket, startURL: startURL, endURL: endURL) {
+                    return adiPb
                 }
             }
-        }
+        }, onCancel: {
+            socket.cancel(with: .goingAway, reason: nil)
+        })
     }
 
     private func handleProvisioningMessage(_ str: String, socket: URLSessionWebSocketTask,
-                                           startURL: URL, endURL: URL,
-                                           continuation: CheckedContinuation<String, Error>) async throws -> Bool {
+                                           startURL: URL, endURL: URL) async throws -> String? {
         guard let data = str.data(using: .utf8),
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let result = json["result"] as? String else {
             throw fail("provision", "服务端消息无法解析: \(str.prefix(200))")
         }
-        LoginLogger.shared.log("← WebSocket: \(str.prefix(200))", category: .appleID)
+        LoginLogger.shared.log("← WebSocket: \(result)", category: .appleID)
         switch result {
         case "GiveIdentifier":
             guard let identifier = keychain.string(for: "identifier") else { throw fail("provision", "GiveIdentifier 时无 identifier") }
             try await socket.send(.string(String(data: try JSONSerialization.data(withJSONObject: ["identifier": identifier]), encoding: .utf8)!))
-            return false
+            return nil
         case "GiveStartProvisioningData":
             let spim = try await fetchProvisioningData(url: startURL, body: ["Header": [:], "Request": [:]])
             try await socket.send(.string(String(data: try JSONSerialization.data(withJSONObject: ["spim": spim]), encoding: .utf8)!))
-            return false
+            return nil
         case "GiveEndProvisioningData":
             guard let cpim = json["cpim"] as? String else { throw fail("provision", "GiveEndProvisioningData 无 cpim") }
             let endData = try await fetchEndProvisioningData(url: endURL, cpim: cpim)
             try await socket.send(.string(String(data: try JSONSerialization.data(withJSONObject: endData), encoding: .utf8)!))
-            return false
+            return nil
         case "ProvisioningSuccess":
             guard let adiPb = json["adi_pb"] as? String else { throw fail("provision", "ProvisioningSuccess 无 adi_pb") }
-            LoginLogger.shared.log("[完成] provision 成功，adi_pb=\(adiPb.prefix(16))…", category: .appleID)
-            socket.cancel(with: .normalClosure, reason: nil)
-            continuation.resume(returning: adiPb)
-            return true
+            LoginLogger.shared.log("[完成] provision 成功（票据不写入日志）", category: .appleID)
+            return adiPb
         default:
             if result.contains("Error") || result.contains("Invalid") ||
                result == "ClosingPerRequest" || result == "Timeout" || result == "TextOnly" {
@@ -855,7 +842,7 @@ final class AnisetteProvider {
                 }
                 throw fail("provision", "服务端返回 \(result): \(raw)")
             }
-            return false
+            return nil
         }
     }
 

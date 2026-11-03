@@ -572,34 +572,6 @@ pub unsafe extern "C" fn idevice_outer_slice_free(slice: *mut c_void, len: usize
 // IPA 侧载（isideload 签名）FFI 导出
 // ---------------------------------------------------------------------------
 
-/// 登录 Apple ID 并构建签名会话。阻塞；需要 2FA 时调用 `twofa_cb`。
-///
-/// # Safety
-/// 见 `sideload_auth::apple_signin`。
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn si_apple_signin(
-    apple_id: *const c_char,
-    password: *const c_char,
-    anisette_url: *const c_char,
-    machine_name: *const c_char,
-    storage_dir: *const c_char,
-    twofa_cb: sideload_auth::TwoFactorCb,
-    ctx: *mut c_void,
-    out_session: *mut *mut sideload_auth::SignSession,
-    out_summary: *mut *mut c_char,
-    out_dsid: *mut *mut c_char,
-    out_auth_token: *mut *mut c_char,
-    out_error: *mut *mut c_char,
-) -> i32 {
-    unsafe {
-        sideload_auth::apple_signin(
-            apple_id, password, anisette_url, machine_name, storage_dir, twofa_cb, ctx,
-            out_session, out_summary, out_dsid, out_auth_token, out_error,
-        )
-    }
-}
-
 /// 签名 IPA，把签名后的 `.app` 包路径写入 `*out_signed_path`。阻塞。
 /// `udid` 先注册到团队（传 NULL 跳过）。
 ///
@@ -636,7 +608,7 @@ pub unsafe extern "C" fn si_register_device(
 /// 释放签名会话。
 ///
 /// # Safety
-/// `session` 必须为 null 或 `si_apple_signin` 返回的指针。
+/// `session` 必须为 null 或 `si_signin_with_session` 返回的指针。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn si_sign_session_free(session: *mut sideload_auth::SignSession) {
     unsafe { sideload_auth::sign_session_free(session) }
@@ -655,13 +627,14 @@ pub unsafe extern "C" fn si_signin_with_session(
     anisette_url: *const c_char,
     storage_dir: *const c_char,
     machine_name: *const c_char,
+    client_info: *const c_char,
     out_session: *mut *mut sideload_auth::SignSession,
     out_summary: *mut *mut c_char,
     out_error: *mut *mut c_char,
 ) -> i32 {
     unsafe {
         sideload_auth::signin_with_session(
-            email, dsid, auth_token, anisette_url, storage_dir, machine_name,
+            email, dsid, auth_token, anisette_url, storage_dir, machine_name, client_info,
             out_session, out_summary, out_error,
         )
     }

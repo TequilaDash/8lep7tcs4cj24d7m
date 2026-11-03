@@ -1764,7 +1764,7 @@ dependencies = [
 name = "idevice-ffi"
 version = "0.1.0"
 dependencies = [
- "futures",
+ "async-trait", "futures",
  "idevice 0.1.68 (git+https://github.com/jkcoxson/idevice.git?rev=89702099f4d7552f704f93b4526756abda319ceb)",
  "isideload",
  "libc",

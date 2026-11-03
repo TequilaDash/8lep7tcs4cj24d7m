@@ -12,8 +12,15 @@ struct AppleUserAccountsView: View {
     @State private var pendingRemove: AppleUserAccount?
     /// v0.3.749：当前账户右滑「注册设备」（SideStore 式预注册手动入口）.
     @State private var deviceWorking = false
-    @State private var showDeviceSheet = false
-    @State private var deviceResult: (ok: Bool, text: String)?
+    @State private var deviceResult: DeviceRegistrationResult?
+    @State private var reloginAccount: AppleUserAccount?
+    @State private var signOutOptions = AppleAccountSignOutOptions()
+
+    private struct DeviceRegistrationResult: Identifiable {
+        let id = UUID()
+        let ok: Bool
+        let text: String
+    }
 
     var body: some View {
         List {
@@ -32,6 +39,7 @@ struct AppleUserAccountsView: View {
                     }
                     if store.hasAccounts {
                         Button(role: .destructive) {
+                            signOutOptions = .init()
                             showSignOutAllConfirm = true
                         } label: {
                             Label("退出全部账户", systemImage: "person.badge.minus")
@@ -46,23 +54,60 @@ struct AppleUserAccountsView: View {
         .sheet(isPresented: $showAddSheet) {
             AppleIDLoginSheet()
         }
-        .alert("退出全部账户？", isPresented: $showSignOutAllConfirm) {
-            Button("退出全部", role: .destructive) { store.signOutAll() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("所有已保持的账户都会被移除，签名会话与保存的凭据一并清除.")
+        .sheet(item: $reloginAccount) { account in
+            AppleIDLoginSheet(initialEmail: account.email)
         }
-        .alert("移除账户？", isPresented: Binding(
-            get: { pendingRemove != nil },
-            set: { if !$0 { pendingRemove = nil } })) {
-            Button("移除", role: .destructive) {
-                if let acc = pendingRemove { store.remove(acc.email) }
-                pendingRemove = nil
+        .sheet(item: $deviceResult) { result in
+            deviceRegisterSheet(result)
+        }
+        .sheet(isPresented: $showSignOutAllConfirm) {
+            signOutSheet(account: nil)
+        }
+        .sheet(item: $pendingRemove) { account in
+            signOutSheet(account: account)
+        }
+    }
+
+    private func signOutSheet(account: AppleUserAccount?) -> some View {
+        let hasOtherAccounts = account != nil && store.accounts.count > 1
+        return NavigationStack {
+            Form {
+                Section {
+                    Text(account == nil ? "退出全部已保持的账户. 退出后需重新登录才能侧载与管理证书."
+                         : "移除该账户的登录凭据；其他账户和商店下载账户不受影响.")
+                        .foregroundStyle(.secondary)
+                }
+                Section(header: Text("保留本地资料"), footer: Text(hasOtherAccounts
+                    ? "这些资料由多个账户共享，仍有账户时全部保留."
+                    : "取消勾选仅清理本地资料，不向 Apple 吊销证书. 设备标识始终保留.")) {
+                    Toggle("保留签名证书", isOn: $signOutOptions.keepCertificate)
+                    Toggle("保留 Anisette 资料", isOn: $signOutOptions.keepAnisetteData)
+                    Toggle("保留 Anisette 请求头设置", isOn: $signOutOptions.keepAnisetteHeaders)
+                }
+                .disabled(hasOtherAccounts)
+                Section {
+                    Text("当前项目没有独立的 SideSign 请求头设置，退出时不会创建或删除此类资料.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section {
+                    Button(role: .destructive) {
+                        if let account { store.remove(account.email, options: signOutOptions) }
+                        else { store.signOutAll(options: signOutOptions) }
+                        pendingRemove = nil
+                        showSignOutAllConfirm = false
+                    } label: {
+                        Text(account == nil ? "退出全部账户" : "移除账户")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(TintedButtonStyle())
+                }
             }
-            Button("取消", role: .cancel) { pendingRemove = nil }
-        } message: {
-            if let acc = pendingRemove {
-                Text("「\(acc.email)」将从账户列表移除；侧载与证书改用切换后的账户.")
+            .navigationTitle("退出登录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { pendingRemove = nil; showSignOutAllConfirm = false }
+                }
             }
         }
     }
@@ -87,9 +132,14 @@ struct AppleUserAccountsView: View {
                         }
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(AppTheme.success)
-                        .accessibilityLabel("当前使用")
+                    if deviceWorking {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel("正在注册设备")
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(AppTheme.success)
+                            .accessibilityLabel("当前使用")
+                    }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     // v0.3.749：保险起见给手动注册入口——预注册在登录/切户时已尽力
@@ -100,9 +150,7 @@ struct AppleUserAccountsView: View {
                         Label("注册设备", systemImage: "iphone")
                     }
                     .tint(AppTheme.accent)
-                }
-                .sheet(isPresented: $showDeviceSheet) {
-                    deviceRegisterSheet
+                    .disabled(deviceWorking)
                 }
             } else {
                 Button {
@@ -171,7 +219,13 @@ struct AppleUserAccountsView: View {
             if !isActive { store.switchActive(to: acc.email) }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                reloginAccount = acc
+            } label: {
+                Label("重新登录", systemImage: "person.badge.key")
+            }
             Button(role: .destructive) {
+                signOutOptions = .init()
                 pendingRemove = acc
             } label: {
                 Label("移除", systemImage: "trash")
@@ -183,9 +237,9 @@ struct AppleUserAccountsView: View {
 
     private func startDeviceRegistration() {
         guard !deviceWorking else { return }
-        deviceWorking = true
         deviceResult = nil
-        showDeviceSheet = true
+        deviceWorking = true
+        // 注册结果就绪才呈现；sheet挂在稳定页面而非会变化的账户行.
         Task { @MainActor in
             let outcome: (Bool, String)
             do {
@@ -194,31 +248,26 @@ struct AppleUserAccountsView: View {
             } catch {
                 outcome = (false, error.localizedDescription)
             }
-            deviceResult = outcome
+            deviceResult = DeviceRegistrationResult(ok: outcome.0, text: outcome.1)
             deviceWorking = false
         }
     }
 
-    private var deviceRegisterSheet: some View {
+    private func deviceRegisterSheet(_ result: DeviceRegistrationResult) -> some View {
         VStack(spacing: AppSpacing.section) {
-            if deviceWorking {
-                InfoActionCard(icon: "arrow.triangle.2.circlepath",
-                               title: "正在注册设备",
-                               message: "把本机 UDID 写进 Apple 开发者团队，通常几秒完成.")
-            } else if let result = deviceResult {
-                InfoActionCard(icon: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill",
-                               iconTint: result.ok ? AppTheme.success : AppTheme.danger,
-                               title: result.ok ? "注册成功" : "注册异常",
-                               message: result.text)
-            }
+            InfoActionCard(icon: result.ok ? "checkmark.circle.fill" : "xmark.circle.fill",
+                           iconTint: result.ok ? AppTheme.success : AppTheme.pending,
+                           title: result.ok ? "注册成功" : "注册异常",
+                           message: result.text)
             Button {
-                showDeviceSheet = false
+                deviceResult = nil
             } label: {
                 Text("好")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(TintedButtonStyle())
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(AppSpacing.section)
         .presentationDetents([.height(250)])
         .presentationDragIndicator(.visible)

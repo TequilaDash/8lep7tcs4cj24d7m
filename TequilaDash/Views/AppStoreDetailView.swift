@@ -583,7 +583,7 @@ struct AppStoreDetailView: View {
     /// 获取许可证：用「当前下载账号」把该应用加入授权列表（免费应用）。
     /// 与下载链路里 9610 分支做的是同一件事 —— 刷新登录 → buyProduct。
     private func acquireLicense() {
-        guard let email = AppStoreDownloadStore.shared.selectedEmail, !email.isEmpty else {
+        guard let email = AppStoreDownloadStore.shared.emailForDownloads(), !email.isEmpty else {
             ToastCenter.shared.show("先登录一个 Apple ID")
             return
         }

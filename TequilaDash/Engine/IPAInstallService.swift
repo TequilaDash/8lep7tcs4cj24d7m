@@ -1,9 +1,10 @@
 import Foundation
 import Combine
+import CryptoKit
 
 /// IPA 侧载服务（汉化移植自 SideInstaller 的安装流程）.
 ///
-/// 流程：登录 Apple ID（isideload，含 2FA）→ 签名 IPA（isideload
+/// 流程：复用设置当前账户的 Xcode 会话 → 签名 IPA（isideload
 /// Sideloader::sign_app，自动注册设备/创建描述文件）→ 通过 LocalDevVPN 隧道
 /// 用 AFC 上传签名后的 .app 到 /PublicStaging → installation_proxy 安装.
 ///
@@ -12,11 +13,7 @@ import Combine
 ///   本地网络权限与配对（原版在 LC guest 下卡在 LocalNetworkAuthorization）；
 /// - 设备连接复用 TequilaDash 既有隧道（配对文件 + LocalDevVPN），
 ///   签名所需的设备 UDID 直接从配对文件 plist 的 identifier 读取.
-/// `@unchecked Sendable`：本类的跨线程可变状态只有 2FA 交接那一对
-/// （`twoFactorResult` / `twoFactorSem`），其读写由 `DispatchSemaphore` 的
-/// signal/wait 建立 happens-before；`twoFactorPrompt` 与其余状态只在主队列
-/// （`beginTwoFactorPrompt` 的 `DispatchQueue.main.async`）访问。
-/// 即：跨线程共享的不是「并发可变状态」，而是被信号量串行化的一次交接。
+/// 阻塞签名适配器不认证账户；所有凭据来自设置当前账户.
 final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     static let shared = IPAInstallService()
@@ -33,62 +30,6 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         UserDefaults.standard.object(forKey: autoSignInKey) as? Bool ?? true
     }
 
-    // MARK: - 2FA 桥接
-
-    /// 主线程回调：弹出 2FA 输入；reply(nil) 表示取消.
-    var twoFactorPrompt: ((@escaping (String?) -> Void) -> Void)?
-
-    private let twoFactorSem = DispatchSemaphore(value: 0)
-    private var twoFactorResult: String?
-
-    /// C 回调（isideload 需要 2FA 时调用）.阻塞等用户输入.
-    /// 通过 `IPAInstallService.shared` 访问实例成员——编译器视为类型属性访问，
-    /// 不捕获局部变量，可转换为 C 函数指针.
-    private let twoFactorCallback: SITwoFactorCb = { _, outBuf, bufLen in
-        IPAInstallService.shared.beginTwoFactorPrompt()
-        // 最多等 5 分钟：用户不响应（或切走 App）时自动放弃，避免后台线程
-        // 永久阻塞 —— 它占着串行登录队列，会让用户后续手动登录一起卡住.
-        _ = IPAInstallService.shared.twoFactorSem.wait(timeout: .now() + 300)
-        guard let code = IPAInstallService.shared.twoFactorResult, !code.isEmpty, bufLen > 1 else {
-            return 0
-        }
-        IPAInstallService.shared.twoFactorResult = nil
-        guard let outBuf else { return 0 }
-        let bytes = Array(code.utf8.prefix(Int(bufLen) - 1))
-        for (index, byte) in bytes.enumerated() {
-            outBuf[index] = CChar(bitPattern: byte)
-        }
-        outBuf[bytes.count] = 0
-        return 1
-    }
-
-    private func beginTwoFactorPrompt() {
-        DispatchQueue.main.async {
-            // 清掉上一轮可能残留的信号：否则本次 wait() 会立即被旧信号唤醒，
-            // 拿着空的/旧的验证码往下走，表现就是"卡住后登录失败".
-            while self.twoFactorSem.wait(timeout: .now()) == .success { }
-            self.twoFactorResult = nil
-            // 优先用页面注入的 prompt（「IPA 侧载」页自己弹窗）.
-            // 没有时（典型场景：App 启动的后台预热 warmUp，用户还没进过该页）
-            // 走全局协调器，由 RootView 统一弹出输入框 —— 否则 2FA 请求会被
-            // 静默丢弃：手机上弹了验证码，App 里却没地方输入，登录就此卡住.
-            guard let handler = self.twoFactorPrompt else {
-                TwoFactorPromptCoordinator.shared.requestCode(from: Self.twoFactorFeature) { code in
-                    self.twoFactorResult = code
-                    self.twoFactorSem.signal()
-                }
-                return
-            }
-            handler { code in
-                self.twoFactorResult = code
-                self.twoFactorSem.signal()
-            }
-        }
-    }
-
-    /// 全局 2FA 弹窗里显示的功能名.
-    static let twoFactorFeature = "IPA 侧载"
-
     // MARK: - 会话
 
     /// isideload 的签名会话（登录成功后持有）.
@@ -96,33 +37,13 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     @Published private(set) var isSignedIn = false
     @Published private(set) var teamSummary: String?
 
-    /// 最近一次**完整登录**（`si_apple_signin`）拿到的 dsid 与
-    /// `com.apple.gs.xcode.auth` token.由 isideload fork 暴露（v0.2.111），
-    /// 调用方应持久化到 Keychain，下次用 `signInWithSession` 免登录恢复.
-    /// 通过 token 恢复会话时这两个值不会更新（本来就已存在）.
-    private(set) var lastSessionDSID: String?
-    private(set) var lastSessionAuthToken: String?
-
     /// 登录/会话恢复的串行队列：Rust 调用是阻塞的，预热（app 启动后台）
-    /// 与页面内自动登录可能并发，串行化保证同一时刻只有一个登录操作在跑，
+    /// 与页面操作可能并发，串行化保证同一时刻只有一个登录操作在跑，
     /// 避免两个调用同时读写 `_session` 造成竞态.
     private let authQueue = DispatchQueue(label: "com.tequila.dash.auth")
 
-    /// 「用 token 恢复会话」失败过一次（token 大概率已过期）.
-    /// 为 true 时自动登录跳过免 2FA 恢复、直接走完整登录，避免每次进页面
-    /// 都白等一次注定失败的恢复请求（实测单次失败恢复要 5~7 秒）.
-    /// **持久化到 UserDefaults**（v0.2.105）：token 失效后 App 重启也不白等；
-    /// 完整登录成功（token 刷新）时自动清零.
-    private(set) var sessionRestoreFailed: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.sessionRestoreFailedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.sessionRestoreFailedKey) }
-    }
-
-    /// App 启动后台预热（warmUp）正在执行中.页面自动登录据此**去重**，
-    /// 避免 warmUp 与页面自动登录重复联网（v0.2.106 优化「每次几十秒」）.
+    /// App 启动后台预热（warmUp）正在执行中.
     @Published private(set) var isWarmingUp = false
-
-    private static let sessionRestoreFailedKey = "ipaSessionRestoreFailed"
 
     private(set) var session: OpaquePointer? {
         get { _session }
@@ -140,17 +61,33 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         teamSummary = nil
     }
 
-    /// v0.3.746：切换账户时调用——释放旧会话后，还要把「token 恢复失败过」的
-    /// 全局标记一并清零：它是 UserDefaults 全局单值，不区分账户；旧账户 token
-    /// 失效置位后会错误跳过新账户的免 2FA 恢复（路径 A）.
+    /// 切换账户时调用：释放旧账户的签名会话，让 warmUp 用新账户的设置会话重建.
     func signOutForAccountSwitch() {
         signOut()
-        sessionRestoreFailed = false
     }
 
     deinit {
         if let _session {
             si_sign_session_free(_session)
+        }
+    }
+
+    /// 退出最后账户时按保留选项清理精确的Rust本地缓存；不删除描述文件或配对文件.
+    func removeLocalAuthenticationCache(emails: [String], keepCertificate: Bool, keepAnisetteData: Bool) {
+        let root = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TequilaDashIsideload", isDirectory: true)
+        var targets: [URL] = []
+        if !keepAnisetteData { targets.append(root.appendingPathComponent("anisette_state")) }
+        if !keepCertificate {
+            for email in emails {
+                // pinned isideload cert_identity.rs: SHA256(apple_email bytes)/key.
+                let hash = SHA256.hash(data: Data(email.utf8)).map { String(format: "%02x", $0) }.joined()
+                targets.append(root.appendingPathComponent(hash, isDirectory: true).appendingPathComponent("key"))
+            }
+        }
+        for target in targets where FileManager.default.fileExists(atPath: target.path) {
+            do { try FileManager.default.removeItem(at: target) }
+            catch { LoginLogger.shared.log("[注意] 清理侧载本地缓存未成功: \(error.localizedDescription)") }
         }
     }
 
@@ -183,7 +120,8 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// **直接跳过 provisioning 复用**），让两套流程共用同一台"虚拟机器".
     ///
     /// 此方法只在 Swift 侧已有 identifier+adiPb 时写入（不主动联网 provision）；
-    /// 无值则跳过，Rust 侧自行 provision 兜底.
+    /// 无值则不写 —— 签名适配器对缺失身份 fail-closed，绝不允许 Rust 自己
+    /// provision 出第二台机器（v0.3.750 统一账户体系）.
     func syncSharedAnisetteStateIfAvailable() {
         let provider = AnisetteProvider.shared
         let target = URL(fileURLWithPath: storageDir).appendingPathComponent("anisette_state")
@@ -201,7 +139,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 try? FileManager.default.removeItem(at: target)
                 LoginLogger.shared.log("… Swift 侧无有效 Anisette 身份，已清除 IPA 侧载的陈旧机器标识（避免两套身份分裂）")
             } else {
-                LoginLogger.shared.log("… Swift 侧暂无 Anisette 身份，IPA 侧载将自行 provision")
+                LoginLogger.shared.log("… Swift 侧暂无 Anisette 身份，签名会话将等设置侧就绪后再建")
             }
             return
         }
@@ -245,12 +183,6 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     // MARK: - 登录（阻塞，后台线程调用）
 
-    func signIn(appleID: String, password: String, anisetteURL: String) throws {
-        try authQueue.sync {
-            try performSignIn(appleID: appleID, password: password, anisetteURL: anisetteURL)
-        }
-    }
-
     /// v0.2.119 观测点：Rust 侧登录完成后读回 `anisette_state`，核对它是否真的
     /// 用了 Swift 共享过去的那台"虚拟机器".
     ///
@@ -289,69 +221,15 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func performSignIn(appleID: String, password: String, anisetteURL: String) throws {
-        // v0.2.117：与 Swift 认证共用同一 Anisette 机器标识，避免 Apple 风控.
-        syncSharedAnisetteStateIfAvailable()
-        if let session {
-            si_sign_session_free(session)
-            self.session = nil
-        }
-        var newSession: OpaquePointer?
-        var summary: UnsafeMutablePointer<CChar>?
-        var dsidOut: UnsafeMutablePointer<CChar>?
-        var authTokenOut: UnsafeMutablePointer<CChar>?
-        var error: UnsafeMutablePointer<CChar>?
-        let rc = appleID.withCString { id in
-            password.withCString { pw in
-                anisetteURL.withCString { ani in
-                    "TequilaDash".withCString { machine in
-                        storageDir.withCString { dir in
-                            si_apple_signin(id, pw, ani, machine, dir,
-                                            twoFactorCallback, nil,
-                                            &newSession, &summary,
-                                            &dsidOut, &authTokenOut, &error)
-                        }
-                    }
-                }
-            }
-        }
-        defer {
-            if let summary { si_string_free(summary) }
-            if let dsidOut { si_string_free(dsidOut) }
-            if let authTokenOut { si_string_free(authTokenOut) }
-            if let error { si_string_free(error) }
-        }
-        if rc == 0, let newSession {
-            session = newSession
-            teamSummary = summary.map { String(cString: $0) }
-            LoginLogger.shared.log("[完成] IPA 侧载登录成功: \(teamSummary ?? "（无团队摘要）")")
-            // v0.2.119：核对 Rust 是否真的复用了 Swift 共享的机器标识.
-            verifySharedAnisetteState()
-            // 取出 dsid + xcode.auth token（isideload fork 暴露），供调用方
-            // 持久化后免登录恢复.
-            lastSessionDSID = dsidOut.map { String(cString: $0) }
-            lastSessionAuthToken = authTokenOut.map { String(cString: $0) }
-            // 完整登录成功 → token 已刷新，恢复失败标志清除.
-            sessionRestoreFailed = false
-            // v0.3.749（SideStore 做法）：登录成功即把本机预注册进所选团队，
-            // 让 Apple 的注册传播在用户点签名之前就走完（8220 的根）.
-            preRegisterDeviceBestEffort()
-        } else {
-            let msg = error.map { String(cString: $0) } ?? "rc=\(rc)"
-            LoginLogger.shared.log("[失败] IPA 侧载登录失败: \(msg)")
-            throw makeError(msg)
-        }
-    }
-
     /// 用「更多 → 设置」已保存的 dsid + authToken 恢复签名会话
-    /// （**免登录免 2FA**）.token 过期时抛错，调用方回退完整登录.
-    func signInWithSession(email: String, dsid: String, authToken: String, anisetteURL: String) throws {
+    /// （**免登录免 2FA**）.会话不可用直接抛错；不回退任何独立登录.
+    func signInWithSession(email: String, dsid: String, authToken: String, anisetteURL: String, clientInfo: String) throws {
         try authQueue.sync {
-            try performSignInWithSession(email: email, dsid: dsid, authToken: authToken, anisetteURL: anisetteURL)
+            try performSignInWithSession(email: email, dsid: dsid, authToken: authToken, anisetteURL: anisetteURL, clientInfo: clientInfo)
         }
     }
 
-    private func performSignInWithSession(email: String, dsid: String, authToken: String, anisetteURL: String) throws {
+    private func performSignInWithSession(email: String, dsid: String, authToken: String, anisetteURL: String, clientInfo: String) throws {
         // 已有会话（预热已完成）：直接复用，不再重建.
         if isSignedIn { return }
         // v0.2.117：与 Swift 认证共用同一 Anisette 机器标识.
@@ -365,8 +243,10 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                     anisetteURL.withCString { a in
                         storageDir.withCString { dir in
                             "TequilaDash".withCString { m in
-                                si_signin_with_session(e, d, t, a, dir, m,
-                                                       &newSession, &summary, &error)
+                                clientInfo.withCString { ci in
+                                    si_signin_with_session(e, d, t, a, dir, m, ci,
+                                                           &newSession, &summary, &error)
+                                }
                             }
                         }
                     }
@@ -383,13 +263,11 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             LoginLogger.shared.log("[完成] IPA 侧载会话恢复成功: \(teamSummary ?? "（无团队摘要）")")
             // v0.2.119：核对 Rust 是否真的复用了 Swift 共享的机器标识.
             verifySharedAnisetteState()
-            sessionRestoreFailed = false
             // v0.3.749（SideStore 做法）：token 恢复会话同样预注册——切户后 warmUp
             // 走的就是这条路，签名时不再首撞 8220.
             preRegisterDeviceBestEffort()
         } else {
-            // token 失效等恢复失败：标记，下次自动登录直接走完整登录.
-            sessionRestoreFailed = true
+            // token 过期/身份缺失等：直接抛错，调用方提示到 Apple ID 账户页处理.
             let msg = error.map { String(cString: $0) } ?? "rc=\(rc)"
             LoginLogger.shared.log("[失败] IPA 侧载会话恢复失败: \(msg)")
             throw makeError(msg)
@@ -441,76 +319,30 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     // MARK: - 后台预热（app 启动时调用，免 2FA）
 
-    /// 后台预热（app 启动时调用）.
-    ///
-    /// v0.2.108：两条路径并行提升体验——
-    /// 1) 有 dsid + authToken（「设置」Apple ID 认证引擎登录过）→ 免 2FA 恢复会话；
-    /// 2) 没有 token 但存了邮箱/密码（IPA 页登录过）→ 后台完整登录.
-    ///    若使用 app 专用密码或已信任设备，可做到杀后台重开已登录；
-    ///    否则 2FA 会静默失败，进入 IPA 页后自动登录会再试一次并弹验证码.
-    /// 失败均静默，由页面内自动登录兜底.
-    /// @MainActor：MemoryLimitSettings 是 MainActor 隔离类，读取其属性需在主线程.
+    /// 只导入设置当前账户的会话；绝不提交账密、弹2FA或回退独立登录.
     @MainActor
     func warmUp() {
-        // v0.3.745 账户体系：账户源从 keychain 单账户改为多账户台账的「当前账户」；
-        // keychain 主键仍由 AppleUserAccountStore.switchActive 写回，双轨兼容.
-        let store = AppleUserAccountStore.shared
-        guard let acc = store.activeAccount else { return }
-        guard Self.isAutoSignInEnabled else { return }
-        guard !isSignedIn else { return }
-        guard !isWarmingUp else { return }
-        let id = acc.email
-        let ani = MemoryLimitSettings.shared.anisetteServer
-
-        // 路径 A：有 token → 免 2FA 恢复.
-        // v0.2.112：必须读 isideload 专用会话（sideloadDSID/sideloadAuthToken）.
-        // `swiftDSID`/`swiftAuthToken` 是 Swift 认证引擎的会话，两套 Anisette
-        // 机器标识不同，混用会导致 isideload 侧登录失败.
-        if !sessionRestoreFailed,
-           let dsid = acc.sideloadDSID, let authToken = acc.sideloadAuthToken,
-           !dsid.isEmpty, !authToken.isEmpty {
-            isWarmingUp = true
-            // Swift 6：外层 Task 继承本方法（@MainActor）的隔离 —— isWarmingUp 的
-            // 复位（原 defer 内 Task { @MainActor }）改由外层 defer 直接执行，
-            // 不再把 self 传进主 actor 闭包（修 sending 'self'）；阻塞登录仍在
-            // detached 跑（self 为 @unchecked Sendable，可安全捕获）.
-            Task { [weak self] in
-                guard let self else { return }
-                defer { self.isWarmingUp = false }
-                do {
-                    try await Task.detached(priority: .utility) {
-                        try self.signInWithSession(email: id, dsid: dsid, authToken: authToken, anisetteURL: ani)
-                    }.value
-                } catch {
-                    // token 失效等：signInWithSession 内部已设 sessionRestoreFailed=true，
-                    // 页面内自动登录会回退到完整登录.
-                }
-            }
-            return
-        }
-
-        // 路径 B：无 token 但有密码 → 后台完整登录（2FA 弹窗未就绪，失败静默）.
-        let pw = acc.password
-        guard !pw.isEmpty else { return }
+        guard Self.isAutoSignInEnabled, !isSignedIn, !isWarmingUp else { return }
+        guard let account = AppleUserAccountStore.shared.activeAccount,
+              let dsid = account.swiftDSID, !dsid.isEmpty,
+              let token = account.swiftAuthToken, !token.isEmpty else { return }
+        let email = account.email
         isWarmingUp = true
         Task { [weak self] in
             guard let self else { return }
             defer { self.isWarmingUp = false }
             do {
+                // 仅向设置的Anisette提供器取新OTP；不允许Rust生成另一台机器.
+                let data = try await AnisetteProvider.shared.getAnisetteDataWithFallback()
+                guard AppleUserAccountStore.shared.activeAccount?.email == email,
+                      AppleUserAccountStore.shared.activeAccount?.swiftAuthToken == token else { return }
+                let server = AnisetteProvider.shared.currentServer
                 try await Task.detached(priority: .utility) {
-                    try self.signIn(appleID: id, password: pw, anisetteURL: ani)
+                    try self.signInWithSession(email: email, dsid: dsid, authToken: token,
+                                               anisetteURL: server, clientInfo: data.deviceDescription)
                 }.value
-                // 成功后把本次登录拿到的 dsid/authToken 回填**台账**（免 2FA 恢复用），
-                // 同时写回 keychain 主键（证书链等老消费方兼容）.
-                let dsid = self.lastSessionDSID ?? ""
-                let authToken = self.lastSessionAuthToken ?? ""
-                store.updateSideloadSession(email: id, dsid: dsid, authToken: authToken)
-                await MainActor.run {
-                    MemoryLimitSettings.shared.saveSessionCredentials(
-                        email: id, password: pw, dsid: dsid, authToken: authToken)
-                }
             } catch {
-                // 静默：用户进入 IPA 页时页面内自动登录会再试并展示错误.
+                LoginLogger.shared.log("[失败] 设置会话签名适配失败；请在Apple ID账户页重试或重新登录: " + error.localizedDescription)
             }
         }
     }

@@ -18,9 +18,9 @@ private actor StoreAccountRequestGate {
     ///
     /// ## 为什么必须有这个上限（v0.3.389 真机事故）
     /// 本门是**纯内存态**，`release` 只在 `withAccount` 的 do/catch 两路被调用。
-    /// 但只要**持锁的那一次 `withAccount` 没走到 release**（最典型：App 进后台被挂起、
-    /// 或进程被系统回收 —— 异步任务不会补跑 defer），`owners` 里就会留下一个
-    /// **永不释放的 email**。此后这台设备上**所有下载都永久停在「准备中 0%」**，
+    /// 同一进程内，持锁请求迟迟未返回时，后续请求会等待它释放租约.
+    /// 进程被系统回收会清空本门，不会留下跨进程的内存锁.
+    /// 此上限只限制等待时间；不能据此断定旧请求已经结束，
     /// 而且**一条日志都没有**（卡死在第一条 `onLog` 之前，`[AppleID] 请求下载信息…` 永远不出现）。
     /// 真机实测就是这个形状：用户点下载 → 顶部「准备中 0%」不动 → 日志里没有任何下载记录。
     ///
@@ -38,9 +38,10 @@ private actor StoreAccountRequestGate {
     private(set) var forcedAcquires = 0
 
     /// 取锁。返回 `(令牌, 是否超时夺来)`；调用方**必须**用同一令牌 release.
-    func acquire(_ email: String) async -> (token: UInt64, forced: Bool) {
+    func acquire(_ email: String) async throws -> (token: UInt64, forced: Bool) {
         let deadline = Date().addingTimeInterval(Self.acquireTimeout)
         while true {
+            try Task.checkCancellation()
             var set = owners[email] ?? []
             if set.isEmpty {
                 nextToken &+= 1
@@ -54,13 +55,12 @@ private actor StoreAccountRequestGate {
                 forcedAcquires += 1
                 nextToken &+= 1
                 let token = nextToken
-                // 强制接管：旧持有者几乎必然已挂起/被回收（永远不会 release），
-                // 这里直接把该 email 下的旧令牌全部清掉，只留本次这一个 ——
-                // 既清僵尸，又保证「接管者也在门里」，不会让门退化成无锁.
+                // 兼容既有25s接管策略. 旧请求可能仍在运行，此路径不保证严格互斥.
+                // 只保留本次令牌，旧请求迟到的release不会误删新持有者.
                 owners[email] = [token]
                 return (token, true)
             }
-            try? await Task.sleep(nanoseconds: 200_000_000)
+            try await Task.sleep(nanoseconds: 200_000_000)
         }
     }
 
@@ -86,10 +86,9 @@ enum StoreAccountSession {
     static func withAccount<T>(email: String,
                                operation: (inout AppStoreAccount) async throws -> T) async throws -> T {
         let gateKey = email.lowercased()
-        let lease = await gate.acquire(gateKey)
+        let lease = try await gate.acquire(gateKey)
         if lease.forced {
-            // 强制接管：上一个持有者很可能因 App 进后台被挂起/回收而未释放租约；
-            // 本次结束时 release 会把它清掉，所以一次超时之后链路自行恢复。
+            // 等待超限不代表旧请求已结束；记录既有接管策略，供耗时审计判断并发风险.
             let forcedCount = await gate.forcedAcquireCount()
             LoginLogger.shared.log(
                 "[会话] 账号租约等待超过 \(Int(StoreAccountRequestGate.acquireTimeout))s，已强制接管"

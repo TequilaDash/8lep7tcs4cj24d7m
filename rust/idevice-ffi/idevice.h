@@ -466,7 +466,6 @@ typedef void *plist_t;
  * `int (*)(void *ctx, char *out_buf, size_t buf_len)` — 把 2FA 验证码写进
  * `out_buf`（NUL 结尾）并返回 1；用户取消返回 0。
  */
-typedef int32_t (*TwoFactorCb)(void *ctx, char *out_buf, uintptr_t buf_len);
 
 typedef int (*Pkcs7SignFn)(const uint8_t *data, int data_len, uint8_t **der_out, int *der_len);
 
@@ -1410,25 +1409,6 @@ void idevice_plist_array_free(plist_t *plists, uintptr_t len);
 void idevice_outer_slice_free(void *slice, uintptr_t len);
 
 /**
- * 登录 Apple ID 并构建签名会话。阻塞；需要 2FA 时调用 `twofa_cb`。
- *
- * # Safety
- * 见 `sideload_auth::apple_signin`。
- */
-int32_t si_apple_signin(const char *apple_id,
-                        const char *password,
-                        const char *anisette_url,
-                        const char *machine_name,
-                        const char *storage_dir,
-                        TwoFactorCb twofa_cb,
-                        void *ctx,
-                        struct SignSession **out_session,
-                        char **out_summary,
-                        char **out_dsid,
-                        char **out_auth_token,
-                        char **out_error);
-
-/**
  * 签名 IPA，把签名后的 `.app` 包路径写入 `*out_signed_path`。阻塞。
  * `udid` 先注册到团队（传 NULL 跳过）。
  *
@@ -1446,7 +1426,7 @@ int32_t si_sign_ipa(struct SignSession *session,
  * 释放签名会话。
  *
  * # Safety
- * `session` 必须为 null 或 `si_apple_signin` 返回的指针。
+ * `session` 必须为 null 或 `si_signin_with_session` 返回的指针。
  */
 void si_sign_session_free(struct SignSession *session);
 
@@ -1462,6 +1442,7 @@ int32_t si_signin_with_session(const char *email,
                                const char *anisette_url,
                                const char *storage_dir,
                                const char *machine_name,
+                               const char *client_info,
                                struct SignSession **out_session,
                                char **out_summary,
                                char **out_error);

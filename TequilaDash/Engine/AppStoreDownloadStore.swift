@@ -291,6 +291,25 @@ final class AppStoreDownloadStore {
         return usableAccounts.first
     }
 
+    /// v0.3.750：下载类入口取「这次该用哪个账号」的唯一口径.
+    ///
+    /// 以前三条路各有各的读法：商店列表/详情页走 `usableAccounts[0]`（能回退），
+    /// 版本历史的账号通道与两处「获取许可证」直读 `selectedEmail`（不能回退）.
+    /// 多账户重做后 `AppStore.SelectedEmail` 这条旧指针可能为空（重装/退出单个账号都会
+    /// 让指针落空，而台账文件里的账号还在），于是出现用户报的现象：同一个账号
+    /// 「能下最新版，却在历史版本里报『账号会话未就绪』」.
+    /// 规则：显式指定 > 选中账号（`selectedAccount` 自带可用账号回退）.
+    func emailForDownloads(preferred: String? = nil) -> String? {
+        if let preferred {
+            let email = preferred.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !email.isEmpty {
+                guard let account = account(for: email), Self.isUsable(account) else { return nil }
+                return account.email
+            }
+        }
+        return selectedAccount?.email
+    }
+
     func select(email: String) {
         selectedEmail = email
         // v0.3.328：切换当前下载账号后立刻把商店区域跟到这个账号，
