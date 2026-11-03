@@ -324,7 +324,7 @@ struct CertificateView: View {
                 .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
             Text(msg)
                 .font(.caption)
-                .foregroundStyle(isOK ? AppTheme.success : AppTheme.pending)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
     }
@@ -346,19 +346,19 @@ struct CertificateView: View {
 
     // v0.3.157：本地签名证书（p12）独立分组.作用：模块/文件真证书签名用的
     // 本地证书（导入的 p12 或登录自动签发），与上方 Apple 侧证书列表（吊销对象）区分.
-    // v0.3.746 UI 现代化：状态/导入/删除三行走 round8 三列结构
-    // （AppRowIcon 图标列 → 统一内容列 → 行尾状态胶囊），间距全走 AppSpacing 档位.
+    // v0.3.748 round2（用户 2026-11-02 点名：导入栏改一行展示、功能文字不许擅自加颜色、
+    // 点导入不灵敏要按多次）：状态与导入合并为一行——已设置时行尾收「更换/删除」菜单，
+    // 未设置时整行点击即导入；行内文字一律默认前景色（HARD-RULES 28）；
+    // 命中区补 contentShape，present 经 Task 异步一跳，修首次点击被吞.
     @ViewBuilder
     private var localSigningSection: some View {
         Section {
-            // 状态行.
-            HStack(alignment: .center, spacing: AppSpacing.row) {
-                AppRowIcon(systemName: "seal.fill",
-                           tint: certStore.hasCert ? AppTheme.success : AppTheme.pending)
-                VStack(alignment: .leading, spacing: AppSpacing.captionPair) {
-                    Text(certStore.hasCert ? "本地签名证书" : "未设置本地签名证书")
-                        .font(AppFont.rowTitle)
-                    if certStore.hasCert {
+            if certStore.hasCert {
+                HStack(alignment: .center, spacing: AppSpacing.row) {
+                    AppRowIcon(systemName: "seal.fill", tint: AppTheme.success)
+                    VStack(alignment: .leading, spacing: AppSpacing.captionPair) {
+                        Text("本地签名证书")
+                            .font(AppFont.rowTitle)
                         Text(certStore.localCertSummary)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -369,46 +369,29 @@ struct CertificateView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                    } else {
-                        Text("导入后用于模块/文件真证书签名")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     }
-                }
-                Spacer(minLength: AppSpacing.tight)
-                SizePill(text: certStore.hasCert ? "已设置" : "未设置",
-                         tint: certStore.hasCert ? AppTheme.success : AppTheme.pending,
-                         level: .compact)
-            }
-            // 导入行.
-            Button {
-                showP12Picker = true
-            } label: {
-                HStack(alignment: .center, spacing: AppSpacing.row) {
-                    AppRowIcon(systemName: "square.and.arrow.down", tint: AppTheme.accent)
-                    Text("导入 p12 证书")
-                        .font(AppFont.rowTitle)
-                        .foregroundStyle(AppTheme.accent)
                     Spacer(minLength: AppSpacing.tight)
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(AppTheme.unselected)
+                    localCertActionsMenu
                 }
-            }
-            .buttonStyle(.plain)
-            // 删除行（仅已设置时）.
-            if certStore.hasCert {
-                Button(role: .destructive) {
-                    showRemoveCertConfirm = true
+            } else {
+                Button {
+                    requestP12Import()
                 } label: {
                     HStack(alignment: .center, spacing: AppSpacing.row) {
-                        AppRowIcon(systemName: "trash", tint: AppTheme.danger)
-                        Text("删除已导入证书（仅本地）")
-                            .font(AppFont.rowTitle)
-                            .foregroundStyle(AppTheme.danger)
-                        Spacer(minLength: 0)
+                        AppRowIcon(systemName: "square.and.arrow.down", tint: AppTheme.pending)
+                        VStack(alignment: .leading, spacing: AppSpacing.captionPair) {
+                            Text("未设置本地签名证书")
+                                .font(AppFont.rowTitle)
+                            Text("点击导入 p12，用于模块/文件真证书签名")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: AppSpacing.tight)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppTheme.unselected)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -419,6 +402,31 @@ struct CertificateView: View {
             Text("签名证书（p12）")
         } footer: {
             Text("用于模块/文件真证书签名.identifier 需与主程序一致（自动处理），TeamID 匹配即可.导入的 p12 会替换本地证书文件，不吊销 Apple 侧证书.")
+        }
+    }
+
+    /// 已设置态的行尾菜单：更换与删除收进这里，板块保持一行.
+    private var localCertActionsMenu: some View {
+        Menu {
+            Button("更换 p12 证书", systemImage: "square.and.arrow.down") {
+                requestP12Import()
+            }
+            Divider()
+            Button("删除本地证书", systemImage: "trash", role: .destructive) {
+                showRemoveCertConfirm = true
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .foregroundStyle(AppTheme.unselected)
+        }
+        .frame(width: 30)
+    }
+
+    /// 异步一跳再拉起文件选取器：点击里同步翻状态触发 onChange，
+    /// iOS 26/27 上首次点击常被吞（用户实测「要按多次」）.
+    private func requestP12Import() {
+        Task { @MainActor in
+            showP12Picker = true
         }
     }
 
