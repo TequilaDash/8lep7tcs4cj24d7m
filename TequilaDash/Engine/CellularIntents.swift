@@ -21,10 +21,9 @@ import Foundation
 /// 设置蜂窝网络开关（私有通路，效果判定；快捷指令自动化可后台静默执行）.
 @available(iOS 16.0, *)
 struct CellularSetIntent: AppIntent {
-    static var title: LocalizedStringResource = "设置蜂窝网络"
-    static var description = IntentDescription(
-        "通过私有 CoreTelephony 通路尝试开关蜂窝网络，并以真实联网状态判定效果." +
-        "普通自签沙盒可能被系统权限层拒绝，届时会如实回报."
+    static let title: LocalizedStringResource = "设置蜂窝网络"
+    static let description = IntentDescription(
+        "通过私有 CoreTelephony 通路尝试开关蜂窝网络，并以真实联网状态判定效果. 普通自签沙盒可能被系统权限层拒绝，届时会如实回报."
     )
     /// Gnoix 同款：自动化触发时不打开 App 前台，完全静默.
     static var openAppWhenRun: Bool { false }
@@ -63,8 +62,8 @@ struct CellularSetIntent: AppIntent {
 /// 关闭蜂窝网络（自动化友好：无参数，直接执行）.
 @available(iOS 16.0, *)
 struct CellularOffIntent: AppIntent {
-    static var title: LocalizedStringResource = "关闭蜂窝网络"
-    static var description = IntentDescription("私有通路尝试关闭蜂窝数据，后台静默执行，效果如实回报.")
+    static let title: LocalizedStringResource = "关闭蜂窝网络"
+    static let description = IntentDescription("私有通路尝试关闭蜂窝数据，后台静默执行，效果如实回报.")
     static var openAppWhenRun: Bool { false }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -77,8 +76,8 @@ struct CellularOffIntent: AppIntent {
 /// 打开蜂窝网络（自动化友好：无参数，直接执行）.
 @available(iOS 16.0, *)
 struct CellularOnIntent: AppIntent {
-    static var title: LocalizedStringResource = "打开蜂窝网络"
-    static var description = IntentDescription("私有通路尝试恢复蜂窝数据，后台静默执行，效果如实回报.")
+    static let title: LocalizedStringResource = "打开蜂窝网络"
+    static let description = IntentDescription("私有通路尝试恢复蜂窝数据，后台静默执行，效果如实回报.")
     static var openAppWhenRun: Bool { false }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
