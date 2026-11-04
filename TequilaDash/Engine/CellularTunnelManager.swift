@@ -325,6 +325,24 @@ final class CellularTunnelManager: @unchecked Sendable {
             return false
         }
 
+        // v0.3.755：私有 CoreTelephony 开关优先（Gnoix 同款）——不跳快捷指令、不离开 App.
+        if CellularDataToggleService.shared.isPrivateAPIAvailable {
+            do {
+                try await CellularDataToggleService.shared.setCellularEnabled(false)
+                didTurnOffData = true
+                // 等路由重置窗口（网络真的断）；超时也继续，后续隧道就绪探测兜底.
+                let down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 6)
+                LoginLogger.shared.log(
+                    "[Cellular] 私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")",
+                    category: .tunnelCellular)
+                return true
+            } catch {
+                LoginLogger.shared.log(
+                    "[Cellular] 私有 API 关蜂窝失败（\(error.localizedDescription)），回落快捷指令路径",
+                    category: .tunnelCellular)
+            }
+        }
+
         let name = turnOffShortcutName
         // v0.3.650：**没建快捷指令就绝不跳转**。
         //
@@ -374,6 +392,19 @@ final class CellularTunnelManager: @unchecked Sendable {
     @discardableResult
     func turnOnDataIfNeeded() async -> Bool {
         guard didTurnOffData else { return false }
+        // v0.3.755：私有 CoreTelephony 开关优先；失败回落快捷指令.
+        if CellularDataToggleService.shared.isPrivateAPIAvailable {
+            do {
+                try await CellularDataToggleService.shared.setCellularEnabled(true)
+                didTurnOffData = false
+                try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
+                return true
+            } catch {
+                LoginLogger.shared.log(
+                    "[Cellular] 私有 API 开蜂窝失败（\(error.localizedDescription)），回落快捷指令路径",
+                    category: .tunnelCellular)
+            }
+        }
         let name = turnOnShortcutName
         guard CellularShortcutInstaller.isShortcutInstalled(name) else {
             LoginLogger.shared.log(

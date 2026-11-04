@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.755] - 2026-11-04
+
+### 新增
+
+- 蜂窝网络续签私有开关通道（照 Gnoix 1.2.15 逆向/反编译移植）：新增 `CellularDataToggleService`（dlopen CoreTelephony 取 `_CTServerConnectionCreate` / `_CTServerConnectionSetCellularDataIsEnabled`，程序化开关蜂窝{{TERM_fsvsvmiy}}）与 `CellularNetworkChecker`（常驻 NWPathMonitor 维护在线/Wi-Fi/仅蜂窝状态，`waitForCellularToTurnOff` 按网络真实断开等待路由重置窗口，取代固定 sleep 赌时长）. `CellularTunnelManager` 关/开蜂窝优先走私有 API——成功则不再跳出 App 跑快捷指令；失败自动回落既有快捷指令路径（引导自建链路保留为降级面）. `didTurnOffData` 生命周期保险（切后台/回前台恢复蜂窝）对两条路径同样生效.
+
 ## [0.3.754] - 2026-11-04
 
 ### 修复
