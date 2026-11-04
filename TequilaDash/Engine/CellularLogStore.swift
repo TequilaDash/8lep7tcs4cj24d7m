@@ -31,9 +31,18 @@ final class CellularLogStore: ObservableObject, @unchecked Sendable {
 
     private init() {}
 
+    /// 同文去重窗口（v0.3.757）：10 秒内逐字相同的日志只记首条 ——
+    /// 建隧道调用点有 28 处，闸门类文案会反复命中，不去重会把 200 条环形刷穿.
+    private static let dedupeWindow: TimeInterval = 10
+
     func log(_ text: String) {
         let entry = Entry(time: Date(), text: text)
         lock.lock()
+        if let last = buffer.last, last.text == text,
+           entry.time.timeIntervalSince(last.time) < Self.dedupeWindow {
+            lock.unlock()
+            return
+        }
         buffer.append(entry)
         if buffer.count > Self.capacity {
             buffer.removeFirst(buffer.count - Self.capacity)

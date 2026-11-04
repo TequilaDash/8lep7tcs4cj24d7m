@@ -104,6 +104,19 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
         waitBox.resumeIfPending(false)
     }
 
+    /// 等待网络恢复在线（v0.3.757：开蜂窝效果校验用）.
+    /// - Returns: 期间恢复联网 = `true`；超时仍离线 = `false`.
+    func waitForNetworkToReturn(timeoutSeconds: Double) async -> Bool {
+        if connectedBox.value { return true }
+        // Date 比较走 Double 时间戳（>=/<= 是 weak import 雷，守卫 swift_date_compare_guard.py 拦截）.
+        let deadline = Date().timeIntervalSinceReferenceDate + timeoutSeconds
+        while Date().timeIntervalSinceReferenceDate < deadline {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            if connectedBox.value { return true }
+        }
+        return connectedBox.value
+    }
+
     /// 一次性 Wi-Fi 探针（Gnoix `isWiFiInterfaceActive()` 同职责）.
     /// 探不到不冒充 Wi-Fi（默认 `false`，与 `isWiFiSatisfied` 的超时放行策略相反）.
     static func isWiFiInterfaceActive(timeout: TimeInterval = 1.0) -> Bool {

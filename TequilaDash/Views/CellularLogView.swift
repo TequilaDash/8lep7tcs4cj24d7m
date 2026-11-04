@@ -14,7 +14,7 @@ struct CellularLogView: View {
     var body: some View {
         List {
             if store.entries.isEmpty {
-                Text("暂无日志. 触发一次蜂窝开关（或重启 App）后回来看.")
+                Text("暂无日志，需触发一次蜂窝开关.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -29,7 +29,7 @@ struct CellularLogView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("蜂窝开关日志")
+        .navigationTitle("蜂窝刷新日志")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

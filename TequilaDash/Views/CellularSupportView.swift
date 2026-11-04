@@ -30,6 +30,9 @@ struct CellularSupportView: View {
     /// v0.3.756：右上角「运行日志」面板.
     @State private var showLog = false
 
+    /// v0.3.757：私有开关「写入权限」状态（实时观察服务发布）.
+    @ObservedObject private var toggleService = CellularDataToggleService.shared
+
     /// 私有开关 API 可用性（init 期探测定死）.
     private var privateAvailable: Bool {
         CellularDataToggleService.shared.isPrivateAPIAvailable
@@ -93,10 +96,15 @@ struct CellularSupportView: View {
                         .font(AppFont.footnote)
                         .foregroundStyle(.secondary)
                 }
+                if privateAvailable {
+                    Text(toggleService.privateStatusText)
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                }
             } header: {
                 Text("开关方式")
             } footer: {
-                Text("自动 = 优先私有实现（全程不离开 App），失败才回落快捷指令. 私有实现 = 只走私有 API. 快捷指令 = 只走快捷指令（iOS 会短暂跳到快捷指令 App）.")
+                Text("请选择其中一个方案，默认自动.")
             }
 
             Section {
@@ -141,9 +149,7 @@ struct CellularSupportView: View {
                 } label: {
                     Label("重新引导示范", systemImage: "questionmark.circle")
                 }
-            } footer: {
-                Text("名称回到 TurnOffData / TurnOnData，延时回到 1 秒，不影响总开关.")
-            }
+            } 
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Cellular 隧道支持")

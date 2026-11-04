@@ -22,10 +22,30 @@ import UIKit
 /// ⚠️ 默认关（`UserDefaults` 无值即 `false`）⇒ 开关不开时本类全部方法都是 no-op，
 /// **不改变 Wi-Fi 下既有行为**（兼容纪律，与 `TunnelManager` 同款）.
 ///
-/// `@unchecked Sendable`：本类**没有可变存储属性**，全是无状态计算，跨隔离域共享本单例安全.
+/// `@unchecked Sendable`：实例侧可变状态只有 `didTurnOffData`（stateLock 保护）与静默闸门
+/// 去重标记（静态 + NSLock），跨隔离域共享本单例安全.
 final class CellularTunnelManager: @unchecked Sendable {
     static let shared = CellularTunnelManager()
     private init() {}
+
+    // MARK: - 静默闸门日志（v0.3.757）
+
+    // prepareForTunnel 的两道快速闸门此前是**零日志** return —— 用户开着蜂窝总开关测试时，
+    // 「面板一条日志都没有」的最大嫌疑就是它们（总开关没开 / 冷启动 Wi-Fi 误判）.
+    // 现在补日志：面板侧每会话各记一次（28 个调用点会反复撞闸门，防刷屏）；盘上恒记.
+    private static let gateFlagLock = NSLock()
+    private static var loggedGateBails: Set<String> = []
+
+    private static func logGateOnce(_ key: String, _ text: String) {
+        gateFlagLock.lock()
+        let first = !loggedGateBails.contains(key)
+        if first { loggedGateBails.insert(key) }
+        gateFlagLock.unlock()
+        if first {
+            CellularLogStore.shared.log(text)
+        }
+        LoginLogger.shared.log("[Cellular] " + text, category: .tunnelCellular)
+    }
 
     /// `UserDefaults` 键. 沿用本仓「模块.项」点号惯例（与 `TunnelManager.kindKey` 同款）.
     static let enabledKey = "TequilaDash.CellularTunnelSupport"
@@ -88,14 +108,22 @@ final class CellularTunnelManager: @unchecked Sendable {
     @discardableResult
     func prepareForTunnel() -> Bool {
         // 快速闸门：平台 / 开关 / Wi-Fi。三项任一不满足直接返回，**不阻塞**。
-        guard isSupported, isEnabled else { return false }
-        guard !Self.isWiFiSatisfied() else { return false }
+        // v0.3.757：不再是静默 return —— 面板与盘上日志都如实留痕（详见 logGateOnce）.
+        guard isSupported, isEnabled else {
+            Self.logGateOnce("disabled", "蜂窝隧道总开关未开，跳过蜂窝流程")
+            return false
+        }
+        guard !Self.isWiFiSatisfied() else {
+            Self.logGateOnce("wifi", "Wi-Fi 在线，跳过蜂窝流程")
+            return false
+        }
 
         // 关蜂窝（幂等：已关过就不重复跑）。同步等待 async 结果。
         let turnedOff = Self.runSync { await self.turnOffDataIfNeeded() }
         if !turnedOff {
-            // 没关成（快捷指令没装 / 没被受理）—— 不阻断，由后续 ensureHeartbeat 如实报错。
-            LoginLogger.shared.log("[Cellular] 关蜂窝未执行，继续尝试建隧道",
+            // 没关成（幂等跳过 / 私有被拒 / 快捷指令没装 / 没被受理）—— 不阻断，如实留痕.
+            // v0.3.757：具体原因已进蜂窝开关日志（面板可见），这里只留盘上索引.
+            LoginLogger.shared.log("[Cellular] 关蜂窝未执行（原因见蜂窝开关日志），继续尝试建隧道",
                                   category: .tunnelCellular)
         }
 
@@ -366,15 +394,41 @@ final class CellularTunnelManager: @unchecked Sendable {
             if service.isPrivateAPIAvailable {
                 do {
                     try await service.setCellularEnabled(false)
-                    didTurnOffData = true
-                    // 等路由重置窗口（网络真的断）；超时也继续，后续隧道就绪探测兜底.
-                    let down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 6)
-                    CellularLogStore.shared.log("私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")")
-                    LoginLogger.shared.log(
-                        "[Cellular] 私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")",
-                        category: .tunnelCellular)
-                    return true
+                    // v0.3.757：效果判定 —— setter 返回 0 只代表系统受理；以「蜂窝真断」为准.
+                    var down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 2.5)
+                    if !down && CellularNetworkChecker.shared.isNetworkConnectedNow {
+                        // 仍未断且仍在线 ⇒ 可能 bool 极性别名（参数语义与预期相反），翻转重试一枪.
+                        CellularLogStore.shared.log("私有 API 返回成功但 2.5s 未断网，翻转极性别名重试")
+                        service.polarityInverted = !service.polarityInverted
+                        do {
+                            try await service.setCellularEnabled(false)
+                            down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 3.5)
+                        } catch {
+                            CellularLogStore.shared.log("极性重试调用失败（\(error.localizedDescription)）")
+                        }
+                        if !down {
+                            CellularLogStore.shared.log("翻转后仍未断网，还原极性，判定私有开关无效")
+                            service.polarityInverted = !service.polarityInverted
+                        }
+                    }
+                    if down || !CellularNetworkChecker.shared.isNetworkConnectedNow {
+                        didTurnOffData = true
+                        CellularLogStore.shared.log("私有 API 关蜂窝生效（实测断网），路由重置窗口已开")
+                        LoginLogger.shared.log("[Cellular] 私有 API 关蜂窝生效（实测断网）",
+                                              category: .tunnelCellular)
+                        return true
+                    }
+                    CellularLogStore.shared.log("私有 API 调用完成但蜂窝未断，判定无效")
+                    LoginLogger.shared.log("[Cellular] 私有 API 调用完成但蜂窝未断（疑似无效果）",
+                                          category: .tunnelCellular)
+                    if mode == .privateOnly {
+                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底，本次关蜂窝未执行")
+                        return false
+                    }
+                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
                 } catch {
+                    // v0.3.757：CTError ≠ 0 是系统明确拒绝（真机实锤 CTError 2）——
+                    // 极性重试无意义，快速按失败走（不再浪费 6s 等待）.
                     CellularLogStore.shared.log("私有 API 关蜂窝失败（\(error.localizedDescription)）")
                     LoginLogger.shared.log(
                         "[Cellular] 私有 API 关蜂窝失败（\(error.localizedDescription)）",
@@ -452,11 +506,29 @@ final class CellularTunnelManager: @unchecked Sendable {
             if service.isPrivateAPIAvailable {
                 do {
                     try await service.setCellularEnabled(true)
-                    didTurnOffData = false
-                    try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
-                    return true
+                    // v0.3.757：效果校验 —— setter 返回 0 ≠ 蜂窝真开了；8s 内没恢复联网视为未生效.
+                    let back = await CellularNetworkChecker.shared.waitForNetworkToReturn(timeoutSeconds: 8)
+                    if back || CellularNetworkChecker.shared.isNetworkConnectedNow {
+                        didTurnOffData = false
+                        CellularLogStore.shared.log("私有 API 开蜂窝生效（实测恢复联网）")
+                        LoginLogger.shared.log("[Cellular] 私有 API 开蜂窝生效（实测恢复联网）",
+                                              category: .tunnelCellular)
+                        try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
+                        return true
+                    }
+                    CellularLogStore.shared.log("私有 API 开蜂窝后 8s 未恢复联网，视为未生效")
+                    LoginLogger.shared.log("[Cellular] 私有 API 开蜂窝后未恢复联网（疑似无效果）",
+                                          category: .tunnelCellular)
+                    if mode == .privateOnly {
+                        CellularLogStore.shared.log("模式=私有实现：开蜂窝未生效（可到控制中心手动开蜂窝）")
+                        return false
+                    }
+                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
                 } catch {
                     CellularLogStore.shared.log("私有 API 开蜂窝失败（\(error.localizedDescription)）")
+                    LoginLogger.shared.log(
+                        "[Cellular] 私有 API 开蜂窝失败（\(error.localizedDescription)）",
+                        category: .tunnelCellular)
                     if mode == .privateOnly {
                         CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底（可到控制中心手动开蜂窝）")
                         return false
