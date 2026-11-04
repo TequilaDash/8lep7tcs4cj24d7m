@@ -27,6 +27,26 @@ struct CellularSupportView: View {
 
     @State private var showGuide = false
 
+    /// v0.3.756：右上角「运行日志」面板.
+    @State private var showLog = false
+
+    /// 私有开关 API 可用性（init 期探测定死）.
+    private var privateAvailable: Bool {
+        CellularDataToggleService.shared.isPrivateAPIAvailable
+    }
+
+    /// 开关方式三选绑定（写回即记日志，切换有痕）.
+    private var modeBinding: Binding<CellularTunnelManager.ToggleMode> {
+        Binding(
+            get: { CellularTunnelManager.shared.toggleMode },
+            set: {
+                CellularTunnelManager.shared.toggleMode = $0
+                CellularLogStore.shared.log("开关方式切换为 \($0.label)")
+                AppHaptics.success()
+            }
+        )
+    }
+
     /// 名字输入框：**读原始存储值**（可以为空），默认名只作占位符.
     ///
     /// v0.3.743：旧实现读「生效值」（留空即回落默认名），用户把输入框清空后立刻又被填回
@@ -58,11 +78,33 @@ struct CellularSupportView: View {
     var body: some View {
         List {
             Section {
+                Picker("开关方式", selection: modeBinding) {
+                    ForEach(CellularTunnelManager.ToggleMode.allCases, id: \.self) { m in
+                        Text(m.label).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+                HStack(spacing: 8) {
+                    Image(systemName: privateAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(privateAvailable ? AppTheme.success : AppTheme.danger)
+                    Text("私有开关 API")
+                    Spacer(minLength: 8)
+                    Text(privateAvailable ? "可用" : "不可用")
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("开关方式")
+            } footer: {
+                Text("自动 = 优先私有实现（全程不离开 App），失败才回落快捷指令. 私有实现 = 只走私有 API. 快捷指令 = 只走快捷指令（iOS 会短暂跳到快捷指令 App）.")
+            }
+
+            Section {
                 Toggle("蜂窝刷新", isOn: $enabled)
             } header: {
                 Text("总开关")
             } footer: {
-                Text("刷新时通过快捷指令自动开关蜂窝数据.")
+                Text("刷新时按「开关方式」所选通道自动开关蜂窝数据.")
             }
 
             Section {
@@ -76,7 +118,7 @@ struct CellularSupportView: View {
             } header: {
                 Text("快捷指令")
             } footer: {
-                Text("快捷指令 App 里的指令名，区分大小写.")
+                Text("快捷指令 App 里的指令名，区分大小写. 仅「快捷指令」方式或「自动」回落时使用.")
             }
 
             Section {
@@ -106,6 +148,20 @@ struct CellularSupportView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Cellular 隧道支持")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showLog = true
+                } label: {
+                    Label("运行日志", systemImage: "doc.text.magnifyingglass")
+                }
+            }
+        }
+        .sheet(isPresented: $showLog) {
+            NavigationStack {
+                CellularLogView()
+            }
+        }
         .onAppear {
             if !guideSeen { showGuide = true }
         }

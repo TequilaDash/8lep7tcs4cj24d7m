@@ -49,43 +49,56 @@ final class CellularDataToggleService: @unchecked Sendable {
     private typealias SetCellularFn = @convention(c) (OpaquePointer?, Bool) -> Int32
 
     private init() {
+        // v0.3.756：全链分步日志进 CellularLogStore（镜像 LoginLogger）——
+        // 「为什么没走私有 API」在日志面板里一眼可见.
+        CellularLogStore.shared.log("蜂窝开关服务初始化：探测私有 CoreTelephony API…")
         let setup = Self.setupPrivateCoreTelephony()
         self.ctConnection = setup.connection
         self.setCellularFunc = setup.setter
         self.isPrivateAPIAvailable = setup.connection != nil && setup.setter != nil
-        LoginLogger.shared.log(
+        CellularLogStore.shared.log(
             isPrivateAPIAvailable
-                ? "[Cellular] 私有 CoreTelephony 蜂窝开关 API 就绪（Gnoix 同款 _CTServerConnectionCreate + SetCellularDataIsEnabled）"
-                : "[Cellular] 私有 CoreTelephony 蜂窝开关 API 不可用，蜂窝开关走快捷指令路径",
-            category: .tunnelCellular)
+                ? "私有 CoreTelephony 蜂窝开关 API 就绪（_CTServerConnectionCreate + SetCellularDataIsEnabled）"
+                : "私有 CoreTelephony 蜂窝开关 API 不可用：蜂窝开关将走快捷指令路径")
     }
 
     // MARK: - 私有 API 探测（Gnoix setupPrivateCoreTelephony 同职责）
 
     private static func setupPrivateCoreTelephony()
         -> (connection: OpaquePointer?, setter: SetCellularFn?) {
+        let log = CellularLogStore.shared
         let path = "/System/Library/Frameworks/CoreTelephony.framework/CoreTelephony"
         guard let handle = dlopen(path, RTLD_NOW) else {
+            log.log("私有 API·dlopen 失败：\(String(cString: dlerror()))")
             return (nil, nil)
         }
-        guard let createSym = dlsym(handle, "_CTServerConnectionCreate"),
-              let setSym = dlsym(handle, "_CTServerConnectionSetCellularDataIsEnabled") else {
+        log.log("私有 API·dlopen 成功")
+        guard let createSym = dlsym(handle, "_CTServerConnectionCreate") else {
+            log.log("私有 API·dlsym(_CTServerConnectionCreate) 失败")
             return (nil, nil)
         }
+        guard let setSym = dlsym(handle, "_CTServerConnectionSetCellularDataIsEnabled") else {
+            log.log("私有 API·dlsym(_CTServerConnectionSetCellularDataIsEnabled) 失败")
+            return (nil, nil)
+        }
+        log.log("私有 API·两个私有符号齐全")
         let create = unsafeBitCast(createSym, to: CreateFn.self)
 
         // Gnoix 传的是 kCFAllocatorSystemDefault（GOT 槽解引用）；公开片段常见传 NULL.
         // 两种都试，先系统分配器后 NULL.
         let allocator = Unmanaged.passUnretained(kCFAllocatorSystemDefault).toOpaque()
         var connection = create(allocator, nil, nil)
+        var allocatorNote = "kCFAllocatorSystemDefault"
         if connection == nil {
             connection = create(nil, nil, nil)
+            allocatorNote = "NULL"
         }
         guard connection != nil else {
+            log.log("私有 API·CTServerConnectionCreate 两次尝试（系统分配器/NULL）均返回空 ⇒ 判定不可用")
             return (nil, nil)
         }
-        let setter = unsafeBitCast(setSym, to: SetCellularFn.self)
-        return (connection, setter)
+        log.log("私有 API·CTServerConnection 创建成功（分配器=\(allocatorNote)）")
+        return (connection, unsafeBitCast(setSym, to: SetCellularFn.self))
     }
 
     // MARK: - 开关
@@ -96,19 +109,16 @@ final class CellularDataToggleService: @unchecked Sendable {
         guard let connection = ctConnection, let setter = setCellularFunc else {
             throw ToggleError.privateAPIUnavailable
         }
+        CellularLogStore.shared.log("私有 API·setCellularEnabled(\(enabled ? "开" : "关")) 调用中…")
         let code: Int32 = try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(returning: setter(connection, enabled))
             }
         }
         guard code == 0 else {
-            LoginLogger.shared.log(
-                "[Cellular] SetCellularDataIsEnabled(\(enabled)) 返回 CTError \(code)",
-                category: .tunnelCellular)
+            CellularLogStore.shared.log("私有 API·SetCellularDataIsEnabled 返回 CTError \(code)")
             throw ToggleError.ctError(code)
         }
-        LoginLogger.shared.log(
-            "[Cellular] 私有 API 已\(enabled ? "打开" : "关闭")蜂窝{{TERM_fsvsvmiy}}",
-            category: .tunnelCellular)
+        CellularLogStore.shared.log("私有 API·已\(enabled ? "打开" : "关闭")蜂窝{{TERM_fsvsvmiy}}")
     }
 }

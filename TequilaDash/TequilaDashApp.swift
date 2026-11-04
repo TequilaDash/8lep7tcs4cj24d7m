@@ -37,6 +37,10 @@ struct TequilaDashApp: App {
         setenv("GOMAXPROCS", "4", 1)         // 6 核设备限制 P 数，减少线程与结构开销
         // SSH Debug 模式：开启后随 App 启动自动拉起 SSH 服务（见 SSH 调试页开关）
         SSHServerService.shared.autoStartIfNeeded()
+        // v0.3.756：启动即探测私有蜂窝开关 API 并写蜂窝日志面板首条——
+        // 用户打开「Cellular 隧道支持 → 运行日志」第一屏就能看到判定结论.
+        CellularLogStore.shared.log("App 启动，探测私有蜂窝开关 API…")
+        _ = CellularDataToggleService.shared
         // v0.3.725：iOS 27.2 起 RPPairing 端口不再固定 49152，启动即后台解析一次
         // （_remotepairing._tcp.）。current 只读缓存，解析不阻塞这里.
         RemotePairingPort.warmUp()

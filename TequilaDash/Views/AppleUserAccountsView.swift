@@ -17,6 +17,9 @@ struct AppleUserAccountsView: View {
     @State private var signOutOptions = AppleAccountSignOutOptions()
     /// 二次确认对话框（防 Form 整行误触直接删户）.
     @State private var confirmRemove = false
+    /// v0.3.756：列表身份代数——移除/退出 sheet 关闭后 +1，强制 List 重建，
+    /// 兜底 destructive swipe + sheet 组合的幽灵行渲染缺陷（台账数据从未变过，纯显示层）.
+    @State private var listEpoch = 0
 
     private struct DeviceRegistrationResult: Identifiable {
         let id = UUID()
@@ -62,10 +65,10 @@ struct AppleUserAccountsView: View {
         .sheet(item: $deviceResult) { result in
             deviceRegisterSheet(result)
         }
-        .sheet(isPresented: $showSignOutAllConfirm) {
+        .sheet(isPresented: $showSignOutAllConfirm, onDismiss: { listEpoch += 1 }) {
             signOutSheet(account: nil)
         }
-        .sheet(item: $pendingRemove) { account in
+        .sheet(item: $pendingRemove, onDismiss: { listEpoch += 1 }) { account in
             signOutSheet(account: account)
         }
     }
@@ -112,6 +115,7 @@ struct AppleUserAccountsView: View {
                             else { store.signOutAll(options: signOutOptions) }
                             pendingRemove = nil
                             showSignOutAllConfirm = false
+                            listEpoch += 1
                         }
                         Button("取消", role: .cancel) {
                             LoginLogger.shared.log("[账户] 二次确认取消：\(account?.email ?? "全部账户")，未做任何操作")
@@ -204,6 +208,7 @@ struct AppleUserAccountsView: View {
             ForEach(store.accounts) { acc in
                 accountRow(acc)
             }
+            .id(listEpoch)
             if store.accounts.isEmpty {
                 Text("还没有保持的账户.")
                     .font(AppFont.footnote)
@@ -245,12 +250,16 @@ struct AppleUserAccountsView: View {
             } label: {
                 Label("重新登录", systemImage: "person.badge.key")
             }
-            Button(role: .destructive) {
+            // v0.3.756：不再用 destructive 角色——destructive swipe + sheet 组合
+            // 在 List 上有幽灵行渲染缺陷（用户实测「没点移除账户却被隐藏」），
+            // 普通按钮 + danger 着色外观完全一致，且不触发该缺陷.
+            Button {
                 signOutOptions = .init()
                 pendingRemove = acc
             } label: {
                 Label("移除", systemImage: "trash")
             }
+            .tint(AppTheme.danger)
         }
     }
 

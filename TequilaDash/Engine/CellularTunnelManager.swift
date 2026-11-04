@@ -207,6 +207,38 @@ final class CellularTunnelManager: @unchecked Sendable {
     static let defaultTurnOffShortcut = "TurnOffData"
     static let defaultTurnOnShortcut = "TurnOnData"
 
+    // MARK: - 开关方式（v0.3.756：Auto / 私有实现 / 快捷指令）
+
+    /// 蜂窝开关方式三选.
+    enum ToggleMode: String, CaseIterable {
+        /// 优先私有 API，失败回落快捷指令（默认）.
+        case auto
+        /// 只走私有 API（失败不回落）.
+        case privateOnly
+        /// 只走快捷指令.
+        case shortcutsOnly
+
+        var label: String {
+            switch self {
+            case .auto: return "自动"
+            case .privateOnly: return "私有实现"
+            case .shortcutsOnly: return "快捷指令"
+            }
+        }
+    }
+
+    static let toggleModeKey = "CellularToggleMode"
+
+    /// 当前开关方式（UserDefaults 持久化，缺省 auto）.
+    var toggleMode: ToggleMode {
+        get {
+            ToggleMode(rawValue: UserDefaults.standard.string(forKey: Self.toggleModeKey) ?? "") ?? .auto
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.toggleModeKey)
+        }
+    }
+
     /// 关/开蜂窝后各等多久再探隧道（对齐 SideStore
     /// `defaultTurnOffDataBaseDelay` / `defaultTurnOnDataBaseDelay` = 1.0s）.
     ///
@@ -322,24 +354,43 @@ final class CellularTunnelManager: @unchecked Sendable {
         guard !Self.isWiFiSatisfied() else {
             LoginLogger.shared.log("[Cellular] Wi-Fi 已连接，跳过关闭蜂窝快捷指令",
                                   category: .tunnelCellular)
+            CellularLogStore.shared.log("Wi-Fi 已连接，跳过关蜂窝")
             return false
         }
 
-        // v0.3.755：私有 CoreTelephony 开关优先（Gnoix 同款）——不跳快捷指令、不离开 App.
-        if CellularDataToggleService.shared.isPrivateAPIAvailable {
-            do {
-                try await CellularDataToggleService.shared.setCellularEnabled(false)
-                didTurnOffData = true
-                // 等路由重置窗口（网络真的断）；超时也继续，后续隧道就绪探测兜底.
-                let down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 6)
-                LoginLogger.shared.log(
-                    "[Cellular] 私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")",
-                    category: .tunnelCellular)
-                return true
-            } catch {
-                LoginLogger.shared.log(
-                    "[Cellular] 私有 API 关蜂窝失败（\(error.localizedDescription)），回落快捷指令路径",
-                    category: .tunnelCellular)
+        // v0.3.756：开关方式三选（自动=私有优先回落快捷指令 / 私有实现 / 快捷指令）.
+        let mode = toggleMode
+        CellularLogStore.shared.log("关蜂窝开始（模式=\(mode.label)）")
+        if mode != .shortcutsOnly {
+            let service = CellularDataToggleService.shared
+            if service.isPrivateAPIAvailable {
+                do {
+                    try await service.setCellularEnabled(false)
+                    didTurnOffData = true
+                    // 等路由重置窗口（网络真的断）；超时也继续，后续隧道就绪探测兜底.
+                    let down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 6)
+                    CellularLogStore.shared.log("私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")")
+                    LoginLogger.shared.log(
+                        "[Cellular] 私有 API 已关蜂窝，路由重置窗口\(down ? "已就绪" : "等待超时（继续）")",
+                        category: .tunnelCellular)
+                    return true
+                } catch {
+                    CellularLogStore.shared.log("私有 API 关蜂窝失败（\(error.localizedDescription)）")
+                    LoginLogger.shared.log(
+                        "[Cellular] 私有 API 关蜂窝失败（\(error.localizedDescription)）",
+                        category: .tunnelCellular)
+                    if mode == .privateOnly {
+                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底，本次关蜂窝未执行")
+                        return false
+                    }
+                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                }
+            } else {
+                CellularLogStore.shared.log("私有 API 不可用")
+                if mode == .privateOnly {
+                    CellularLogStore.shared.log("模式=私有实现：本次关蜂窝未执行（请改用自动或快捷指令）")
+                    return false
+                }
             }
         }
 
@@ -360,6 +411,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         }
 
         let url = Self.shortcutURL(for: name)
+        CellularLogStore.shared.log("执行关蜂窝快捷指令「\(name)」（会短暂跳到快捷指令 App）")
         LoginLogger.shared.log("[Cellular] 执行关蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
         guard ok else {
@@ -392,17 +444,31 @@ final class CellularTunnelManager: @unchecked Sendable {
     @discardableResult
     func turnOnDataIfNeeded() async -> Bool {
         guard didTurnOffData else { return false }
-        // v0.3.755：私有 CoreTelephony 开关优先；失败回落快捷指令.
-        if CellularDataToggleService.shared.isPrivateAPIAvailable {
-            do {
-                try await CellularDataToggleService.shared.setCellularEnabled(true)
-                didTurnOffData = false
-                try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
-                return true
-            } catch {
-                LoginLogger.shared.log(
-                    "[Cellular] 私有 API 开蜂窝失败（\(error.localizedDescription)），回落快捷指令路径",
-                    category: .tunnelCellular)
+        // v0.3.756：开蜂窝同样按开关方式三选走.
+        let mode = toggleMode
+        CellularLogStore.shared.log("开蜂窝开始（模式=\(mode.label)）")
+        if mode != .shortcutsOnly {
+            let service = CellularDataToggleService.shared
+            if service.isPrivateAPIAvailable {
+                do {
+                    try await service.setCellularEnabled(true)
+                    didTurnOffData = false
+                    try? await Task.sleep(nanoseconds: UInt64(turnOnBaseDelay * 1_000_000_000))
+                    return true
+                } catch {
+                    CellularLogStore.shared.log("私有 API 开蜂窝失败（\(error.localizedDescription)）")
+                    if mode == .privateOnly {
+                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底（可到控制中心手动开蜂窝）")
+                        return false
+                    }
+                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                }
+            } else {
+                CellularLogStore.shared.log("私有 API 不可用")
+                if mode == .privateOnly {
+                    CellularLogStore.shared.log("模式=私有实现：开蜂窝未执行（可到控制中心手动开蜂窝）")
+                    return false
+                }
             }
         }
         let name = turnOnShortcutName
@@ -413,6 +479,7 @@ final class CellularTunnelManager: @unchecked Sendable {
             return false
         }
         let url = Self.shortcutURL(for: name)
+        CellularLogStore.shared.log("执行开蜂窝快捷指令「\(name)」（会短暂跳到快捷指令 App）")
         LoginLogger.shared.log("[Cellular] 执行开蜂窝快捷指令「\(name)」…", category: .tunnelCellular)
         let ok = await UIApplication.shared.open(url)
         if ok { didTurnOffData = false }
