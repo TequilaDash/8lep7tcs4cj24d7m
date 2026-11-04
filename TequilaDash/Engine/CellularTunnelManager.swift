@@ -34,7 +34,8 @@ final class CellularTunnelManager: @unchecked Sendable {
     // 「面板一条日志都没有」的最大嫌疑就是它们（总开关没开 / 冷启动 Wi-Fi 误判）.
     // 现在补日志：面板侧每会话各记一次（28 个调用点会反复撞闸门，防刷屏）；盘上恒记.
     private static let gateFlagLock = NSLock()
-    private static var loggedGateBails: Set<String> = []
+    // 访问全部收在 gateFlagLock 临界区内；nonisolated(unsafe) 只是关掉并发检查器的全局可变告警.
+    private static nonisolated(unsafe) var loggedGateBails: Set<String> = []
 
     private static func logGateOnce(_ key: String, _ text: String) {
         gateFlagLock.lock()

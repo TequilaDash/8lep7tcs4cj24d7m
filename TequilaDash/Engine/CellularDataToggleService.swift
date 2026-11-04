@@ -208,27 +208,30 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
         return try await callOnUserQueue { f(c, wire) }
     }
 
+    /// 同步领取探测资格（NSLock.lock/unlock 禁止在 async 上下文直调，收进同步函数）.
+    /// - Returns: `true` = 本调用是探测者；`false` = 已有人探测过（或正在探测）.
+    private func claimProbeSlot() -> Bool {
+        probeLock.lock()
+        defer { probeLock.unlock() }
+        if probedVariants { return false }
+        probedVariants = true
+        return true
+    }
+
     /// 变体探测（一次性；probeLock 防并发重入）.
     private func probeVariantsOnce(initialCode: Int32) async -> CallVariant? {
-        probeLock.lock()
-        if probedVariants {
-            probeLock.unlock()
-            return nil
-        }
-        probedVariants = true
-        probeLock.unlock()
-        let log = CellularLogStore.shared
-        log("变体探测：系统拒绝（CTError \(initialCode)），一次性试遍调用变体（结果本会话缓存）…")
+        guard claimProbeSlot() else { return nil }
+        CellularLogStore.shared.log("变体探测：系统拒绝（CTError \(initialCode)），一次性试遍调用变体（结果本会话缓存）…")
         for v in [CallVariant.intArg, .mainThread] {
             do {
                 let c = try await invokeWithVariant(v, enabled: true)
-                log("变体探测·\(v.rawValue) → \(c == 0 ? "返回 0（受理）" : "CTError \(c)")")
+                CellularLogStore.shared.log("变体探测·\(v.rawValue) → \(c == 0 ? "返回 0（受理）" : "CTError \(c)")")
                 if c == 0 { return v }
             } catch {
-                log("变体探测·\(v.rawValue) → 异常：\(error.localizedDescription)")
+                CellularLogStore.shared.log("变体探测·\(v.rawValue) → 异常：\(error.localizedDescription)")
             }
         }
-        log("变体探测：全部变体均被系统拒绝 ⇒ 权限层拦截（非调用方式问题），静默开关本机不可用")
+        CellularLogStore.shared.log("变体探测：全部变体均被系统拒绝 ⇒ 权限层拦截（非调用方式问题），静默开关本机不可用")
         setStatus("系统拒绝写入（CTError \(initialCode)），本机静默开关不可用，请改用自动或快捷指令")
         return nil
     }
