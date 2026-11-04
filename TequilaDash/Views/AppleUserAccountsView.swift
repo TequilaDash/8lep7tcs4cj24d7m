@@ -15,6 +15,8 @@ struct AppleUserAccountsView: View {
     @State private var deviceResult: DeviceRegistrationResult?
     @State private var reloginAccount: AppleUserAccount?
     @State private var signOutOptions = AppleAccountSignOutOptions()
+    /// 二次确认对话框（防 Form 整行误触直接删户）.
+    @State private var confirmRemove = false
 
     private struct DeviceRegistrationResult: Identifiable {
         let id = UUID()
@@ -90,10 +92,8 @@ struct AppleUserAccountsView: View {
                 }
                 Section {
                     Button(role: .destructive) {
-                        if let account { store.remove(account.email, options: signOutOptions) }
-                        else { store.signOutAll(options: signOutOptions) }
-                        pendingRemove = nil
-                        showSignOutAllConfirm = false
+                        LoginLogger.shared.log("[账户] 移除页点按删除键：\(account?.email ?? "全部账户")，等待二次确认")
+                        confirmRemove = true
                     } label: {
                         Text(account == nil ? "退出全部账户" : "移除账户")
                             .font(AppFont.bodyEmphasis)
@@ -101,10 +101,30 @@ struct AppleUserAccountsView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
+                    .confirmationDialog(
+                        account == nil ? "确定退出全部账户？" : "确定移除 \(account?.email ?? "")？",
+                        isPresented: $confirmRemove,
+                        titleVisibility: .visible
+                    ) {
+                        Button(account == nil ? "退出全部账户" : "移除账户", role: .destructive) {
+                            LoginLogger.shared.log("[账户] 二次确认通过，执行移除：\(account?.email ?? "全部账户")")
+                            if let account { store.remove(account.email, options: signOutOptions) }
+                            else { store.signOutAll(options: signOutOptions) }
+                            pendingRemove = nil
+                            showSignOutAllConfirm = false
+                        }
+                        Button("取消", role: .cancel) {
+                            LoginLogger.shared.log("[账户] 二次确认取消：\(account?.email ?? "全部账户")，未做任何操作")
+                        }
+                    } message: {
+                        Text("移除后需重新登录才能侧载与管理证书.")
+                    }
                 }
             }
             .navigationTitle("退出登录")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { LoginLogger.shared.log("[账户] 移除页打开：\(account?.email ?? "全部账户")（当前共 \(store.accounts.count) 个账户）") }
+            .onDisappear { LoginLogger.shared.log("[账户] 移除页关闭：\(account?.email ?? "全部账户")") }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { pendingRemove = nil; showSignOutAllConfirm = false }

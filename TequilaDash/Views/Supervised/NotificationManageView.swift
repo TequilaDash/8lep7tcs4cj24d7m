@@ -155,7 +155,7 @@ struct NotificationManageView: View {
                 // v0.3.721：上一分支是 AppLoadingRow(.page) 的大圈，空态用同量级的 AppEmptyState，
                 // 不再掉回系统 ContentUnavailableView 的灰底小图标（视觉断层）.
                 AppEmptyState(
-                    icon: "app",
+                    icon: "apps.iphone",
                     secondaryIcon: nil,
                     title: "暂无应用",
                     message: pickerMessage.isEmpty ? "未找到已安装应用." : pickerMessage

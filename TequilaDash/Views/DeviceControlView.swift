@@ -30,7 +30,7 @@ struct DeviceControlView: View {
             case .restart: return "power.circle.fill"
             case .shutdown: return "power"
             case .recovery: return "wrench.and.screwdriver.fill"
-            case .cfprefsFlush: return "gearshape.arrow.circlepath"
+            case .cfprefsFlush: return "arrow.clockwise.circle"
             }
         }
 

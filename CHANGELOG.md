@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.753] - 2026-11-04
+
+### 修复
+
+- 「刷新 cfprefsd」图标空块：`gearshape.arrow.circlepath` 不是真实存在的 SF Symbol，改用 `arrow.clockwise.circle`；同批修复受监管两处空态的非法符号 `app`（改 `apps.iphone`）. 新增 `Resources/Scripts/sf_symbol_guard.py` + `sf_symbols.txt` 白名单守卫：全仓 `systemName`/`systemImage`/`icon` 字面量必须先登记真实存在的符号名才能过守卫，杜绝同类低级错误复发.
+- 移除账户页防误触：Form 内整行可点的「移除账户」破坏键增加系统二次确认对话框，点按不再立即删户；移除页打开/关闭/二次确认全程写 LoginLogger 审计（账户数、邮箱、结果），后续可用 SSH 日志实证「未操作却丢账户」类反馈的真因.
+
 ## [0.3.752] - 2026-11-03
 
 ### 修复
