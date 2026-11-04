@@ -255,10 +255,26 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
                 throw ToggleError.privateAPIUnavailable
             }
             let wire = wireBool(enabled)
+            // @Sendable 闭包不能直捕非 Sendable 的 @convention(c) 函数值（RegionIsolation，CI 实锤）——
+            // 装进 @unchecked Sendable 信箱搬运，语义不变：仍在主线程调用一次.
+            let box = MainCallBox(c: c, f: f, wire: wire)
             return try await withCheckedThrowingContinuation { continuation in
-                DispatchQueue.main.async { continuation.resume(returning: f(c, wire)) }
+                DispatchQueue.main.async { continuation.resume(returning: box.fire()) }
             }
         }
+    }
+
+    /// 跨隔离域搬运私有 C 指针的一次性信箱.
+    private final class MainCallBox: @unchecked Sendable {
+        let c: OpaquePointer?
+        let f: SetCellularFn
+        let wire: Bool
+        init(c: OpaquePointer?, f: SetCellularFn, wire: Bool) {
+            self.c = c
+            self.f = f
+            self.wire = wire
+        }
+        func fire() -> Int32 { f(c, wire) }
     }
 
     private func callOnUserQueue(_ body: @escaping () -> Int32) async throws -> Int32 {
