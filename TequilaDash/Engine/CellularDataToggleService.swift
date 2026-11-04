@@ -34,13 +34,14 @@ final class CellularDataToggleService: @unchecked Sendable {
     }
 
     /// 私有 API 是否可用. `false` 时调用方应走快捷指令路径.
-    private(set) var isPrivateAPIAvailable: Bool
+    let isPrivateAPIAvailable: Bool
 
     /// `_CTServerConnectionCreate` 产出的 connection.
-    private var ctConnection: OpaquePointer?
+    /// 三者均 init 期定死不再变（let），async 读侧无需加锁——
+    /// NSLock.lock() 在 async 上下文不可用（CI 实锤），let 是最省事的正确解.
+    let ctConnection: OpaquePointer?
     /// `_CTServerConnectionSetCellularDataIsEnabled(connection, enabled) -> CTError`.
-    private var setCellularFunc: SetCellularFn?
-    private let lock = NSLock()
+    let setCellularFunc: SetCellularFn?
 
     private typealias CreateFn = @convention(c) (
         UnsafeRawPointer?, UnsafeRawPointer?, UnsafeRawPointer?
@@ -92,12 +93,7 @@ final class CellularDataToggleService: @unchecked Sendable {
     /// 程序化设置蜂窝{{TERM_fsvsvmiy}}开关. `true` = 开，`false` = 关.
     /// C 调用内部可能阻塞（走 XPC），放到全局队列执行，不卡 MainActor.
     func setCellularEnabled(_ enabled: Bool) async throws {
-        lock.lock()
-        let connection = ctConnection
-        let setter = setCellularFunc
-        lock.unlock()
-
-        guard let connection, let setter else {
+        guard let connection = ctConnection, let setter = setCellularFunc else {
             throw ToggleError.privateAPIUnavailable
         }
         let code: Int32 = try await withCheckedThrowingContinuation { continuation in
