@@ -114,8 +114,13 @@ struct IncreaseMemoryView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
-                // v0.3.683：区块级错误行统一到 AppErrorRow.
-                AppErrorRow(message: message, retry: { Task { await ctrl.reload() } })
+                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                if AppSessionExpiredCard.isSessionExpiredMessage(message) {
+                    AppSessionExpiredCard(message: message, retry: { Task { await ctrl.reload() } })
+                } else {
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: message, retry: { Task { await ctrl.reload() } })
+                }
             case .loaded:
                 if ctrl.teams.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态，非错误态）。
@@ -154,8 +159,13 @@ struct IncreaseMemoryView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载 App 列表…", level: .block)
             case .failed(let message):
-                // v0.3.683：区块级错误行统一到 AppErrorRow.
-                AppErrorRow(message: "加载失败：\(message)", retry: { Task { await ctrl.loadAppIDs() } })
+                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                if AppSessionExpiredCard.isSessionExpiredMessage(message) {
+                    AppSessionExpiredCard(message: message, retry: { Task { await ctrl.loadAppIDs() } })
+                } else {
+                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    AppErrorRow(message: "加载失败：\(message)", retry: { Task { await ctrl.loadAppIDs() } })
+                }
             case .loaded:
                 if ctrl.apps.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。

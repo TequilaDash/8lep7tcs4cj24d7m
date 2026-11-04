@@ -46,7 +46,12 @@ struct CertificateView: View {
                 // 避免同一条消息在页面上出现两次.
                 if let error = manager.lastError, manager.teamState == .loaded {
                     Section {
-                        AppErrorRow(message: error, retry: { manager.loadCerts() })
+                        // v0.3.754：会话过期（1100）走全仓统一卡片 AppSessionExpiredCard（规则 42）.
+                        if manager.lastErrorIsSessionExpired {
+                            AppSessionExpiredCard(message: error)
+                        } else {
+                            AppErrorRow(message: error, retry: { manager.loadCerts() })
+                        }
                     }
                 }
                 if manager.teamState == .loaded {
@@ -248,8 +253,13 @@ struct CertificateView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
-                // v0.3.683：区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
-                AppErrorRow(message: message, retry: { manager.loadTeams() })
+                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                if AppSessionExpiredCard.isSessionExpiredMessage(message) {
+                    AppSessionExpiredCard(message: message)
+                } else {
+                    // v0.3.683：区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
+                    AppErrorRow(message: message, retry: { manager.loadTeams() })
+                }
             case .loaded:
                 if manager.teams.isEmpty {
                     // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。

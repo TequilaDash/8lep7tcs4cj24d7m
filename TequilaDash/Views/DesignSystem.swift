@@ -873,6 +873,47 @@ extension AppErrorRow {
     }
 }
 
+/// 「Apple 会话已过期（1100）」统一错误卡片（v0.3.754 定版：全仓唯一形态）.
+///
+/// ## 为什么要有它
+/// 证书管理与增加内存限制两页曾各出一种风格（大卡 vs 行内 AppErrorRow），
+/// 同一个错误两种长相，用户裁定不允许并存（HARD-RULES 规则 42）。
+/// 全仓所有呈现「会话已过期 / 1100」类错误的位置必须调用本组件；
+/// 以后新增页面同样只允许这一个入口，禁止再走 AppErrorRow 行样式。
+///
+/// ## 用法
+/// ```swift
+/// // 有结构化标记（如 CertificateManager.lastErrorIsSessionExpired）直接判；
+/// // 只有文案时用 isSessionExpiredMessage(_:) 兜底。
+/// if AppSessionExpiredCard.isSessionExpiredMessage(message) {
+///     AppSessionExpiredCard(message: message, retry: { reload() })
+/// } else {
+///     AppErrorRow(message: message, retry: { reload() })
+/// }
+/// ```
+struct AppSessionExpiredCard: View {
+    let message: String
+    /// 页内可选重试动作（卡片自带动作位，TintedButtonStyle 小按钮，非行内胶囊）.
+    var retry: (() -> Void)? = nil
+
+    var body: some View {
+        InfoActionCard(
+            icon: "person.badge.key.fill",
+            iconTint: AppTheme.pending,
+            title: "需要重新登录",
+            message: message,
+            actionTitle: retry == nil ? nil : "重试",
+            action: retry
+        )
+    }
+
+    /// 文案级判定（对齐 AppleAuthModels.swift:156 的 1100 文案口径）：
+    /// 调用方拿不到结构化标记（如 teamState 里的裸 message）时用它兜底。
+    static func isSessionExpiredMessage(_ message: String) -> Bool {
+        message.contains("会话已过期") || message.lowercased().contains("session has expired")
+    }
+}
+
 /// 列表的「加载 / 错误 / 空」三态统一容器（v0.3.626 新增）.
 ///
 /// ## 为什么要有它
