@@ -39,9 +39,9 @@ final class CellularDataToggleService: @unchecked Sendable {
     /// `_CTServerConnectionCreate` 产出的 connection.
     /// 三者均 init 期定死不再变（let），async 读侧无需加锁——
     /// NSLock.lock() 在 async 上下文不可用（CI 实锤），let 是最省事的正确解.
-    let ctConnection: OpaquePointer?
+    private let ctConnection: OpaquePointer?
     /// `_CTServerConnectionSetCellularDataIsEnabled(connection, enabled) -> CTError`.
-    let setCellularFunc: SetCellularFn?
+    private let setCellularFunc: SetCellularFn?
 
     private typealias CreateFn = @convention(c) (
         UnsafeRawPointer?, UnsafeRawPointer?, UnsafeRawPointer?
