@@ -104,7 +104,7 @@ struct CellularSupportView: View {
             } header: {
                 Text("开关方式")
             } footer: {
-                Text("请选择其中一个方案，默认自动.")
+                Text("自动与私有实现在被系统拒绝后都会自动改走快捷指令（普通自签 App 无法直改蜂窝，Gnoix 亦同）.")
             }
 
             Section {

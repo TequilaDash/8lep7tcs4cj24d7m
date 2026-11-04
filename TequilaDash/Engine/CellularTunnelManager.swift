@@ -19,7 +19,7 @@ import UIKit
 ///   · `waitForMinimuxerReady(timeout: 2.0)`         → 有界轮询（250ms 并行探多候选，见 `waitForTunnelReady`）
 ///   · `core.isReady(withNetworkCheck: false)`       → 本仓无「Wi-Fi 网络门」，天然等价于 `false`
 ///
-/// ⚠️ 默认关（`UserDefaults` 无值即 `false`）⇒ 开关不开时本类全部方法都是 no-op，
+/// 默认关（`UserDefaults` 无值即 `false`）⇒ 开关不开时本类全部方法都是 no-op，
 /// **不改变 Wi-Fi 下既有行为**（兼容纪律，与 `TunnelManager` 同款）.
 ///
 /// `@unchecked Sendable`：实例侧可变状态只有 `didTurnOffData`（stateLock 保护）与静默闸门
@@ -104,7 +104,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 其中多数在同步上下文里。改成 async 会波及 28 个文件的调用链，风险远大于收益。
     /// 故内部用 `DispatchSemaphore` 等 async 结果 —— 与 `isWiFiSatisfied` 同款手法。
     ///
-    /// ⚠️ 这样会在蜂窝模式下阻塞调用线程最多 `readyTimeout + baseDelay`。
+    ///  这样会在蜂窝模式下阻塞调用线程最多 `readyTimeout + baseDelay`。
     /// 蜂窝本来就是「准备阶段多等一会」的场景，可接受；Wi-Fi 下第一道闸门就返回，零开销。
     @discardableResult
     func prepareForTunnel() -> Bool {
@@ -190,7 +190,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 用于「内部逻辑是 async、但对外必须保持同步签名」的场合
     /// （典型就是 `prepareForTunnel`：28 个调用点全是同步上下文）。
     ///
-    /// ⚠️ **不可重入**：闭包内不得再调用本函数。当前唯一用途是等
+    ///  **不可重入**：闭包内不得再调用本函数。当前唯一用途是等
     /// `turnOffDataIfNeeded()`（其内部只跑快捷指令 + sleep），安全。
     private static func runSync(_ body: @escaping @MainActor () async -> Bool) -> Bool {
         let semaphore = DispatchSemaphore(value: 0)
@@ -242,7 +242,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     enum ToggleMode: String, CaseIterable {
         /// 优先私有 API，失败回落快捷指令（默认）.
         case auto
-        /// 只走私有 API（失败不回落）.
+        /// 先走私有 API，被系统拒绝时同样回落快捷指令（普通自签沙盒一律被拒，Gnoix 同款）.
         case privateOnly
         /// 只走快捷指令.
         case shortcutsOnly
@@ -269,12 +269,15 @@ final class CellularTunnelManager: @unchecked Sendable {
     }
 
     /// 关/开蜂窝后各等多久再探隧道（对齐 SideStore
-    /// `defaultTurnOffDataBaseDelay` / `defaultTurnOnDataBaseDelay` = 1.0s）.
+    /// v0.3.758：默认 1.2s（关）/ 1.5s（开），对齐 Gnoix 卡点时序实测值.
     ///
     /// v0.3.741：从写死 1.0s 改为可配置（与 SideStore 设置页同款两栏），
     /// 键与 UI 同源；取值统一过 `sanitizeBaseDelay` 夹到 0...30 秒.
     static let turnOffBaseDelayKey = "TurnOffDataBaseDelay"
     static let turnOnBaseDelayKey = "TurnOnDataBaseDelay"
+    // v0.3.758：Gnoix 卡点时序 —— 关蜂窝后等 1.2s 再推进，开蜂窝后等 1.5s 再收尾.
+    static let defaultTurnOffBaseDelay: TimeInterval = 1.2
+    static let defaultTurnOnBaseDelay: TimeInterval = 1.5
     static let defaultBaseDelay: TimeInterval = 1.0
     /// 允许范围：0 = 不等待；上限 30 秒（防手滑填 9999 把刷新拖死）.
     static let baseDelayRange: ClosedRange<Double> = 0...30
@@ -288,9 +291,9 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 关/开两档延时里的较大者（同步等待的上限用）.
     private static var configuredBaseDelayCeiling: TimeInterval {
         let off = UserDefaults.standard.object(forKey: turnOffBaseDelayKey) as? Double
-            ?? defaultBaseDelay
+            ?? defaultTurnOffBaseDelay
         let on = UserDefaults.standard.object(forKey: turnOnBaseDelayKey) as? Double
-            ?? defaultBaseDelay
+            ?? defaultTurnOnBaseDelay
         return sanitizeBaseDelay(max(off, on))
     }
 
@@ -298,14 +301,14 @@ final class CellularTunnelManager: @unchecked Sendable {
     var turnOffBaseDelay: TimeInterval {
         Self.sanitizeBaseDelay(
             UserDefaults.standard.object(forKey: Self.turnOffBaseDelayKey) as? Double
-                ?? Self.defaultBaseDelay)
+                ?? Self.defaultTurnOffBaseDelay)
     }
 
     /// 用户配置的「开蜂窝后等待」秒数.
     var turnOnBaseDelay: TimeInterval {
         Self.sanitizeBaseDelay(
             UserDefaults.standard.object(forKey: Self.turnOnBaseDelayKey) as? Double
-                ?? Self.defaultBaseDelay)
+                ?? Self.defaultTurnOnBaseDelay)
     }
 
     /// 本次会话内是否已经关过蜂窝. 用锁保护（`turnOff/OnDataIfNeeded` 可能被不同线程调）.
@@ -371,7 +374,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     ///   3. `guard !isWifiSatisfied` —— Wi-Fi 下跳过
     ///   4. 只有 openURL 成功才置 `didTurnOffData = true` 并进入等待
     ///
-    /// ⚠️ **不承诺 radio 状态**：`UIApplication.open` 返回 true 只代表系统受理了这个 URL，
+    ///  **不承诺 radio 状态**：`UIApplication.open` 返回 true 只代表系统受理了这个 URL，
     /// 不代表蜂窝数据已关闭（这正是 v0.3.616 撤销「伪造路径」的原因）。
     /// 所以这里的返回值语义是「是否执行了关闭动作」，调用方仍需靠 TCP 探测确认真实连通性。
     @MainActor
@@ -422,11 +425,9 @@ final class CellularTunnelManager: @unchecked Sendable {
                     CellularLogStore.shared.log("私有 API 调用完成但蜂窝未断，判定无效")
                     LoginLogger.shared.log("[Cellular] 私有 API 调用完成但蜂窝未断（疑似无效果）",
                                           category: .tunnelCellular)
-                    if mode == .privateOnly {
-                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底，本次关蜂窝未执行")
-                        return false
-                    }
-                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                    // v0.3.758：Gnoix 二进制实锤 —— 其私有 setter 同样被拒（日志原文
+                    // 「普通自签沙盒缺少 CommCenter 特权凭证」），被拒/无效后照常走快捷指令.
+                    CellularLogStore.shared.log("私有开关被系统拒绝或无效，回落快捷指令路径")
                 } catch {
                     // v0.3.757：CTError ≠ 0 是系统明确拒绝（真机实锤 CTError 2）——
                     // 极性重试无意义，快速按失败走（不再浪费 6s 等待）.
@@ -434,18 +435,12 @@ final class CellularTunnelManager: @unchecked Sendable {
                     LoginLogger.shared.log(
                         "[Cellular] 私有 API 关蜂窝失败（\(error.localizedDescription)）",
                         category: .tunnelCellular)
-                    if mode == .privateOnly {
-                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底，本次关蜂窝未执行")
-                        return false
-                    }
-                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                    // v0.3.758：Gnoix 二进制实锤 —— 其私有 setter 同样被拒（日志原文
+                    // 「普通自签沙盒缺少 CommCenter 特权凭证」），被拒/无效后照常走快捷指令.
+                    CellularLogStore.shared.log("私有开关被系统拒绝或无效，回落快捷指令路径")
                 }
             } else {
-                CellularLogStore.shared.log("私有 API 不可用")
-                if mode == .privateOnly {
-                    CellularLogStore.shared.log("模式=私有实现：本次关蜂窝未执行（请改用自动或快捷指令）")
-                    return false
-                }
+                CellularLogStore.shared.log("私有 API 不可用，直接走快捷指令路径")
             }
         }
 
@@ -520,28 +515,17 @@ final class CellularTunnelManager: @unchecked Sendable {
                     CellularLogStore.shared.log("私有 API 开蜂窝后 8s 未恢复联网，视为未生效")
                     LoginLogger.shared.log("[Cellular] 私有 API 开蜂窝后未恢复联网（疑似无效果）",
                                           category: .tunnelCellular)
-                    if mode == .privateOnly {
-                        CellularLogStore.shared.log("模式=私有实现：开蜂窝未生效（可到控制中心手动开蜂窝）")
-                        return false
-                    }
-                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                    // v0.3.758：开蜂窝同样不区分模式硬失败，回落快捷指令（Gnoix 同款）.
+                    CellularLogStore.shared.log("私有开关开蜂窝未生效，回落快捷指令路径")
                 } catch {
                     CellularLogStore.shared.log("私有 API 开蜂窝失败（\(error.localizedDescription)）")
                     LoginLogger.shared.log(
                         "[Cellular] 私有 API 开蜂窝失败（\(error.localizedDescription)）",
                         category: .tunnelCellular)
-                    if mode == .privateOnly {
-                        CellularLogStore.shared.log("模式=私有实现：不走快捷指令兜底（可到控制中心手动开蜂窝）")
-                        return false
-                    }
-                    CellularLogStore.shared.log("自动模式：回落快捷指令路径")
+                    CellularLogStore.shared.log("系统拒绝私有开蜂窝，回落快捷指令路径")
                 }
             } else {
-                CellularLogStore.shared.log("私有 API 不可用")
-                if mode == .privateOnly {
-                    CellularLogStore.shared.log("模式=私有实现：开蜂窝未执行（可到控制中心手动开蜂窝）")
-                    return false
-                }
+                CellularLogStore.shared.log("私有 API 不可用，直接走快捷指令路径")
             }
         }
         let name = turnOnShortcutName
@@ -571,7 +555,7 @@ final class CellularTunnelManager: @unchecked Sendable {
 
     // MARK: - 快捷指令（v0.3.650 起改为「引导用户自建」）
 
-    /// ⚠️ 这里**没有**「自动安装快捷指令」。
+    ///  这里**没有**「自动安装快捷指令」。
     ///
     /// 历史（三段都留记录，避免下一个人再走一遍）：
     /// · v0.3.599 试过 `shortcuts://import-shortcut?...&silent=true` 静默导入

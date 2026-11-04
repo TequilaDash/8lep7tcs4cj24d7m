@@ -6,8 +6,8 @@
 //  v0.3.757：真机取证（盘上 tunnellog 15:51:39）—— 初始化链路全绿，但 setter 一调用
 //  即被系统拒绝（关/开均 CTError 2）⇒ 新增三件事：
 //    1. 调用变体探测：首个 CTError 时一次性试遍「整型参数 / 主线程调用」，首个返回 0 的
-//       变体本会话缓存胜出（排查调用方式/参数类型是否是变量；若属权限层拦截，全部变体
-//       同样被拒，日志会如实写明「权限层拦截，非调用方式问题」）.
+//       变体本会话缓存胜出（排查调用方式/参数类型是否是变量；若属系统权限拒绝，全部变体
+//       同样被拒，日志按「普通自签沙盒缺少 CommCenter 特权凭证」如实留痕，Gnoix 同款）.
 //    2. 极性别名：个别系统版本 setter 的布尔语义可能与预期相反，manager 以真实断网/恢复
 //       联网实测校准后翻转并持久化（TequilaDash.CellularTogglePolarityInverted）.
 //    3. 写入权限状态 @Published：支持页「私有开关 API」行下如实展示（受理/拒绝/不可用）.
@@ -231,8 +231,8 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
                 CellularLogStore.shared.log("变体探测·\(v.rawValue) → 异常：\(error.localizedDescription)")
             }
         }
-        CellularLogStore.shared.log("变体探测：全部变体均被系统拒绝 ⇒ 权限层拦截（非调用方式问题），静默开关本机不可用")
-        setStatus("系统拒绝写入（CTError \(initialCode)），本机静默开关不可用，请改用自动或快捷指令")
+        CellularLogStore.shared.log("变体探测：全部变体均被系统拒绝（普通自签沙盒缺少 CommCenter 特权凭证，Gnoix 同款被拒）")
+        setStatus("私有开关被系统拒绝（CTError \(initialCode)，普通自签沙盒缺少 CommCenter 特权凭证），已自动回落快捷指令路径")
         return nil
     }
 
