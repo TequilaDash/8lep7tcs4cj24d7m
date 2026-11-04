@@ -232,7 +232,7 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
             }
         }
         CellularLogStore.shared.log("变体探测：全部变体均被系统拒绝（普通自签沙盒缺少 CommCenter 特权凭证，Gnoix 同款被拒）")
-        setStatus("私有开关被系统拒绝（CTError \(initialCode)，普通自签沙盒缺少 CommCenter 特权凭证），已自动回落快捷指令路径")
+        setStatus("私有开关被系统拒绝（CTError \(initialCode)，普通自签沙盒缺少 CommCenter 特权凭证）")
         return nil
     }
 

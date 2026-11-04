@@ -242,7 +242,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     enum ToggleMode: String, CaseIterable {
         /// 优先私有 API，失败回落快捷指令（默认）.
         case auto
-        /// 先走私有 API，被系统拒绝时同样回落快捷指令（普通自签沙盒一律被拒，Gnoix 同款）.
+        /// 只走私有 API，被系统拒绝或无效果时**如实失败，不回落**（用户显式选择的独立方案；兜底回落是 auto 的职责）.
         case privateOnly
         /// 只走快捷指令.
         case shortcutsOnly
@@ -427,7 +427,7 @@ final class CellularTunnelManager: @unchecked Sendable {
                                           category: .tunnelCellular)
                     // v0.3.758：Gnoix 二进制实锤 —— 其私有 setter 同样被拒（日志原文
                     // 「普通自签沙盒缺少 CommCenter 特权凭证」），被拒/无效后照常走快捷指令.
-                    CellularLogStore.shared.log("私有开关被系统拒绝或无效，回落快捷指令路径")
+                    CellularLogStore.shared.log("私有开关被系统拒绝或无效")
                 } catch {
                     // v0.3.757：CTError ≠ 0 是系统明确拒绝（真机实锤 CTError 2）——
                     // 极性重试无意义，快速按失败走（不再浪费 6s 等待）.
@@ -437,11 +437,17 @@ final class CellularTunnelManager: @unchecked Sendable {
                         category: .tunnelCellular)
                     // v0.3.758：Gnoix 二进制实锤 —— 其私有 setter 同样被拒（日志原文
                     // 「普通自签沙盒缺少 CommCenter 特权凭证」），被拒/无效后照常走快捷指令.
-                    CellularLogStore.shared.log("私有开关被系统拒绝或无效，回落快捷指令路径")
+                    CellularLogStore.shared.log("私有开关被系统拒绝或无效")
                 }
             } else {
                 CellularLogStore.shared.log("私有 API 不可用，直接走快捷指令路径")
             }
+        }
+        // v0.3.759：私有实现是用户显式选择的独立方案 —— 被系统拒绝或无效果就如实失败，
+        // 不替用户兜底回落快捷指令（兜底回落是「自动」模式的职责）.
+        if mode == .privateOnly {
+            CellularLogStore.shared.log("私有实现模式：关蜂窝私有开关被拒或无效，按选择不回落快捷指令")
+            return false
         }
 
         let name = turnOffShortcutName
@@ -516,17 +522,22 @@ final class CellularTunnelManager: @unchecked Sendable {
                     LoginLogger.shared.log("[Cellular] 私有 API 开蜂窝后未恢复联网（疑似无效果）",
                                           category: .tunnelCellular)
                     // v0.3.758：开蜂窝同样不区分模式硬失败，回落快捷指令（Gnoix 同款）.
-                    CellularLogStore.shared.log("私有开关开蜂窝未生效，回落快捷指令路径")
+                    CellularLogStore.shared.log("私有开关开蜂窝未生效")
                 } catch {
                     CellularLogStore.shared.log("私有 API 开蜂窝失败（\(error.localizedDescription)）")
                     LoginLogger.shared.log(
                         "[Cellular] 私有 API 开蜂窝失败（\(error.localizedDescription)）",
                         category: .tunnelCellular)
-                    CellularLogStore.shared.log("系统拒绝私有开蜂窝，回落快捷指令路径")
+                    CellularLogStore.shared.log("系统拒绝私有开蜂窝")
                 }
             } else {
                 CellularLogStore.shared.log("私有 API 不可用，直接走快捷指令路径")
             }
+        }
+        // v0.3.759：与 turnOff 对称 —— privateOnly 被拒/无效即如实失败，不回落.
+        if mode == .privateOnly {
+            CellularLogStore.shared.log("私有实现模式：开蜂窝私有开关被拒或无效，按选择不回落快捷指令")
+            return false
         }
         let name = turnOnShortcutName
         guard CellularShortcutInstaller.isShortcutInstalled(name) else {
