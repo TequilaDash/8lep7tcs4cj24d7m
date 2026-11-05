@@ -42,6 +42,11 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 避免两个调用同时读写 `_session` 造成竞态.
     private let authQueue = DispatchQueue(label: "com.tequila.dash.auth")
 
+    /// 设备注册专用串行队列：register FFI 可能等回环门（真机 UDID 走 lockdown/隧道），
+    /// 绝不能占用 authQueue——v0.3.765 教训：恢复路径内联预注册把 authQueue 卡死后，
+    /// 「正在恢复签名会话」永不消失，切户/重登全部排队.
+    private let registerQueue = DispatchQueue(label: "com.tequila.dash.devreg")
+
     /// App 启动后台预热（warmUp）正在执行中.
     @Published private(set) var isWarmingUp = false
 
@@ -283,9 +288,10 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             LoginLogger.shared.log("[完成] IPA 侧载会话恢复成功: \(teamSummary ?? "（无团队摘要）")")
             // v0.2.119：核对 Rust 是否真的复用了 Swift 共享的机器标识.
             verifySharedAnisetteState()
-            // v0.3.749（SideStore 做法）：token 恢复会话同样预注册——切户后 warmUp
-            // 走的就是这条路，签名时不再首撞 8220.
-            preRegisterDeviceBestEffort()
+            // v0.3.749（SideStore 做法）：token 恢复会话同样预注册——签名时不再首撞 8220.
+            // v0.3.765 改异步：预注册要读设备 UDID（lockdown 走隧道，隧道未就绪时还会
+            // 拉起回环门等用户操作），绝不能内联在恢复路径里阻塞 authQueue.
+            schedulePreRegisterBestEffort()
         } else {
             // token 过期/身份缺失等：直接抛错，调用方提示到 Apple ID 账户页处理.
             let msg = error.map { String(cString: $0) } ?? "rc=\(rc)"
@@ -315,23 +321,32 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         return udid
     }
 
-    /// 登录/恢复成功收尾的尽力预注册：失败只记隧道日志不打扰用户——签名路径里
+    /// 登录/恢复成功收尾的尽力预注册（异步，v0.3.765）：隧道未就绪直接跳过——签名路径里
     /// sign_ipa 仍会 ensure 兜底，也可以在「更多 → Apple ID 账户 → 当前账户」右滑手动重试.
-    private func preRegisterDeviceBestEffort() {
-        do {
-            let udid = try performRegisterDevice()
-            LoginLogger.shared.log("[完成] 设备已预注册到签名团队（尾号 \(udid.suffix(8))，提前消化 Apple 注册传播空窗）")
-        } catch let e as NSError {
-            LoginLogger.shared.log("[注意] 设备预注册跳过或失败（签名时自动重试）: \(e.localizedDescription)")
+    /// 注册一律走独立的 registerQueue，绝不占用 authQueue.
+    private func schedulePreRegisterBestEffort() {
+        guard TunnelGate.isReady else {
+            LoginLogger.shared.log("[注意] 隧道未就绪，设备预注册推迟到签名时进行")
+            return
+        }
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            do {
+                let udid = try self.registerQueue.sync { try self.performRegisterDevice() }
+                LoginLogger.shared.log("[完成] 设备已预注册到签名团队（尾号 \(udid.suffix(8))）")
+            } catch let e as NSError {
+                LoginLogger.shared.log("[注意] 设备预注册未完成（签名时自动重试）: \(e.localizedDescription)")
+            }
         }
     }
 
     /// 「Apple ID 账户」页右滑「注册设备」的手动入口：排队到 authQueue（与登录/签名串行，
     /// 不并发碰会话），成功返回 UDID 供弹窗展示；失败抛 Apple 原文.
     func registerCurrentDevice() async throws -> String {
-        // self 是 @unchecked Sendable（warmUp 同款模式），detached 里只进 authQueue 串行段.
+        // v0.3.765：注册改走 registerQueue——手动注册允许等回环门（弹卡关蜂窝），
+        // 但绝不能占着 authQueue 等，否则等待期间的登录/恢复全部被卡死.
         try await Task.detached(priority: .userInitiated) {
-            try self.authQueue.sync {
+            try self.registerQueue.sync {
                 try self.performRegisterDevice()
             }
         }.value
@@ -348,6 +363,14 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
               let token = account.swiftAuthToken, !token.isEmpty else { return }
         let email = account.email
         isWarmingUp = true
+        // v0.3.765 看门狗：恢复链路里任何一环卡死（anisette/FFI/隧道门）超过 60 秒，
+        // 强制解除「正在恢复签名会话」状态——宁可显示未登录，也绝不永久转圈.
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            guard let self, self.isWarmingUp else { return }
+            self.isWarmingUp = false
+            LoginLogger.shared.log("[注意] 签名会话恢复超过 60 秒未结束，界面已停止等待；后台恢复若成功会自动转为已登录")
+        }
         Task { [weak self] in
             guard let self else { return }
             defer { self.isWarmingUp = false }
