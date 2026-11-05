@@ -76,30 +76,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// await 版：等卡点流程收场并把结果带回调用方.
-    /// Wi-Fi 在线时不开弹窗直接执行；卡点路径的失败以 CellularGlitchError 抛回
-    /// （弹窗里已经展示过原因，调用方不必重复提示）.
-    func runAndWait<T>(label: String, action: @escaping @Sendable () async throws -> T) async throws -> T {
-        guard runTask == nil else {
-            throw CellularGlitchError(message: "已有蜂窝卡点操作进行中，请等它结束再试.")
-        }
-        return try await withCheckedThrowingContinuation { continuation in
-            let gate = GlitchResumeOnce(continuation: continuation)
-            runTask = Task { [weak self] in
-                guard let self else { return }
-                var outcome: Result<T, Error>?
-                do {
-                    let value = try await self.glitchFlow(label: label, action: action)
-                    outcome = .success(value)
-                } catch {
-                    outcome = .failure(error)
-                }
-                await MainActor.run { self.runTask = nil }
-                gate.resume(with: outcome)
-            }
-        }
-    }
-
     // MARK: - 通用门（同步链路接入点：所有建 RSD 隧道的回环操作）
 
     /// 通用门·入口（同步，可在任意线程调）.
@@ -125,8 +101,11 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         turnOnWorkItem = nil
 
         let manager = CellularTunnelManager.shared
-        var down = false
-        var cancelled = false
+        final class GateOutcome: @unchecked Sendable {
+            var down = false
+            var cancelled = false
+        }
+        let outcome = GateOutcome()
         let sem = DispatchSemaphore(value: 0)
         let task = Task { [weak self] in
             guard let self else { sem.signal(); return }
@@ -141,14 +120,14 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
                 await MainActor.run { self.phase = .waitingDisconnect(reason: "请在「控制中心」关闭「蜂窝网络」") }
                 ok = await checker.waitForCellularToTurnOff(timeoutSeconds: 900)
             }
-            down = ok
-            cancelled = Task.isCancelled
+            outcome.down = ok
+            outcome.cancelled = Task.isCancelled
             sem.signal()
         }
         gateTask = task
         sem.wait()
 
-        guard down, !cancelled else {
+        guard outcome.down, !outcome.cancelled else {
             gateLock.lock(); gateBusy = false; gateLock.unlock()
             Task { @MainActor in
                 self.phase = .idle
@@ -260,23 +239,3 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     }
 }
 
-/// continuation 只许 resume 一次的包装（runAndWait 的成败都要收场）.
-private final class GlitchResumeOnce<T>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<T, Error>?
-    init(continuation: CheckedContinuation<T, Error>) {
-        self.continuation = continuation
-    }
-    func resume(with outcome: Result<T, Error>?) {
-        lock.lock()
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-        guard let continuation else { return }
-        switch outcome {
-        case .success(let value): continuation.resume(returning: value)
-        case .failure(let error): continuation.resume(throwing: error)
-        case nil: continuation.resume(throwing: CellularGlitchError(message: "蜂窝卡点流程提前结束."))
-        }
-    }
-}

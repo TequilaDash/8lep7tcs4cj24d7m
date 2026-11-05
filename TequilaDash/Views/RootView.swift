@@ -70,7 +70,7 @@ struct RootView: View {
             }
             .interactiveDismissDisabled()
         }
-        // v0.3.760：蜂窝卡点弹窗 —— CellularGlitchCoordinator.run/runAndWait 会置 modalRequest.
+        // v0.3.760：蜂窝卡点弹窗 —— CellularGlitchCoordinator.run/beginLoopbackGate 会置 modalRequest.
         // 下滑关闭等同于「取消」：走 coordinator.dismiss() 复位 phase.
         .sheet(item: Binding(
             get: { glitchCoordinator.modalRequest },
