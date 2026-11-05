@@ -124,19 +124,18 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     /// 等待网络真的断掉（Gnoix `waitForCellularToTurnOff` 同职责）.
     /// - Returns: 已断 / 等待期间断网 = `true`；超时仍在线 = `false`.
     ///   超时 `false` 不阻断调用方：后续还有隧道就绪探测兜底.
-    func waitForCellularToTurnOff(timeoutSeconds: Double) async -> Bool {
+        func waitForCellularToTurnOff(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
         if !connectedBox.value { return true }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            guard waitBox.store(continuation) else {
-                // 已有别的等待者：不叠加等待，直接按「未等到」返回.
-                continuation.resume(returning: false)
-                return
-            }
-            let box = waitBox
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds) {
-                box.resumeIfPending(false)
-            }
+        // v0.3.763：100ms 切片轮询（感知即毫秒级推进），废弃单等待者 WaitBox ——
+        // 多个等待者互抢一个坑位、cancel 只能杀「当时 pending」的那个，是取消不立即生效的根因.
+        let deadline = Date().timeIntervalSinceReferenceDate + timeoutSeconds
+        while Date().timeIntervalSinceReferenceDate < deadline {
+            if shouldAbort?() == true { return false }
+            if Task.isCancelled { return false }
+            if !connectedBox.value { return true }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
+        return !connectedBox.value
     }
 
     /// 取消未决等待（按「未等到」收场）.
@@ -146,12 +145,15 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
 
     /// 等待网络恢复在线（v0.3.757：开蜂窝效果校验用）.
     /// - Returns: 期间恢复联网 = `true`；超时仍离线 = `false`.
-    func waitForNetworkToReturn(timeoutSeconds: Double) async -> Bool {
+        func waitForNetworkToReturn(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
         if connectedBox.value { return true }
         // Date 比较走 Double 时间戳（>=/<= 是 weak import 雷，守卫 swift_date_compare_guard.py 拦截）.
+        // v0.3.763：100ms 切片 + shouldAbort 令牌，网络恢复即毫秒级返回.
         let deadline = Date().timeIntervalSinceReferenceDate + timeoutSeconds
         while Date().timeIntervalSinceReferenceDate < deadline {
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            if shouldAbort?() == true { return false }
+            if Task.isCancelled { return false }
+            try? await Task.sleep(nanoseconds: 100_000_000)
             if connectedBox.value { return true }
         }
         return connectedBox.value

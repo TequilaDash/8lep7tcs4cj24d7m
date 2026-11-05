@@ -71,7 +71,7 @@ final class CellularTunnelManager: @unchecked Sendable {
 
         var label: String {
             switch self {
-            case .auto: return "自动"
+            case .auto: return "Auto"
             case .privateOnly: return "私有实现"
             case .guidedCard: return "卡点弹窗"
             }
@@ -91,10 +91,6 @@ final class CellularTunnelManager: @unchecked Sendable {
         }
     }
 
-    /// v0.3.758：Gnoix 卡点时序 —— 关蜂窝生效后等 1.2s 再推进（路由重置时隙），
-    /// 开蜂窝后等 1.5s 再收尾. v0.3.762 起为固定常量（用户可配延时随快捷指令方案一并移除）.
-    static let routeResetDelayOff: TimeInterval = 1.2
-    static let routeResetDelayOn: TimeInterval = 1.5
 
     /// 本次会话内是否已经关过蜂窝. 用锁保护（`turnOff/OnDataIfNeeded` 可能被不同线程调）.
     private let stateLock = NSLock()
@@ -217,7 +213,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 本函数**绝不自动执行任何跳转**.
     @MainActor
     @discardableResult
-    func turnOffDataIfNeeded(orchestratedByGate: Bool = false) async -> Bool {
+    func turnOffDataIfNeeded(orchestratedByGate: Bool = false, shouldAbort: (() -> Bool)? = nil) async -> Bool {
         guard isSupported && isEnabled else { return false }
         guard !didTurnOffData else { return false }
         guard !Self.isWiFiSatisfied() else {
@@ -239,14 +235,14 @@ final class CellularTunnelManager: @unchecked Sendable {
             do {
                 try await service.setCellularEnabled(false)
                 // 效果判定：setter 返回 0 只代表系统受理；以「蜂窝真断」为准（v0.3.757）.
-                var down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 2.5)
-                if !down && CellularNetworkChecker.shared.isNetworkConnectedNow {
+                var down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 2.5, shouldAbort: shouldAbort)
+                if !down, shouldAbort?() != true, CellularNetworkChecker.shared.isNetworkConnectedNow {
                     // 仍未断且仍在线 ⇒ 可能 bool 极性别名（参数语义与预期相反），翻转重试一枪.
                     CellularLogStore.shared.log("私有 API 返回成功但 2.5s 未断网，翻转极性别名重试")
                     service.polarityInverted = !service.polarityInverted
                     do {
                         try await service.setCellularEnabled(false)
-                        down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 3.5)
+                        down = await CellularNetworkChecker.shared.waitForCellularToTurnOff(timeoutSeconds: 3.5, shouldAbort: shouldAbort)
                     } catch {
                         CellularLogStore.shared.log("极性重试调用失败（\(error.localizedDescription)）")
                     }
@@ -260,7 +256,6 @@ final class CellularTunnelManager: @unchecked Sendable {
                     CellularLogStore.shared.log("私有 API 关蜂窝生效（实测断网），路由重置窗口已开")
                     LoginLogger.shared.log("[Cellular] 私有 API 关蜂窝生效（实测断网）",
                                            category: .tunnelCellular)
-                    try? await Task.sleep(nanoseconds: UInt64(Self.routeResetDelayOff * 1_000_000_000))
                     return true
                 }
                 CellularLogStore.shared.log("私有 API 调用完成但蜂窝未断，判定无效")
@@ -295,7 +290,7 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// （`didTurnOffData` 保持 true，下个生命周期信号再试；用户也可在卡点弹窗里手动开）.
     @MainActor
     @discardableResult
-    func turnOnDataIfNeeded() async -> Bool {
+    func turnOnDataIfNeeded(shouldAbort: (() -> Bool)? = nil) async -> Bool {
         guard didTurnOffData else { return false }
         let mode = toggleMode
         CellularLogStore.shared.log("开蜂窝开始（模式=\(mode.label)）")
@@ -309,13 +304,12 @@ final class CellularTunnelManager: @unchecked Sendable {
             do {
                 try await service.setCellularEnabled(true)
                 // 效果校验：setter 返回 0 ≠ 蜂窝真开了；8s 内没恢复联网视为未生效（v0.3.757）.
-                let back = await CellularNetworkChecker.shared.waitForNetworkToReturn(timeoutSeconds: 8)
+                let back = await CellularNetworkChecker.shared.waitForNetworkToReturn(timeoutSeconds: 8, shouldAbort: shouldAbort)
                 if back || CellularNetworkChecker.shared.isNetworkConnectedNow {
                     didTurnOffData = false
                     CellularLogStore.shared.log("私有 API 开蜂窝生效（实测恢复联网）")
                     LoginLogger.shared.log("[Cellular] 私有 API 开蜂窝生效（实测恢复联网）",
                                            category: .tunnelCellular)
-                    try? await Task.sleep(nanoseconds: UInt64(Self.routeResetDelayOn * 1_000_000_000))
                     return true
                 }
                 CellularLogStore.shared.log("私有 API 开蜂窝后 8s 未恢复联网，视为未生效")

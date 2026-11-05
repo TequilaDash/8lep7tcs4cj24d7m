@@ -110,7 +110,18 @@ actor AirliftToneTransport {
 
     /// 读一个设备上的绝对路径.
     func read(path: String, pairingPath: String) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
+
+        var gateOpened = false
+        defer { if gateOpened { CellularGlitchCoordinator.shared.endLoopbackGate() } }
+        switch await CellularGlitchCoordinator.shared.awaitLoopbackGate(label: "读取沙盒文件") {
+        case .opened:
+            gateOpened = true
+        case .notNeeded:
+            break
+        case .unavailable(let message):
+            throw AirliftTransportError.failed(message)
+        }
+        return try await withCheckedThrowingContinuation { continuation in
             Self.queue.async {
                 do {
                     let data = try Self.readSyncWithRetry(path: path, pairingPath: pairingPath)
@@ -124,6 +135,17 @@ actor AirliftToneTransport {
 
     /// 把若干文件**写入**设备上的目标目录.
     func write(files: [AirliftToneFile], directory: String, pairingPath: String) async throws {
+
+        var gateOpened = false
+        defer { if gateOpened { CellularGlitchCoordinator.shared.endLoopbackGate() } }
+        switch await CellularGlitchCoordinator.shared.awaitLoopbackGate(label: "写入沙盒文件") {
+        case .opened:
+            gateOpened = true
+        case .notNeeded:
+            break
+        case .unavailable(let message):
+            throw AirliftTransportError.failed(message)
+        }
         try await withCheckedThrowingContinuation { continuation in
             Self.queue.async {
                 do {
