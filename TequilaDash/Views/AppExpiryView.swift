@@ -366,11 +366,13 @@ struct AppExpiryView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            // Swift 6：两个模型都非 Sendable → 用 ProfileFetchBox 整体转移回主线程
-            let fetched = try await Task.detached(priority: .userInitiated) {
+            // v0.3.760：读取描述文件走本机回环（misagent）—— 纯蜂窝时本地配对休眠，
+            // 经「蜂窝卡点」弹窗（Gnoix 1.2.16 同款：关蜂窝→路由重置窗口→趁隙执行）.
+            // Wi-Fi 在线时 runAndWait 不开弹窗直接执行，行为与旧实现一致.
+            let fetched = try await CellularGlitchCoordinator.shared.runAndWait(label: "读取描述文件") {
                 ProfileFetchBox(value: (try ProvisioningProfileStore.fetchAllProfiles(),
                                         try ProvisioningProfileStore.fetchSideloadedApps()))
-            }.value
+            }
             let (profiles, apps) = fetched.value
 
             // 已匹配：按 app 分组
@@ -422,10 +424,16 @@ struct AppExpiryView: View {
                 throw NSError(domain: "AppExpiry", code: -1, userInfo: [NSLocalizedDescriptionKey: "未选择文件"])
             }
             let data = try Data(contentsOf: url)
-            try ProvisioningProfileStore.addProfile(data)
+            // v0.3.760：安装描述文件同样走回环隧道 → 接入蜂窝卡点（Gnoix 移植）.
+            try await CellularGlitchCoordinator.shared.runAndWait(label: "安装描述文件") {
+                try ProvisioningProfileStore.addProfile(data)
+            }
             infoMessage = "描述文件添加成功."
             showInfo = true
             await load()
+        } catch let glitch as CellularGlitchCoordinator.GlitchError {
+            // 卡点弹窗已展示失败原因（关蜂窝超时/执行未成功），不再重复弹本地错误框.
+            _ = glitch
         } catch {
             await MainActor.run {
                 loadError = error.localizedDescription
@@ -439,18 +447,22 @@ struct AppExpiryView: View {
         Task {
             do {
                 // Swift 6：ProfileInfo 含 [String: Any] 非 Sendable，直接捕获 targets
-                // 会被 detached 闭包判为 sending 数据竞争 → 主线程先提取所需的
-                // Sendable 值（uuid 字符串数组），detached 闭包只捕获它.
+                // 会被并发闭包判为 sending 数据竞争 → 主线程先提取所需的
+                // Sendable 值（uuid 字符串数组），卡点闭包只捕获它.
                 let uuids = targets.map { $0.id }
-                try await Task.detached(priority: .userInitiated) {
+                // v0.3.760：移除描述文件走回环隧道 → 接入蜂窝卡点（Gnoix 移植）.
+                try await CellularGlitchCoordinator.shared.runAndWait(label: "移除描述文件") {
                     for uuid in uuids {
                         try ProvisioningProfileStore.removeProfile(uuid: uuid)
                     }
-                }.value
+                }
                 selectedUUIDs.removeAll()
                 infoMessage = "已删除 \(targets.count) 个描述文件."
                 showInfo = true
                 await load()
+            } catch let glitch as CellularGlitchCoordinator.GlitchError {
+                // 卡点弹窗已展示失败原因，不再重复弹本地错误框.
+                _ = glitch
             } catch {
                 await MainActor.run {
                     loadError = error.localizedDescription

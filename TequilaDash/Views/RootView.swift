@@ -26,6 +26,8 @@ struct RootView: View {
     /// 二级界面用 `fullScreenCover` 盖住整个 TabView（看不到 App 默认底栏），
     /// 由 `ModuleUIRouter` 驱动；本视图只负责把它盖上来 + 响应「回主页」通知.
     @StateObject private var moduleUIRouter = ModuleUIRouter.shared
+    /// v0.3.760：蜂窝卡点弹窗（Gnoix 移植）—— 断网窗口内跑 misagent 等回环操作.
+    @StateObject private var glitchCoordinator = CellularGlitchCoordinator.shared
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -67,6 +69,14 @@ struct RootView: View {
                 hasAcknowledgedLimits = true
             }
             .interactiveDismissDisabled()
+        }
+        // v0.3.760：蜂窝卡点弹窗 —— CellularGlitchCoordinator.run/runAndWait 会置 modalRequest.
+        // 下滑关闭等同于「取消」：走 coordinator.dismiss() 复位 phase.
+        .sheet(item: Binding(
+            get: { glitchCoordinator.modalRequest },
+            set: { if $0 == nil { glitchCoordinator.dismiss() } }
+        )) { request in
+            CellularGlitchModalView(request: request)
         }
         // v0.3.481：模块原生二级界面 —— 用 fullScreenCover 而不是 push/sheet，
         // 目的是**完全盖住 TabView**（用户看到的底部导航栏是模块自己的，不是 App 默认底栏）。

@@ -18,6 +18,9 @@ final class TunnelHealthViewModel: ObservableObject {
     /// 探测结果快照（`Sendable`：全是值类型，可安全跨隔离域传递）.
     struct Snapshot: Sendable {
         var wifiSatisfied = false
+        /// v0.3.760：连接诊断判「蜂窝 / Wi-Fi / 无连接」（Gnoix 同职责）——
+        /// 纯蜂窝卡点排查时一眼看清当前走的是什么网.
+        var networkKind = ""
         var utunAvailable = false
         var targetIP = ""
         var candidatePeers: [String] = []
@@ -83,6 +86,17 @@ final class TunnelHealthViewModel: ObservableObject {
         var s = Snapshot()
         // 网络（NWPathMonitor 等首个回调，最多 0.5s）
         s.wifiSatisfied = CellularTunnelManager.isWiFiSatisfied(timeout: 0.5)
+        // v0.3.760：蜂窝 / Wi-Fi / 无连接判定（读常驻探针的带锁镜像，非阻塞）.
+        let checker = CellularNetworkChecker.shared
+        if !checker.isNetworkConnectedNow {
+            s.networkKind = "无连接"
+        } else if checker.isCellularOnly {
+            s.networkKind = "蜂窝网络"
+        } else if checker.isWiFi {
+            s.networkKind = "Wi-Fi"
+        } else {
+            s.networkKind = "其它网络"
+        }
         // 隧道
         s.utunAvailable = LocalDevVPN.isConnected
         s.targetIP = LocalDevVPN.targetIP
@@ -123,7 +137,7 @@ final class TunnelHealthViewModel: ObservableObject {
     var rows: [Row] {
         let s = snapshot
         var result: [Row] = []
-        result.append(Row("网络", s.wifiSatisfied ? "Wi-Fi 已连接" : "无 Wi-Fi", s.wifiSatisfied))
+        result.append(Row("网络", s.networkKind, s.wifiSatisfied))
         result.append(Row("utun 隧道接口", s.utunAvailable ? "存在" : "不存在", s.utunAvailable))
         result.append(Row(
             "目标对端可达（\(s.targetIP):49152）",
