@@ -74,6 +74,23 @@ struct CellularGlitchModalView: View {
             Text(reason)
                 .font(AppFont.caption)
                 .foregroundStyle(.secondary)
+            if request.showShortcutChoice {
+                Button {
+                    coordinator.switchToShortcutFallback()
+                } label: {
+                    Label {
+                        Text("改用快捷指令")
+                    } icon: {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.accent))
+                Text("执行关蜂窝快捷指令后本卡继续等待断网，无需手动返回.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             Button {
                 coordinator.cancel()
             } label: {

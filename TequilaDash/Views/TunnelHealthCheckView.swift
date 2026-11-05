@@ -86,16 +86,20 @@ final class TunnelHealthViewModel: ObservableObject {
         var s = Snapshot()
         // 网络（NWPathMonitor 等首个回调，最多 0.5s）
         s.wifiSatisfied = CellularTunnelManager.isWiFiSatisfied(timeout: 0.5)
-        // v0.3.760：蜂窝 / Wi-Fi / 无连接判定（读常驻探针的带锁镜像，非阻塞）.
-        let checker = CellularNetworkChecker.shared
-        if !checker.isNetworkConnectedNow {
+        // v0.3.761：蜂窝 / Wi-Fi / VPN / 无连接判定 —— 改用 getifaddrs BSD 接口快照
+        // （Gnoix `isWiFiInterfaceActive` 同款判定源）；NWPathMonitor 的
+        // usesInterfaceType 在蜂窝 + utun 并存时会错判（蜂窝显示成 Wi-Fi 的根因）.
+        let snap = CellularNetworkChecker.captureInterfaceSnapshot()
+        if !snap.wifi && !snap.cellular && !snap.utun {
             s.networkKind = "无连接"
-        } else if checker.isCellularOnly {
-            s.networkKind = "蜂窝网络"
-        } else if checker.isWiFi {
+        } else if snap.wifi && snap.cellular {
+            s.networkKind = "Wi-Fi 优先"
+        } else if snap.wifi {
             s.networkKind = "Wi-Fi"
+        } else if snap.cellular {
+            s.networkKind = "蜂窝网络"
         } else {
-            s.networkKind = "其它网络"
+            s.networkKind = "VPN 通道"
         }
         // 隧道
         s.utunAvailable = LocalDevVPN.isConnected

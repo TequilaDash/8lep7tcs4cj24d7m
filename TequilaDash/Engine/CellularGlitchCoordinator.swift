@@ -45,9 +45,12 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     }
 
     /// 弹窗请求（Identifiable 供 RootView 的 .sheet(item:)）.
+    /// `showShortcutChoice`：自动模式下私有开关无效后，等待断网卡上出现
+    /// 「改用快捷指令」按钮（用户裁定：自动 = 私有优先 → 卡点弹窗二选一）.
     struct ModalRequest: Identifiable {
         let id = UUID()
         let label: String
+        var showShortcutChoice = false
     }
 
     @Published private(set) var phase: Phase = .idle
@@ -89,7 +92,8 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     @discardableResult
     func beginLoopbackGate(label: String) -> Bool {
         let checker = CellularNetworkChecker.shared
-        if checker.isWiFi && checker.isNetworkConnectedNow { return false }
+        // v0.3.761：Wi-Fi 判定改 BSD 接口快照（en* 持有地址才算），utun 场景不再误判.
+        if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return false }
         if !checker.isNetworkConnectedNow { return false }
         gateLock.lock()
         if gateBusy || runTask != nil { gateLock.unlock(); return false }
@@ -101,6 +105,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         turnOnWorkItem = nil
 
         let manager = CellularTunnelManager.shared
+        let mode = manager.toggleMode
         final class GateOutcome: @unchecked Sendable {
             var down = false
             var cancelled = false
@@ -111,10 +116,10 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             guard let self else { sem.signal(); return }
             await MainActor.run {
                 self.routeResetFired = false
-                self.modalRequest = ModalRequest(label: label)
+                self.modalRequest = ModalRequest(label: label, showShortcutChoice: mode == .auto)
                 self.phase = .waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…")
             }
-            _ = await manager.turnOffDataIfNeeded()
+            _ = await manager.turnOffDataIfNeeded(orchestratedByGate: true)
             var ok = await checker.waitForCellularToTurnOff(timeoutSeconds: 8)
             if !ok, !Task.isCancelled {
                 await MainActor.run { self.phase = .waitingDisconnect(reason: "请在「控制中心」关闭「蜂窝网络」") }
@@ -173,6 +178,20 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// 弹窗「改用快捷指令」按钮：后台执行快捷指令关蜂窝；
+    /// 900s 等待继续由探针感知断网自然收场，无需中断门流程.
+    func switchToShortcutFallback() {
+        gateLock.lock()
+        let active = gateBusy
+        gateLock.unlock()
+        guard active else { return }
+        CellularLogStore.shared.log("卡点弹窗：改用快捷指令关蜂窝")
+        LoginLogger.shared.log("[Cellular] 卡点弹窗：改用快捷指令关蜂窝", category: .tunnelCellular)
+        Task { @MainActor in
+            _ = await CellularTunnelManager.shared.runShortcutTurnOff()
+        }
+    }
+
     /// 用户看完结果点「完成」关掉弹窗.
     func dismiss() {
         Task { @MainActor in
@@ -194,8 +213,8 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             routeResetFired = false
             modalRequest = ModalRequest(label: label)
         }
-        // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.
-        if checker.isWiFi && checker.isNetworkConnectedNow {
+        // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.（v0.3.761：接口快照判定）
+        if CellularNetworkChecker.captureInterfaceSnapshot().wifi {
             return try await action()
         }
         // ② 已经离线：路由重置窗口已开，直接进窗口.

@@ -379,7 +379,9 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 所以这里的返回值语义是「是否执行了关闭动作」，调用方仍需靠 TCP 探测确认真实连通性。
     @MainActor
     @discardableResult
-    func turnOffDataIfNeeded() async -> Bool {
+    /// - Parameter orchestratedByGate: 被卡点通用门编排时为 `true` —— 自动模式下私有开关
+    ///   无效后**不再静默回落快捷指令**，改由卡点弹窗接管（手动关蜂窝 / 改用快捷指令，用户裁定）.
+    func turnOffDataIfNeeded(orchestratedByGate: Bool = false) async -> Bool {
         guard isSupported && isEnabled else { return false }
         guard !didTurnOffData else { return false }
         // Wi-Fi 下不跑快捷指令（SideStore 同款闸门）。
@@ -449,7 +451,18 @@ final class CellularTunnelManager: @unchecked Sendable {
             CellularLogStore.shared.log("私有实现模式：关蜂窝私有开关被拒或无效，按选择不回落快捷指令")
             return false
         }
+        if orchestratedByGate && mode == .auto {
+            CellularLogStore.shared.log("自动模式（门编排）：私有开关无效，交由卡点弹窗接管（手动关蜂窝或改用快捷指令）")
+            return false
+        }
 
+        return await runShortcutTurnOff()
+    }
+
+    /// 仅执行关蜂窝快捷指令（卡点弹窗「改用快捷指令」按钮直调；常规路径经 turnOffDataIfNeeded 收尾）.
+    @MainActor
+    @discardableResult
+    func runShortcutTurnOff() async -> Bool {
         let name = turnOffShortcutName
         // v0.3.650：**没建快捷指令就绝不跳转**。
         //

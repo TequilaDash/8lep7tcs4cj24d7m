@@ -81,6 +81,46 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     /// 当前网络在线快照（读带锁镜像，不等主线程发布）.
     var isNetworkConnectedNow: Bool { connectedBox.value }
 
+    // MARK: - BSD 接口快照（Gnoix `isWiFiInterfaceActive` 同款判定源）
+
+    /// getifaddrs() 枚举 BSD 接口得到的状态快照：
+    /// · `wifi` = en* 在 UP+RUNNING 且持有 IPv4/IPv6 地址（与状态栏 Wi-Fi 图标同源）；
+    /// · `cellular` = pdp_ip* 同条件；
+    /// · `utun` = utun* 同条件（VPN/隧道通道）.
+    ///
+    /// `NWPathMonitor.usesInterfaceType` 只描述「默认路由路径」，蜂窝 + utun 并存时会错判
+    /// （连接诊断把蜂窝显示成 Wi-Fi 的根因）；接口状态是确定性事实.
+    struct InterfaceSnapshot: Equatable {
+        var wifi = false
+        var cellular = false
+        var utun = false
+    }
+
+    static func captureInterfaceSnapshot() -> InterfaceSnapshot {
+        var snapshot = InterfaceSnapshot()
+        var listPtr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&listPtr) == 0, let first = listPtr else { return snapshot }
+        defer { freeifaddrs(first) }
+        var ptr: UnsafeMutablePointer<ifaddrs>? = first
+        while let cur = ptr {
+            defer { ptr = cur.pointee.ifa_next }
+            let flags = cur.pointee.ifa_flags
+            guard flags & UInt32(IFF_UP) != 0, flags & UInt32(IFF_RUNNING) != 0 else { continue }
+            guard let addr = cur.pointee.ifa_addr else { continue }
+            let family = addr.pointee.sa_family
+            guard family == UInt8(AF_INET) || family == UInt8(AF_INET6) else { continue }
+            let name = String(cString: cur.pointee.ifa_name)
+            if name.hasPrefix("en") {
+                snapshot.wifi = true
+            } else if name.hasPrefix("pdp_ip") {
+                snapshot.cellular = true
+            } else if name.hasPrefix("utun") {
+                snapshot.utun = true
+            }
+        }
+        return snapshot
+    }
+
     /// 等待网络真的断掉（Gnoix `waitForCellularToTurnOff` 同职责）.
     /// - Returns: 已断 / 等待期间断网 = `true`；超时仍在线 = `false`.
     ///   超时 `false` 不阻断调用方：后续还有隧道就绪探测兜底.
