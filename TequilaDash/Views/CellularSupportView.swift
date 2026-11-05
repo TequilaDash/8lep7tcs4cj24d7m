@@ -56,16 +56,12 @@ struct CellularSupportView: View {
                 }
             } header: {
                 Text("开关方式")
-            } footer: {
-                Text("自动：优先私有开关，被系统拒绝或无效果时弹卡点卡，按提示手动关蜂窝. 私有实现：被拒后如实失败，不弹卡. 卡点弹窗：跳过私有开关，直接弹卡引导手动开关蜂窝.")
             }
 
             Section {
                 Toggle("蜂窝刷新", isOn: $enabled)
             } header: {
                 Text("总开关")
-            } footer: {
-                Text("开启后，建隧道类回环操作在蜂窝网络下会自动进入卡点流程，断网窗口内建立通路.")
             }
         }
         .listStyle(.insetGrouped)

@@ -54,8 +54,6 @@ enum ProfileConfigService {
     ///（`ProvisioningProfileStore.tunnelQueue`），各建一条等于没保护.
     /// 只锁「建隧道」这一步（理由同 v0.3.376 FileSharingService.tunnelQueue）.
     private static func createTunnel() throws -> (adapter: OpaquePointer, handshake: OpaquePointer) {
-        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
-        try TunnelGate.guardReady()
         return try ProvisioningProfileStore.tunnelQueue.sync {
             try createTunnelLocked()
         }
@@ -81,6 +79,10 @@ enum ProfileConfigService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "下载配置")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
+        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        if !loopbackGated {
+            try TunnelGate.guardReady()
+        }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.targetIP
         let parseResult = deviceIP.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }

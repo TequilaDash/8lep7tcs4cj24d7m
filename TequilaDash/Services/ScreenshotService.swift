@@ -92,8 +92,6 @@ final class ScreenshotService: Sendable {
     }
 
     private func createTunnel(hostname: String) throws -> TunnelHandles {
-        // 隧道就绪闸门：缓存可达即零等待放行；不可达补一次 0.5s 探测后快速失败（替代直连 75s+ 挂死）.
-        try TunnelGate.guardReady()
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             throw makeError("未检测到配对文件.请到「更多 → 配对文件导入」导入配对文件（需 LocalDevVPN + 开发者模式）.")
         }
@@ -112,6 +110,10 @@ final class ScreenshotService: Sendable {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "截屏服务")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
+        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        if !loopbackGated {
+            try TunnelGate.guardReady()
+        }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.targetIP
         let parseResult = deviceIP.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
