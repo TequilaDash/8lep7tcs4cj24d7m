@@ -106,8 +106,7 @@ struct TequilaDashApp: App {
     ///
     /// `turnOnDataIfNeeded()` 是 `@MainActor async`，而 observer 回调是同步
     /// 闭包 ⇒ 起一个 `Task { @MainActor in ... }` 把调用搬回主隔离域。
-    /// 不 await、不阻塞回调线程（快捷指令执行期间 App 可能已被挂起，
-    /// 那时 `UIApplication.shared.open` 会被系统拒绝，属于预期降级）.
+    /// 不 await、不阻塞回调线程（私有开关执行期间 App 可能已被挂起，属于预期降级）.
     private static func restoreCellularDataIfNeeded(reason: String) {
         let manager = CellularTunnelManager.shared
         // 先看有没有真的关过：没关过就不必起 Task（省掉一次无谓的主线程派发）.
@@ -115,7 +114,7 @@ struct TequilaDashApp: App {
         Task { @MainActor in
             let restored = await manager.turnOnDataIfNeeded()
             LoginLogger.shared.log(
-                "[Cellular] \(reason)时恢复蜂窝数据：\(restored ? "已执行开蜂窝快捷指令" : "无需恢复（未关过或已恢复）")",
+                "[Cellular] \(reason)时恢复蜂窝数据：\(restored ? "私有开关已恢复联网" : "无需恢复（未关过或已恢复）")",
                 category: .tunnelCellular)
         }
     }

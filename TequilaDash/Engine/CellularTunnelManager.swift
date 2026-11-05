@@ -333,7 +333,9 @@ final class CellularTunnelManager: @unchecked Sendable {
         return false
     }
 
-    /// 平台是否支持（照 SideStore：tvOS 不支持）.
+    /// 本次会话内是否已经通过 `turnOffDataIfNeeded()` 关过蜂窝（只读探针）.
+    /// `TequilaDashApp` 的生命周期 observer（非隔离域）先用它判断，再决定是否起 Task 恢复蜂窝.
+    var hasTurnedOffDataInThisSession: Bool { didTurnOffData }
     var isSupported: Bool {
         #if os(tvOS)
         return false
