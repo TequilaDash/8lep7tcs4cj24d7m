@@ -774,6 +774,17 @@ jobs:
           echo "IPA_TUNNEL=$TUN_IPA" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Weak-import guard (v0.3.746 crash-class blocker)
+        # 部署目标保持 18.0 的前提下，把「弱导入在旧系统 GOT 落空 → PC=0 闪退」这一类
+        # 崩溃（v0.3.746 的 Date.>= 实锤）变成构建失败：扫描主二进制未定义弱导入，
+        # 硬禁止清单（Date 比较符）出现即拦版；新增未归类弱导入只记录待归类。
+        run: |
+          set -euo pipefail
+          APP="$(find build -name 'TequilaDash.app' -type d | head -n1)"
+          BIN="$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist" 2>/dev/null || echo 'TequilaDash')"
+          test -f "$BIN"
+          python3 Resources/Scripts/check_weak_imports.py "$BIN"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4

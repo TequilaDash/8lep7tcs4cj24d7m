@@ -25,6 +25,7 @@
 
 import Foundation
 import Network
+import UIKit
 
 /// 隧道未就绪（后台探测结论 + 一次立即重探仍不通）.
 struct TunnelReadinessError: LocalizedError {
@@ -120,10 +121,13 @@ final class TunnelReadiness: ObservableObject {
         }
         let monitor = NWPathMonitor()
         pathMonitor = monitor
-        monitor.pathUpdateHandler = { [weak self] _ in
-            // 网络路径变化（VPN 建立/断开、Wi-Fi 切换）→ 立即重探.
+        monitor.pathUpdateHandler = { [weak self] path in
+            // 网络路径变化（VPN 建立/断开、Wi-Fi 切换、蜂窝开关）→ 立即重探.
             Task { @MainActor [weak self] in
-                await self?.probeOnce()
+                guard let self else { return }
+                await self.probeOnce()
+                // v0.3.766（Gnoix 对齐）：网络恢复而隧道仍不可达 ⇒ 事件驱动拉起重建.
+                self.rebuildTunnelIfNeeded(networkSatisfied: path.status == .satisfied)
             }
         }
         monitor.start(queue: DispatchQueue(label: "com.tequila.dash.tunnelreadiness.path"))
@@ -150,6 +154,24 @@ final class TunnelReadiness: ObservableObject {
                 : "状态翻转：可达 → 不可达（\(ip):\(port)）")
         }
         isReady = reachable
+    }
+
+    /// 网络恢复事件驱动的隧道重建（Gnoix 对齐）.
+    ///
+    /// 蜂窝开关 / Wi-Fi 切换时 iOS 可能拆掉 LocalDevVPN 的 NE tunnel；探测循环
+    /// 只探不建 ⇒ 隧道死后 App 停在「未就绪」，只能手动重进页面。这里在「网络
+    /// 恢复（path satisfied）而隧道仍不可达」时调 `LocalDevVPN.startWhenNeeded()`：
+    /// 其内部判据（选中 localDevVPN + 无任何 utun + 5 秒冷却 + 用户开关）保证
+    /// utun 幸存时是零副作用空操作；卡点弹窗进行中不拉起（不能抢用户前台），
+    /// App 在后台也不拉起（后台 open 他 App 会被系统拒绝而误跳 App Store）.
+    private func rebuildTunnelIfNeeded(networkSatisfied: Bool) {
+        guard networkSatisfied else { return }
+        guard !TunnelGate.isReady else { return }
+        guard CellularGlitchCoordinator.shared.phase == .idle else { return }
+        guard UIApplication.shared.applicationState == .active else { return }
+        if LocalDevVPN.startWhenNeeded() {
+            TunnelDiagnostics.note("隧道就绪", "网络恢复而隧道不可达，已事件驱动拉起 LocalDevVPN 重建")
+        }
     }
 
     private func probeLoop() async {
