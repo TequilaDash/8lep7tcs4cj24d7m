@@ -78,6 +78,8 @@ final class AFCService {
         addr.sin_port = in_port_t(RemotePairingPort.current).bigEndian
 
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
+        let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "浏览应用文件")
+        defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.targetIP
         let parseResult = deviceIP.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }

@@ -8,6 +8,13 @@
 import Foundation
 import SwiftUI
 
+/// 卡点路径的失败（弹窗已展示过原因，调用方不必再弹自己的错误框）.
+/// 文件级：供 CellularGlitchCoordinator 与 ResumeOnce 共用（嵌套类型跨类型不可见）.
+struct CellularGlitchError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 /// 蜂窝卡点协调器 —— Gnoix「Glitch Protocol / 卡点时序」的移植版.
 ///
 /// 纯蜂窝（无 Wi-Fi）时 iOS 会让本机配对/回环通路休眠，misagent 等依赖
@@ -20,6 +27,10 @@ import SwiftUI
 /// 2. 等 NWPathMonitor 感知「断网」；自动关没断就交给用户手动关（弹窗指引）；
 /// 3. 断网瞬间 = 路由重置窗口 → 睡 1.2s（Gnoix 卡点时隙）→ 执行操作；
 /// 4. 完成后尝试恢复蜂窝（失败由弹窗指引手动开）.
+///
+/// v0.3.760 全量接入：所有建 RSD 隧道的回环操作统一经
+/// `beginLoopbackGate(label:)` / `endLoopbackGate()` 接入本卡（同步链路三行接入），
+/// 弹窗只管「通路建立」本身，操作成败由调用方自己的错误通道呈现.
 final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     static let shared = CellularGlitchCoordinator()
 
@@ -27,7 +38,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         case idle
         /// 等待「断网」被感知（reason 说明当前是自动尝试还是等用户手动）.
         case waitingDisconnect(reason: String)
-        /// 断网窗口已开（路由重置进行中），正在执行操作.
+        /// 断网窗口已开（路由重置进行中），正在建立通路/执行操作.
         case injecting(label: String)
         case success
         case failed(message: String)
@@ -39,47 +50,47 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         let label: String
     }
 
-    /// 卡点路径的失败（弹窗已展示过原因，调用方不必再弹自己的错误框）.
-    struct GlitchError: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
-    }
-
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var modalRequest: ModalRequest?
     /// 「蜂窝断开成功触发了 iOS 底层网络路由重置」是否已发生（弹窗正文据此切换）.
     @Published private(set) var routeResetFired = false
 
     private var runTask: Task<Void, Never>?
+    private var gateTask: Task<Void, Never>?
+    /// 同步门互斥（begin/end 都可能来自任意线程）.
+    private let gateLock = NSLock()
+    private var gateBusy = false
+    /// 出口调度的「延迟恢复蜂窝」工作项（下一次 begin 会取消它，连续操作复用窗口）.
+    private var turnOnWorkItem: DispatchWorkItem?
+
+    // MARK: - 异步 API（View 层直接用）
 
     /// 发起一次卡点操作（fire-and-forget；进度/结果走弹窗）.
     func run(label: String, action: @escaping @Sendable () async throws -> Void) {
         guard runTask == nil else { return }
         runTask = Task { [weak self] in
             guard let self else { return }
-            await self.glitchFlow(label: label, action: action)
+            do { _ = try await self.glitchFlow(label: label, action: action) }
+            catch { /* 弹窗已呈现，fire-and-forget 不再外抛 */ }
             await MainActor.run { self.runTask = nil }
         }
     }
 
     /// await 版：等卡点流程收场并把结果带回调用方.
-    /// Wi-Fi 在线时不开弹窗直接执行；卡点路径的失败以 GlitchError 抛回
+    /// Wi-Fi 在线时不开弹窗直接执行；卡点路径的失败以 CellularGlitchError 抛回
     /// （弹窗里已经展示过原因，调用方不必重复提示）.
     func runAndWait<T>(label: String, action: @escaping @Sendable () async throws -> T) async throws -> T {
         guard runTask == nil else {
-            throw GlitchError(message: "已有蜂窝卡点操作进行中，请等它结束再试.")
+            throw CellularGlitchError(message: "已有蜂窝卡点操作进行中，请等它结束再试.")
         }
         return try await withCheckedThrowingContinuation { continuation in
-            let gate = ResumeOnce(continuation: continuation)
+            let gate = GlitchResumeOnce(continuation: continuation)
             runTask = Task { [weak self] in
                 guard let self else { return }
                 var outcome: Result<T, Error>?
                 do {
-                    try await self.glitchFlow(label: label, action: action)
-                    // glitchFlow 正常返回不代表 action 成功 —— 成败以 phase 为准.
-                    if case .failed(let message) = self.phase {
-                        outcome = .failure(GlitchError(message: message))
-                    }
+                    let value = try await self.glitchFlow(label: label, action: action)
+                    outcome = .success(value)
                 } catch {
                     outcome = .failure(error)
                 }
@@ -89,9 +100,93 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
+    // MARK: - 通用门（同步链路接入点：所有建 RSD 隧道的回环操作）
+
+    /// 通用门·入口（同步，可在任意线程调）.
+    ///
+    /// - Wi-Fi 在线 / 已离线（窗口已开）/ 已有卡点进行中 → 返回 false，调用方直接执行；
+    /// - 蜂窝单网且在线 → 阻塞本线程，弹卡点卡：自动关蜂窝 → 等断网（8s）
+    ///   → 未断交给用户手动关（900s）→ 断网后睡 1.2s（路由重置时隙）→ 返回 true.
+    ///
+    /// 返回 true 时调用方**必须** `defer { endLoopbackGate() }`；
+    /// 返回 false 时不许调 end（会错误恢复别人的蜂窝状态）.
+    @discardableResult
+    func beginLoopbackGate(label: String) -> Bool {
+        let checker = CellularNetworkChecker.shared
+        if checker.isWiFi && checker.isNetworkConnectedNow { return false }
+        if !checker.isNetworkConnectedNow { return false }
+        gateLock.lock()
+        if gateBusy || runTask != nil { gateLock.unlock(); return false }
+        gateBusy = true
+        gateLock.unlock()
+
+        // 连续回环操作复用同一窗口：取消出口挂起的「延迟恢复蜂窝」.
+        turnOnWorkItem?.cancel()
+        turnOnWorkItem = nil
+
+        let manager = CellularTunnelManager.shared
+        var down = false
+        var cancelled = false
+        let sem = DispatchSemaphore(value: 0)
+        let task = Task { [weak self] in
+            guard let self else { sem.signal(); return }
+            await MainActor.run {
+                self.routeResetFired = false
+                self.modalRequest = ModalRequest(label: label)
+                self.phase = .waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…")
+            }
+            _ = await manager.turnOffDataIfNeeded()
+            var ok = await checker.waitForCellularToTurnOff(timeoutSeconds: 8)
+            if !ok, !Task.isCancelled {
+                await MainActor.run { self.phase = .waitingDisconnect(reason: "请在「控制中心」关闭「蜂窝网络」") }
+                ok = await checker.waitForCellularToTurnOff(timeoutSeconds: 900)
+            }
+            down = ok
+            cancelled = Task.isCancelled
+            sem.signal()
+        }
+        gateTask = task
+        sem.wait()
+
+        guard down, !cancelled else {
+            gateLock.lock(); gateBusy = false; gateLock.unlock()
+            Task { @MainActor in
+                self.phase = .idle
+                self.modalRequest = nil
+            }
+            return false
+        }
+        Task { @MainActor in
+            self.routeResetFired = true
+            self.phase = .injecting(label: label)
+        }
+        // Gnoix 关蜂窝后睡 1.2s 再执行：给 iOS 路由表重建留时隙.
+        Thread.sleep(forTimeInterval: 1.2)
+        return true
+    }
+
+    /// 通用门·出口（与 beginLoopbackGate 配对，调用方用 defer 保证执行）.
+    /// 调度 5s 后恢复蜂窝（期间新 begin 会取消），弹窗随后收尾成「通路就绪」.
+    func endLoopbackGate() {
+        gateLock.lock(); gateBusy = false; gateLock.unlock()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            Task { [weak self] in
+                guard let self else { return }
+                _ = await CellularTunnelManager.shared.turnOnDataIfNeeded()
+                await MainActor.run { self.phase = .success }
+            }
+        }
+        turnOnWorkItem = item
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: item)
+    }
+
+    // MARK: - 用户操作
+
     /// 用户在「等待断网」阶段点了取消.
     func cancel() {
         runTask?.cancel()
+        gateTask?.cancel()
         CellularNetworkChecker.shared.cancelWait()
         Task { @MainActor in
             phase = .idle
@@ -113,66 +208,60 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         await MainActor.run { phase = p }
     }
 
-    private func glitchFlow(label: String, action: @escaping @Sendable () async throws -> Void) async {
+    private func glitchFlow<T>(label: String, action: @escaping @Sendable () async throws -> T) async throws -> T {
         let checker = CellularNetworkChecker.shared
         let manager = CellularTunnelManager.shared
         await MainActor.run {
             routeResetFired = false
             modalRequest = ModalRequest(label: label)
         }
-        do {
-            // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.
-            if checker.isWiFi && checker.isNetworkConnectedNow {
-                try await action()
-                return
-            }
-            // ② 已经离线：路由重置窗口已开，直接进窗口.
-            if !checker.isNetworkConnectedNow {
-                try await runInWindow(label: label, action: action)
-                return
-            }
-            // ③ 蜂窝在线：自动关（私有 API / 快捷指令，被拒照常继续 —— Gnoix 同款）.
-            await setPhase(.waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…"))
-            _ = await manager.turnOffDataIfNeeded()
-            var down = await checker.waitForCellularToTurnOff(timeoutSeconds: 8)
-            // ④ 自动关没断（私有被拒 + 快捷指令没建）：交给用户手动关，弹窗指引.
-            if !down, !Task.isCancelled {
-                await setPhase(.waitingDisconnect(reason: "请在「控制中心」关闭「蜂窝网络」"))
-                down = await checker.waitForCellularToTurnOff(timeoutSeconds: 900)
-            }
-            guard down, !Task.isCancelled else {
-                await setPhase(.failed(message: "等待关闭蜂窝网络超时，未执行\(label)."))
-                return
-            }
-            try await runInWindow(label: label, action: action)
-        } catch is CancellationError {
-            await setPhase(.idle)
-        } catch {
-            await setPhase(.failed(message: error.localizedDescription))
+        // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.
+        if checker.isWiFi && checker.isNetworkConnectedNow {
+            return try await action()
         }
+        // ② 已经离线：路由重置窗口已开，直接进窗口.
+        if !checker.isNetworkConnectedNow {
+            return try await runInWindow(label: label, action: action)
+        }
+        // ③ 蜂窝在线：自动关（私有 API / 快捷指令，被拒照常继续 —— Gnoix 同款）.
+        await setPhase(.waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…"))
+        _ = await manager.turnOffDataIfNeeded()
+        var down = await checker.waitForCellularToTurnOff(timeoutSeconds: 8)
+        // ④ 自动关没断（私有被拒 + 快捷指令没建）：交给用户手动关，弹窗指引.
+        if !down, !Task.isCancelled {
+            await setPhase(.waitingDisconnect(reason: "请在「控制中心」关闭「蜂窝网络」"))
+            down = await checker.waitForCellularToTurnOff(timeoutSeconds: 900)
+        }
+        guard down, !Task.isCancelled else {
+            await setPhase(.failed(message: "等待关闭蜂窝网络超时，未执行\(label)."))
+            throw CellularGlitchError(message: "等待关闭蜂窝网络超时.")
+        }
+        return try await runInWindow(label: label, action: action)
     }
 
     /// 断网窗口内执行：路由重置时隙 + 操作 + 完成后尝试恢复蜂窝.
-    private func runInWindow(label: String, action: @escaping @Sendable () async throws -> Void) async {
+    private func runInWindow<T>(label: String, action: @escaping @Sendable () async throws -> T) async throws -> T {
         await MainActor.run { routeResetFired = true }
         await setPhase(.injecting(label: label))
         // Gnoix 关蜂窝后睡 1.2s 再执行：给 iOS 路由表重建留时隙.
         try? await Task.sleep(nanoseconds: 1_200_000_000)
         do {
-            try await action()
+            let value = try await action()
+            await setPhase(.success)
+            // 完成后恢复蜂窝（复用开蜂窝全链路：私有 / 快捷指令 / 效果校验）；
+            // 失败不吞结果 —— 弹窗成功页会指引手动开.
+            _ = await CellularTunnelManager.shared.turnOnDataIfNeeded()
+            return value
         } catch {
             await setPhase(.failed(message: error.localizedDescription))
-            return
+            // 包装重抛：调用方只 catch CellularGlitchError 即可避免重复弹框.
+            throw CellularGlitchError(message: error.localizedDescription)
         }
-        await setPhase(.success)
-        // 完成后恢复蜂窝（复用开蜂窝全链路：私有 / 快捷指令 / 效果校验）；
-        // 失败不吞结果 —— 弹窗成功页会指引手动开.
-        _ = await CellularTunnelManager.shared.turnOnDataIfNeeded()
     }
 }
 
 /// continuation 只许 resume 一次的包装（runAndWait 的成败都要收场）.
-private final class ResumeOnce<T>: @unchecked Sendable {
+private final class GlitchResumeOnce<T>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<T, Error>?
     init(continuation: CheckedContinuation<T, Error>) {
@@ -187,7 +276,7 @@ private final class ResumeOnce<T>: @unchecked Sendable {
         switch outcome {
         case .success(let value): continuation.resume(returning: value)
         case .failure(let error): continuation.resume(throwing: error)
-        case nil: continuation.resume(throwing: GlitchError(message: "蜂窝卡点流程提前结束."))
+        case nil: continuation.resume(throwing: CellularGlitchError(message: "蜂窝卡点流程提前结束."))
         }
     }
 }

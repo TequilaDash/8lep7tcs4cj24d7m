@@ -1372,6 +1372,9 @@ enum FileSharingService {
     /// `Lookup`，真正会长时间无响应的那部分）都在闸门之外执行，所以一次卡死的
     /// Lookup 不会按住闸门把别的入口一起拖死，它只占住自己那条隧道.
     static func makeTunnel() throws -> TunnelHandles {
+        // v0.3.760：所有回环操作统一卡点 —— 门放在闸门锁**外**，弹窗等待期间不占 tunnelGate.
+        let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "建立配对通路")
+        defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         let waitStarted = Date()
         tunnelGate.lock()
         defer { tunnelGate.unlock() }

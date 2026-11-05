@@ -65,6 +65,8 @@ final class WiFiPowerBridge: @unchecked Sendable {
 
         // 2) 隧道 IP
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
+        let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "Wi-Fi 电源桥")
+        defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.targetIP
         guard !deviceIP.isEmpty else {

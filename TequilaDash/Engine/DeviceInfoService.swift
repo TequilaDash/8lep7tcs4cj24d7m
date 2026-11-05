@@ -493,6 +493,8 @@ enum DeviceInfoService {
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = in_port_t(RemotePairingPort.current).bigEndian
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
+        let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "读取设备信息")
+        defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.targetIP
         // v0.3.637：必须校验 inet_pton 返回值。

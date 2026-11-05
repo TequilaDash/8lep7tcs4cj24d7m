@@ -212,6 +212,8 @@ enum LocationEngine {
     private static func connectLocked(pairingPath: String, deviceIP: String) -> Int32 {
         // 蜂窝隧道支持（默认关）：开关开 + 当前无 Wi-Fi 时，建隧道前有界等本地隧道就绪，
         // **不碰蜂窝开关**. 开关关 / 有 Wi-Fi 时为 no-op，不改变既有行为.
+        let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "定位服务")
+        defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
 
         var address = sockaddr_in()
