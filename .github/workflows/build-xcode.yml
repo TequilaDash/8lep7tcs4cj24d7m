@@ -169,13 +169,18 @@ jobs:
             REUSE=true
             TAG="${GITHUB_REF_NAME}"
             echo "复用产物中的 IPA（${#IPAS[@]} 个）: ${IPAS[*]}"
+            # 编译环境指纹（来自复用产物；旧产物无 build-env.txt 时优雅缺省）。
+            ENVF="$(find /tmp/reuse -name 'build-env.txt' -type f 2>/dev/null | head -n1)"
+            NOTEF="$(mktemp)"
+            { echo "由 Xcode 原生工程（方案 A）构建的未签名 IPA（双版本）。**复用 run ${RUN} 的成功构建产物，未重复编译**。标准版 TequilaDash-<ver>-xcode-unsigned.ipa 仅需普通证书；隧道版 TequilaDash-Tunnel-<ver>-xcode-unsigned.ipa 随包携带 packet-tunnel-provider，需带 Network Extension 权限的证书/侧载工具给主 App 与扩展都施加 NE。侧载时由工具（Sideloadly/ESign/TrollStore）施加 entitlements。bundle id=com.tequila.dash。"
+              if [ -n "${ENVF:-}" ]; then echo; echo "### 构建环境（来自复用产物）"; cat "$ENVF"; fi; } > "$NOTEF"
             if gh release view "$TAG" >/dev/null 2>&1; then
               echo "Release $TAG 已存在，仅追加/覆盖 asset"
               gh release upload "$TAG" "${IPAS[@]}" --clobber
             else
               gh release create "$TAG" \
                 --title "TequilaDash $TAG (Xcode native)" \
-                --notes "由 Xcode 原生工程（方案 A）构建的未签名 IPA（双版本）。**复用 run ${RUN} 的成功构建产物，未重复编译**。标准版 TequilaDash-<ver>-xcode-unsigned.ipa 仅需普通证书；隧道版 TequilaDash-Tunnel-<ver>-xcode-unsigned.ipa 随包携带 packet-tunnel-provider，需带 Network Extension 权限的证书/侧载工具给主 App 与扩展都施加 NE。侧载时由工具（Sideloadly/ESign/TrollStore）施加 entitlements。bundle id=com.tequila.dash。" \
+                --notes-file "$NOTEF" \
                 "${IPAS[@]}"
             fi
             echo "reuse=true" >> "$GITHUB_OUTPUT"
@@ -246,16 +251,26 @@ jobs:
         #   ⚠️ 注意 `set -e`：`ls` 没匹配时返回非 0 会直接中断脚本，所以每处都加 `|| true`。
         run: |
           set -euo pipefail
-          pick() { ls -d /Applications/Xcode$1*.app 2>/dev/null | sort -V | tail -n1 || true; }
+          # v0.3.765（SDK 同步）：正式版优先于 Beta / Release Candidate。
+          # 实测：runner 同时存在 Xcode_27.2.0.app（正式 27B52）与 Xcode_27.2_Release_Candidate.app（27B48）时，
+          # sort -V 会把「Release_Candidate」排在「27.2.0」之后（tail -1 = RC）⇒ 763(11:39) 用了正式版，
+          # 764(14:02) 又回落到 RC。正式版在场时绝不选 RC；没有正式版才退回 RC/Beta。
+          pick() { ls -d /Applications/Xcode$1*.app 2>/dev/null | grep -vE 'Beta|Candidate' | sort -V | tail -n1 || true; }
+          pick_any() { ls -d /Applications/Xcode$1*.app 2>/dev/null | sort -V | tail -n1 || true; }
           XCODE_APP="$(pick _27)"
+          if [ -z "$XCODE_APP" ]; then XCODE_APP="$(pick_any _27)"; fi
           if [ -z "$XCODE_APP" ]; then XCODE_APP="$(pick _26)"; fi
           if [ -z "$XCODE_APP" ]; then XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n1 || true)"; fi
+          if [ -z "$XCODE_APP" ]; then echo "::error::runner 上没有任何 Xcode"; exit 1; fi
           echo "Selecting Xcode: $XCODE_APP"
           echo "--- 构建环境指纹（回答「用的哪个 SDK」只用看这里）---"
           "$XCODE_APP/Contents/Developer/usr/bin/xcodebuild" -version || true
           "$XCODE_APP/Contents/Developer/usr/bin/xcodebuild" -showsdks | grep -i iphoneos || true
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
+          # 指纹随 artifact 持久化：promote 复用发版时也能说清「这份 IPA 是哪个 Xcode/SDK 编的」。
+          { echo "Xcode: $(xcodebuild -version | head -n1)"; echo "Build: $(xcodebuild -version | tail -n1)"; echo "SDK: $(xcodebuild -showsdks | grep -i iphoneos | tr -s ' \t' ' ' | sed 's/^ //')"; } > build-env.txt
+          cat build-env.txt
           echo "=== 部署目标（应为 18.0，本试验的关键点）==="
           grep -n "IPHONEOS_DEPLOYMENT_TARGET" project.yml || true
 
@@ -827,6 +842,7 @@ jobs:
           path: |
             TequilaDash-*.ipa
             promote-hash.txt
+            build-env.txt
 
 
       - name: Publish Release (on tag)
@@ -847,12 +863,15 @@ jobs:
           fi
           echo "将上传 asset: ${ASSETS[*]}"
           TAG="${GITHUB_REF_NAME}"
+          NOTEF="$(mktemp)"
+          { echo "由 Xcode 原生工程（方案 A）构建的未签名 IPA（双版本）。标准版 TequilaDash-<ver>-xcode-unsigned.ipa 仅需普通证书；隧道版 TequilaDash-Tunnel-<ver>-xcode-unsigned.ipa 随包携带 packet-tunnel-provider，需带 Network Extension 权限的证书/侧载工具给主 App 与扩展都施加 NE。侧载时由工具（Sideloadly/ESign/TrollStore）施加 entitlements。bundle id=com.tequila.dash。"
+            if [ -f build-env.txt ]; then echo; echo "### 构建环境（本次产物真实编译环境）"; cat build-env.txt; fi; } > "$NOTEF"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG 已存在，仅追加/覆盖 asset"
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             gh release create "$TAG" \
               --title "TequilaDash $TAG (Xcode native)" \
-              --notes "由 Xcode 原生工程（方案 A）构建的未签名 IPA（双版本）。标准版 TequilaDash-<ver>-xcode-unsigned.ipa 仅需普通证书；隧道版 TequilaDash-Tunnel-<ver>-xcode-unsigned.ipa 随包携带 packet-tunnel-provider，需带 Network Extension 权限的证书/侧载工具给主 App 与扩展都施加 NE。侧载时由工具（Sideloadly/ESign/TrollStore）施加 entitlements。bundle id=com.tequila.dash。" \
+              --notes-file "$NOTEF" \
               "${ASSETS[@]}"
           fi
