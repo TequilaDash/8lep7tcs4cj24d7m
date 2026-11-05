@@ -382,8 +382,10 @@ def main():
     findings += check_manager(os.path.join(root, MANAGER_REL))
     findings += check_multi_candidate_probe(os.path.join(root, MANAGER_REL))
     findings += check_settings_toggle(root)
-    findings += check_shortcut_dependency_present(root)
-    findings += check_shortcut_name_configurable(root)
+    # v0.3.762 第二次反转（用户裁定「把快捷指令的方案删了 以后我们不需要用到快捷指令」）：
+    # R4/R5 从「必须用快捷指令」再反转为「禁止快捷指令」——shortcuts:// 跳前台与卡点弹窗严重冲突.
+    findings += check_no_shortcut_dependency(root)
+    findings += check_no_shortcut_guide_references(root)
     findings += check_wiring(os.path.join(root, DISCOVERY_REL), "应用列表")
     findings += check_wiring(os.path.join(root, UNINSTALL_REL), "卸载")
     findings += check_wiring(os.path.join(root, LOCATION_REL), "虚拟定位")
@@ -401,6 +403,57 @@ def main():
         print("✓ 引擎文件与键名齐备、开关默认关且已接上、快捷指令调用在位且名可自定义、"
               "全部隧道入口均已调用 prepareForTunnel、无 Wi-Fi 硬信念文案 —— 合规")
     return 1 if findings else 0
+
+
+
+
+def check_no_shortcut_dependency(root):
+    """R4（v0.3.762 反转）：CellularTunnelManager.swift **禁止**快捷指令调用.
+
+    历史：v0.3.612 删快捷指令（错误）→ v0.3.613 照 SideStore 要求快捷指令 →
+    v0.3.762 用户实测「自动模式没弹卡点卡、反而被跳到快捷指令 App」后裁定：
+    「把快捷指令的方案删了 以后我们不需要用到快捷指令！严重冲突！」.
+    根因 = 门编排失败后，建隧道链路的旧无参调用仍按旧语义自动执行
+    `UIApplication.open(shortcuts://run-shortcut?...)` 跳前台，把 App 踢到后台，
+    卡点弹窗永远看不见.
+
+    新不变量：关/开蜂窝只允许 私有 CoreTelephony API 或 交由卡点弹窗引导手动，
+    引擎文件里不得出现任何 shortcuts:// / run-shortcut / UIApplication.open.
+    """
+    findings = []
+    full = os.path.join(root, MANAGER_REL)
+    if not os.path.exists(full):
+        return findings  # R1 已报缺失
+    body = strip_comments(read(full))
+    for pat in ("shortcuts://", "run-shortcut", "UIApplication.shared.open", "runShortcutTurn"):
+        if pat in body:
+            findings.append(("R4", "%s 出现 `%s` —— 快捷指令方案已删（v0.3.762 用户裁定），关/开蜂窝只允许私有 CoreTelephony API 或卡点弹窗引导手动，任何路径不得跳快捷指令 App." % (
+                MANAGER_REL.replace("\\", "/"), pat)))
+    for fn in ("turnOffDataIfNeeded", "turnOnDataIfNeeded"):
+        if not re.search(r'func\s+' + fn + r'\s*\(', body):
+            findings.append(("R4", "%s 未实现 `%s()` —— 私有开关/卡点弹窗两路仍需这两个入口." % (
+                MANAGER_REL.replace("\\", "/"), fn)))
+    return findings
+
+
+def check_no_shortcut_guide_references(root):
+    """R5（v0.3.762 反转）：全仓不得再引用已删除的快捷指令文件/类型.
+
+    CellularShortcutInstaller.swift / CellularShortcutGuideView.swift /
+    CellularIntents.swift 已随快捷指令方案删除；任何残留引用都会编译失败.
+    """
+    findings = []
+    for pat in ("CellularShortcutInstaller", "CellularShortcutGuideView", "CellularIntents"):
+        for rel, full in iter_source_files(root):
+            if not rel.endswith(".swift"):
+                continue
+            try:
+                stripped = strip_comments(read(full))
+            except OSError:
+                continue
+            if pat in stripped:
+                findings.append(("R5", "%s 仍引用 `%s` —— 该快捷指令类型已随方案删除（v0.3.762），残留引用会编译失败." % (rel, pat)))
+    return findings
 
 
 if __name__ == "__main__":

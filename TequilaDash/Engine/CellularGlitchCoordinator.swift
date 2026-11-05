@@ -45,12 +45,10 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     }
 
     /// 弹窗请求（Identifiable 供 RootView 的 .sheet(item:)）.
-    /// `showShortcutChoice`：自动模式下私有开关无效后，等待断网卡上出现
-    /// 「改用快捷指令」按钮（用户裁定：自动 = 私有优先 → 卡点弹窗二选一）.
+    /// v0.3.762：快捷指令方案删除 —— 卡点弹窗只有「继续等手动关蜂窝」一条路，无二选按钮.
     struct ModalRequest: Identifiable {
         let id = UUID()
         let label: String
-        var showShortcutChoice = false
     }
 
     @Published private(set) var phase: Phase = .idle
@@ -105,7 +103,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         turnOnWorkItem = nil
 
         let manager = CellularTunnelManager.shared
-        let mode = manager.toggleMode
         final class GateOutcome: @unchecked Sendable {
             var down = false
             var cancelled = false
@@ -116,7 +113,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             guard let self else { sem.signal(); return }
             await MainActor.run {
                 self.routeResetFired = false
-                self.modalRequest = ModalRequest(label: label, showShortcutChoice: mode == .auto)
+                self.modalRequest = ModalRequest(label: label)
                 self.phase = .waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…")
             }
             _ = await manager.turnOffDataIfNeeded(orchestratedByGate: true)
@@ -175,20 +172,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         Task { @MainActor in
             phase = .idle
             modalRequest = nil
-        }
-    }
-
-    /// 弹窗「改用快捷指令」按钮：后台执行快捷指令关蜂窝；
-    /// 900s 等待继续由探针感知断网自然收场，无需中断门流程.
-    func switchToShortcutFallback() {
-        gateLock.lock()
-        let active = gateBusy
-        gateLock.unlock()
-        guard active else { return }
-        CellularLogStore.shared.log("卡点弹窗：改用快捷指令关蜂窝")
-        LoginLogger.shared.log("[Cellular] 卡点弹窗：改用快捷指令关蜂窝", category: .tunnelCellular)
-        Task { @MainActor in
-            _ = await CellularTunnelManager.shared.runShortcutTurnOff()
         }
     }
 
