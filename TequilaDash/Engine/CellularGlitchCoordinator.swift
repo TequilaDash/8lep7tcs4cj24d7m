@@ -194,10 +194,12 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         let checker = CellularNetworkChecker.shared
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return .notNeeded }
         if !checker.isNetworkConnectedNow { return .notNeeded }
-        gateLock.lock()
-        if gateBusy || runTask != nil { gateLock.unlock(); return .notNeeded }
-        gateBusy = true
-        gateLock.unlock()
+        let acquired: Bool = gateLock.withLock {
+            if gateBusy || runTask != nil { return false }
+            gateBusy = true
+            return true
+        }
+        if !acquired { return .notNeeded }
 
         restoreTask?.cancel()
         restoreTask = nil
@@ -205,9 +207,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         let myEpoch = bumpEpoch()
         let outcome = await gateOutcome(label: label, epoch: myEpoch)
         guard outcome.down, !outcome.cancelled else {
-            gateLock.lock()
-            gateBusy = false
-            gateLock.unlock()
+            gateLock.withLock { gateBusy = false }
             await MainActor.run {
                 if self.isCancelled(myEpoch) {
                     self.phase = .idle
