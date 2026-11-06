@@ -70,9 +70,9 @@ enum TunnelGate {
             let frames = Thread.callStackSymbols.dropFirst(2).prefix(3).joined(separator: " <- ")
             TunnelDiagnostics.note("主线程隧道调用", frames.isEmpty ? "guardReady 在主线程同步等待" : frames)
         }
-        // v0.3.768（Gnoix 对齐）：utun 对端不通再探设备直连通道（各 0.5s 上限）.
-        let reachable = LocalDevVPN.isChannelReachable(timeout: probeTimeout)
-        if reachable {
+        // v0.3.772（回环定版）：主地址恒 127.0.0.1:RSD —— 探测对象与建链对象一致，
+        // 回环预演通过 = 建链第一步成立（余下步骤失败由功能侧如实报错）.
+        if LocalDevVPN.loopbackProbeReady(timeout: probeTimeout) {
             setReady(true)
             // 让 MainActor 侧的发布状态跟上（后台补一拍，不阻塞调用方）.
             Task { @MainActor in
@@ -83,7 +83,7 @@ enum TunnelGate {
         Task { @MainActor in
             await TunnelReadiness.shared.probeOnce()
         }
-        throw TunnelReadinessError(ip: LocalDevVPN.targetIP, port: RemotePairingPort.current)
+        throw TunnelReadinessError(ip: "127.0.0.1", port: RemotePairingPort.current)
     }
 }
 
@@ -101,8 +101,6 @@ final class TunnelReadiness: ObservableObject {
 
     private var started = false
     private var pathMonitor: NWPathMonitor?
-    /// 最近一次探测是否走了直连通道（状态翻转时才记日志）.
-    private var lastProbeWasDirect = false
     /// 单次探测超时（非阻塞 connect + poll）.
     private static let probeTimeout: TimeInterval = 0.5
 
@@ -134,46 +132,38 @@ final class TunnelReadiness: ObservableObject {
                 await self?.probeOnce()
             }
         }
-        TunnelDiagnostics.note("隧道就绪", "事件驱动探测已启动（target=\(LocalDevVPN.targetIP):\(RemotePairingPort.current)）")
+        TunnelDiagnostics.note("隧道就绪", "事件驱动探测已启动（127.0.0.1:RSD 回环主通路，Gnoix 同款）")
     }
 
     // MARK: - 探测
 
     /// 立即探测一次（socket 在后台线程跑，结论回主线程发布 + 写入 TunnelGate 缓存）.
     func probeOnce() async {
-        let ip = LocalDevVPN.targetIP
-        let port = RemotePairingPort.current
+        var port = RemotePairingPort.current
         let timeout = Self.probeTimeout
-        // v0.3.768（Gnoix 对齐）：先探 utun 对端（既有判据），不通再探设备直连通道
-        // （Bonjour 解析的设备自身 IP + RSD 端口）——蜂窝下 LocalDevVPN 隧道死透，
-        // RSD 监听设备所有网卡仍可直连；iOS 只限制应用连 127.0.0.1 回环，不限自身网卡.
-        let utunReachable = await Task.detached(priority: .utility) {
-            LocalDevVPN.isReachable(ip: ip, timeout: timeout, port: port)
-        }.value
-        var reachable = utunReachable
-        var viaDirect = false
-        if !utunReachable {
-            viaDirect = await Task.detached(priority: .utility) {
-                RemotePairingPort.probeDirectEndpoint(timeout: timeout)
+        // v0.3.772（回环定版）：只探 127.0.0.1:RSD —— 与 tunnel_create_rppairing 建链
+        // 主地址同源，探测通过即建链前半段成立（回环 refusal 即时，无 utun 黑洞）.
+        // 端口未知时事件驱动解析一次（Bonjour/缓存），不再维护 utun/直连双通道口径.
+        if port == 0 {
+            port = await Task.detached(priority: .utility) {
+                RemotePairingPort.resolveNow(timeout: 3)
             }.value
-            reachable = viaDirect
+        }
+        var reachable = false
+        if port > 0 {
+            reachable = await Task.detached(priority: .utility) {
+                LocalDevVPN.isReachable(ip: "127.0.0.1", timeout: timeout, port: port)
+            }.value
         }
         let now = Date()
-        // v0.3.771（重做）滞回：置真只认硬证据（utun 对端可达；门内真实成功另行置真），
-        // 直连探测只「维持」已置真的通路、绝不把假探成真（LC 实测直连探测假阳性）.
-        TunnelGate.setReady(utunReachable || (TunnelGate.isReady && reachable))
+        // 探测对象 == 建链对象：通即置真，不通即清假，无滞回.
+        TunnelGate.setReady(reachable)
         lastCheckedAt = now
         if reachable && !isReady { becameReadyAt = now }
         if reachable != isReady {
             TunnelDiagnostics.note("隧道就绪", reachable
-                ? "状态翻转：不可达 → 可达（\(ip):\(port)）"
-                : "状态翻转：可达 → 不可达（\(ip):\(port)）")
-        }
-        if viaDirect != lastProbeWasDirect {
-            TunnelDiagnostics.note("直连通道", viaDirect
-                ? "utun(\(ip):\(port))不可达，设备直连(\(RemotePairingPort.discoveredIP ?? "-"):\(port))接管"
-                : "直连通道让位（utun 可达或直连探测未通过）")
-            lastProbeWasDirect = viaDirect
+                ? "状态翻转：不可达 → 可达（127.0.0.1:\(port)）"
+                : "状态翻转：可达 → 不可达（127.0.0.1:\(port)）")
         }
         isReady = reachable
     }

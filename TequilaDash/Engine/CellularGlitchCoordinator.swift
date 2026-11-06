@@ -197,8 +197,29 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     func awaitLoopbackGate(label: String) async -> LoopbackGateVerdict {
         let checker = CellularNetworkChecker.shared
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return .notNeeded }
-        // v0.3.771（重做）：通路真的建着（硬证据置真，同 beginLoopbackGate 注释）⇒ 不再二次卡点.
+        // v0.3.772（回环定版）门只回答一件事：回环链路（127.0.0.1:RSD，与建链主地址同源）
+        // 现在确认可用吗？可用 → 放行（Gnoix 行为：蜂窝下也不弹卡）；确认不通 → 卡点弹窗，
+        // 关蜂窝救 utun 备用路（唯一出场场景）.
+        // ① 通路曾确认（门内真实成功/探测置真）→ 放行.
         if TunnelGate.isReady { return .notNeeded }
+        // ② 回环建链预演（毫秒级，回环 refusal 即时）→ 通过即放行并记下通路.
+        if LocalDevVPN.loopbackProbeReady() {
+            TunnelGate.setReady(true)
+            TunnelDiagnostics.note("蜂窝通路", "回环链路可用，直连放行，无需卡点")
+            return .notNeeded
+        }
+        // ③ 端口未知 → 事件驱动解析一次（Bonjour/缓存）再探.
+        if RemotePairingPort.current == 0 {
+            _ = await Task.detached(priority: .utility) {
+                RemotePairingPort.resolveNow(timeout: 3)
+            }.value
+        }
+        if RemotePairingPort.current > 0, LocalDevVPN.loopbackProbeReady() {
+            TunnelGate.setReady(true)
+            TunnelDiagnostics.note("蜂窝通路", "解析端口后回环链路可用，直连放行")
+            return .notNeeded
+        }
+        // ④ 回环确认不通（且非 Wi-Fi、有网）→ 卡点弹窗.
         if !checker.isNetworkConnectedNow { return .notNeeded }
         let acquired: Bool = gateLock.withLock {
             if gateBusy || runTask != nil { return false }

@@ -120,10 +120,24 @@ enum LocalDevVPN {
         isReachable(ip: targetIP, timeout: 1.0)
     }
 
-    /// 实际建连 IP（v0.3.769 Gnoix 对齐）：直连戳存在（事件驱动）→ 回环端点 127.0.0.1；
-    /// 否则回落 utun 对端 `targetIP`（既有行为不变）。戳由正向事件置位、反向事件清零.
+    /// 实际建连 IP（v0.3.772 回环定版）：**恒为 127.0.0.1**（Gnoix 同款主通路）.
+    ///
+    /// 取证：rust `tunnel_create_rppairing` 第一步 connect 用的是调用方传入的主地址，
+    /// 主地址失败整个调用立即失败（候选表只用于第二步 listener host 猜测）。769/771 的
+    /// 「直连戳」决定主地址，而戳会被网络切换清掉 —— 成败取决于一个随时消失的戳，
+    /// 而不是稳定的物理事实。RSD 监听127.0.0.1（iOS 只限制应用连回环），回环不走
+    /// 路由，蜂窝/Wi-Fi/LC 皆通 —— 主地址恒回环后，蜂窝下直接可用由此成立.
+    /// utun 对端 `targetIP` 只服务 NE/Airlift 场景（见 TunnelProvider/AirliftToneTransport）.
     static var connectIP: String {
-        RemotePairingPort.freshDirectIPCandidate ?? targetIP
+        "127.0.0.1"
+    }
+
+    /// 回环建链预演：与 `tunnel_create_rppairing` 主地址（127.0.0.1:RSD 端口）完全同源，
+    /// 探测通过 = 建链第一步成立（回环 refusal 即时，无 utun 黑洞问题）.
+    static func loopbackProbeReady(timeout: TimeInterval = 0.5) -> Bool {
+        let port = RemotePairingPort.current
+        guard port > 0 else { return false }
+        return isReachable(ip: "127.0.0.1", timeout: timeout, port: port)
     }
 
     /// 通道可达（v0.3.768 Gnoix 对齐）：utun 对端可达 或 设备直连可达。
