@@ -151,7 +151,7 @@ final class CellularTunnelManager: @unchecked Sendable {
                                   category: .tunnelCellular)
         }
 
-        let ready = waitForTunnelReady()
+        let ready = Self.waitForBringUp()
         // 诊断：把「隧道到底在不在、候选对端是哪些、本机接口长什么样」如实打进日志.
         let peers = LocalDevVPN.candidateTunnelPeers()
         LoginLogger.shared.log(

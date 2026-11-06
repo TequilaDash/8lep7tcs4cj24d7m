@@ -1,6 +1,5 @@
 import SwiftUI
 
-// 规则 31「引擎不熄火」（用户 2026-10-31 定的最终交互范式，参考实现 Views/HealthCheckView.swift，commit b833e64）.
 // 判据：隧道未就绪不是错误，是「待发」——功能挂起并订阅就绪翻转，VPN 一开当场自动续跑；
 // 禁止终态报错要用户手动重试、禁止定时重试、禁止任何线程被隧道调用同步阻塞.
 // 本文件只放三条口径里可复用的部分，「续跑哪一个动作」仍由各页面自己决定：
@@ -23,7 +22,6 @@ enum TunnelPending {
     static func isPending(_ error: Error) -> Bool {
         if error is TunnelReadinessError { return true }
         // 用 TunnelGate 的 NSLock 缓存读（同一面就绪旗）：isPending 会被非隔离上下文调到，
-        // 不能走 @MainActor 的 TunnelReadiness.shared.isReady（CI 实测 actor 隔离报错）.
         guard !TunnelGate.isReady else { return false }
         if let e = error as? AppDiscoveryError, case .heartbeatFailed = e { return true }
         if let e = error as? IconCleanupService.CleanupError, case .tunnelFailed = e { return true }
@@ -35,7 +33,6 @@ enum TunnelPending {
         isPending(error) ? copy : error.localizedDescription
     }
 
-    /// 挂在待发位上的页面出现时踢一次蜂窝通路（v0.3.774）：蜂窝在线且通路未建 ⇒ 走与主动操作
     /// **同一条**卡点链（弹卡 → 关蜂窝 → 断网窗口内建链 → 成功置真），本行随即由 onTunnelReady
     /// 当场消失并续跑；Wi-Fi / 已就绪 / 已离线都不动作（判据在 kickPassiveGate 内）.
     ///
@@ -57,7 +54,6 @@ struct TunnelPendingRow: View {
 
     var body: some View {
         AppLoadingRow(title: TunnelPending.copy, detail: detail, level: level)
-            // v0.3.774：待发态一出现就去踢蜂窝通路 —— 此前卡点只由引擎的 RSD 回环调用触发，
             // 走心跳的页面（空间回收/应用列表）挂在待发位上没人建隧道，4G 下永久停在这行.
             .onAppear { TunnelPending.kickCellularGate(for: detail) }
     }
@@ -73,7 +69,6 @@ extension View {
 
 /// 双保险触发：① 就绪翻转（原始语义）；② 回到前台时若已就绪补一脚 ——
 /// 后台期间发生的翻转可能只留下最新值，页面没有其它状态变化就不重算；
-/// 覆盖「去开 VPN → 回 App，页面停在待发」的真机路径（2026-11-01 用户复现）.
 /// action 由调用方自带幂等守卫，重复触发是 no-op.
 private struct TunnelReadyWatcher: ViewModifier {
     let action: () -> Void

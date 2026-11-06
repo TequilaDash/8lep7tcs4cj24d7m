@@ -44,12 +44,7 @@ enum WirelessLockdownService {
     }
 
     private static func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
-        var message = ffiError?.pointee.message.map { String(cString: $0) } ?? ""
-        // v0.3.248：Rust 侧 {:?} 调试格式会把枚举外壳带上（如 UnexpectedResponse("正文")），
-        // 剥掉只留正文，避免界面出现一坨调试语法
-        if message.hasPrefix("UnexpectedResponse(\""), message.hasSuffix("\")") {
-            message = String(message.dropFirst("UnexpectedResponse(\"".count).dropLast(2))
-        }
+        let message = DeviceErrorText.cleaned(ffiError?.pointee.message) ?? ""
         let code = ffiError.map { Int($0.pointee.code) } ?? -1
         if let ffiError { idevice_error_free(ffiError) }
         return NSError(domain: "WirelessLockdownService", code: code,

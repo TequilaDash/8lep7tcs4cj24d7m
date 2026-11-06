@@ -94,7 +94,7 @@ final class PairingInstallService: Sendable {
         guard let ffiError else { return makeError(fallback) }
         let message: String
         if let cString = ffiError.pointee.message {
-            message = String(cString: cString)
+            message = DeviceErrorText.annotate(String(cString: cString))
         } else {
             message = ""
         }

@@ -636,7 +636,7 @@ enum I4PairingService {
     /// 取 FFI 错误正文并释放该错误对象（与 `WirelessLockdownService.error(from:)` 同口径）.
     /// Rust 侧用 `{:?}` 序列化 `IdeviceError`，`UnexpectedResponse("正文")` 的调试外壳在此剥掉，只留正文.
     private static func ffiMessage(_ ffiError: UnsafeMutablePointer<IdeviceFfiError>) -> String {
-        var message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+        var message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
         if message.hasPrefix("UnexpectedResponse(\""), message.hasSuffix("\")") {
             message = String(message.dropFirst("UnexpectedResponse(\"".count).dropLast(2))
         }

@@ -2,15 +2,9 @@
 //  BonjourNetworkDiscovery.swift
 //  TequilaDash
 //
-//  网络发现（mDNS）—— SideStore「Network Discovery」三层模型的移植：
-//  ① 域枚举（searchForRegistrationDomains + local 写死保底，同上游 :113-129）；
 //  ② 服务类型枚举（_services._dns-sd._udp. meta-query + commonServiceTypesToBrowse
-//     68 型 NWBrowser 兜底探测，同上游 discoverServiceTypes/startFallbackSearches）；
 //  ③ 服务实例浏览（工程消费的三型：RemotePairing / RSD / Pairable-Host）.
 //
-//  对齐上游：SideStore/Core/Bonjour/BonjourDiscoveryManager.swift（develop, 896 行）
-//  与 BonjourDiscoveryTypes.swift（68 型清单与友好名映射逐项照搬）。NSBonjourServices
-//  声明与上游 AltStore/Info.plist 的 69 项逐项一致（68 型 + _services._dns-sd._udp），
 //  缺一型 iOS 14+ 本地网络权限就会拦掉对应浏览.
 //
 //  线程模型（与 RemotePairingPort.BonjourPortWorker 同款）：NetServiceBrowser schedule
@@ -51,7 +45,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         ]
     }
 
-    /// SideStore ServiceTypeInfo 同款：原始类型 + 友好名（枚举层展示用）.
     struct ServiceTypeInfo: Identifiable, Equatable {
         var id: String { rawType }
         let rawType: String
@@ -62,7 +55,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     /// 与 Info.plist NSBonjourServices 声明一致的工程消费三型（实例层）.
     static let serviceTypes = ["_remotepairing._tcp.", "_remoted._tcp.", "_remotepairing-pairable-host._tcp."]
-    /// SideStore BonjourDiscoveryTypes.swift 逐项照搬（68 型）：meta-query 常不响应，
     /// 兜底用 NWBrowser 直接探常见类型，探到即视为该域下存在的服务类型.
     static let commonServiceTypesToBrowse: [String] = [
         "_altserver._tcp.",
@@ -135,7 +127,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         "_vnc._tcp.",
     ]
 
-    /// SideStore 同款友好名映射（68 键逐项照搬）.
     static let commonKnownServiceTypes: [String: String] = [
         "_airplay._tcp.": "Protocol for streaming of audio/video content",
         "_raop._tcp.": "Remote Audio Output Protocol (AirTunes)",
@@ -212,16 +203,13 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     @Published private(set) var services: [DiscoveredService] = []
-    /// 当前域下枚举到的服务类型（域二级页展示，SideStore「服务类型」列表同款）.
     @Published private(set) var serviceTypes: [ServiceTypeInfo] = []
     @Published private(set) var isBrowsing = false
     @Published private(set) var isEnumeratingTypes = false
     @Published private(set) var lastErrorText: String?
 
-    /// 浏览到的可注册域（SideStore Discovery「Browsable Domains」同款，如 "local"）.
     @Published private(set) var domains: [String] = []
 
-    /// 类型二级页的实例列表（SideStore ServiceInstancesView 同款：一次只浏览一个类型）.
     @Published private(set) var typeInstances: [DiscoveredService] = []
     @Published private(set) var isBrowsingInstances = false
     @Published private(set) var instanceErrorText: String?
@@ -237,7 +225,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     private var metaQuerySettled = false
     private var fallbackTypesTotal = 0
     private var settledFallbackBrowsers: Set<ObjectIdentifier> = []
-    /// browseToken -> 浏览器：@Sendable 闭包直接捕获 NWBrowser 会撞 #SendableClosureCaptures（CI 实测），
     /// 故闭包只捕获 Int 令牌，回表取浏览器.
     private var fallbackBrowserBox: [Int: NWBrowser] = [:]
 
@@ -260,7 +247,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         domainBrowser.schedule(in: .main, forMode: .common)
         domainBrowser.searchForRegistrationDomains()
         self.domainBrowser = domainBrowser
-        // SideStore 同款（BonjourDiscoveryManager.discoverDomains 启动即写死 local）：
         // 注册域枚举在 iOS 上几乎不回结果，保底 local 让可浏览域列表不再空白.
         if !domains.contains("local") {
             domains.append("local")
@@ -281,7 +267,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     // MARK: - 单类型实例浏览（三层模型的第③层，类型二级页专用）
 
-    /// 只浏览一个类型的实例并解析地址端口 —— SideStore discoverInstances(ofType:) 的等价实现，
     /// 但走 NetServiceBrowser（解析后能拿到 ip:port，NWBrowser 那侧只给名字）.
     func startInstanceBrowsing(rawType: String, domain: String) {
         stopInstanceBrowsing()
@@ -318,7 +303,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
             d = "local"
         }
         if t.hasSuffix(".") { t = String(t.dropLast()) }
-        // 只剩 "_apple-mobdev2" 这种没有协议段的残段时补回 ._tcp.（上游同款默认）
         if !t.contains("_tcp") && !t.contains("_udp") { t += "._tcp" }
         if !t.hasSuffix(".") { t += "." }
         if d.isEmpty { d = "local" }
@@ -326,10 +310,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         return (t, d)
     }
 
-    // MARK: - 服务类型枚举（SideStore 三层模型的第②层）
-
-    /// SideStore discoverServiceTypes 同款：_services._dns-sd._udp. meta-query 优先，
-    /// 68 型 NWBrowser 兜底探测并行挂上；收摊靠事件（tryFinishTypeEnumeration），不定秒.
+/// 68 型 NWBrowser 兜底探测并行挂上；收摊靠事件（tryFinishTypeEnumeration），不定秒.
     func discoverServiceTypes(in domain: String) {
         let domainWithDot = domain.hasSuffix(".") ? domain : domain + "."
         stopTypeSearch()
@@ -361,7 +342,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         tryFinishTypeEnumeration()
     }
 
-    /// SideStore startFallbackSearches 同款：每型一个 NWBrowser 直接 browse，
     /// 有结果即记类型；浏览器挂入 fallbackTypeBrowsers 统一停.
     private func startFallbackSearches(types: [String], in domain: String) {
         settledFallbackBrowsers = []
@@ -412,10 +392,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     /// 规范化并去重插入类型：补尾点；只过滤 meta 自身（_services._dns-sd）与空串.
     ///
-    /// v0.3.774（真机对比用户图二/图三）：旧版这里还要求以 ._tcp. / ._udp. 结尾，于是把
-    /// meta-query 回来的 PTR 全名（"_apple-mobdev2._tcp.local."）整条丢掉，同域下 SideStore
-    /// 显示 4 行我们只显示 2 行 —— 上游 BonjourDiscoveryManager.didFind(:553) 是照收的，
-    /// 查不到友好名就挂 nil（SideStore 渲染成橙色问号行）。现在同口径：未知类型保留，
     /// 由 displayName 回落原始串；实例浏览再按 browseComponents 归一化回真实类型.
     private func insertServiceType(rawType: String) {
         var t = rawType.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -435,7 +411,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         if browser === instanceBrowser {
-            // 类型二级页（SideStore ServiceInstancesView 同款）：只进 typeInstances，
             // 不污染主页面的三型列表.
             let row = DiscoveredService(id: serviceID(service), name: service.name ?? "（未命名）",
                                         type: service.type ?? "unknown",
@@ -451,7 +426,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         }
         if browser === typeBrowser {
             // meta-query：PTR 目标（如 "_airplay._tcp.local."）被 NetService 解析为
-            // name=类型主体 + type=协议段；两种拆法都归一成 "_airplay._tcp."（SideStore :553 同款拼法）.
             let name = (service.name ?? "").trimmingCharacters(in: .whitespaces)
             guard !name.isEmpty else { return }
             let type = service.type ?? ""
@@ -506,7 +480,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         }
         guard browser !== domainBrowser else { return }
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
-        // LC #1519：LiveContainer 宿主按自己的 NSBonjourServices 白名单校验服务类型，
         // guest 声明不合并；缺类型时该浏览器报错且权限弹窗不弹（_remotepairing._tcp
         // 宿主已声明，可用）。列表里有服务时不打扰用户；回环建连不需要本地网络权限.
         if services.isEmpty {

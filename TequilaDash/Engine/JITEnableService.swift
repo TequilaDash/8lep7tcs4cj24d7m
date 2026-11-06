@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 
-/// 启用 JIT 服务（汉化移植自 StikDebug 的 JITEnableContext，核心机制同源）.
 ///
 /// 原理：通过 LocalDevVPN 隧道（RPPairing 配对文件）连接设备的 debug_proxy /
 /// process_control 开发者服务，以「调试模式」启动目标 App——App 进程带
@@ -35,7 +34,7 @@ final class JITEnableService: Sendable {
         guard let ffiError else { return makeError(fallback) }
         let message: String
         if let cString = ffiError.pointee.message {
-            message = String(cString: cString)
+            message = DeviceErrorText.annotate(String(cString: cString))
         } else {
             message = ""
         }
@@ -57,7 +56,6 @@ final class JITEnableService: Sendable {
 
     /// CoreDevice 隧道句柄：经 CoreDeviceProxy 建出的**第二条** RSD 握手.
     ///
-    /// 它的服务表（iOS 27.0 实测 85 条）比 RPPairing 直连的 RSD 表（64 条）多出
     /// 整个 `com.apple.coredevice.*` 块与 `com.apple.internal.dt.remote.debugproxy`.
     private struct CoreDeviceHandles {
         var adapter: OpaquePointer?
@@ -87,7 +85,6 @@ final class JITEnableService: Sendable {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "启用 JIT")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -99,8 +96,6 @@ final class JITEnableService: Sendable {
         }
 
         // 隧道建立失败自动重试（最多 3 次）：Wi-Fi↔蜂窝切换等瞬时抖动会导致
-        // RPPairing 握手失败，重试后通常成功（对齐 StikDebug PR #432 的思路）.
-        // v0.3.774 用户裁定：重试间隔必须是毫秒级 —— 这里只留 20ms 防空转，
         // 真正的节流来自 socket connect / FFI 自身，不再是人为退避.
         TunnelDiagnostics.begin("JIT 建隧道", "hostname=\(hostname) ip=\(deviceIP)")
         var lastError: NSError?
@@ -179,7 +174,7 @@ final class JITEnableService: Sendable {
         }
         var servicesArray: UnsafeMutablePointer<CRsdServiceArray>?
         if let ffiError = rsd_get_services(handshake, &servicesArray) {
-            let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+            let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
             let code = Int(ffiError.pointee.code)
             idevice_error_free(ffiError)
             TunnelDiagnostics.note("JIT RSD 服务表", "\(label) 读取失败 code=\(code) \(message)")
@@ -454,7 +449,6 @@ final class JITEnableService: Sendable {
         // 关键保活：process_control 调试启动目标应用后，本应用立即退到后台，
         // iOS 数秒内就会挂起进程——若此时 attach/detach 流程还没跑完，
         // 目标应用会一直停在 SIGSTOP（黑屏无反应）.持有后台租约保证
-        // 整个会话期间本应用不被挂起（对齐 StikDebug 的 DebugKeepAliveLease）.
         // Swift 6：JITBackgroundLease 已收敛主线程（@MainActor）；本方法可能在后台
         // 线程跑，创建/释放需跳主线程。**若本方法本身就在主线程调用**，直接 `main.sync`
         // 会死锁 —— 故先判 `Thread.isMainThread`：在主线程用 `MainActor.assumeIsolated`
@@ -572,7 +566,6 @@ final class JITEnableService: Sendable {
                 // 只有以 "E" 开头的响应（debugserver 错误包）才是真正的失败.
                 // v0.2.71 误把成功响应当失败 → throw 后 detach 未执行，目标应用
                 // 停在 SIGSTOP、连接断开后被 debugserver 终止（闪退）.
-                // 对齐 StikDebug：原版不检查 attach 响应，成功失败都继续 detach.
                 if text.hasPrefix("E") {
                     throw makeError("调试器附着失败：\(text)")
                 }
@@ -674,7 +667,6 @@ private actor IconFetchSemaphore {
     }
 }
 
-/// JIT 会话后台保活租约（对齐原版 StikDebug 的 DebugKeepAliveLease 与
 /// PR #432 的续期思路）.
 ///
 /// 为什么必须保活：`process_control_launch_app(debug: true)` 调试启动目标应用后，

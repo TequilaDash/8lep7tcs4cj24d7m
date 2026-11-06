@@ -191,7 +191,7 @@ enum ActivationService {
     /// 把 FFI 错误转成可读文案（读完即释放）.
     private static func message(from ffiError: UnsafeMutablePointer<IdeviceFfiError>, fallback: String) -> String {
         let code = ffiError.pointee.code
-        let text = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+        let text = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
         idevice_error_free(ffiError)
         return text.isEmpty ? "\(fallback)（code=\(code)）" : text
     }

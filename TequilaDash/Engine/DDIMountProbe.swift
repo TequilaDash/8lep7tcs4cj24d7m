@@ -217,7 +217,7 @@ enum DDIMountProbe {
     private static func buildTunnel(into tunnel: inout TunnelHandles, pairingPath: String) throws {
         var pairingFile: OpaquePointer?
         if let ffiError = pairingPath.withCString({ rp_pairing_file_read($0, &pairingFile) }) {
-            let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+            let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
             let code = Int(ffiError.pointee.code)
             idevice_error_free(ffiError)
             throw probeError("读取配对文件失败 code=\(code) \(message)")
@@ -269,7 +269,7 @@ enum DDIMountProbe {
                 }
             }
             if let ffiError {
-                let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+                let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
                 let code = Int(ffiError.pointee.code)
                 idevice_error_free(ffiError)
                 lastError = probeError("code=\(code) \(message)")
@@ -294,7 +294,7 @@ enum DDIMountProbe {
     private static func dumpServiceTable(_ handshake: OpaquePointer, into out: inout [String]) {
         var servicesArray: UnsafeMutablePointer<CRsdServiceArray>?
         if let ffiError = rsd_get_services(handshake, &servicesArray) {
-            let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+            let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
             let code = Int(ffiError.pointee.code)
             idevice_error_free(ffiError)
             out.append("  [失败] rsd_get_services 失败 code=\(code) \(message)")

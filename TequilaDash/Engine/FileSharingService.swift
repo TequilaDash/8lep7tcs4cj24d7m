@@ -123,7 +123,7 @@ enum FileSharingService {
     /// 也**没有 free 那个错误对象** ⇒ 每次失败泄漏一个。
     static func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
         guard let ffiError else { return makeError(fallback) }
-        let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+        let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
         let code = Int(ffiError.pointee.code)
         idevice_error_free(ffiError)
         return NSError(domain: "FileSharing", code: code,
@@ -805,7 +805,7 @@ enum FileSharingService {
         var rawPtr: UnsafeMutableRawPointer?
         var len: Int = 0
         if let err = installation_proxy_lookup_apps(ip, &rawPtr, &len) {
-            let msg = err.pointee.message.map { String(cString: $0) } ?? "unknown"
+            let msg = DeviceErrorText.cleaned(err.pointee.message) ?? "unknown"
             idevice_error_free(err)
             throw makeError("Lookup 失败：\(msg)")
         }
@@ -1291,7 +1291,7 @@ enum FileSharingService {
                 // 整表抛错会让本来能看的目录直接空白（比降级更糟）。
                 // 折中：类型按「未知」处理，但**把失败原因记进日志并附在条目上**，
                 // 由 UI 显示为未知大小，而不是确定的 0 字节。
-                let message = rc?.pointee.message.map { String(cString: $0) } ?? ""
+                let message = DeviceErrorText.cleaned(rc?.pointee.message) ?? ""
                 let code = Int(rc?.pointee.code ?? 0)
                 if let rc { idevice_error_free(rc) }
                 LoginLogger.shared.log(

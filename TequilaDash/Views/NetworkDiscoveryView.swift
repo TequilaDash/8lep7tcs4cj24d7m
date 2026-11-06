@@ -3,9 +3,6 @@
 //  TequilaDash
 //
 //  网络发现（mDNS）—— 入口：Cellular 隧道支持 → 网络发现.
-//  SideStore「Discovery」三层结构照搬：可浏览域 → 该域的服务类型 → 该类型的实例，
-//  另加 mDNS 服务列表 + 直连端点观测 + 导航栏蜂窝支持开关（SideStore 同位）+ 隧道事件日志.
-//  v0.3.774（用户图二反馈）：实例不再塞在域二级页里，改成像 SideStore 那样点类型进下一级.
 //
 
 import SwiftUI
@@ -13,7 +10,6 @@ import SwiftUI
 struct NetworkDiscoveryView: View {
     @StateObject private var discovery = BonjourNetworkDiscovery()
 
-    /// 与「Cellular 隧道支持」总开关同键 —— SideStore Discovery 右上角蜂窝按钮同位.
     @AppStorage(CellularTunnelManager.enabledKey) private var cellularEnabled = false
 
     @State private var probing = false
@@ -141,7 +137,6 @@ struct NetworkDiscoveryView: View {
         }
     }
 
-    /// SideStore Discovery「Browsable Domains」同款：可浏览域 + 域二级页.
     private var domainSection: some View {
         Section {
             if discovery.domains.isEmpty {
@@ -216,8 +211,6 @@ struct NetworkDiscoveryView: View {
     }
 }
 
-/// 域二级页：只列该域下枚举到的服务类型（SideStore ServiceTypesView 同款两层结构）.
-/// v0.3.774（用户图二）：原先塞在本页底部的「隧道服务实例」Section 不该出现在这里 ——
 /// 实例属于类型那一层，改成点类型行进 NetworkTypeInstancesView.
 private struct NetworkDomainDetailView: View {
     @ObservedObject var discovery: BonjourNetworkDiscovery
@@ -242,7 +235,6 @@ private struct NetworkDomainDetailView: View {
                         NavigationLink {
                             NetworkTypeInstancesView(discovery: discovery, info: t, domain: domain)
                         } label: {
-                            // 有友好名：主行友好名 + 副行原始类型；查不到（SideStore 的橙色问号
                             // 那类）主行直接显示原始串，不再被我方过滤器吞掉.
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(t.displayName)
@@ -273,7 +265,6 @@ private struct NetworkDomainDetailView: View {
     }
 }
 
-/// 类型三级页：该类型下的实例（SideStore ServiceInstancesView 同款）.
 /// meta-query 带回来的 PTR 全名（"_apple-mobdev2._tcp.local."）在浏览前由
 /// BonjourNetworkDiscovery.browseComponents 归一化成真实类型 + 域，否则浏览直接失败.
 private struct NetworkTypeInstancesView: View {

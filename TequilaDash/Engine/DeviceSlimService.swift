@@ -1024,7 +1024,7 @@ enum DeviceSlimService {
                 // v0.3.661：`measure` 现在可空 —— 量不到就是「不知道」，不是 0。
                 let before = measure(client: client, path: item.id)?.bytes
                 if let ffiError = item.id.withCString({ afc_remove_path_and_contents(client, $0) }) {
-                    let message = ffiError.pointee.message.map { String(cString: $0) } ?? "rc=\(ffiError.pointee.code)"
+                    let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? "rc=\(ffiError.pointee.code)"
                     idevice_error_free(ffiError)
                     result.failures.append("\(item.name)：\(message)")
                     continue

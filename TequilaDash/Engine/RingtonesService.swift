@@ -67,7 +67,7 @@ final class RingtonesService: @unchecked Sendable {
 
     private func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
         guard let ffiError else { return makeError(fallback) }
-        let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+        let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
         let code = Int(ffiError.pointee.code)
         idevice_error_free(ffiError)
         return NSError(domain: "Ringtones", code: code,

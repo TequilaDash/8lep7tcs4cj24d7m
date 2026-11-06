@@ -41,7 +41,7 @@ final class AFCService {
 
     private func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
         guard let ffiError else { return makeError(fallback) }
-        let message = ffiError.pointee.message.map { String(cString: $0) } ?? ""
+        let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
         let code = Int(ffiError.pointee.code)
         idevice_error_free(ffiError)
         return NSError(domain: "AFCService", code: code,
@@ -193,7 +193,7 @@ final class AFCService {
         var count = 0
         let cPath = path.isEmpty ? "/" : path
         if let ffiError = cPath.withCString({ afc_list_directory(client, $0, &entries, &count) }) {
-            let message = ffiError.pointee.message.map { String(cString: $0) } ?? "rc=\(ffiError.pointee.code)"
+            let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? "rc=\(ffiError.pointee.code)"
             let code = Int(ffiError.pointee.code)
             idevice_error_free(ffiError)
             throw NSError(domain: "AFCService", code: code,
@@ -302,7 +302,7 @@ final class AFCService {
     static func fileInfo(client: OpaquePointer, path: String) throws -> AfcFileInfo {
         var info = AfcFileInfo()
         if let ffiError = path.withCString({ afc_get_file_info(client, $0, &info) }) {
-            let message = ffiError.pointee.message.map { String(cString: $0) } ?? "rc=\(ffiError.pointee.code)"
+            let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? "rc=\(ffiError.pointee.code)"
             let code = Int(ffiError.pointee.code)
             idevice_error_free(ffiError)
             throw NSError(domain: "AFCService", code: code,
@@ -395,7 +395,7 @@ final class AFCService {
     /// 把 FFI 错误转成 NSError，并**释放** FFI 分配的错误对象
     private static func ffiError(_ e: UnsafeMutablePointer<IdeviceFfiError>?,
                                 _ fallback: String) -> NSError {
-        let message = e?.pointee.message.map { String(cString: $0) } ?? fallback
+        let message = DeviceErrorText.cleaned(e?.pointee.message) ?? fallback
         let code = Int(e?.pointee.code ?? 0)
         if let e { idevice_error_free(e) }
         return NSError(domain: "AFCService", code: code,
@@ -436,7 +436,7 @@ final class AFCService {
         var info = AfcFileInfo()
         if let e = path.withCString({ afc_get_file_info(client, $0, &info) }) {
             let code = e.pointee.code
-            let message = e.pointee.message.map { String(cString: $0) } ?? ""
+            let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
             idevice_error_free(e)
             // 「确认不存在」的判据沿用全仓既有口径（SSHFileProvider.ffiError：NoSuchFile / NotFound）.
             // Rust 侧 message 是 IdeviceError 的 Debug 名，对象不存在时为 Afc(ObjectNotFound)（实测 code=106）；

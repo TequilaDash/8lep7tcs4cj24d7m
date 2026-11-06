@@ -31,7 +31,7 @@ enum DeveloperModeService {
 
     private static func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?,
                               fallback: String) -> NSError {
-        var message = ffiError?.pointee.message.map { String(cString: $0) } ?? ""
+        var message = DeviceErrorText.cleaned(ffiError?.pointee.message) ?? ""
         if message.hasPrefix("UnexpectedResponse(\""), message.hasSuffix("\")") {
             message = String(message.dropFirst("UnexpectedResponse(\"".count).dropLast(2))
         }

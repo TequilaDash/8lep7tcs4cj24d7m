@@ -479,7 +479,7 @@ enum DeviceInfoService {
             //      拿不到 Rust 侧的真实原因（是缺 DeviceCertificate？还是 plist 解析失败？）；
             //   2. **每次失败泄漏一个 IdeviceFfiError**。
             // 对照：AFCService.swift:42-49 与 IPAInstallService.swift:213-219 都会提取 message 并 free。
-            let message = e.pointee.message.map { String(cString: $0) } ?? ""
+            let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
             let code = Int(e.pointee.code)
             idevice_error_free(e)
             throw NSError(domain: "DeviceInfo", code: code == 0 ? -2 : code,
@@ -535,7 +535,7 @@ enum DeviceInfoService {
                 // 也**不调用 idevice_error_free** ⇒ 每次失败泄漏一个 IdeviceFfiError，
                 // 而本函数一轮最多走 3 次、collectFull 里又会被多处调用。
                 // 与同文件上方「读配对文件」分支（v0.3.641 已修）保持同一写法.
-                let message = e.pointee.message.map { String(cString: $0) } ?? ""
+                let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
                 let code = Int(e.pointee.code)
                 idevice_error_free(e)
                 lastError = NSError(domain: "DeviceInfo",

@@ -464,7 +464,7 @@ final class AfcFileProvider: FileProvider, @unchecked Sendable {
     /// FFI 错误 → FileProviderError（并释放 FFI 分配的错误对象）.
     private func ffiError(_ e: UnsafeMutablePointer<IdeviceFfiError>?, _ fallback: String) -> FileProviderError {
         guard let e else { return .io(fallback) }
-        let message = e.pointee.message.map { String(cString: $0) } ?? ""
+        let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
         let code = Int(e.pointee.code)
         idevice_error_free(e)
         let text = message.isEmpty ? fallback : message

@@ -54,7 +54,7 @@ enum BatteryHealthService {
     private static func ffiError(_ e: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
         guard let e else { return makeError(fallback) }
         defer { idevice_error_free(e) }
-        let msg = e.pointee.message.map { String(cString: $0) } ?? ""
+        let msg = DeviceErrorText.cleaned(e.pointee.message) ?? ""
         return NSError(domain: "BatteryHealth", code: Int(e.pointee.code),
                        userInfo: [NSLocalizedDescriptionKey: msg.isEmpty ? fallback : msg])
     }

@@ -40,7 +40,7 @@ enum ProfileConfigService {
     }
 
     private static func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
-        let message = ffiError?.pointee.message.map { String(cString: $0) } ?? ""
+        let message = DeviceErrorText.cleaned(ffiError?.pointee.message) ?? ""
         let code = ffiError.map { Int($0.pointee.code) } ?? -1
         if let ffiError { idevice_error_free(ffiError) }
         return NSError(domain: "ProfileConfigService", code: code,
