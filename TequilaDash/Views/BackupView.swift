@@ -4,7 +4,7 @@ import os
 /// Shared backup progress controller used from the per-app detail screen.
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是语义正确的隔离，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` / `sending 'onFinished'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` / `sending 'onFinished'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 @MainActor
 final class BackupViewModel: ObservableObject {
     enum State {
@@ -18,7 +18,7 @@ final class BackupViewModel: ObservableObject {
 
     private let service = BackupService()
     /// Swift 6：取消标志在主线程写（cancel()）、后台备份流程里轮询读（isCancelled 闭包），
-    /// 用系统锁保护避免数据竞争（@MainActor 隔离无法覆盖后台轮询路径）。
+    /// 用系统锁保护避免数据竞争（@MainActor 隔离无法覆盖后台轮询路径）.
     private let cancelled = OSAllocatedUnfairLock(initialState: false)
 
     var isBusy: Bool {
@@ -26,8 +26,8 @@ final class BackupViewModel: ObservableObject {
         return false
     }
 
-    // Swift 6：onFinished 会被后台队列闭包捕获（:47），必须标 @Sendable（CI 实测）。
-    // 调用点（AppDetailView 两处）已改为只捕获 Sendable 的局部值，不捕获 View 的 self。
+    // Swift 6：onFinished 会被后台队列闭包捕获（:47），必须标 @Sendable（CI 实测）.
+    // 调用点（AppDetailView 两处）已改为只捕获 Sendable 的局部值，不捕获 View 的 self.
     func start(app: InstalledApp, isContainerApp: Bool = false, iconData: Data? = nil,
                onFinished: (@Sendable () -> Void)? = nil) {
         cancelled.withLock { $0 = false }

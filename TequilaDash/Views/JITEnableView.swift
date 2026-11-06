@@ -1,8 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// 启用 JIT（汉化移植自 StikDebug，对齐原版 Home 的列表组织）.
-/// 布局与 StikDebug 一致：导航栏常驻搜索框 + 「最近使用」分组 +
 /// 「Apps with get-task-allow」全部分组；行内显示 App 图标 + 名称 + Bundle ID.
 struct JITEnableView: View {
     @State private var apps: [JITAppInfo] = []
@@ -36,7 +34,7 @@ struct JITEnableView: View {
         List {
             if isLoading && apps.isEmpty {
                 Section {
-                    // v0.3.700：整页/区块加载态收口到 AppLoadingRow（.block 档：圈略大 + 上下留白）.
+                    // 整页/区块加载态收口到 AppLoadingRow（.block 档：圈略大 + 上下留白）.
                     AppLoadingRow(title: "正在枚举可启用 JIT 的应用…", level: .block)
                 }
             } else if apps.isEmpty && !isLoading {
@@ -83,7 +81,7 @@ struct JITEnableView: View {
 
                 if isWorking {
                     Section {
-                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        // 区块级加载行收口到 AppLoadingRow（.block 档）.
                         AppLoadingRow(title: progressText, level: .block)
                     }
                 }

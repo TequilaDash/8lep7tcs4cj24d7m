@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// v0.3.295：AppStore 商店（主页新板块）
+/// AppStore 商店（主页新板块）
 ///
-/// 数据源：Apple 公开接口（iTunes Search / Lookup / 官方榜单 RSS）。
-/// 安装：免登录源直装（RSD 隧道）或跳转系统 App Store。
+/// 数据源：Apple 公开接口（iTunes Search / Lookup / 官方榜单 RSS）.
+/// 安装：免登录源直装（RSD 隧道）或跳转系统 App Store.
 struct AppStoreView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kind: AppStoreRankKind = .free
@@ -14,7 +14,7 @@ struct AppStoreView: View {
     @State private var keyword = ""
     @State private var searchResults: [AppStoreItem] = []
     /// 搜不到时回落到**已购列表**的匹配项 —— 下架应用在公开 search/lookup 里天然缺席，
-    /// 但只要买过（许可在账号里）就仍能下载。
+    /// 但只要买过（许可在账号里）就仍能下载.
     @State private var ownedMatches: [AppStoreItem] = []
     /// 搜索序号：快速连搜时，让慢的已购补挂任务过期作废，不许旧结果覆盖新搜索.
     @State private var searchSeq = 0
@@ -29,15 +29,15 @@ struct AppStoreView: View {
     @State private var accountTarget: AppStoreItem?
     @ObservedObject private var center = IPADownloadCenter.shared
 
-    /// v0.3.399：列表行**长按 →「查看图标 / 查看图片」**用的全屏预览。
+    /// 列表行**长按 →「查看图标 / 查看图片」**用的全屏预览.
     ///
-    /// 「查看图标」只用列表项自带的图标地址，不发网络请求（见 `showIconPreview`）。
+    /// 「查看图标」只用列表项自带的图标地址，不发网络请求（见 `showIconPreview`）.
     /// 「查看图片」要按 id 查一次 Lookup 拿图（榜单走 RSS，`parseRSSEntry` 不解析截图），
-    /// 详见 `openImagePreview(for:)`。
+    /// 详见 `openImagePreview(for:)`.
     ///
-    /// v0.3.408：**`previewImages` 这份数组撤掉了** —— 图数组现在挂进 `ImagePreviewTarget`
+    /// **`previewImages` 这份数组撤掉了** —— 图数组现在挂进 `ImagePreviewTarget`
     /// 一起写（原来"数组一次写入、触发器再写一次"会让弹窗读到旧的空数组，
-    /// 用户看到的就是「没有可查看的图片」+「返回才刷新」，见 `ImagePreviewTarget` 的注释）。
+    /// 用户看到的就是「没有可查看的图片」+「返回才刷新」，见 `ImagePreviewTarget` 的注释）.
     @State private var previewTarget: ImagePreviewTarget?
 
     /// 实际生效的区域码（`"auto"` 在此解析成账号区）—— 用于标题文案
@@ -48,9 +48,9 @@ struct AppStoreView: View {
         AppStoreService.Region(rawValue: resolvedCode)?.title ?? resolvedCode.uppercased()
     }
 
-    /// v0.3.328：进入商店时按当前 Apple ID 同步区域。
-    /// 只在**账号换了**才改（登录时已经跟随过一次）—— 用户手动挑的区域不会被每次进页面覆盖。
-    /// 改的是同一个 `AppStorage` 键，`onChange(of: shopRegion)` 会自动清空搜索并重载榜单。
+    /// 进入商店时按当前 Apple ID 同步区域.
+    /// 只在**账号换了**才改（登录时已经跟随过一次）—— 用户手动挑的区域不会被每次进页面覆盖.
+    /// 改的是同一个 `AppStorage` 键，`onChange(of: shopRegion)` 会自动清空搜索并重载榜单.
     private func syncRegionWithAccount() {
         // 用户显式选了「自动」就保持「自动」，不要被改写成具体区
         guard shopRegion != AppStoreService.autoRegion else { return }
@@ -63,10 +63,10 @@ struct AppStoreView: View {
 
     private var isSearchMode: Bool { !keyword.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// v0.3.303：免登录下载入口 —— 放在商店最显眼位置。
+    /// 免登录下载入口 —— 放在商店最显眼位置.
     ///
     /// 数据与安装包来自爱思 PC 端在用的公开接口（`app4.i4.cn` / `d-app6.i4.cn`），
-    /// 服务端即为已签名 IPA，因此**不需要 Apple ID、也不需要配置任何分发源**。
+    /// 服务端即为已签名 IPA，因此**不需要 Apple ID、也不需要配置任何分发源**.
     @ViewBuilder
     private var freeSection: some View {
         Section {
@@ -88,7 +88,7 @@ struct AppStoreView: View {
         }
     }
 
-    /// v0.3.308：账号管理 + **AppStore 独立日志**入口（此前商店里没有这两个入口）
+    /// 账号管理 + **AppStore 独立日志**入口（此前商店里没有这两个入口）
     @ViewBuilder
     private var manageSection: some View {
         Section {
@@ -141,8 +141,8 @@ struct AppStoreView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("AppStore 商店")
         .navigationBarTitleDisplayMode(.inline)
-        // v0.3.367：用户要求「无论下滑状态都能搜索」→ 搜索栏常驻（原 .automatic 下滑会收起）。
-        // 形态对齐主页「应用」板块的 `.searchable(..., displayMode: .always)`。
+        // 用户要求「无论下滑状态都能搜索」→ 搜索栏常驻（原 .automatic 下滑会收起）.
+        // 形态对齐主页「应用」板块的 `.searchable(..., displayMode: .always)`.
         .searchable(text: $keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用名 / BundleID")
         .avoidSearchZoom()
         .onSubmit(of: .search) { runSearch() }
@@ -206,8 +206,8 @@ struct AppStoreView: View {
             }
             .presentationDetents([.medium])
         }
-        // v0.3.399：列表行长按「查看图片」→ 与详情页/爱思源**同一套**预览组件
-        // v0.3.408：`urls` 从 item 自己读（不再读页面上的 `previewImages`）
+        // 列表行长按「查看图片」→ 与详情页/爱思源**同一套**预览组件
+        // `urls` 从 item 自己读（不再读页面上的 `previewImages`）
         .fullScreenCover(item: $previewTarget) { target in
             ImageGalleryViewer(urls: target.urls, startIndex: target.index)
         }
@@ -234,11 +234,11 @@ struct AppStoreView: View {
 
     // MARK: 榜单
 
-    /// 区域筛选：切换后榜单 / 搜索 / 详情都按该区域取数据。
+    /// 区域筛选：切换后榜单 / 搜索 / 详情都按该区域取数据.
     /// 三段式：自动（跟随账号）→ 常用区域 → 其他地区（全表余下的，`XX - storefront id`）
     ///
-    /// v0.3.363：「自动」时把**跟随到的那个区**标注出来（用户要求：不然不知道自动跟了哪个区）。
-    /// 「自动」当前解析到的区域码（小写）；非自动模式返回空串，不标注。
+    /// 「自动」时把**跟随到的那个区**标注出来（用户要求：不然不知道自动跟了哪个区）.
+    /// 「自动」当前解析到的区域码（小写）；非自动模式返回空串，不标注.
     private var followedRegionCode: String {
         guard shopRegion == AppStoreService.autoRegion else { return "" }
         return AppStoreService.resolveRegion(AppStoreService.autoRegion)
@@ -254,7 +254,7 @@ struct AppStoreView: View {
                             .tag(r.rawValue)
                     }
                 }
-                // v0.3.363：这节剔掉上面的常用区 —— 两节同 tag 会让 Picker 可能双勾选/标题错。
+                // 这节剔掉上面的常用区 —— 两节同 tag 会让 Picker 可能双勾选/标题错.
                 Section("其他地区") {
                     ForEach(StoreRegions.excluding(Set(AppStoreService.Region.allCases.map(\.rawValue))),
                             id: \.code) { region in
@@ -318,7 +318,7 @@ struct AppStoreView: View {
             }
         } else if let errorText {
             Section {
-                // v0.3.x 批 3 错误态收敛：同构错误区统一到 AppErrorRow.
+                // 错误态收敛：同构错误区统一到 AppErrorRow.
                 AppErrorRow(message: errorText, retry: { Task { await loadCharts() } }, centered: true)
                     .padding(.vertical, 30)
             }
@@ -372,11 +372,11 @@ struct AppStoreView: View {
 
     // MARK: 行
 
-    /// v0.3.399：榜单行 / 搜索结果行**共用**的行壳 —— 点进详情 + 长按菜单。
-    /// 抽出来只是为了让两处不要各挂一份一模一样的 `contextMenu`（菜单只有一项，别再复制）。
+    /// 榜单行 / 搜索结果行**共用**的行壳 —— 点进详情 + 长按菜单.
+    /// 抽出来只是为了让两处不要各挂一份一模一样的 `contextMenu`（菜单只有一项，别再复制）.
     ///
-    /// v0.3.403：菜单补齐「查看图标 / 提取图标」——两项都走 `ImagePreviewSupport.swift`
-    /// 里的**共用实现**，与 AppleID 详情页、爱思源两处一字不差。
+    /// 菜单补齐「查看图标 / 提取图标」——两项都走 `ImagePreviewSupport.swift`
+    /// 里的**共用实现**，与 AppleID 详情页、爱思源两处一字不差.
     private func storeRow(_ app: AppStoreItem, rank: Int?) -> some View {
         NavigationLink {
             AppStoreDetailView(item: app)
@@ -386,12 +386,12 @@ struct AppStoreView: View {
         .contextMenu {
             iconMenuItems(iconURL: app.iconURL ?? app.iconSmallURL,
                           fileNameBase: app.bundleId ?? app.name) {
-                // v0.3.408：图数组由 `showIconPreview` 写进 target（页面上不再有预览数组）
+                // 图数组由 `showIconPreview` 写进 target（页面上不再有预览数组）
                 showIconPreview(app.iconURL ?? app.iconSmallURL, target: $previewTarget)
             }
-            // 列表**独有**的一项：这里的图 = 详情页那组截图（其它三处的长按菜单都没有它）。
-            // 保留原因：用户 v0.3.399 就是在这块提的「查看图片」，本轮只要求补「查看图标 /
-            // 提取图标」，没让撤掉它 —— 少一个能用的入口不如多一个。
+            // 列表**独有**的一项：这里的图 = 详情页那组截图（其它三处的长按菜单都没有它）.
+            // 保留原因：用户 就是在这块提的「查看图片」，本轮只要求补「查看图标 /
+            // 提取图标」，没让撤掉它 —— 少一个能用的入口不如多一个.
             Button {
                 openImagePreview(for: app)
             } label: {
@@ -400,18 +400,18 @@ struct AppStoreView: View {
         }
     }
 
-    /// v0.3.399：列表长按「查看图片」→ 全屏预览（图 = 详情页那组截图）。
+    /// 列表长按「查看图片」→ 全屏预览（图 = 详情页那组截图）.
     ///
     /// 为什么要按 id 再查一次：榜单走官方 RSS，`parseRSSEntry` **不解析 `screenshotUrls`**，
     /// 所以榜单项的 `screenshots` 恒定为空；搜索结果来自 `search`（`parseSearchItem`）自带截图，
-    /// 这时就不再发网络请求。查不到图只提示一句，不开空预览。
+    /// 这时就不再发网络请求.查不到图只提示一句，不开空预览.
     ///
     /// 函数名没叫 `previewImages`：那会和 `openImagePreview` 想表达的意思打架（同一个类型里
-    /// 属性与函数同名容易读错），改叫 `openImagePreview` 更明确。
-    ///（v0.3.408 起那个同名的 `@State previewImages` 已经不存在了，名字照旧 —— 它现在确实只做"打开"。）
+    /// 属性与函数同名容易读错），改叫 `openImagePreview` 更明确.
+    ///（那个同名的 `@State previewImages` 已经不存在了，名字照旧 —— 它现在确实只做"打开".）
     private func openImagePreview(for app: AppStoreItem) {
         if !app.screenshots.isEmpty {
-            // v0.3.408：图数组随 target 一起写 —— **一次写入**，弹窗读到的就是这一份
+            // 图数组随 target 一起写 —— **一次写入**，弹窗读到的就是这一份
             previewTarget = ImagePreviewTarget(index: 0, urls: app.screenshots)
             return
         }
@@ -491,7 +491,7 @@ struct AppStoreView: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
     }
 
-    /// 已购（含已下架）匹配行：标「已购」，点「下载」走 AppleID 通道。
+    /// 已购（含已下架）匹配行：标「已购」，点「下载」走 AppleID 通道.
     private func ownedRow(_ app: AppStoreItem) -> some View {
         let busy = center.activeJob(bundleId: app.bundleId, name: app.name) != nil
         return HStack(spacing: 12) {
@@ -563,10 +563,10 @@ struct AppStoreView: View {
             // 在架结果先上屏：搜索本体（iTunes search）是亚秒级，不该陪已购链路一起等.
             searching = false
             // 已购（含下架）**无条件**并入：公开 search 天然查不到已下架应用，
-            // 若只在 searchResults 为空时才回落，同名的在架应用一命中，下架那条就永远搜不到。
-            // 与在架结果按 id 去重，避免同一个 App 出现两次。
+            // 若只在 searchResults 为空时才回落，同名的在架应用一命中，下架那条就永远搜不到.
+            // 与在架结果按 id 去重，避免同一个 App 出现两次.
             // 并入**异步补挂**：SAP setup 端点被 Apple 回 5xx 时每次要吃满超时，
-            // 同步等它曾把整页搜索拖到几十秒（SSH 日志 10:00:58→10:01:35 实锤）。
+            // 同步等它曾把整页搜索拖到几十秒（SSH 日志 10:00:58→10:01:35 实锤）.
             let listedIds = Set(searchResults.map(\.id))
             Task {
                 let owned = await fallbackOwnedMatches(for: term)
@@ -576,7 +576,7 @@ struct AppStoreView: View {
         }
     }
 
-    /// 已购回落查询：未登录 / 查询失败一律返回空，不打断搜索本身。
+    /// 已购回落查询：未登录 / 查询失败一律返回空，不打断搜索本身.
     private func fallbackOwnedMatches(for term: String) async -> [AppStoreItem] {
         guard let email = AppStoreDownloadStore.shared.selectedAccount?.email, !email.isEmpty else {
             return []
@@ -612,8 +612,8 @@ struct AppStoreView: View {
         ToastCenter.shared.show("已开始用「\(list[0].email)」下载")
     }
 
-    /// 免登录源：按 bundleId 找包 → 下载 → 安装。
-    /// 榜单 RSS 不带 bundleId（已在加载时批量补全），这里再兜一次按 AppID 反查。
+    /// 免登录源：按 bundleId 找包 → 下载 → 安装.
+    /// 榜单 RSS 不带 bundleId（已在加载时批量补全），这里再兜一次按 AppID 反查.
     /// 获取许可证：用「当前下载账号」把该应用加入授权列表（免费应用）
     private func acquireLicense(_ app: AppStoreItem) {
         guard let email = AppStoreDownloadStore.shared.emailForDownloads(), !email.isEmpty else {

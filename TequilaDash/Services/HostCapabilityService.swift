@@ -2,12 +2,12 @@
 //  HostCapabilityService.swift
 //  TequilaDash
 //
-//  v0.3.481：宿主能力接口（escape.host.v1）—— 模块**反向调用宿主**的唯一通道.
+//  宿主能力接口（escape.host.v1）—— 模块**反向调用宿主**的唯一通道.
 //
 //  ## 为什么需要它
-//  在此之前模块只能「被宿主调用」（signal / bridge），不能反向调用宿主能力。
+//  在此之前模块只能「被宿主调用」（signal / bridge），不能反向调用宿主能力.
 //  后果是任何需要「沙盒外读写 / 改系统设置 / 枚举进程」的模块，都得自己把整套
-//  漏洞利用重写一遍 —— 既是重复劳动，也是模块之间耦合的根源。
+//  漏洞利用重写一遍 —— 既是重复劳动，也是模块之间耦合的根源.
 //
 //  有了这层接口，模块只说「我要 fs.read」，由宿主决定底层怎么实现；
 //  将来底层换了，模块**零改动**. 加新能力也只需要改这一个文件.
@@ -297,11 +297,11 @@ enum HostCapabilityService {
     /// 沙盒根（App 的 home：`/var/mobile/Containers/Data/Application/<UUID>`）
     private static var homeDir: String { NSHomeDirectory() }
 
-    /// 把调用方给的路径**归一化成沙盒内的绝对路径**。
+    /// 把调用方给的路径**归一化成沙盒内的绝对路径**.
     ///
     /// 加这层的原因：以前 `fs.*` 只认 `NSHomeDirectory()` 开头的绝对路径，而容器
     /// UUID 是随机且会变的 —— 调用方（尤其 SSH 里的排查脚本）拿不到它，就只能绕道
-    /// afc，而 afc 的根是 `/var/mobile/Media`，**根本够不到 App 沙盒**。
+    /// afc，而 afc 的根是 `/var/mobile/Media`，**根本够不到 App 沙盒**.
     ///
     /// 现在四种写法都行：
     /// - `Documents/a.ipa`        → 相对 Documents（最常用，与 `ls` / `cat` 同口径）
@@ -415,7 +415,7 @@ enum HostCapabilityService {
         let path = resolvePath(rawPath)
         guard isInSandbox(path) else {
             // 沙盒外**没有**可用原语了：宿主唯一能碰沙盒外的机制是 airlift 漏洞利用，
-            // 而它已整体移除（用户 2026-09-25 决定不再使用）。如实报错，不假装知道.
+            // 而它已整体移除（用户 2026-09-25 决定不再使用）.如实报错，不假装知道.
             return fail(
                 "fs.read 只支持 App 沙盒内路径.",
                 extra: ["via": "none", "resolved": path, "home": homeDir])
@@ -581,13 +581,13 @@ enum HostCapabilityService {
 
     // MARK: - apps.lookup（按 bundle id 查 App 容器路径）
 
-    /// `apps.lookup` —— 列已安装应用，**带 App 数据容器路径**（v0.3.497 新增）.
+    /// `apps.lookup` —— 列已安装应用，**带 App 数据容器路径**（新增）.
     ///
     /// ## 为什么需要它
     /// App 容器的路径里带一串随机 UUID
-    /// （`/var/containers/Bundle/Application/<UUID>/`）—— 靠人猜不出来。
+    /// （`/var/containers/Bundle/Application/<UUID>/`）—— 靠人猜不出来.
     /// 这个能力走 `installation_proxy`（**不是漏洞**），
-    /// 直接把 `Container`（数据容器）/ 包路径给出来，用于定位 App 容器。
+    /// 直接把 `Container`（数据容器）/ 包路径给出来，用于定位 App 容器.
     ///
     /// ## 参数
     /// - `bundleId`：可选；给了就只返回那一个 App（不区分大小写）
@@ -953,16 +953,16 @@ enum HostCapabilityService {
 
     /// `pkg.stat` —— 一次拿全 IPA 体检摘要，**零字节搬运**（响应里没有任何文件字节）.
     ///
-    /// 入参：`path`（App 沙盒内的 IPA/ZIP 路径，规则同 `pkg.list`）。
+    /// 入参：`path`（App 沙盒内的 IPA/ZIP 路径，规则同 `pkg.list`）.
     ///
     /// 返回（详见 `pkgStatSync`）：中央目录条目数 / 重复条目名 / 孤儿 local header /
     /// data descriptor 计数 / bit3 条目数；`Payload/*.app` 结构；主二进制 `cryptid`
     /// （Mach-O `LC_ENCRYPTION_INFO(_64)`，支持 thin 与 fat）；`SC_Info/*.sinf` 的
-    /// 格式判定（sinf-TLV 容器 / SuperBlob / 疑似 hex 被当 base64 解码）。
+    /// 格式判定（sinf-TLV 容器 / SuperBlob / 疑似 hex 被当 base64 解码）.
     ///
     /// ## 硬超时
-    /// 整个分析（含全文件扫描）包在 **30s 硬超时** 里：超时明确报错、不挂住调用线程。
-    /// 扫描是**分块**的（4MB/块），**不会把 230MB 的整包读进内存**。
+    /// 整个分析（含全文件扫描）包在 **30s 硬超时** 里：超时明确报错、不挂住调用线程.
+    /// 扫描是**分块**的（4MB/块），**不会把 230MB 的整包读进内存**.
     private static func pkgStat(_ args: [String: Any]) -> (Int32, String) {
         guard let rawPath = args["path"] as? String, !rawPath.isEmpty else {
             return fail("pkg.stat 缺少 path")
@@ -1085,7 +1085,7 @@ enum HostCapabilityService {
     /// 扫描 local header：先用字节签名找候选，再对每个候选做**结构校验**
     /// （签名 / version-needed ∈ 10..63 / nameLen ∈ 1..255 / 文件名可打印），
     /// **只保留结构自洽的** —— 这样 stored/deflate 数据里碰巧出现的 `PK\x03\x04`
-    /// 不会被误报成孤儿头（F4）。
+    /// 不会被误报成孤儿头（F4）.
     private static func scanLocalHeaders(path: String, cap: Int) -> LocalHeaderScan {
         let cand = scanSignature(path: path, sig: Data([0x50, 0x4B, 0x03, 0x04]), cap: cap)
         guard let fh = FileHandle(forReadingAtPath: path) else {
@@ -1121,8 +1121,8 @@ enum HostCapabilityService {
         return name
     }
 
-    /// 分块扫描整个文件，统计 4 字节签名的出现次数并记录起始偏移（最多记 `cap` 个）。
-    /// 块间保留 3 字节重叠，避免签名跨块漏计；用 `Data.range(of:)` 走底层优化搜索。
+    /// 分块扫描整个文件，统计 4 字节签名的出现次数并记录起始偏移（最多记 `cap` 个）.
+    /// 块间保留 3 字节重叠，避免签名跨块漏计；用 `Data.range(of:)` 走底层优化搜索.
     private static func scanSignature(path: String, sig: Data, cap: Int) -> (count: Int, positions: [Int]) {
         guard let fh = FileHandle(forReadingAtPath: path) else { return (0, []) }
         defer { try? fh.close() }
@@ -1151,11 +1151,11 @@ enum HostCapabilityService {
     }
 
     /// 中央目录驱动的结构校验：每个条目在其 `localHeaderOffset` 处都应能找到
-    /// `PK\x03\x04` 本地头签名。
+    /// `PK\x03\x04` 本地头签名.
     ///
     /// 注意： 这**不是** `zip.testzip()` 的等价物，也**不是**完整校验 ——
     /// 它只看「中央目录 ↔ 本地头」是否对齐，**看不到** local header 与真实数据的
-    /// 边界错位、也不逐条验 CRC。所以它通过**不等于**包是好的。
+    /// 边界错位、也不逐条验 CRC.所以它通过**不等于**包是好的.
     private static func verifyLocalHeaders(path: String, entries: [[String: Any]]) -> Bool {
         guard let fh = FileHandle(forReadingAtPath: path) else { return false }
         defer { try? fh.close() }
@@ -1170,12 +1170,12 @@ enum HostCapabilityService {
         return true
     }
 
-    /// 读出 ZIP 条目**解压后前 `maxOut` 字节**。
+    /// 读出 ZIP 条目**解压后前 `maxOut` 字节**.
     ///
-    /// - stored（method 0）：直读。
+    /// - stored（method 0）：直读.
     /// - deflate（method 8）：读入至多 `maxOut` 压缩字节后用 `compression_decode_buffer`
     ///   只解到 `maxOut` —— 与 `IPAPackageInspector.inflatePrefix` 同一手法，
-    ///   **不把几十 MB 的主二进制整个展开**。
+    ///   **不把几十 MB 的主二进制整个展开**.
     private static func zipEntryPrefix(path: String, entry: [String: Any], maxOut: Int) -> Data? {
         guard maxOut > 0,
               let lho = entry["localHeaderOffset"] as? Int,
@@ -1265,7 +1265,7 @@ enum HostCapabilityService {
     /// **支持 thin 与 fat**.
     ///
     /// 返回 `(cryptid, source, note)`：`source` 是命中的加载命令名（或 `none` / `unknown`），
-    /// `note` 是补充说明（fat 切片信息 / 解析失败原因），空串表示无补充。
+    /// `note` 是补充说明（fat 切片信息 / 解析失败原因），空串表示无补充.
     private static func machOCryptid(path: String, exeEntryName: String,
                                      entries: [[String: Any]]) -> (cryptid: Int, source: String, note: String) {
         guard !exeEntryName.isEmpty,
@@ -1328,8 +1328,8 @@ enum HostCapabilityService {
                 "不是可识别的 Mach-O（magic le=0x\(String(le, radix: 16)) be=0x\(String(be, radix: 16))）")
     }
 
-    /// 解析 thin Mach-O 的加密加载命令；返回 `(cryptid, 命令名)`。
-    /// 解析成功但无加密命令 ⇒ `(0, "none")`；结构异常 ⇒ nil。
+    /// 解析 thin Mach-O 的加密加载命令；返回 `(cryptid, 命令名)`.
+    /// 解析成功但无加密命令 ⇒ `(0, "none")`；结构异常 ⇒ nil.
     private static func parseThinMachOCryptid(_ data: Data, base: Int, is64: Bool,
                                               bigEndian: Bool) -> (Int, String)? {
         let headerSize = is64 ? 32 : 28
@@ -1395,16 +1395,16 @@ enum HostCapabilityService {
     /// 返回 `(format, verdict, structurallyValid)`：
     /// - `format ∈ superblob | container | unknown`（对齐 schema）；
     /// - `verdict`：人读的判定（以「结构自洽」开头 = 好；「可疑」/「垃圾/损坏」= 坏）；
-    /// - `structurallyValid`：机器可读的**质量门**信号（消费方应据此拒收坏包）。
+    /// - `structurallyValid`：机器可读的**质量门**信号（消费方应据此拒收坏包）.
     ///
     /// ## 判据（F3：不只看顶层长度，还要递归验子结构）
     /// - **superblob**：`magic 0xFADE0CC0` + 声明长度 == 实际 + `count` 与索引表条数一致（0<count≤32）
-    ///   + 每个 blob 偏移在界内 + 含 CodeDirectory(type=0)。
+    ///   + 每个 blob 偏移在界内 + 含 CodeDirectory(type=0).
     /// - **container**：`{4B 大端总长}` + `"sinf"` + 递归 TLV；顶层长度 == 实际，
-    ///   且**递归聚合**「子项恰好铺满」（内层越界/空洞也算坏），并含 `frma` 或 `schi`。
+    ///   且**递归聚合**「子项恰好铺满」（内层越界/空洞也算坏），并含 `frma` 或 `schi`.
     ///
     /// 为什么必须递归：只验顶层会让「顶层长度对、内层块长度错」的坏包被判成自洽 —— 漏报坏包
-    /// 比误报更危险（用户装上去会闪退）。
+    /// 比误报更危险（用户装上去会闪退）.
     private static func classifySinf(_ data: Data) -> (format: String, verdict: String, valid: Bool) {
         let len = data.count
         if len < 8 {
@@ -1466,11 +1466,11 @@ enum HostCapabilityService {
         return ("unknown", "垃圾：非 SuperBlob 也非 sinf-TLV 容器", false)
     }
 
-    /// 递归遍历 sinf TLV 列表。块 = `{4B 大端长度}{4B tag}{长度-8 字节值}`；
-    /// tag 为 `sinf`/`schi` 时**递归进其值**。
+    /// 递归遍历 sinf TLV 列表.块 = `{4B 大端长度}{4B tag}{长度-8 字节值}`；
+    /// tag 为 `sinf`/`schi` 时**递归进其值**.
     ///
     /// `tiled` 必须**递归聚合**：只要任一层子项越界或没铺满，整体就不是自洽 ——
-    /// 否则「顶层恰好铺满、内层越界」的坏包会被漏判（F3）。
+    /// 否则「顶层恰好铺满、内层越界」的坏包会被漏判（F3）.
     private static func walkSinfTLV(_ d: Data, start: Int, end: Int, depth: Int,
                                     tiled: inout Bool, tags: inout [String]) {
         guard depth < 8 else { return }        // 防病态深嵌套
@@ -1491,12 +1491,12 @@ enum HostCapabilityService {
         if off != end { tiled = false }
     }
 
-    /// 疑似「hex 文本被当 base64 解码」的启发式判据。
+    /// 疑似「hex 文本被当 base64 解码」的启发式判据.
     ///
     /// 注意： **该阈值尚未用真机样本校准**（实现时设备 SSH 不可用，见交付报告）：
     /// 判据 = 长度恰为某已知合法 sinf 长度（1032/1048/1056/1072）× 1.5，
-    /// 且把内容 base64 再编码后**全是 hex 字符**。
-    /// 若日后拿到真机样本发现误报/漏报，可改成「按已知合法长度表比对」。
+    /// 且把内容 base64 再编码后**全是 hex 字符**.
+    /// 若日后拿到真机样本发现误报/漏报，可改成「按已知合法长度表比对」.
     private static func looksLikeHexAsBase64(_ data: Data) -> Bool {
         let legalLengths = [1032, 1048, 1056, 1072]
         guard legalLengths.contains(where: { Int(Double($0) * 1.5) == data.count }) else { return false }
@@ -1625,19 +1625,19 @@ enum HostCapabilityService {
     ///
     /// ## 契约（对齐 `capability-schema.json` 的 `ui.screenshot`）
     /// - 入参：`toFile`（可选，落盘相对路径）、`overwrite`（可选，默认 `true`）、
-    ///   `inline`（可选，默认 `false`；**本实现的扩展**，用来显式要 base64）。
-    ///   `path` 作为 `toFile` 的兼容别名仍被接受。
+    ///   `inline`（可选，默认 `false`；**本实现的扩展**，用来显式要 base64）.
+    ///   `path` 作为 `toFile` 的兼容别名仍被接受.
     /// - **默认落盘**（设计正文：截图默认落盘，内联才 base64）：`toFile` 缺省时落到
-    ///   `Documents/Screenshots/shot-<ts>.png`；只有 `inline:true` 才回传 base64。
-    /// - 返回：落盘 `{ok,toFile,bytes,width,height,via}`；内联 `{ok,bytes,data,width,height,via}`。
+    ///   `Documents/Screenshots/shot-<ts>.png`；只有 `inline:true` 才回传 base64.
+    /// - 返回：落盘 `{ok,toFile,bytes,width,height,via}`；内联 `{ok,bytes,data,width,height,via}`.
     ///
     /// ## 底层与超时
     /// 走 `ScreenshotService`（**DVT 三连**，不是 screenshotr —— 本设备无 screenshotr 服务），
-    /// **硬超时 15s**：超时返回明确错误，绝不挂住调用线程。不需要越狱，只需配对隧道。
+    /// **硬超时 15s**：超时返回明确错误，绝不挂住调用线程.不需要越狱，只需配对隧道.
     ///
     /// ## 为什么内联要设上限
-    /// 真机 PNG 常 1–5MB，base64 后 1.3–6.6MB。能力通道有「响应被截断」的历史问题，
-    /// 故内联超过 2MB 直接拒绝，要求改用 `toFile`。
+    /// 真机 PNG 常 1–5MB，base64 后 1.3–6.6MB.能力通道有「响应被截断」的历史问题，
+    /// 故内联超过 2MB 直接拒绝，要求改用 `toFile`.
     private static func uiScreenshot(_ args: [String: Any]) -> (Int32, String) {
         // toFile 优先；path 作兼容别名（老调用方不至于静默失效）
         let toFileRaw = (args["toFile"] as? String) ?? (args["path"] as? String)
@@ -1700,7 +1700,7 @@ enum HostCapabilityService {
     }
 
     /// 读 PNG 的 IHDR 取宽高.
-    /// 标准 PNG 签名是 **8 字节** `89 50 4E 47 0D 0A 1A 0A`（F7：此前只校验前 4 字节）。
+    /// 标准 PNG 签名是 **8 字节** `89 50 4E 47 0D 0A 1A 0A`（F7：此前只校验前 4 字节）.
     /// 之后：块长 4B + `"IHDR"` 4B ⇒ 宽在偏移 16、高在 20，均**大端** 32 位.
     private static func pngDimensions(_ data: Data) -> (Int, Int)? {
         guard data.count >= 24 else { return nil }
@@ -1721,7 +1721,7 @@ enum HostCapabilityService {
 
     // MARK: - afc.*（AFC 文件操作，支持多个根）
 
-    /// `afc.*` 能用的根 —— 每个根是**一条不同的 RSD 服务会话**。
+    /// `afc.*` 能用的根 —— 每个根是**一条不同的 RSD 服务会话**.
     ///
     /// ## 为什么只有两个（如实说清，别让模块作者以为能浏览整个 /var）
     /// RSD 服务表（64 个服务）里，**能枚举目录**的只有这两条：
@@ -1732,11 +1732,11 @@ enum HostCapabilityService {
     /// | `crash` | `com.apple.crashreportcopymobile` | `/var/mobile/Library/Logs/CrashReporter` |
     ///
     /// **`/var` 根、`/var/mobile/Library`、其他 App 容器都列不出来** ——
-    /// 没有任何服务把根设在它们上面；`house_arrest` 的 `VendContainer` 在 iOS 27 实测被拒。
+    /// 没有任何服务把根设在它们上面；`house_arrest` 的 `VendContainer` 在 iOS 27 实测被拒.
     ///
     /// ## 为什么这条路稳
-    /// 两条服务都在同一条 RSD 隧道上（设备广播服务 → host 直连端口）。
-    /// **不依赖 bad_query，也不依赖 MHA** —— 不随那两条被修而失效。
+    /// 两条服务都在同一条 RSD 隧道上（设备广播服务 → host 直连端口）.
+    /// **不依赖 bad_query，也不依赖 MHA** —— 不随那两条被修而失效.
     enum AfcRoot: String {
         case media
         case crash
@@ -1765,7 +1765,7 @@ enum HostCapabilityService {
         }
     }
 
-    /// 在指定根上执行一段 AFC 操作（复用一条连接）。
+    /// 在指定根上执行一段 AFC 操作（复用一条连接）.
     private static func withAfcRoot<T>(_ root: AfcRoot,
                                        _ body: (OpaquePointer) throws -> T) throws -> T {
         switch root {
@@ -1780,15 +1780,14 @@ enum HostCapabilityService {
 
     /// 规范化成 AFC 口径（去掉前导/尾随 `/`）.
     ///
-    /// ## ▸ v0.3.501：**不再拒绝 `..`**
-    /// 原来见到 `..` 就直接拒，理由是「根就是边界」。但**真正的边界是 AFC 服务自己的沙盒**
+    /// 原来见到 `..` 就直接拒，理由是「根就是边界」.但**真正的边界是 AFC 服务自己的沙盒**
     /// （`com.apple.afc` 只被授权 `/var/mobile/Media`；`com.apple.crashreportcopymobile`
-    /// 只被授权 `/var/mobile/Library/Logs/CrashReporter`）—— 设备侧会独立做这个检查。
+    /// 只被授权 `/var/mobile/Library/Logs/CrashReporter`）—— 设备侧会独立做这个检查.
     /// 我们这里的字符串过滤既挡不住什么，又挡住了一个**关键实验**：
-    /// 「crash 那个根的沙盒到底覆盖多大」—— 用 `..` 探一次就知道。
+    /// 「crash 那个根的沙盒到底覆盖多大」—— 用 `..` 探一次就知道.
     ///
-    /// ⇒ 现在放行 `..`，把判定权交回设备侧（越界会得到 `Afc(PermDenied)`）。
-    /// 仍然拒绝 NUL（那是真会造成 C 字符串截断的东西）。
+    /// ⇒ 现在放行 `..`，把判定权交回设备侧（越界会得到 `Afc(PermDenied)`）.
+    /// 仍然拒绝 NUL（那是真会造成 C 字符串截断的东西）.
     private static func afcPath(_ raw: String?) -> String? {
         var p = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if p.unicodeScalars.contains(where: { $0.value == 0 }) { return nil }
@@ -1811,13 +1810,13 @@ enum HostCapabilityService {
     }
 
     /// 写门禁（SSH exec 暴露面）：只读根 ⇒ **明确报错**（错误码 + 人话），
-    /// **不静默成功、不静默 no-op**。
+    /// **不静默成功、不静默 no-op**.
     ///
     /// 判据来自**共享**的 `AfcRootPolicy`（`AFCService.swift`），与 SFTP 侧
     /// `AfcFileProvider` 用的是**同一份** —— 避免「两处各写一份 `== .crash`」再次漂移，
-    /// 那正是本次绕过漏洞（`afc.delete {root:"crash",recursive:true}` 递归删崩溃日志）的根因。
+    /// 那正是本次绕过漏洞（`afc.delete {root:"crash",recursive:true}` 递归删崩溃日志）的根因.
     ///
-    /// - Returns: `nil` 表示放行；非 `nil` 即拒绝用的 `(code, json)` 结果。
+    /// - Returns: `nil` 表示放行；非 `nil` 即拒绝用的 `(code, json)` 结果.
     private static func afcReadOnlyGuard(_ root: AfcRoot, op: String,
                                          path: String) -> (Int32, String)? {
         guard AfcRootPolicy.isReadOnly(root.rawValue) else { return nil }
@@ -1856,16 +1855,16 @@ enum HostCapabilityService {
         }
     }
 
-    /// `afc.stat` —— 查**单条路径**的元数据（v0.3.501 新增）.
+    /// `afc.stat` —— 查**单条路径**的元数据（新增）.
     ///
     /// ## 为什么它值得单独开一个能力（真机实测 2026-09-20）
     /// `afc_get_file_info` 会**跟随中间那一段 symlink**，而且**不受 AFC 沙盒限制** ——
     /// 同一条路径上 `afc.read` / `afc.write` / `afc.list` 全是 `Afc(PermDenied)`，
-    /// 只有 stat 能过。于是：在 Media 里放一条指向**目标父目录**的 symlink，
-    /// 就能对**任意路径**问「在不在 / 多大 / 是文件还是目录」。
+    /// 只有 stat 能过.于是：在 Media 里放一条指向**目标父目录**的 symlink，
+    /// 就能对**任意路径**问「在不在 / 多大 / 是文件还是目录」.
     ///
     /// ## 局限（诚实写出来）
-    /// 只能**点查**（给定名字），**不能列目录**。
+    /// 只能**点查**（给定名字），**不能列目录**.
     ///
     /// 参数：`path`（相对当前根的路径，可含 `..`）、`root`（`media` / `crash`）
     private static func afcStat(_ args: [String: Any]) -> (Int32, String) {
@@ -1952,8 +1951,8 @@ enum HostCapabilityService {
             let text = error.localizedDescription
             // ▸ 如实区分失败原因 —— 原来一律提示「目录非空需要 recursive」，
             //   而真机上最常见的是**权限**（例：CrashReporter 里 `sysdiagnose` 归档
-            //   的内容由系统账号创建，AFC 以 mobile 身份删不动）。
-            //   误导性的 hint 会让人去改 recursive，白试一轮。
+            //   的内容由系统账号创建，AFC 以 mobile 身份删不动）.
+            //   误导性的 hint 会让人去改 recursive，白试一轮.
             if text.contains("PermDenied") {
                 return fail("删除被拒（权限）：该条目不属于当前身份，AFC 无权删除.",
                             extra: ["root": root.rawValue, "path": path,
@@ -1994,15 +1993,15 @@ enum HostCapabilityService {
             .appendingPathComponent("run.log")
     }
 
-    /// 单条记录里 args / result 各自的上限。
+    /// 单条记录里 args / result 各自的上限.
     ///
-    /// ▸ v0.3.492：从 **1200 提到 8192**。原来的 1200 太小 ——
+    /// ▸ ：从 **1200 提到 8192**.原来的 1200 太小 ——
     /// 有些能力的 `details` 判据动辄 1200~3600 字符，一截就把最关键的
-    /// 那几行切掉，于是每次排障都得再绕去设备上 `cat` 原文。
-    /// 8192 足以完整容纳这类判据，同时仍防止单条记录把日志撑爆。
+    /// 那几行切掉，于是每次排障都得再绕去设备上 `cat` 原文.
+    /// 8192 足以完整容纳这类判据，同时仍防止单条记录把日志撑爆.
     private static let callLogTextLimit = 8192
-    /// 日志文件大小上限；超过就只留后半段（最近的调用才是排障要看的）。
-    /// ▸ v0.3.492：512KB → 2MB（配合单条上限提高；仍是有限值，不会无限增长）。
+    /// 日志文件大小上限；超过就只留后半段（最近的调用才是排障要看的）.
+    /// ▸ ：512KB → 2MB（配合单条上限提高；仍是有限值，不会无限增长）.
     private static let callLogFileLimit = 2 * 1024 * 1024
 
     /// 追加一笔能力调用记录.

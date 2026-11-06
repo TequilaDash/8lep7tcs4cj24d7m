@@ -2,7 +2,7 @@
 //  CellularGlitchModalView.swift
 //  TequilaDash
 //
-//  v0.3.760：蜂窝卡点弹窗（Gnoix CellularGlitchModalView 同职责，本仓卡片风格）.
+//  蜂窝卡点弹窗（Gnoix CellularGlitchModalView 同职责，本仓卡片风格）.
 //
 
 import SwiftUI

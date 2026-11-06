@@ -2,7 +2,7 @@
 //  ModuleUIRouter.swift
 //  TequilaDash
 //
-//  v0.3.481：模块「原生 SwiftUI 二级界面」的路由（谁在展示、怎么退出）.
+//  模块「原生 SwiftUI 二级界面」的路由（谁在展示、怎么退出）.
 //
 //  二级界面本身用 `fullScreenCover(item:)` 盖住 App 的 TabView（看不到默认底栏），
 //  但「回主页」这件事必须让 **RootView** 去切自己的 tab —— 而 `MainTab` 是
@@ -17,10 +17,10 @@ extension Notification.Name {
     /// 二级界面点「主页」时发；RootView 收到后切到主页 tab
     static let escSelectHomeTab = Notification.Name("esc.selectHomeTab")
 
-    /// `PendingImportHandoff.post(_:)` 写入挂起记录后广播（裸通知，**不带 payload**）。
-    /// `ImportView` 收到后去消费挂起值。载荷只走挂起值这**一个真相源**，通知只作唤醒信号：
+    /// `PendingImportHandoff.post(_:)` 写入挂起记录后广播（裸通知，**不带 payload**）.
+    /// `ImportView` 收到后去消费挂起值.载荷只走挂起值这**一个真相源**，通知只作唤醒信号：
     /// 覆盖「页面已挂载、AirDrop 回前台把 App 带回」时 `scenePhase` 早于 `post` 触发、
-    /// 之后再无触发点的那条路径（见 `PendingImportHandoff` 顶部注释）。
+    /// 之后再无触发点的那条路径（见 `PendingImportHandoff` 顶部注释）.
     static let escPendingImportHandoff = Notification.Name("esc.pendingImportHandoff")
 }
 

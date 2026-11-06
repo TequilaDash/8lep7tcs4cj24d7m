@@ -2,7 +2,7 @@
 //  AppStoreIdReader.swift
 //  TequilaDash
 //
-//  v0.3.281：读取「已安装 App 的安装来源 Apple ID」——爱思助手同款通道。
+//  读取「已安装 App 的安装来源 Apple ID」——爱思助手同款通道.
 //
 //  通道（逆向 i4Tools 的 idm_app.dll 实锤：/PublicStaging/ + SkipUninstall +
 //  am_archive_app + iTunesMetadata 字符串并存 + am_get_device_app_iTunesMetadata 导出）：
@@ -13,7 +13,7 @@
 //    3. 解析 zip 取出 iTunesMetadata.plist → appleId
 //    4. 删除设备上的归档文件（清理）
 //
-//  注意：Archive 耗时/占盘 ≈ App 大小；调用方应在后台线程执行并在 UI 提示。
+//  注意：Archive 耗时/占盘 ≈ App 大小；调用方应在后台线程执行并在 UI 提示.
 //
 
 import Foundation
@@ -29,7 +29,7 @@ enum AppStoreIdReader {
 
     // MARK: - 对外入口
 
-    /// 读指定 App 的安装来源 Apple ID（同步阻塞，调用方放后台线程）。
+    /// 读指定 App 的安装来源 Apple ID（同步阻塞，调用方放后台线程）.
     static func installingAppleId(bundleId: String, log: ((String) -> Void)? = nil) throws -> Result {
         log?("开始归档 \(bundleId)（Archive 到 /PublicStaging，耗时与 App 大小成正比）…")
         try archiveApp(bundleId: bundleId, log: log)
@@ -59,9 +59,9 @@ enum AppStoreIdReader {
 
     // MARK: - 导出 IPA（爱思「导出应用」同款：Archive → 拉回本机）
 
-    /// 把指定 App 归档并完整拉回本机 Documents/AppStoreDownloads/<bundleId>.ipa。
-    /// 归档包即 App Store 风格 IPA（含 Payload/ + iTunesMetadata.plist），可再次安装。
-    /// 同步阻塞；progress 回调 0...1。
+    /// 把指定 App 归档并完整拉回本机 Documents/AppStoreDownloads/<bundleId>.ipa.
+    /// 归档包即 App Store 风格 IPA（含 Payload/ + iTunesMetadata.plist），可再次安装.
+    /// 同步阻塞；progress 回调 0...1.
     static func exportIPA(bundleId: String,
                           log: ((String) -> Void)? = nil,
                           progress: ((Double) -> Void)? = nil) throws -> URL {

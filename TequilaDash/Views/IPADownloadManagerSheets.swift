@@ -1,12 +1,12 @@
-// 从 TequilaDash/Views/IPADownloadManagerView.swift 拆出（原文件 1307 行）：安装进度圆环与在线安装设置面板两个独立 View 体量过大，按职责拆到本文件；纯搬迁、零逻辑改动。
+// 从 TequilaDash/Views/IPADownloadManagerView.swift 拆出（原文件 1307 行）：安装进度圆环与在线安装设置面板两个独立 View 体量过大，按职责拆到本文件；纯搬迁、零逻辑改动.
 
 import SwiftUI
 
-/// v0.3.388：行内**安装进度圆环**（44pt，与行首 48pt 图标等高，不动行高）。
+/// 行内**安装进度圆环**（44pt，与行首 48pt 图标等高，不动行高）.
 ///
 /// · `fraction != nil` → 圆环 + 环内等宽百分比：12 点起画、圆头 3pt、主题青（`downloadAccent`）；
 /// · `fraction == nil` → **不确定态**：一段持续旋转的弧，**不写百分比**
-///   —— 这是「在线安装进了系统阶段、App 量不到进度」时唯一诚实的画法。
+///   —— 这是「在线安装进了系统阶段、App 量不到进度」时唯一诚实的画法.
 struct InstallProgressRing: View {
 
     let fraction: Double?
@@ -42,12 +42,12 @@ struct InstallProgressRing: View {
     }
 }
 
-/// v0.3.383：下载管理右上角齿轮弹出的**极简**设置 —— 只放一行 GitHub Token。
+/// 下载管理右上角齿轮弹出的**极简**设置 —— 只放一行 GitHub Token.
 ///
 /// 用途：把在线安装的**清单**托管到私有 gist（`raw_url` 是可信 HTTPS），
-/// 比公共临时托管可靠。token 存 **Keychain**（`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，
-/// 不做 iCloud 同步、不落 UserDefaults），日志最多只记前 8 位。
-/// 注意：**这只换了一个更可靠的托管通道，不代表「在线安装装不上」被修好了**。
+/// 比公共临时托管可靠.token 存 **Keychain**（`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，
+/// 不做 iCloud 同步、不落 UserDefaults），日志最多只记前 8 位.
+/// 注意：**这只换了一个更可靠的托管通道，不代表「在线安装装不上」被修好了**.
 struct OnlineInstallSettingsSheet: View {
 
     @Environment(\.dismiss) private var dismiss

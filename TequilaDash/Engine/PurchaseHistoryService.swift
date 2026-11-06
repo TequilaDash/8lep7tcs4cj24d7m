@@ -38,15 +38,15 @@ enum PurchaseHistoryError: Error, LocalizedError {
 enum PurchaseHistoryService {
     private static let base = "https://pd.itunes.apple.com/WebObjects/MZPurchaseDaap.woa/purchase"
     private static let userAgent = "Configurator/2.17 (Macintosh; OS X 15.2; 24C5089c) AppleWebKit/0620.1.16.11.6"
-    // 三种 media kind 并列 AND：移动应用 131072、Arcade 262144、Mac 应用 67108864。
-    // 只带 131072 时 Mac 端已购与部分 Arcade 条目会整条缺席（对齐 ipatool appstore_owned_apps.go:184）。
+    // 三种 media kind 并列 AND：移动应用 131072、Arcade 262144、Mac 应用 67108864.
+    // 只带 131072 时 Mac 端已购与部分 Arcade 条目会整条缺席（对齐 ipatool appstore_owned_apps.go:184）.
     static let query = "('com.apple.itunes.extended\\-media\\-kind:131072',"
         + "'com.apple.itunes.extended\\-media\\-kind:262144',"
         + "'com.apple.itunes.extended\\-media\\-kind:67108864')"
-    // Configurator (34) 列移动应用；Mac App Store (13) 另列 Mac 软件与 Apple silicon 上可跑的移动应用。
+    // Configurator (34) 列移动应用；Mac App Store (13) 另列 Mac 软件与 Apple silicon 上可跑的移动应用.
     static let storefronts = ["34", "13"]
 
-    /// 同邮箱已购拉取单飞：并发第二个调用方直接等第一班结果，不再各自过会话租约门。
+    /// 同邮箱已购拉取单飞：并发第二个调用方直接等第一班结果，不再各自过会话租约门.
     /// ① 消灭「25 秒强制接管」造成的双持有者重叠 —— 账号对象与 SAP 签名器（Unicorn 模拟）
     ///    被两条链路并发使用，是「搜索后点已购闪退」的直接来源（2026-11-01 用户报告）；
     /// ② 搜索异步补挂与已购页共享同一次拉取，不再各等 20 秒.
@@ -84,10 +84,10 @@ enum PurchaseHistoryService {
                 return try await list(account: &account)
             }
             guard first.isEmpty else { return first }
-            // v0.3.352：**空表也刷新一次会话再问一遍**。
+            // **空表也刷新一次会话再问一遍**.
             // 会话票据不被 Apple 认可时，DMAP 回的是 `mstt=200 + mtco=0`（合法的空数据库），
-            // 而不是 401 —— 只按 401/403 重登就会把「票据失效」误判成「没有购买记录」。
-            // 只重试一次，且刷新失败时沿用空结果，不让刷新本身把列表页打挂。
+            // 而不是 401 —— 只按 401/403 重登就会把「票据失效」误判成「没有购买记录」.
+            // 只重试一次，且刷新失败时沿用空结果，不让刷新本身把列表页打挂.
             LoginLogger.shared.log("[已购] 返回空表 → 刷新一次会话后重试", category: .appStore)
             do {
                 account = try await AppleIDSignInService.rotate(email: email, failedAccount: account)
@@ -104,12 +104,12 @@ enum PurchaseHistoryService {
         }
     }
 
-    /// 逐 store 轮询已购库再按 `id` 合并去重（对齐 ipatool `fetchOwnedApps`）。
+    /// 逐 store 轮询已购库再按 `id` 合并去重（对齐 ipatool `fetchOwnedApps`）.
     /// 单一 storefront 失败不中止（Mac 端 store 失败不该丢掉移动端已购）；
     /// 但 `tokenExpired` 直接上抛，交给外层换票重试；两个 store 全败则上抛最后一次错误，
-    /// 避免把「整轮失败」伪装成「空已购列表」。
+    /// 避免把「整轮失败」伪装成「空已购列表」.
     private static func list(account: inout AppStoreAccount) async throws -> [OwnedApp] {
-        // storefront 形如 `<region>-1,<store>`，取逗号前一段作前缀（对齐 Go 的 strings.Cut）。
+        // storefront 形如 `<region>-1,<store>`，取逗号前一段作前缀（对齐 Go 的 strings.Cut）.
         let prefix = account.requestStoreFront.split(separator: ",", maxSplits: 1).first.map(String.init) ?? ""
         guard !prefix.isEmpty else { throw PurchaseHistoryError.badResponse("无有效的账号 storefront") }
         let original = account.fullStoreFront
@@ -212,9 +212,9 @@ enum PurchaseHistoryService {
             let data = try await send(path: "/databases/\(revision)/items",
                 body: PurchaseHistoryService.itemsBody(sessionID: sessionID, revision: revision),
                 contentType: "application/x-dmap-tagged", signed: true)
-            // v0.3.674：mtco/mrco 的口径统一交给 parseItems —— 原来这里用 `try firstUInt(...) ?? "missing"`
-            // 把「计数缺失」当成可以忽略，而 parseItems 里同两个 tag 缺失却整轮硬抛（:407）。
-            // 同一份响应的判定只应有一处：这里也改成硬失败，日志只打印已经过校验的计数。
+            // mtco/mrco 的口径统一交给 parseItems —— 原来这里用 `try firstUInt(...) ?? "missing"`
+            // 把「计数缺失」当成可以忽略，而 parseItems 里同两个 tag 缺失却整轮硬抛（:407）.
+            // 同一份响应的判定只应有一处：这里也改成硬失败，日志只打印已经过校验的计数.
             let apps = try PurchaseHistoryService.parseItems(data)
             let counts = try PurchaseHistoryService.recordCounts(data)
             LoginLogger.shared.log("[已购] total=\(counts.total) returned=\(counts.returned) apps=\(apps.count)",
@@ -240,10 +240,10 @@ enum PurchaseHistoryService {
             }
             let (data, response) = try await perform(request)
             LoginLogger.shared.log("[已购] \(path) → HTTP \(response.statusCode)，\(data.count) 字节", category: .appStore)
-            // v0.3.674：Apple 会在响应头里**校正**当前账号的 storefront（形如 `143441-1,34`），
-            // 与 vendor/ApplePackage/Commands/Purchase.swift 的处理一致：拿到就回写 fullStoreFront。
+            // Apple 会在响应头里**校正**当前账号的 storefront（形如 `143441-1,34`），
+            // 与 vendor/ApplePackage/Commands/Purchase.swift 的处理一致：拿到就回写 fullStoreFront.
             // 原来从不读这个头，`list` 每次都从**旧**的 requestStoreFront 推前缀（见 list 的 prefix），
-            // 于是账号换区 / 首次登录给的 storefront 永远不生效，已购库一直查错区。
+            // 于是账号换区 / 首次登录给的 storefront 永远不生效，已购库一直查错区.
             if let updated = Self.storeFrontHeader(in: response), updated != account.fullStoreFront {
                 LoginLogger.shared.log("[已购] 账号 storefront 由 \(account.requestStoreFront) 校正为 \(updated)",
                                        category: .appStore)
@@ -282,13 +282,13 @@ enum PurchaseHistoryService {
                   StoreAuthenticationProtocol.isDeviceGUID(guid) else {
                 throw PurchaseHistoryError.signerUnavailable
             }
-            // v0.3.674：`isDeviceGUID` 放行 **12...32** 位偶数长度十六进制 GUID，而 SAP 的
-            // hardwareID 只要**前 12 位 = 6 字节**。原来固定 `stride(from: 0, to: 12, by: 2)`
+            // `isDeviceGUID` 放行 **12...32** 位偶数长度十六进制 GUID，而 SAP 的
+            // hardwareID 只要**前 12 位 = 6 字节**.原来固定 `stride(from: 0, to: 12, by: 2)`
             // 再按 `offsetBy:` 取下标 —— GUID 恰好 12 位（DeviceIdentifier.random() 的默认长度）
             // 时最后一个下标正好落在 endIndex，`guid[index ..< guid.index(index, offsetBy: 2)]`
-            // 越界 trap，整个进程崩溃，且崩在已购列表这种基础路径上。
+            // 越界 trap，整个进程崩溃，且崩在已购列表这种基础路径上.
             // 改成「先截前 12 位，再按 2 位步进」：下标永远在 prefix 范围内；不足 12 位时
-            // 得到的字节数 < 6，由下一行 guard 兜住（不再 trap）。
+            // 得到的字节数 < 6，由下一行 guard 兜住（不再 trap）.
             let guidHead = guid.prefix(12)
             var bytes: [UInt8] = []
             bytes.reserveCapacity(6)
@@ -310,9 +310,9 @@ enum PurchaseHistoryService {
             }
             let nested = bag["urlBag"] as? [String: Any] ?? [:]
             func value(_ key: String) -> Any? { bag[key] ?? nested[key] }
-            // v0.3.359：与登录侧口径统一 —— 只要求端点**落在 Apple 自有域内**，不再 pin 具体主机名；
-            // bag 缺字段时用内置兜底。此前登录已放宽而已购没放宽，会出现
-            // 「登录能过、已购签不出」的不对称（jsbox-re 发现）。
+            // 与登录侧口径统一 —— 只要求端点**落在 Apple 自有域内**，不再 pin 具体主机名；
+            // bag 缺字段时用内置兜底.此前登录已放宽而已购没放宽，会出现
+            // 「登录能过、已购签不出」的不对称（jsbox-re 发现）.
             let bagVersion = StoreAuthenticationProtocol.string(value("sign-sap-version"))
             if !bagVersion.isEmpty, bagVersion != "200" {
                 LoginLogger.shared.log("[已购] bag 的 sign-sap-version=\(bagVersion)（非 200），按 200 处理",
@@ -366,8 +366,8 @@ enum PurchaseHistoryService {
             return (data, http)
         }
 
-        /// 响应头 `X-Set-Apple-Store-Front`（形如 `143441-1,34`）—— Apple 用它校正账号所在区。
-        /// 只接受「数字区号(-1)?,(数字)」这一种形态，避免把异常头写进账号快照。
+        /// 响应头 `X-Set-Apple-Store-Front`（形如 `143441-1,34`）—— Apple 用它校正账号所在区.
+        /// 只接受「数字区号(-1)?,(数字)」这一种形态，避免把异常头写进账号快照.
         static func storeFrontHeader(in response: HTTPURLResponse) -> String? {
             guard let raw = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front")?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -378,7 +378,7 @@ enum PurchaseHistoryService {
             return raw
         }
 
-        /// v0.3.359：与登录侧同款 —— https + Apple 自有域（不再 pin 具体主机名）
+        /// 与登录侧同款 —— https + Apple 自有域（不再 pin 具体主机名）
         private func publicURL(_ value: Any?) -> URL? {
             guard let text = value as? String, let url = URL(string: text),
                   url.scheme?.lowercased() == "https", let host = url.host?.lowercased(),
@@ -445,9 +445,9 @@ enum PurchaseHistoryService {
         }
     }
 
-    /// DAAP 记录计数：`mtco` = 服务端声称的总数，`mrco` = 本次实际返回数。
-    /// v0.3.674：两个 tag 的**缺失即失败**只在 `recordCounts` 一处判定 —— 原来 `items()` 的日志用
-    /// `?? "missing"` 静默容忍、`parseItems` 却硬抛，同一份响应有两套口径。
+    /// DAAP 记录计数：`mtco` = 服务端声称的总数，`mrco` = 本次实际返回数.
+    /// 两个 tag 的**缺失即失败**只在 `recordCounts` 一处判定 —— 原来 `items()` 的日志用
+    /// `?? "missing"` 静默容忍、`parseItems` 却硬抛，同一份响应有两套口径.
     static func recordCounts(_ data: Data) throws -> (total: UInt64, returned: UInt64) {
         guard let returned = try firstUInt(data, tag: "mrco"),
               let total = try firstUInt(data, tag: "mtco") else {
@@ -498,9 +498,9 @@ enum PurchaseHistoryService {
         let returned = counts.returned
         let total = counts.total
         // DAAP 已购库**不做服务端分页**（对齐 ipatool：`ownedAppsPage` 只是对已取回数组做本地切片，
-        // `fetchOwnedAppsForStorefront` 一次性取全量，且完全不校验 mtco/mrco）。
+        // `fetchOwnedAppsForStorefront` 一次性取全量，且完全不校验 mtco/mrco）.
         // 这里若 Apple 只回了一部分（returned < total），按已返回的条目继续，不再硬失败 ——
-        // 否则一个被截断的响应会让整个「已购列表」打不开，用户连已下架的都看不到、更下不了。
+        // 否则一个被截断的响应会让整个「已购列表」打不开，用户连已下架的都看不到、更下不了.
         if total != returned {
             LoginLogger.shared.log("[已购] Apple 只返回部分记录（\(returned)/\(total)），按已返回 \(apps.count) 条继续",
                                    category: .appStore)
@@ -511,12 +511,12 @@ enum PurchaseHistoryService {
     // MARK: - 下架图标（NB 下架库）
 
     /// 下架应用的图标：Apple 的 `lookup` 对下架应用**天然返回空**（它就是因为下架才缺席），
-    /// 所以这些行在已购列表里一直只显示字母块。NB 下架库收录时留下了 `iconPath`
+    /// 所以这些行在已购列表里一直只显示字母块.NB 下架库收录时留下了 `iconPath`
     /// （mzstatic CDN 直链），按 **App Store ID → Bundle ID → 名称** 依次认领，
-    /// 认不到就不写（宁缺勿错 —— 图标配错比字母块更糟）。
+    /// 认不到就不写（宁缺勿错 —— 图标配错比字母块更糟）.
     ///
     /// 只在**已判定下架**的条目上调用（调用方要先跑完 `lookup` 才知道哪些下架），
-    /// 并发 4、总量封顶 30，避免把已购列表拖慢。
+    /// 并发 4、总量封顶 30，避免把已购列表拖慢.
     static func offSaleIcons(for apps: [OwnedApp], limit: Int = 30) async -> [Int64: String] {
         let targets = Array(apps.prefix(limit)).filter { !$0.name.isEmpty || !$0.bundleId.isEmpty }
         guard !targets.isEmpty else { return [:] }
@@ -537,7 +537,7 @@ enum PurchaseHistoryService {
         return table
     }
 
-    /// 单个下架应用 → 图标直链。搜不到 / 认不出身份 ⇒ `nil`（不猜）。
+    /// 单个下架应用 → 图标直链.搜不到 / 认不出身份 ⇒ `nil`（不猜）.
     private static func offSaleIcon(for app: OwnedApp) async -> (Int64, String?) {
         let key = app.name.isEmpty ? app.bundleId : app.name
         guard !key.isEmpty,

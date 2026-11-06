@@ -7,13 +7,13 @@ struct AppleAccountSignOutOptions {
     var keepAnisetteHeaders = true
 }
 
-// MARK: - 多账户台账（v0.3.745 账户体系重做）
+// MARK: - 多账户台账（账户体系重做）
 
 /// 一个已登录并保持的 Apple ID 账户.
 ///
 /// 双链会话各自独立（v0.2.112 的铁律仍然有效）：
 /// - swiftdsid/swiftAuthToken = Swift 认证引擎会话（证书管理/增加内存等用）；
-/// - sideloadDSID/sideloadAuthToken = 历史侧载会话字段（v0.3.750 起签名
+/// - sideloadDSID/sideloadAuthToken = 历史侧载会话字段（签名
 ///   直接复用设置身份，仅保留字段兼容旧台账）.
 struct AppleUserAccount: Codable, Identifiable, Equatable {
     /// 邮箱（小写）即 id.
@@ -52,7 +52,7 @@ final class AppleUserAccountStore: ObservableObject {
         return docs.appendingPathComponent("Tequila/AppleUserAccounts.json")
     }()
     private static let activeKey = "TequilaDash.ActiveAppleID"
-    /// v0.3.756：旧存储收编只做一次 —— 否则删光账户后（台账空）只要
+    /// 旧存储收编只做一次 —— 否则删光账户后（台账空）只要
     /// MemoryLimitSettings.isLoggedIn 仍为 true，下次启动就会把旧账户「复活」.
     private static let legacyImportDoneKey = "TequilaDash.LegacyImportDone"
 
@@ -113,7 +113,7 @@ final class AppleUserAccountStore: ObservableObject {
             accountName: acc.accountName)
         save()
 
-        // v0.3.746：切户后两链已持有的旧会话必须立即失效，否则：
+        // 切户后两链已持有的旧会话必须立即失效，否则：
         // - IPA 侧载页 isSignedIn 仍挂旧 session，warmUp 的 `guard !isSignedIn`
         //   永远不重恢复（切户后回侧载页显示旧账户已登录）；
         // - CertificateManager 单例的 hasLoaded/didAutoLoad 还是旧账户的 true，
@@ -204,14 +204,14 @@ final class AppleUserAccountStore: ObservableObject {
             let data = try JSONEncoder().encode(accounts)
             try data.write(to: url, options: .atomic)
         } catch {
-            // v0.3.756：写入失败不再静默 —— 台账写丢 = 账户「消失」，必须留痕.
+            // 写入失败不再静默 —— 台账写丢 = 账户「消失」，必须留痕.
             LoginLogger.shared.log("[账户] 台账写入失败：\(error.localizedDescription)")
         }
     }
 
     /// 首启迁移：keychain 里已有单账户登录态、台账为空 → 收编为台账第一笔.
     private func importLegacyIfNeeded() {
-        // v0.3.756：一次性迁移标记，封死「删光账户后重启被旧存储收编复活」路径.
+        // 一次性迁移标记，封死「删光账户后重启被旧存储收编复活」路径.
         guard !UserDefaults.standard.bool(forKey: Self.legacyImportDoneKey) else { return }
         defer { UserDefaults.standard.set(true, forKey: Self.legacyImportDoneKey) }
         guard accounts.isEmpty, MemoryLimitSettings.shared.isLoggedIn else { return }

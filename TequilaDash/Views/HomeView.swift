@@ -1,52 +1,52 @@
 import SwiftUI
 
-/// v0.3.xxx：主页按**多色板 + 混合布局**重做（原「3 个全宽行分组 + 全蓝图标」）。
+/// 主页按**多色板 + 混合布局**重做（原「3 个全宽行分组 + 全蓝图标」）.
 ///
 /// ## 为什么改（用户原话：「主页布局优化一下 我感觉很丑陋 单一」）
 /// 改前主页的问题不是「某一处丑」，而是**整页只有一种语言**：
-/// - 8 个功能入口的图标底**全是同一个蓝**（`AppTheme.accent` 占了 5 处）—— 没有模块区分。
-/// - 所有入口都是**同一种形状**（全宽横条 + 30pt 图标 + 右 chevron），一屏 8 条一模一样的横条。
-/// - 所有卡片都是**同一种底**（`secondarySystemGroupedBackground`），没有层次。
-/// - 分段标题是 12pt 灰字 + 小图标，在页面里**立不起来**。
-/// - 已定义好的 14 个新色 token（8 模块色 / 4 表面层 / 2 强调变体 / 3 渐变）**一个都没用上**。
+/// - 8 个功能入口的图标底**全是同一个蓝**（`AppTheme.accent` 占了 5 处）—— 没有模块区分.
+/// - 所有入口都是**同一种形状**（全宽横条 + 30pt 图标 + 右 chevron），一屏 8 条一模一样的横条.
+/// - 所有卡片都是**同一种底**（`secondarySystemGroupedBackground`），没有层次.
+/// - 分段标题是 12pt 灰字 + 小图标，在页面里**立不起来**.
+/// - 已定义好的 14 个新色 token（8 模块色 / 4 表面层 / 2 强调变体 / 3 渐变）**一个都没用上**.
 ///
 /// ## 改后（Hero + Bento 网格 + 分组行）
-/// - **Hero**：orb 卡片 = `surfaceCard` + 发丝描边（**不再叠加任何渐变 banner**，见下）。
+/// - **Hero**：orb 卡片 = `surfaceCard` + 发丝描边（**不再叠加任何渐变 banner**，见下）.
 /// - **设备与系统 → 2 列 Bento 网格**（4 个平级工具入口）：每格是**自己的模块色**的淡色
-///   渐变卡 + 模块色图标底，是页面的「彩色中心」。
+///   渐变卡 + 模块色图标底，是页面的「彩色中心」.
 /// - **清理与优化 / 扩展与商店 → 全宽行**（保持「词条 + 说明」的列表语言），
-///   但每行图标底换用**自己的模块色**（不再全蓝）。
-/// - **分段标题**统一 `AppSectionHeader`，且**竖条 / 符号取该分组自己的模块色**（与组内内容同色）。
-/// - **百宝箱**入口换紫色身份，保留点击 / 上滑手势。
-/// - 页面底 `surfaceBase`、卡片 `surfaceCard` —— 用上新表面层，撑起层次。
+///   但每行图标底换用**自己的模块色**（不再全蓝）.
+/// - **分段标题**统一 `AppSectionHeader`，且**竖条 / 符号取该分组自己的模块色**（与组内内容同色）.
+/// - **百宝箱**入口换紫色身份，保留点击 / 上滑手势.
+/// - 页面底 `surfaceBase`、卡片 `surfaceCard` —— 用上新表面层，撑起层次.
 ///
 /// ## 硬规则对齐
-/// - 不用纯蓝实底按钮：hero 的「立即体检」仍是 `TintedButtonStyle`（半透明着色 + 发丝描边）。
-/// - 模块色只出现在**紧凑图标底 / 淡色卡底**（不透明度 ≤14%），不做全宽深色实底。
-/// - 界面文案一律英文句点 `.`。
+/// - 不用纯蓝实底按钮：hero 的「立即体检」仍是 `TintedButtonStyle`（半透明着色 + 发丝描边）.
+/// - 模块色只出现在**紧凑图标底 / 淡色卡底**（不透明度 ≤14%），不做全宽深色实底.
+/// - 界面文案一律英文句点 `.`.
 ///
-/// v0.3.599：**去棕 + 去悬浮球 banner**（用户原话：「我不喜欢棕色的颜色 主页你踩雷了 特别是你看
-/// "扩展与商店"那两个选区的颜色 你不许用棕色」「主页那个悬浮球背景还叠加一层 banner 看着怪别扭」）。
-/// - `categoryStore` 橙棕 `#C2620E` → 冷青蓝 `#0B8FC9`（「扩展与商店」两行随之去棕）。
-/// - `categoryAdvanced` 已并入 `AppTheme.danger`（仓库只允许一个红，见 HARD-RULES 28）。
-/// - hero 卡片删除叠加的冷色渐变 banner 层。
-/// - 分组头竖条改用各分组模块色（不再统一蓝）。
-/// v0.3.219：Hero 换装 Metal 实时液态玻璃球（LiquidGlassOrbView + LiquidGlassOrb.metal）。
-/// v0.3.207：百宝箱 = 系统原生 sheet（presentationDetents 0.4↔1.0，原生上拉展开 /
-/// 下拉关闭，跟手流畅，返回不必点横线；把手区点击或上滑触发）。
+/// **去棕 + 去悬浮球 banner**（用户原话：「我不喜欢棕色的颜色 主页你踩雷了 特别是你看
+/// "扩展与商店"那两个选区的颜色 你不许用棕色」「主页那个悬浮球背景还叠加一层 banner 看着怪别扭」）.
+/// - `categoryStore` 橙棕 `#C2620E` → 冷青蓝 `#0B8FC9`（「扩展与商店」两行随之去棕）.
+/// - `categoryAdvanced` 已并入 `AppTheme.danger`（仓库只允许一个红，见 HARD-RULES 28）.
+/// - hero 卡片删除叠加的冷色渐变 banner 层.
+/// - 分组头竖条改用各分组模块色（不再统一蓝）.
+/// Hero 换装 Metal 实时液态玻璃球（LiquidGlassOrbView + LiquidGlassOrb.metal）.
+/// 百宝箱 = 系统原生 sheet（presentationDetents 0.4↔1.0，原生上拉展开 /
+/// 下拉关闭，跟手流畅，返回不必点横线；把手区点击或上滑触发）.
 struct HomeView: View {
     @ObservedObject var appList: AppListViewModel
-    /// v0.3.197：安全评分（占位，后续接入 SecurityPresets.plist + Reveil 思路实做）。
+    /// 安全评分（占位，后续接入 SecurityPresets.plist + Reveil 思路实做）.
     @State private var securityScore: Int = 92
-    /// v0.3.207：百宝箱 sheet
+    /// 百宝箱 sheet
     @State private var treasureOpen = false
-    /// 百宝箱入口图标弹跳动效触发值（TRApp `Symbols18BounceSymbolEffect` 语言）。
+    /// 百宝箱入口图标弹跳动效触发值（TRApp `Symbols18BounceSymbolEffect` 语言）.
     @State private var treasureBounce = 0
 
-    /// v0.3.441：Gestalt 不再占底部 tab，改从百宝箱进入。
+    /// Gestalt 不再占底部 tab，改从百宝箱进入.
     /// 为什么要 pendingGestalt 这个中转：直接在 sheet 里 push 会套第二层导航栈（页面没返回按钮），
     /// 而「关掉 sheet 再 push」必须等 sheet **完全关闭**才 push，否则导航会被吞掉 ——
-    /// 所以用 sheet 的 onDismiss 作为时机。
+    /// 所以用 sheet 的 onDismiss 作为时机.
     @State private var showGestalt = false
     @State private var pendingGestalt = false
     /// 顽固图标清理页（与 Gestalt 同一套「sheet 关闭后再 push」的中转）
@@ -85,7 +85,7 @@ struct HomeView: View {
         .scrollContentBackground(.hidden)
         .background(AppTheme.surfaceBase)
         .sheet(isPresented: $treasureOpen, onDismiss: {
-            // v0.3.441：百宝箱里点了「Gestalt 编辑」→ 等 sheet 完全关闭后再 push
+            // 百宝箱里点了「Gestalt 编辑」→ 等 sheet 完全关闭后再 push
             // （sheet 还在收场时 push 会被导航系统吞掉）
             if pendingGestalt {
                 pendingGestalt = false
@@ -144,8 +144,8 @@ struct HomeView: View {
             .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.4)))
             .interactiveDismissDisabled(false)
         }
-        // v0.3.441：Gestalt 编辑页。挂在这里是因为 HomeView 就是 RootView 里
-        // `NavigationStack { HomeView(...) }` 的内容视图，本修饰符链天然位于该栈内部。
+        // Gestalt 编辑页.挂在这里是因为 HomeView 就是 RootView 里
+        // `NavigationStack { HomeView(...) }` 的内容视图，本修饰符链天然位于该栈内部.
         .navigationDestination(isPresented: $showGestalt) {
             GestaltView()
         }
@@ -155,11 +155,11 @@ struct HomeView: View {
         .navigationDestination(isPresented: $showDeactivate) {
             ActivationView()
         }
-        // 软件源管理（源列表）。右上角「下载管理」入口由 `SignSourceListView` **自己** push
-        // （`downloadManagerDestination` 接线）：二级页是标准子级 push，才有系统返回箭头。
+        // 软件源管理（源列表）.右上角「下载管理」入口由 `SignSourceListView` **自己** push
+        // （`downloadManagerDestination` 接线）：二级页是标准子级 push，才有系统返回箭头.
         // 不要再在**本根级**另挂一个 `navigationDestination(isPresented:)` 去 push 二级页 ——
         // 一级页的 `isPresented` 绑定此时仍为 `true`，两个「钉在栈顶」的 `isPresented` 目的地
-        // 会让二级页失去返回箭头（用户实测「进下载管理没有返回按钮」）。
+        // 会让二级页失去返回箭头（用户实测「进下载管理没有返回按钮」）.
         .navigationDestination(isPresented: $showSignSource) {
             SignSourceListView(downloadManagerDestination: {
                 AnyView(IPADownloadManagerView(filterSource: [.thirdPartySource]))
@@ -172,12 +172,12 @@ struct HomeView: View {
         // 安装爱思移动端（爱思 9.0 对话框移植；内嵌 IPA 为 FairPlay 加密包）
         .navigationDestination(isPresented: $showMobileInstall) {
             // 把 Service 的安装动作注入 View：不注入则 installAction 恒为 nil，
-            // 页面恒显「本页未接入安装动作」且主按钮 .disabled(true)（接线断裂）。
+            // 页面恒显「本页未接入安装动作」且主按钮 .disabled(true)（接线断裂）.
             // 用 makeInstallCachedAction（**只装已缓存的包**，跳过未缓存的）—— 页面主按钮要的是
             // 「把已经下好的包装上」；旧接线用 makeInstallAllAction（要求内置三包全缓存，缺一即抛），
-            // 用户实测只缓存了 220.ipa 时点「开始安装」却报「缓存里没有 217.ipa」，已缓存的 220 也不装。
-            // 其返回类型 () async throws -> Void 与 I4MobileInstallView.installAction 精确匹配。
-            // onLog 转发到 LoginLogger(.i4Fix)，与 I4AppFixView 同一板块。
+            // 用户实测只缓存了 220.ipa 时点「开始安装」却报「缓存里没有 217.ipa」，已缓存的 220 也不装.
+            // 其返回类型 () async throws -> Void 与 I4MobileInstallView.installAction 精确匹配.
+            // onLog 转发到 LoginLogger(.i4Fix)，与 I4AppFixView 同一板块.
             I4MobileInstallView(installAction: I4MobileInstallService.makeInstallCachedAction(
                 onLog: { LoginLogger.shared.log($0, category: .i4Fix) }))
         }
@@ -185,8 +185,8 @@ struct HomeView: View {
         .navigationDestination(isPresented: $showI4Advanced) {
             I4AdvancedView()
         }
-        // v0.3.200：进入主页自动静默体检（灵动球分数即时显示）
-        // v0.3.729：task id 直接绑隧道就绪状态 —— VPN 一开，分数扫描立刻自动重跑
+        // 进入主页自动静默体检（灵动球分数即时显示）
+        // task id 直接绑隧道就绪状态 —— VPN 一开，分数扫描立刻自动重跑
         //（未开时 provisioning 项被闸门秒回「待复检」，不会撞隧道，也不卡主线程）.
         .task(id: TunnelReadiness.shared.isReady) {
             let total = await Task.detached(priority: .userInitiated) {
@@ -198,7 +198,7 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.large)
     }
 
-    /// 打开百宝箱 sheet（点击/上滑触发）：触觉 + 图标弹跳。
+    /// 打开百宝箱 sheet（点击/上滑触发）：触觉 + 图标弹跳.
     private func openTreasure() {
         AppHaptics.tap()
         treasureBounce += 1
@@ -207,14 +207,14 @@ struct HomeView: View {
 
     // MARK: Hero —— 灵动球 + 分数 + 立即体检
 
-    // v0.3.219：Metal 实时液态玻璃球（折射 + RGB 色散 + 菲涅尔 + 焦散 + 液态轮廓，
+    // Metal 实时液态玻璃球（折射 + RGB 色散 + 菲涅尔 + 焦散 + 液态轮廓，
     // 移植自 liquid-glass v2 WebGL 样板；组件见 LiquidGlassOrbView.swift，
-    // 着色器见 LiquidGlassOrb.metal；iOS 17 以下回退旧版圆环进度样式）。
+    // 着色器见 LiquidGlassOrb.metal；iOS 17 以下回退旧版圆环进度样式）.
     //
     // ⚠️ 改前本卡在 `surfaceCard` 之上**又叠了一层冷色渐变 banner**（download 蓝 10% → clean 青 3%，
-    // 顶→底）。用户原话「主页那个悬浮球背景还叠加一层 banner 看着怪别扭 我不喜欢」—— 那层渐变
+    // 顶→底）.用户原话「主页那个悬浮球背景还叠加一层 banner 看着怪别扭 我不喜欢」—— 那层渐变
     // 与球体自身的极光语言**互相打架**（两层冷色叠加，边界糊成一条脏带），且违背硬规则 1 的
-    // 「不做全宽 banner」精神。现**整层删除**：只留 `surfaceCard` + 一条发丝描边，让球体自己
+    // 「不做全宽 banner」精神.现**整层删除**：只留 `surfaceCard` + 一条发丝描边，让球体自己
     // 成为唯一焦点，卡片回归干净.
     private var heroCard: some View {
         VStack(spacing: 14) {
@@ -222,7 +222,7 @@ struct HomeView: View {
             Text(scoreSubtitle)
                 .font(AppFont.footnote)
                 .foregroundStyle(.secondary)
-            // 立即体检：淡底按钮（**不是纯蓝实底**），圆角对齐 TRApp 大按钮（12）；取体检模块绿，与目标页同色。
+            // 立即体检：淡底按钮（**不是纯蓝实底**），圆角对齐 TRApp 大按钮（12）；取体检模块绿，与目标页同色.
             NavigationLink {
                 HealthCheckView(score: $securityScore)
             } label: {
@@ -246,7 +246,7 @@ struct HomeView: View {
     // MARK: 功能分组（分段标题 + 分组内容）
 
     /// 清理与优化：2 项「扫描 + 瘦身」，保持全宽行（词条 + 说明语言），
-    /// 图标底换用**清理模块色**（青绿），不再是全蓝。分组头竖条同用清理模块色.
+    /// 图标底换用**清理模块色**（青绿），不再是全蓝.分组头竖条同用清理模块色.
     private var cleanupSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             AppSectionHeader("清理与优化", symbol: "sparkles", tint: AppModule.clean.tint)
@@ -264,17 +264,17 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 硬规则 5：全宽行不套 16 圆角卡片（与 TreasureBoxView.swift:252-259 同款）。
-            // 原先这里是 .appCard(padding: 0)，把全宽行塞进了卡片。
+            // 硬规则 5：全宽行不套 16 圆角卡片（与 TreasureBoxView.swift:252-259 同款）.
+            // 原先这里是 .appCard(padding: 0)，把全宽行塞进了卡片.
         }
     }
 
     /// 设备与系统：4 个**平级**工具入口（无主次），改 **2 列 Bento 网格**（`AppCardGrid`），
-    /// 每格用**自己的模块色**做淡色渐变卡 + 模块色图标底 —— 这是页面的「彩色中心」。
-    /// 4 项用 4 个不同色相（靛蓝 / 绿 / 石板灰 / 蓝），一屏之内就看出「不再单一」。
+    /// 每格用**自己的模块色**做淡色渐变卡 + 模块色图标底 —— 这是页面的「彩色中心」.
+    /// 4 项用 4 个不同色相（靛蓝 / 绿 / 石板灰 / 蓝），一屏之内就看出「不再单一」.
     /// 分组头竖条用设备模块色（靛蓝），与组内主色呼应.
     ///
-    /// v0.3.692：格子原先用本页私有的 `HomeToolTile`，与 `AppLayout.swift` 的 `AppGridTile` 逐行相同
+    /// 格子原先用本页私有的 `HomeToolTile`，与 `AppLayout.swift` 的 `AppGridTile` 逐行相同
     /// （只差底色），现合并成 `AppGridTile(tinted: true)` 这一档，网格卡只有一份实现.
     private var deviceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -292,9 +292,9 @@ struct HomeView: View {
         }
     }
 
-    /// 扩展与商店：2 项「模块 + 商店」，保持全宽行。
+    /// 扩展与商店：2 项「模块 + 商店」，保持全宽行.
     ///
-    /// ⚠️ 改前两行图标底均为**橙棕** `AppModule.store.tint`（`#C2620E`）—— 用户点名的「棕色踩雷」处。
+    /// ⚠️ 改前两行图标底均为**橙棕** `AppModule.store.tint`（`#C2620E`）—— 用户点名的「棕色踩雷」处.
     /// `categoryStore` 已去棕改为**冷青蓝**，故此处两行随之变青蓝；分组头竖条同用商店模块色.
     private var extensionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -312,18 +312,18 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 硬规则 5：全宽行不套 16 圆角卡片（与 TreasureBoxView.swift:252-259 同款）。
-            // 原先这里是 .appCard(padding: 0)，把全宽行塞进了卡片。
+            // 硬规则 5：全宽行不套 16 圆角卡片（与 TreasureBoxView.swift:252-259 同款）.
+            // 原先这里是 .appCard(padding: 0)，把全宽行塞进了卡片.
         }
     }
 
     // MARK: 百宝箱入口（上拉抽屉；点击/上滑触发）
 
-    /// 主页底部百宝箱入口：点击或上滑手势进入百宝箱抽屉（面板从底部滑动进入）。
-    /// 换 **百宝箱模块色**（紫）身份：紫色淡渐变卡 + 紫图标底，与上方三组区分开。
+    /// 主页底部百宝箱入口：点击或上滑手势进入百宝箱抽屉（面板从底部滑动进入）.
+    /// 换 **百宝箱模块色**（紫）身份：紫色淡渐变卡 + 紫图标底，与上方三组区分开.
     ///
     /// 用 `onTapGesture` + `highPriorityGesture`（沿用真机验证过的旧实现），**不套 Button** ——
-    /// Button 的点击手势与这里的高优先级 DragGesture 并存时，真机上点击可能被拖拽手势吞掉。
+    /// Button 的点击手势与这里的高优先级 DragGesture 并存时，真机上点击可能被拖拽手势吞掉.
     private var treasureCard: some View {
         HStack(spacing: 12) {
             AppRowIcon(systemName: "shippingbox.and.arrow.backward.fill",
@@ -380,8 +380,8 @@ struct HomeView: View {
 
     // MARK: - 数据（Bento 网格 4 项）
 
-    /// 「设备与系统」4 个平级工具入口。每项自带**模块色**与目的地 —— 与 `MoreView.MoreItem`
-    /// 同一模式（`AnyView` 懒加载目的地，点击时才创建）。
+    /// 「设备与系统」4 个平级工具入口.每项自带**模块色**与目的地 —— 与 `MoreView.MoreItem`
+    /// 同一模式（`AnyView` 懒加载目的地，点击时才创建）.
     private struct HomeTool: Identifiable {
         let id: String
         let icon: String
@@ -401,9 +401,9 @@ struct HomeView: View {
         }
     }
 
-    /// 4 项模块色：靛蓝（设备）/ 绿（健康）/ 石板灰（信息）/ 蓝（文档）—— 色相各不相同。
+    /// 4 项模块色：靛蓝（设备）/ 绿（健康）/ 石板灰（信息）/ 蓝（文档）—— 色相各不相同.
     ///
-    /// v0.3.xxx：健康绿改用专用模块色 `AppTheme.categoryHealth`，不再借语义色 `AppTheme.success`
+    /// 健康绿改用专用模块色 `AppTheme.categoryHealth`，不再借语义色 `AppTheme.success`
     /// （语义色 = 操作成功，被当调色板后调 `success` 会连带动到主页）.
     private var deviceTools: [HomeTool] {
         [
@@ -430,16 +430,16 @@ struct HomeView: View {
 
     /// 行分隔线：**全宽**发丝线.
     ///
-    /// v0.3.xxx：原先 `.padding(.leading, 56)` 是给「卡片内行」用的缩进线，本页行早已脱离卡片、
+    /// 原先 `.padding(.leading, 56)` 是给「卡片内行」用的缩进线，本页行早已脱离卡片、
     /// 直接落在页面底上（见 :265 硬规则 5 注），缩进反而把分隔从行左缘断开 —— 现与 `MoreView`
     /// 同款全宽发丝线对齐，见 `TreasureBoxView.swift:273-274`.
     private var rowDivider: some View {
         AppHairline()
     }
 
-    /// 功能行：`AppNavRow` 作 label 的 `NavigationLink`（`.plain` 样式，保留整行点击）。
+    /// 功能行：`AppNavRow` 作 label 的 `NavigationLink`（`.plain` 样式，保留整行点击）.
     ///
-    /// v0.3.692：行标签原先叫本页私有的 `HomeRowLabel`，与 `MoreView` 的 `MoreRowLabel` 逐行相同，
+    /// 行标签原先叫本页私有的 `HomeRowLabel`，与 `MoreView` 的 `MoreRowLabel` 逐行相同，
     /// 现合并成 `AppLayout.swift` 的共享 `AppNavRow`，行高 / 字号 / chevron 只有一份.
     private func navRow<Destination: View>(
         title: String, subtitle: String, icon: String, tint: Color,
@@ -454,10 +454,10 @@ struct HomeView: View {
     }
 
     // MARK: 视觉辅助
-    // v0.3.626：改走统一 token。
+    // 改走统一 token.
     // 原先这里是「蓝 80+ / 黄 60..<80 / 橙」，而 HealthCheckView 是「蓝 90+ / 黄 70+ / 橙」——
-    // 同一个分数在主页与体检页显示成不同颜色（80 分主页蓝、体检页黄）。
-    // 现在两处都调 AppTheme.scoreColor / scoreLabel，阈值与取色只有一份。
+    // 同一个分数在主页与体检页显示成不同颜色（80 分主页蓝、体检页黄）.
+    // 现在两处都调 AppTheme.scoreColor / scoreLabel，阈值与取色只有一份.
     private var scoreSubtitle: String { AppTheme.scoreLabel(securityScore) }
     private var scoreColor: Color { AppTheme.scoreColor(securityScore) }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.3.208：文档共享应用文件浏览（iDescriptor FileSharing 移植，不依赖漏洞）.
+/// 文档共享应用文件浏览（iDescriptor FileSharing 移植，不依赖漏洞）.
 /// 数据源：
 ///   - instproxy_browse 列全部已装应用（含 UIFileSharingEnabled 字段）
 ///   - house_arrest_vend_documents 为指定 bundle id 拿 AFC 会话（仅该 App /Documents 容器）
@@ -13,52 +13,52 @@ struct FileSharingApp: Identifiable {
     var applicationType: String // "User" / "System"
     var supportsFileSharing: Bool
     var path: String?       // ApplicationPath（可选展示）
-    /// v0.3.408：**数据容器路径**（instproxy 的 `Container` 键，形如
-    /// `/var/mobile/Containers/Data/Application/<UUID>`）。
+    /// **数据容器路径**（instproxy 的 `Container` 键，形如
+    /// `/var/mobile/Containers/Data/Application/<UUID>`）.
     ///
     /// 它是设备瘦身量 `docSize` 的**入口**（见 `DeviceSlimService` 的文档大小通道）：
     /// 有了它就能在**本机**用 `SandboxEscape` + `FileService.countTree` 递归求和，
-    /// 不必走 house_arrest AFC（那条路要求应用开启文档共享，微信/游戏这类恰恰没开）。
+    /// 不必走 house_arrest AFC（那条路要求应用开启文档共享，微信/游戏这类恰恰没开）.
     ///
-    /// **两个来源都带这个键**（v0.3.600 起）：
+    /// **两个来源都带这个键**：
     ///   - `get_apps`（**不带** ReturnAttributes）：默认响应本来就带 —— `AppDiscovery`
     ///     正是从同一份响应里取的它（空间回收已经在用）；
-    ///   - 带属性 Lookup：**v0.3.600 把 `Container` 加进请求字段后才带**（此前不在
-    ///     `attributeRequestFields` / Rust `attrs` 里 ⇒ 值为 nil）。而带属性 Lookup
+    ///   - 带属性 Lookup：**把 `Container` 加进请求字段后才带**（此前不在
+    ///     `attributeRequestFields` / Rust `attrs` 里 ⇒ 值为 nil）.而带属性 Lookup
     ///     恰好是设备瘦身的**快路径** ⇒ 此前 `containerPath` 恒 nil ⇒ docSize 通道
-    ///     整条死掉 ⇒ 「较大应用」漏判文档重的应用（这就是用户报的那个 bug）。
-    /// 系统应用可能给空串（与 `AppDiscovery` 同口径），所以判空后一律当 nil 用。
+    ///     整条死掉 ⇒ 「较大应用」漏判文档重的应用（这就是用户报的那个 bug）.
+    /// 系统应用可能给空串（与 `AppDiscovery` 同口径），所以判空后一律当 nil 用.
     var containerPath: String? = nil
     var appSize: Int64?     // 应用大小（StaticDiskUsage / CFBundleSize，字节；未返回则为 nil）
     var docSize: Int64?     // 文档大小（DynamicDiskUsage；**该字段已不在请求里，恒为 nil**）
-                            // v0.3.408：设备瘦身改走**本机通道**量它（`containerPath` +
+                            // 设备瘦身改走**本机通道**量它（`containerPath` +
                             // `SandboxEscape` + `FileService.countTree`，见 DeviceSlimService）
-    // v0.3.291：安装来源（真机 iPhone15,4 / iOS 27.0 实证）
+    // 安装来源（真机 iPhone15,4 / iOS 27.0 实证）
     //   iTunesMetadata 是 **binary plist 字节**（不是字典），账号邮箱在
     //   com.apple.iTunesStore.downloadInfo.accountInfo.AppleID；
     //   ApplicationDSID = 安装该 App 的账号 DSID（与 accountInfo.DSPersonID 同值）；
-    //   IsAppStoreVendable / Archive 在 iOS 27 均不可用（后者返回 UnknownCommand）。
+    //   IsAppStoreVendable / Archive 在 iOS 27 均不可用（后者返回 UnknownCommand）.
     var appleId: String?      // 账号邮箱（appleId 顶层 或 downloadInfo.accountInfo.AppleID）
     var dsid: String?         // 账号 DSID（accountInfo.DSPersonID 或 ApplicationDSID）
     var purchaseDate: String? // 购买/下载时间（downloadInfo.purchaseDate）
     var signer: String?       // SignerIdentity（侧载/签名身份，App Store 为 "Apple iPhone OS Application Signing"）
     var isGenuine: Bool = false // 爱思「苹果正版」= 归档信息里有 iTunesMetadata（App Store 下发）
-    /// v0.3.363：安装来源类型（与「应用」板块 **同一套** AppTypeDetector 判定，
-    /// 见 AppListView.loadAppTypes）。此前文档浏览只按 isGenuine 二分成
-    /// 「苹果正版 / 共享正版」，把自签 / 企业 / 系统应用全部压成「共享正版」。
-    /// v0.3.364：listAppsWithFileSharing() 不再填这个字段（首屏不等 profile），
+    /// 安装来源类型（与「应用」板块 **同一套** AppTypeDetector 判定，
+    /// 见 AppListView.loadAppTypes）.此前文档浏览只按 isGenuine 二分成
+    /// 「苹果正版 / 共享正版」，把自签 / 企业 / 系统应用全部压成「共享正版」.
+    /// listAppsWithFileSharing() 不再填这个字段（首屏不等 profile），
     /// 由 UI 渐进式回填（fetchAppTypeContext → detectTypes）.
     var appType: AppType? = nil
 }
 
-/// v0.3.364：文档浏览的**显示口径**——对齐爱思分类（**唯一映射点**）.
+/// 文档浏览的**显示口径**——对齐爱思分类（**唯一映射点**）.
 ///
-/// 判定仍全部来自 AppTypeDetector；本枚举只负责「AppType → 用户看得懂的标签」。
+/// 判定仍全部来自 AppTypeDetector；本枚举只负责「AppType → 用户看得懂的标签」.
 /// 后续 i4-class 逆向出的分类微调**只改这里的 classify**（UI 只按本类型取文案/配色）.
 ///
-/// 类别集合（v0.3.364）：苹果正版 / 共享正版 / 个人签名 / 企业签名 / 越狱版 / 系统 / 未识别。
+/// 类别集合：苹果正版 / 共享正版 / 个人签名 / 企业签名 / 越狱版 / 系统 / 未识别.
 /// 爱思 9.0 的 6 类里没有「系统」（它只有 全部/可更新/旧版/适配iPad/苹果正版/
-/// 共享正版/个人签名/企业签名/越狱版/其他版本），「系统」是用户明确要求保留的自加类。
+/// 共享正版/个人签名/企业签名/越狱版/其他版本），「系统」是用户明确要求保留的自加类.
 enum FileSharingTypeClass: String, CaseIterable, Identifiable, Hashable {
     case appStorePersonal = "苹果正版"
     case appStoreShared   = "共享正版"
@@ -97,7 +97,7 @@ enum FileSharingTypeClass: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// v0.3.376：读取「已装应用列表」的结局——给调用方区分「成功 / 真失败 / 超时」.
+/// 读取「已装应用列表」的结局——给调用方区分「成功 / 真失败 / 超时」.
 /// 为什么要区分：超时不是失败（设备可能只是慢），必须能给出「读取超时」这种
 /// 最短提示；真失败要保留原始原因（如「无配对文件」）.
 enum FileSharingListOutcome {
@@ -117,10 +117,10 @@ enum FileSharingService {
 
     /// 把 FFI 错误对象转成 NSError —— 与 AFCService.error(from:fallback:) 同款.
     ///
-    /// 为什么必须有这一层：FFI 返回的是 `IdeviceFfiError*`，里面带 `code` 和 `message`。
+    /// 为什么必须有这一层：FFI 返回的是 `IdeviceFfiError*`，里面带 `code` 和 `message`.
     /// 旧代码在 6 处写的是「只判非 nil 就丢一句固定文案」，既丢掉了真实原因
     /// （Afc(PermDenied) / Afc(ObjectNotFound) / 连接已断 全变成同一句「删除失败：<path>」），
-    /// 也**没有 free 那个错误对象** ⇒ 每次失败泄漏一个。
+    /// 也**没有 free 那个错误对象** ⇒ 每次失败泄漏一个.
     static func error(from ffiError: UnsafeMutablePointer<IdeviceFfiError>?, fallback: String) -> NSError {
         guard let ffiError else { return makeError(fallback) }
         let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? ""
@@ -132,19 +132,19 @@ enum FileSharingService {
 
     /// RSD 隧道并发铁律（AFCService.swift:15 同款）：**同一 hostname 并发
     /// `tunnel_create_rppairing` 会互相抢占**. 本服务建隧道用的 hostname 固定为
-    /// "TequilaDashFileShare"（见下方 makeTunnel），而 v0.3.369 起：
+    /// "TequilaDashFileShare"（见下方 makeTunnel），而 起：
     ///   - 「应用管理」AppListView.loadAppTypes 与
     ///   - 「文档浏览」FileSharingAppsView.load
     /// 会**各自独立**调用本服务 → 同 hostname 隧道并发握手.
     ///
-    /// v0.3.378：由 v0.3.376 的 `DispatchQueue.sync` 换成 **`NSRecursiveLock`**，
+    /// 由 的 `DispatchQueue.sync` 换成 **`NSRecursiveLock`**，
     /// 两个理由：
     ///   1. 需要把「排队等待」与「实际执行」**分开记账**（sync 拿不到这个分界点）；
     ///   2. 闸门只在 `makeTunnel` 里取/放，锁粒度仍是「建隧道这一步」——
     ///      **绝不在 FFI 阻塞期间持锁**，否则一次卡死会把其它入口全拖死.
     static let tunnelGate = NSRecursiveLock()
 
-    /// v0.3.378：当前线程在闸门上的累计排队等待秒数（threadDictionary，按线程隔离）.
+    /// 当前线程在闸门上的累计排队等待秒数（threadDictionary，按线程隔离）.
     /// 为什么需要它：等待发生在 `makeTunnel` 深处，而超时记账在 `runGated`；
     /// 线程局部是两者之间最小、且不需要改动任何调用方签名的传递通道.
     private static let queueWaitKey = "com.tequila.dashilesharing.queueWait"
@@ -171,23 +171,23 @@ enum FileSharingService {
 
     /// 列出全部已装应用并标 UIFileSharingEnabled.
     ///
-    /// **v0.3.378：主路径曾一度退回 `get_apps`（快路径）**.
+    /// **：主路径曾一度退回 `get_apps`（快路径）**.
     /// 证据（真机 16:29 日志）：3 次**并发**的带属性 Lookup 全部 20 秒一个字节不回
     ///（`[16:29:21.813 / :24.105 / :34.744] 开始读取` → `[16:29:41.889] 读取超时`），
     /// 而**同一次会话**里改用 `get_apps` + profile 的路径 **2.5 秒**就判完 333 个应用
     ///（16:29:41.895 → :44.395）——说明通道是好的，是 `Lookup` 这条命令卡死.
     ///
-    /// **v0.3.401：类型判定的主路径改回带属性 Lookup**
+    /// **：类型判定的主路径改回带属性 Lookup**
     /// （见 `listAppsWithAttributesWithFallback(timeout:)`）—— 因为 `get_apps`
     /// **不返回 `iTunesMetadata`**，购买邮箱恒空，**共享正版会被判成「苹果正版」**
-    /// （回归：`b2c310d` / v0.3.378；两板块共用同一输入与判定）。同时把
+    /// （回归：`b2c310d` / ；两板块共用同一输入与判定）.同时把
     /// ReturnAttributes 收紧到类型判定必需字段（去掉磁盘占用类，Rust 侧见
     /// installation_proxy.rs 的 `attrs` 常量），验证「卡死 = 逐 app 算磁盘占用」的假设.
     ///
     /// 本函数（**无属性** `get_apps`）随之降级为两处用途：
     ///   - **小额度调用**的快路径（如 `IPADownloadActionsSheet` 的 5s 数据源）；
     ///   - 带属性 Lookup 失败/超时后的**降级路径**（缺购买邮箱 → 类型显示「未识别」，
-    ///     不再误判成「苹果正版」，见 AppTypeDetector v0.3.401）.
+    ///     不再误判成「苹果正版」，见 AppTypeDetector ）.
     /// 同步阻塞——调用方放后台线程.
     static func listAppsWithFileSharing() throws -> [FileSharingApp] {
         LoginLogger.shared.log("[文件共享] get_apps 快路径开始（不带 ReturnAttributes）")
@@ -201,20 +201,20 @@ enum FileSharingService {
         return apps
     }
 
-    /// v0.3.401：**类型判定主路径** —— 先带属性 Lookup（购买邮箱
-    /// `iTunesMetadata.appleId` 的**唯一**来源），取不到再降级到无属性 `get_apps`。
+    /// **类型判定主路径** —— 先带属性 Lookup（购买邮箱
+    /// `iTunesMetadata.appleId` 的**唯一**来源），取不到再降级到无属性 `get_apps`.
     /// 两层都在：带属性走单飞+短期缓存（见 AttributeLookupCenter）、失败/超时降级，
     /// 整条链路由外层 `listAppsWithFileSharing(timeout:)` 的硬超时兜底.
     ///
     /// 为什么「去掉磁盘占用字段」有机会救回来（**待真机验证的假设**）：
     /// `StaticDiskUsage` / `DynamicDiskUsage` 会让 installd 对**每个**已装应用走一遍
     /// bundle / 数据容器目录树（后者要遍历 GB 级数据容器），是这条命令最贵的部分；
-    /// 类型判定只需要 `iTunesMetadata` + 基础标识字段。真机跑一次看日志里的
+    /// 类型判定只需要 `iTunesMetadata` + 基础标识字段.真机跑一次看日志里的
     /// **实际执行 X.Xs** 是否从 20s+ 掉到可接受，即完成验证（日志见本函数内）.
     ///
-    /// v0.3.406：**只把 `StaticDiskUsage` 加回请求**（用户报「设备瘦身扫不到应用」——
-    /// 334 个应用一个都没拿到 `appSize`）。`DynamicDiskUsage` / `CFBundleSize` 仍不请求：
-    /// 前者是动态计算（遍历数据容器、随用量增长），最可能就是 25 秒的元凶。
+    /// **只把 `StaticDiskUsage` 加回请求**（用户报「设备瘦身扫不到应用」——
+    /// 334 个应用一个都没拿到 `appSize`）.`DynamicDiskUsage` / `CFBundleSize` 仍不请求：
+    /// 前者是动态计算（遍历数据容器、随用量增长），最可能就是 25 秒的元凶.
     /// 本函数打印的「请求字段」清单即真机判据 —— 加回后 `实际执行 Y.Ys` 若回到 2~3 秒量级
     /// ⇒ 卡的是 `DynamicDiskUsage`（应用大小 + 购买邮箱同时恢复）；若仍是 ~25 秒
     /// ⇒ 卡的是 Lookup/installd 本身、与字段无关，此时应把 `StaticDiskUsage` 再删掉
@@ -271,12 +271,12 @@ enum FileSharingService {
         return apps
     }
 
-    /// v0.3.401：带属性 Lookup **实际请求**的字段（日志用）。必须与 Rust
+    /// 带属性 Lookup **实际请求**的字段（日志用）.必须与 Rust
     /// `rust/idevice-ffi/src/installation_proxy.rs` 的 `attrs` 常量逐条一致——
     /// 改一处务必改另一处，否则日志会骗人.
-    /// v0.3.406：已加回 `StaticDiskUsage`（恢复应用大小）；`DynamicDiskUsage` /
+    /// 已加回 `StaticDiskUsage`（恢复应用大小）；`DynamicDiskUsage` /
     /// `CFBundleSize` 仍不在列表里（前者疑为 25 秒卡死的元凶）.
-    /// v0.3.600：**加回 `Container`**（数据容器路径）—— 修「设备瘦身-较大应用查询有问题」：
+    /// **加回 `Container`**（数据容器路径）—— 修「设备瘦身-较大应用查询有问题」：
     /// 它是 `DeviceSlimService` 文档大小通道的唯一入口（见 `FileSharingApp.containerPath`），
     /// 此前不在请求里 ⇒ `containerPath` 恒 nil ⇒ docSize 恒 0 ⇒ 文档重的应用漏判.
     /// `Container` 是静态字段（不遍历目录树），不会把 25 秒卡死引回来.
@@ -287,23 +287,23 @@ enum FileSharingService {
         "SignerIdentity",
     ]
 
-    /// v0.3.401：带属性 Lookup 的执行额度上限（秒）——主路径与可选增强
+    /// 带属性 Lookup 的执行额度上限（秒）——主路径与可选增强
     /// `lookupAppAttributes(timeout:)` 共用同一个值（它们现在共享同一条单飞命令，
     /// 增强通常会命中 12s 缓存而不另发命令）. 与 `lookupAppAttributes` 的默认参数
     /// （15）必须一致，否则日志里的「额度」与实际不符.
     private static let attributeLookupBudget: TimeInterval = 15
 
-    /// v0.3.378：**带属性 `Lookup`** —— `iTunesMetadata`（appleId / isGenuine）与
+    /// **带属性 `Lookup`** —— `iTunesMetadata`（appleId / isGenuine）与
     /// 大小字段的唯一来源（这些字段只有带 ReturnAttributes 的 Lookup 才返回）.
     ///
-    /// v0.3.401：**它已不是「可选增强」，而是主路径的同一条命令**——
+    /// **它已不是「可选增强」，而是主路径的同一条命令**——
     /// `listAppsWithFileSharing(timeout:)` 现在先走带属性 Lookup（主路径），
     /// 因此本函数在那一轮加载里通常**命中 12s 缓存**（单飞复用，不另发命令），
     /// 返回与主路径完全相同的列表；三处消费方（文档浏览 / 应用管理 / 设备瘦身）
     /// 的「第二版精修」因此变成幂等回填，保留它是为了兼容调用方签名与
     /// 「主路径未取到、稍后又自愈」的窗口.
-    /// v0.3.406：`StaticDiskUsage`（应用大小）已**加回请求** —— 这里能补回 `appSize`；
-    /// 仍补不回的是**文档大小**（`DynamicDiskUsage`，疑为 25 秒卡死的元凶，暂不请求）。
+    /// `StaticDiskUsage`（应用大小）已**加回请求** —— 这里能补回 `appSize`；
+    /// 仍补不回的是**文档大小**（`DynamicDiskUsage`，疑为 25 秒卡死的元凶，暂不请求）.
     /// 文档大小有 AFC 等价实现（`computeDocumentsSize`：house_arrest + AFC 递归求和），
     /// 但其调用点 `FileSharingAppsView.computeDocumentSizes()` **当前是死代码**，
     /// 要用得先接上；且它是「每个 App 一条隧道」的慢路径，全量 334 个跑不现实.
@@ -311,15 +311,15 @@ enum FileSharingService {
     ///
     /// 独立超时、失败或超时**返回空数组**（字段保持「—」）；调用方必须在首屏渲染
     /// 之后调用，且不得因它失败而回退/清空主列表.
-    /// **v0.3.379：额度由 8 秒提到 15 秒** —— 它是后台可选增强、不阻塞首屏，且
-    /// 单飞保证同一时刻只有一条在飞（不会因为放宽额度而多压设备）；而 v0.3.376
-    /// 之前**根本没有超时**，说明这条命令"最终会返回"才是常态。
+    /// **：额度由 8 秒提到 15 秒** —— 它是后台可选增强、不阻塞首屏，且
+    /// 单飞保证同一时刻只有一条在飞（不会因为放宽额度而多压设备）；而
+    /// 之前**根本没有超时**，说明这条命令"最终会返回"才是常态.
     ///
-    /// **v0.3.379：全部调用统一走 `AttributeLookupCenter`（进程内单飞 + 设备级串行）**.
+    /// **：全部调用统一走 `AttributeLookupCenter`（进程内单飞 + 设备级串行）**.
     /// 真机 16:29 日志（3 次并发发起全挂 20s）+ 代码实证（见 AttributeLookupCenter
     /// 注释）：这条命令本身与 `get_apps` 是**同一套线格式**，差别只在 ReturnAttributes
-    /// 让 installd 要对全部已装应用逐个算磁盘占用/读元数据——贵。三方（应用管理 /
-    /// 文档浏览 / 设备瘦身）各自发一条时，设备侧被同时压 3 份重活，每条都超时。
+    /// 让 installd 要对全部已装应用逐个算磁盘占用/读元数据——贵.三方（应用管理 /
+    /// 文档浏览 / 设备瘦身）各自发一条时，设备侧被同时压 3 份重活，每条都超时.
     /// 单飞后设备侧任何时刻最多 1 条，并发调用共享同一结果；`timeout` 只计
     /// **本条的实际执行**（跟随/缓存等待单独写日志，不占执行额度）.
     static func lookupAppAttributes(timeout: TimeInterval = 15) -> [FileSharingApp] {
@@ -347,11 +347,11 @@ enum FileSharingService {
         }
     }
 
-    /// v0.3.379：诊断只读计数——「此刻设备侧有几条带属性 Lookup 在飞」.
+    /// 诊断只读计数——「此刻设备侧有几条带属性 Lookup 在飞」.
     /// 单飞协调器保证只会是 0 或 1（三处消费方共用同一条）. 供日志/状态面板查询.
     static var attributeLookupInFlightCount: Int { AttributeLookupCenter.shared.inFlightCount }
 
-    /// v0.3.379：带属性 `Lookup` 的**进程内单飞 + 设备级串行**协调器.
+    /// 带属性 `Lookup` 的**进程内单飞 + 设备级串行**协调器.
     ///
     /// 为什么必须有它（实证，非推断）：
     ///   - `installation_proxy_lookup_apps`（rust/idevice-ffi/src/installation_proxy.rs:744）
@@ -362,8 +362,8 @@ enum FileSharingService {
     ///     对全部已装应用逐个算 `StaticDiskUsage`/`DynamicDiskUsage` 并读
     ///     `iTunesMetadata`/`Entitlements`（贵），而无属性的 `get_apps` 同会话 2.5s
     ///     就跑完 333 个应用；
-    ///   - 消费方是**三处**：`AppListView.swift:273`（v0.3.369 起）、
-    ///     `FileSharingAppsView.swift:453`、`DeviceSlimService.swift:320`（v0.3.376 起），
+    ///   - 消费方是**三处**：`AppListView.swift:273`、
+    ///     `FileSharingAppsView.swift:453`、`DeviceSlimService.swift:320`，
     ///     时间线上「卡死」正是并发数 2→3 那一版开始出现的——三方各自发一条贵命令，
     ///     设备侧同时被压 3 份重活，每条都超过 20s 额度.
     ///
@@ -378,15 +378,15 @@ enum FileSharingService {
     ///
     /// **真机对照判据（下次谁怀疑单飞没生效 / 怀疑卡死不只是并发，照这 4 条看日志）**：
     ///   1. 同一轮只应出现**一条**「… 实际发起（第 N 批；设备侧 Lookup 在飞 1 条…）」；
-    ///      若 15s（≈额度）内出现**第二条「实际发起」** → 单飞漏了，回来改这里。
+    ///      若 15s（≈额度）内出现**第二条「实际发起」** → 单飞漏了，回来改这里.
     ///   2. 该条收尾为「实际执行返回（成功 N 条，额度 15s）」且 `实际执行 < 15.0s`
-    ///      → 并发就是全部原因，大小/账号字段应恢复有值。
+    ///      → 并发就是全部原因，大小/账号字段应恢复有值.
     ///   3. 上一条的 **N ≈ 已装应用数**（如 333）：若 N 明显偏少（如 <300）→ 说明读取
     ///      提前截断，才需要回头查 Rust 读法（当前判定：读法是正确的，见
-    ///      installation_proxy.rs:771 的"别改成只认 Status"注释）。
+    ///      installation_proxy.rs:771 的"别改成只认 Status"注释）.
     ///   4. 该条收尾为「超时放弃 15s（FFI 仍在后台跑…）」→ 是**单条工作量 > 额度**，
     ///      不是并发问题；此时应看到随后的调用报「设备侧上一条 Lookup 仍未返回…
-    ///      为保持串行不重发」——若没看到而出现了新的「实际发起」，说明闸门漏了。
+    ///      为保持串行不重发」——若没看到而出现了新的「实际发起」，说明闸门漏了.
     private final class AttributeLookupCenter: @unchecked Sendable {
         static let shared = AttributeLookupCenter()
 
@@ -404,7 +404,7 @@ enum FileSharingService {
         /// 跟随者额外的等待余量（秒）：发起者的执行额度 + 它收尾的时间.
         private static let followerSlack: TimeInterval = 20
 
-        /// 一次批次。**引用类型**：发起者与跟随者必须共享同一实例才能看到 `outcome`
+        /// 一次批次.**引用类型**：发起者与跟随者必须共享同一实例才能看到 `outcome`
         /// 的写入（值类型会被各自拷贝，跟随者永远读到 nil）.
         private final class Flight {
             let generation: Int
@@ -588,7 +588,7 @@ enum FileSharingService {
         }
     }
 
-    /// v0.3.376：**带硬超时**的列表读取——止血点.
+    /// **带硬超时**的列表读取——止血点.
     ///
     /// 为什么必须有超时：整条链路从 Swift 到 Rust 没有任何一层设超时——
     ///   - Swift `FileSharingAppsView.load()` 的 `defer { loading = false }` 只在
@@ -597,16 +597,16 @@ enum FileSharingService {
     ///   - `TcpStream::connect`（tunnel_provider.rs:873）、`create_tcp_listener`
     ///     （:314）、`RemotePairingClient::connect`（:887）无超时；
     ///   - instproxy 响应读取 `read_raw`（installation_proxy.rs:774/779）无超时.
-    /// 只要设备/隧道不再应答，`listAppsWithFileSharing()` 就**永不返回**。
+    /// 只要设备/隧道不再应答，`listAppsWithFileSharing()` 就**永不返回**.
     ///
-    /// v0.3.378：超时**只计「实际执行」**时长，在闸门上的排队等待单独记账
+    /// 超时**只计「实际执行」**时长，在闸门上的排队等待单独记账
     /// （见 runGated 与 tunnelGate 注释）——否则一个调用可能把十几秒耗在排队上，
     /// 刚轮到就"已超时"，报出的「20s」名不副实.
     ///
     /// 超时返回 `.timedOut`（**不是**空数组），调用方据此给提示/降级，绝不无限等待.
     /// 被放弃的那次 FFI 调用仍在后台线程上跑（FFI 无法取消），只是不再阻塞调用方.
     ///
-    /// v0.3.401：本函数是**两个板块共用的唯一入口**，内部顺序为
+    /// 本函数是**两个板块共用的唯一入口**，内部顺序为
     /// 「带属性 Lookup（买邮箱）→ 失败/超时降级 get_apps」（见
     /// `listAppsWithAttributesWithFallback(timeout:)`）；`workTimeout` 是这条链路的
     /// **总额度**，带属性 Lookup 的额度在内部按它自适应 . 这里的 20s 排队额度不变.
@@ -679,37 +679,37 @@ enum FileSharingService {
         }
     }
 
-    /// v0.3.364：类型判定所需的输入快照（一次性拉取，供分批判定复用）.
+    /// 类型判定所需的输入快照（一次性拉取，供分批判定复用）.
     struct AppTypeContext {
         var entitlements: [String: [String: Any]] = [:]
         var provisionsAllDevices: [String: Bool] = [:]
         var currentAppleID: String?
-        /// v0.3.673：**失败留痕**. 旧实现把两条 profile 通道的读取失败
+        /// **失败留痕**. 旧实现把两条 profile 通道的读取失败
         /// `try? … ?? []` 折成「空上下文」，于是「读失败」与「设备上确实没有侧载应用」
         /// 在判定时完全等价 —— 所有应用被安静地判成「未识别」，界面不报任何错.
         /// 现在把每次失败的原文记在这里，调用方可提示，日志也可回溯.
         var issues: [String] = []
     }
 
-    /// v0.3.364：拉取类型判定数据（**唯一**会开 profile 隧道的入口，与 AppListView.loadAppTypes 同源）.
+    /// 拉取类型判定数据（**唯一**会开 profile 隧道的入口，与 AppListView.loadAppTypes 同源）.
     ///
     /// 字段来源：
     ///   - entitlements / application-identifier ← installation_proxy 的 Entitlements
     ///     （ProvisioningProfileStore.fetchSideloadedApps，仅有 profile 的侧载应用返回）
     ///   - ProvisionsAllDevices ← misagent 拉的 .mobileprovision 顶层字段
     ///     （企业判定唯一权威字段，Apple TN3125），按 application-identifier 与 profile 匹配
-    ///   - currentAppleID ← 当前登录的 App Store 账号（keychain 直读）。
-    ///     **v0.3.364 起仅作辅助信息**：正版/共享已改为比「App 自身购买邮箱 ∈
+    ///   - currentAppleID ← 当前登录的 App Store 账号（keychain 直读）.
+    ///     **起仅作辅助信息**：正版/共享已改为比「App 自身购买邮箱 ∈
     ///     爱思共享账号白名单」（见 AppTypeDetector），不再比本机登录账号.
     ///
     /// **两条隧道必须顺序串行**：tuple 从左到右求值，各自 createTunnel + defer 释放后
-    /// 才建下一条（并发握手会死锁闪退，v0.3.187 真机实证，见 AppListView 注释）.
+    /// 才建下一条（并发握手会死锁闪退，真机实证，见 AppListView 注释）.
     /// 同步阻塞——调用方放后台线程，且必须在首屏返回**之后**再调.
     static func fetchAppTypeContext() -> AppTypeContext {
         var context = AppTypeContext()
         LoginLogger.shared.log("[文件共享] 类型上下文开始（profile/misagent 两条隧道串行，无超时）")
         context.currentAppleID = MemoryLimitSettings.currentAppleIDDirect()
-        // v0.3.673：**不再把读失败折成空数组**. 两条通道各自 do/catch，
+        // **不再把读失败折成空数组**. 两条通道各自 do/catch，
         // 失败原文进 context.issues 并写日志；成功与「确实为空」从此可区分.
         var sideloaded: [ProvisioningProfileStore.SideloadedAppInfo] = []
         var allProfiles: [ProvisioningProfileStore.ProfileInfo] = []
@@ -755,7 +755,7 @@ enum FileSharingService {
         return context
     }
 
-    /// v0.3.364：对给定 App 子集判定 AppType（渐进式分批回填用；与 AppListView 同源判定）.
+    /// 对给定 App 子集判定 AppType（渐进式分批回填用；与 AppListView 同源判定）.
     /// 纯内存计算，不开隧道.
     static func detectTypes(for apps: [FileSharingApp], context: AppTypeContext) -> [String: AppType] {
         var resolved: [String: AppType] = [:]
@@ -773,18 +773,18 @@ enum FileSharingService {
         return resolved
     }
 
-    /// v0.3.284：**Lookup** + ReturnAttributes（此前用 Browse —— 大小字段只在
+    /// **Lookup** + ReturnAttributes（此前用 Browse —— 大小字段只在
     /// Lookup 的 ReturnAttributes 里返回，pymobiledevice3 同款：lookup +
-    /// GET_APPS_ADDITIONAL_INFO）。Rust 侧一次请求取全部字段并以 bplist 字节回传，
-    /// Swift 侧完全不碰 plist_t 指针（照抄 get_apps 的 void** 出参模式）。
+    /// GET_APPS_ADDITIONAL_INFO）.Rust 侧一次请求取全部字段并以 bplist 字节回传，
+    /// Swift 侧完全不碰 plist_t 指针（照抄 get_apps 的 void** 出参模式）.
     ///
-    /// **v0.3.378：曾降级为可选增强；v0.3.401 起重新是「类型判定主路径」**
+    /// **：曾降级为可选增强；起重新是「类型判定主路径」**
     /// （由 `listAppsWithAttributesWithFallback` 调用，额度自适应、失败由外层降级
-    /// 到 `get_apps`）。此函数是购买邮箱 / 应用大小的**唯一**来源；v0.3.401 起
-    /// ReturnAttributes 收紧、**v0.3.406 加回 `StaticDiskUsage`**（Rust 侧 `attrs` 常量），
+    /// 到 `get_apps`）.此函数是购买邮箱 / 应用大小的**唯一**来源；起
+    /// ReturnAttributes 收紧、**加回 `StaticDiskUsage`**（Rust 侧 `attrs` 常量），
     /// 所以它返回 `StaticDiskUsage` 而**不返回** `DynamicDiskUsage` / `CFBundleSize`
     /// （即：有 `appSize`、没有 `docSize`）.
-    /// v0.3.600：**加回 `Container`** —— 它因此也是 `containerPath` 的来源（设备瘦身
+    /// **加回 `Container`** —— 它因此也是 `containerPath` 的来源（设备瘦身
     /// 文档大小通道的入口），详见 `attributeRequestFields` 与 `FileSharingApp.containerPath`.
     private static func lookupAppsWithAttributes() throws -> [FileSharingApp] {
         var tunnel = try makeTunnel()
@@ -793,7 +793,7 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ip: OpaquePointer?
-        // v0.3.673：**错误对象必须释放**。旧写法「只判非 nil 就丢固定文案」，
+        // **错误对象必须释放**.旧写法「只判非 nil 就丢固定文案」，
         // 既丢掉真实原因（配对失效 / 端口不通 全变成「连接 instproxy 失败」），
         // 也把 FFI 返回的 IdeviceFfiError 直接丢弃 —— 每次失败泄漏一个.
         if let ffiError = installation_proxy_connect_rsd(adapter, handshake, &ip) {
@@ -838,7 +838,7 @@ enum FileSharingService {
         let appSize = (dict["StaticDiskUsage"] as? NSNumber)?.int64Value
             ?? (dict["CFBundleSize"] as? NSNumber)?.int64Value
         let docSize = (dict["DynamicDiskUsage"] as? NSNumber)?.int64Value
-        // v0.3.408：数据容器路径（`get_apps` 默认响应自带；带属性 Lookup 不含此键 → nil）
+        // 数据容器路径（`get_apps` 默认响应自带；带属性 Lookup 不含此键 → nil）
         let rawContainer = dict["Container"] as? String
         let containerPath = (rawContainer?.isEmpty == false) ? rawContainer : nil
         let itunesMeta = dict["iTunesMetadata"]
@@ -846,9 +846,9 @@ enum FileSharingService {
         var dsid = (dict["ApplicationDSID"] as? NSNumber).map { String($0.int64Value) }
         var purchaseDate: String?
 
-        // v0.3.291：iTunesMetadata 在 iOS 27 上以 **binary plist 字节(Data)** 返回
+        // iTunesMetadata 在 iOS 27 上以 **binary plist 字节(Data)** 返回
         // （真机实证：b'bplist00...'），此前按 [String:Any] 解析恒失败 → 所有 App
-        // 都落到兜底分支被打成「共享正版」。账号邮箱实际路径：
+        // 都落到兜底分支被打成「共享正版」.账号邮箱实际路径：
         //   com.apple.iTunesStore.downloadInfo.accountInfo.AppleID
         func absorbMetadata(_ meta: [String: Any]) {
             if appleId == nil {
@@ -891,8 +891,8 @@ enum FileSharingService {
         )
     }
 
-    /// `installation_proxy_get_apps`（**不带** ReturnAttributes）——v0.3.378~400 曾是主路径；
-    /// **v0.3.401 起是「小额度快路径 + 主路径降级」**（见
+    /// `installation_proxy_get_apps`（**不带** ReturnAttributes）——~400 曾是主路径；
+    /// **起是「小额度快路径 + 主路径降级」**（见
     /// `listAppsWithAttributesWithFallback`）：与 AppDiscovery/TunnelContext.getAllAppsInfo
     /// 同一条命令，真机 333 应用实测 2.5 秒级可用，但**不返回 `iTunesMetadata`**
     /// （购买邮箱 / 正版存在性因此缺失 → 类型判定显示「未识别」，不再误判）.
@@ -906,7 +906,7 @@ enum FileSharingService {
 
         // 1. instproxy connect
         var ip: OpaquePointer?
-        // v0.3.673：同上 —— 释放 FFI 错误对象并保留真实原因.
+        // 同上 —— 释放 FFI 错误对象并保留真实原因.
         if let ffiError = installation_proxy_connect_rsd(adapter, handshake, &ip) {
             throw error(from: ffiError, fallback: "连接 instproxy 失败")
         }
@@ -916,7 +916,7 @@ enum FileSharingService {
         // 2. get_apps（Lookup）—— 与 AppDiscovery / JITEnableService 同一范式
         var rawApps: UnsafeMutableRawPointer?
         var count = 0
-        // v0.3.673：**释放错误对象并保留 installd 原文**（旧写法丢弃指针 + 只报固定文案）.
+        // **释放错误对象并保留 installd 原文**（旧写法丢弃指针 + 只报固定文案）.
         if let ffiError = installation_proxy_get_apps(ip, nil, nil, 0, &rawApps, &count) {
             throw error(from: ffiError, fallback: "获取应用列表失败")
         }
@@ -932,7 +932,7 @@ enum FileSharingService {
         }
 
         var result: [FileSharingApp] = []
-        // v0.3.673：**读不出的条目要留痕**. 旧实现在 plist_to_bin 失败与
+        // **读不出的条目要留痕**. 旧实现在 plist_to_bin 失败与
         // PropertyListSerialization 失败两处直接 continue，返回的数组被上层
         // 当成「设备上就这么多应用」—— 部分和当全量，界面少几个应用却毫无线索.
         var skipped = 0
@@ -964,7 +964,7 @@ enum FileSharingService {
 
     /// house_arrest 会话的根是**数据容器**；载体 Documents 在其下（`/Documents`）.
     ///
-    /// v0.3.xxx 真机 iPhone 11 实证（`pymobiledevice3` house_arrest）：
+    /// iPhone 11 实证（`pymobiledevice3` house_arrest）：
     /// `VendDocuments` 会话里 `listdir("/")` 报 OBJECT_NOT_FOUND、`listdir("/Documents")` 正常；
     /// 写 `/pair.config`（容器根）⇒ AFC `FILE_OPEN` status 10、写 `/Documents/pair.config` ⇒ 成功.
     /// 与 `AppFileBrowserView` 的 `/Documents` 口径一致. 所有针对「载体 Documents」的路径都须带此前缀.
@@ -973,12 +973,12 @@ enum FileSharingService {
     /// 为指定 bundle id 建立 Documents 容器 AFC 会话（house_arrest vend_documents）.
     /// 返回 AFC handle（caller 负责 free）.失败 throw.
     ///
-    /// v0.3.xxx：**vend 失败必须在此拦下**. 底层 `idevice` crate 的
+    /// **vend 失败必须在此拦下**. 底层 `idevice` crate 的
     /// `HouseArrestClient::vend` 只 `read_plist` 拿应答、**不判 Status**
     /// （见其 `src/services/house_arrest.rs`），设备返回 `{Error: ...}` 时仍会返回一个
-    /// AFC 句柄 —— 失败因此被推迟到第一次 AFC 命令，表现为误导性的「创建文件失败」。
+    /// AFC 句柄 —— 失败因此被推迟到第一次 AFC 命令，表现为误导性的「创建文件失败」.
     /// 真机 iPhone 11 实证：载体 App 从未启动 ⇒ 无数据容器 ⇒ vend 被拒 ⇒ 写授权标记 /
-    /// pair.config 全报「创建文件失败」。这里在返回前列一次根目录，列得通才算真拿到沙盒.
+    /// pair.config 全报「创建文件失败」.这里在返回前列一次根目录，列得通才算真拿到沙盒.
     static func openAppDocuments(bundleId: String) throws -> OpaquePointer {
         var tunnel = try makeTunnel()
         defer { tunnel.free() }
@@ -986,7 +986,7 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ha: OpaquePointer?
-        // v0.3.673：**两处错误对象都要释放**. 旧写法 "`== nil, let ha`" 把
+        // **两处错误对象都要释放**. 旧写法 "`== nil, let ha`" 把
         // connect 的 IdeviceFfiError 丢掉；"`guard rc == nil`" 把 vend 的错误也丢掉，
         // 于是「未开启文档共享 / 载体 App 没启动 / 未配对」全变成同一句固定文案，
         // 且每失败一次泄漏一个错误对象.
@@ -1009,7 +1009,7 @@ enum FileSharingService {
         return try verifiedSession(afc: afc, bundleId: bundleId)
     }
 
-    /// vend 之后验活：列一次 Documents 目录，列不通即认为 vend 实际被拒（应答被底层丢弃）。
+    /// vend 之后验活：列一次 Documents 目录，列不通即认为 vend 实际被拒（应答被底层丢弃）.
     /// 失败时释放该 AFC 并抛出**能指明原因**的错误，绝不让调用方拿到一个用不了的句柄.
     ///
     /// 验活只需「列得通」：走 `AFCService.listNames`（一次 `afc_list_directory`，
@@ -1025,7 +1025,7 @@ enum FileSharingService {
         return afc
     }
 
-    /// v0.3.214：为指定 bundle id 建立**完整数据容器** AFC 会话（house_arrest vend_container）.
+    /// 为指定 bundle id 建立**完整数据容器** AFC 会话（house_arrest vend_container）.
     /// 返回 AFC handle（caller 负责 free）；失败 throw —— 表示该应用不允许整个容器访问
     /// （多数第三方 App 无权限，仅开发者/受信签名 App 可开；此时降级只读 Documents）.
     static func openAppContainer(bundleId: String) throws -> OpaquePointer {
@@ -1035,7 +1035,7 @@ enum FileSharingService {
             throw makeError("隧道未建立")
         }
         var ha: OpaquePointer?
-        // v0.3.673：同 openAppDocuments —— connect / vend 的错误对象都必须释放.
+        // 同 openAppDocuments —— connect / vend 的错误对象都必须释放.
         if let ffiError = house_arrest_client_connect_rsd(adapter, handshake, &ha) {
             throw error(from: ffiError, fallback: "连接 house_arrest 失败")
         }
@@ -1053,7 +1053,7 @@ enum FileSharingService {
         return try verifiedSession(afc: afc, bundleId: bundleId)
     }
 
-    /// v0.3.270：计算指定 App Documents 容器的总大小（字节）.
+    /// 计算指定 App Documents 容器的总大小（字节）.
     /// 每次新建 house_arrest 隧道 + AFC 递归遍历求和（Documents 树通常较小）.
     /// 调用方放后台线程、逐 App 串行（避免同时开多条隧道抢占）.
     /// 递归深度上限 treeMaxDepth：触顶时已展开部分照常返回，未展开的目录数记日志.
@@ -1085,10 +1085,10 @@ enum FileSharingService {
                 total += sub.bytes
                 limitSkipped += sub.limitSkipped
             } else {
-                // v0.3.666：**不把「量不到」当 0**.
+                // **不把「量不到」当 0**.
                 //
                 // 本函数是 `throws` 的，同一个循环里 `listDirectory` 失败会往外抛，
-                // 唯独这里是 `?? 0` —— 同一种失败两种待遇。结果是容器总大小静默少算，
+                // 唯独这里是 `?? 0` —— 同一种失败两种待遇.结果是容器总大小静默少算，
                 // 而调用方（「设备瘦身」的 docSize 通道）拿到的是一个看起来完整的数字.
                 // 拿不准就说拿不准：让失败照常抛出，由上层按「没量到」处理.
                 //
@@ -1104,7 +1104,7 @@ enum FileSharingService {
         return (total, limitSkipped)
     }
 
-    /// v0.3.270：字节 → MB 可读文本（保留 2 位小数，与爱思格式一致）.
+    /// 字节 → MB 可读文本（保留 2 位小数，与爱思格式一致）.
     static func formatMB(_ bytes: Int64?) -> String {
         guard let bytes else { return "—" }
         let mb = Double(bytes) / (1024 * 1024)
@@ -1112,7 +1112,7 @@ enum FileSharingService {
         return String(format: "%.2f MB", mb)
     }
 
-    // MARK: v0.3.214 文件操作（移植 FileBrowserView 能力：新建/重命名/删除）
+    // MARK: 文件操作（移植 FileBrowserView 能力：新建/重命名/删除）
 
     /// 新建目录
     static func makeDirectory(afc: OpaquePointer, path: String) throws {
@@ -1141,9 +1141,9 @@ enum FileSharingService {
     }
 
     /// 下载整个文件到内存（afc_file_read_entire 一次读，AFCService 同款范式）
-    /// v0.3.226：0 字节空文件合法（新建空文件可编辑）；>200MB 才拒
+    /// 0 字节空文件合法（新建空文件可编辑）；>200MB 才拒
     static func downloadFile(afc: OpaquePointer, path: String) throws -> Data {
-        // v0.3.673：**「量不到」不等于「超过 200MB」**. 旧写法把两者并进同一句
+        // **「量不到」不等于「超过 200MB」**. 旧写法把两者并进同一句
         // 文案，目录 / 权限受限 / 设备断连都会被说成「文件不存在或超过 200MB」，
         // 用户按这句去删文件、换文件都无效. 现在先分诊，再谈大小.
         guard let size = fileSize(afc: afc, path: path) else {
@@ -1166,10 +1166,10 @@ enum FileSharingService {
         return Data(bytes: dataPtr, count: length)
     }
 
-    /// v0.3.227：流式下载到本地文件（1MB 分块读+写盘，不占内存，任意大小）+ 字节进度
+    /// 流式下载到本地文件（1MB 分块读+写盘，不占内存，任意大小）+ 字节进度
     static func downloadFileStreaming(afc: OpaquePointer, path: String, to dest: URL,
                                       progress: @escaping (Int64, Int64) -> Void) throws {
-        // v0.3.673：**「大小未知」不再冒充 0**. 旧写法 fileSize 失败即 total = 0，
+        // **「大小未知」不再冒充 0**. 旧写法 fileSize 失败即 total = 0，
         // 调用方（AppFileBrowserView 的导出进度条）按 total 渲染，于是进度条恒为空、
         // 文本恒为「0 B/0 B」—— 用户以为卡住了. 现在未知就走 -1（界面显示「—」），
         // 只有真正拿到大小才报字节总数.
@@ -1178,7 +1178,7 @@ enum FileSharingService {
         let rc = path.withCString { afc_file_open(afc, $0, AfcRdOnly, &handle) }
         guard rc == nil, let handle else { throw error(from: rc, fallback: "打开文件失败：\(path)") }
         defer { afc_file_close(handle) }
-        // v0.3.673：**失败即清场**. 本函数先建本地文件再逐块写，任何一步抛错
+        // **失败即清场**. 本函数先建本地文件再逐块写，任何一步抛错
         // （建文件 / 读设备 / 写盘）旧写法都把半截文件留在目标目录里：
         // 分享路径落在 tmp（永不回收）、导出路径落在用户可见目录（半个文件冒充完整文件）.
         // 打开设备句柄之后的所有失败都走 cleanUp，成功路径不删.
@@ -1196,7 +1196,7 @@ enum FileSharingService {
             var dataPtr: UnsafeMutablePointer<UInt8>? = nil
             var readLen: Int = 0
             let r = afc_file_read(handle, &dataPtr, 1_048_576, &readLen)
-            // v0.3.673：先释放缓冲区再抛 —— 旧顺序（throw 在 free 之前）每失败一次
+            // 先释放缓冲区再抛 —— 旧顺序（throw 在 free 之前）每失败一次
             // 泄漏一个 1MB 的 FFI 缓冲区.
             if let dataPtr, readLen > 0 {
                 fh.write(Data(bytes: dataPtr, count: readLen))
@@ -1214,7 +1214,7 @@ enum FileSharingService {
     static func uploadFile(afc: OpaquePointer, data: Data, to path: String) throws {
         var handle: OpaquePointer?
         let rc = path.withCString { afc_file_open(afc, $0, AfcWrOnly, &handle) }
-        // v0.3.673：**释放错误对象并保留 AFC 原文**（旧写法丢指针 + 固定文案）.
+        // **释放错误对象并保留 AFC 原文**（旧写法丢指针 + 固定文案）.
         guard rc == nil else { throw error(from: rc, fallback: "创建文件失败：\(path)") }
         guard let handle else { throw makeError("创建文件失败（句柄为空）：\(path)") }
         defer { afc_file_close(handle) }
@@ -1233,14 +1233,14 @@ enum FileSharingService {
     }
 
     /// 列目录（AFC）.返回顶层条目名 + 是否目录.
-    /// v0.3.213：错误不再吞成空数组——抛给 UI 显示真实原因.
+    /// 错误不再吞成空数组——抛给 UI 显示真实原因.
     static func listDirectory(afc: OpaquePointer, path: String) throws -> [AfcEntry] {
         var entriesPtr: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
         var count: Int = 0
         let rc = path.withCString { cstr in
             afc_list_directory(afc, cstr, &entriesPtr, &count)
         }
-        // v0.3.673：**释放错误对象并保留 AFC 原文**. 旧写法把 IdeviceFfiError 丢掉、
+        // **释放错误对象并保留 AFC 原文**. 旧写法把 IdeviceFfiError 丢掉、
         // 只报一句固定文案 —— 权限不足 / 路径不存在 / 连接已断 全长得一样，
         // 且本函数是文档浏览的每次进目录必走路径，失败一次泄漏一个.
         guard rc == nil else {
@@ -1261,7 +1261,7 @@ enum FileSharingService {
             let name = String(cString: cstr)
             guard name != ".", name != ".." else { continue }
             let childPath = path.hasSuffix("/") ? path + name : path + "/" + name
-            // v0.3.288：一次 afc_get_file_info 同时取 类型/大小/修改时间
+            // 一次 afc_get_file_info 同时取 类型/大小/修改时间
             //（原先只判目录 + 大小从未取 → 列表恒 0 字节）
             var info = AfcFileInfo()
             let rc = childPath.withCString { afc_get_file_info(afc, $0, &info) }
@@ -1279,18 +1279,18 @@ enum FileSharingService {
                 }
                 afc_file_info_free(&info)
             } else {
-                // v0.3.661：**读不出就不再猜**。
+                // **读不出就不再猜**.
                 //
                 // 旧实现这里调一次 isDirectory() 重新 stat —— 同一个调用刚刚已经失败，
                 // 再发一次只会同样失败（白付一次 AFC round-trip，实测 ~7.5ms/条），
-                // 然后落回 isDir=false / size=0，把该条目**伪装成「0 字节普通文件」**。
-                // 目录被显示成文件、用户点进去打不开 —— 这正是「读不出被当成确定答案」。
+                // 然后落回 isDir=false / size=0，把该条目**伪装成「0 字节普通文件」**.
+                // 目录被显示成文件、用户点进去打不开 —— 这正是「读不出被当成确定答案」.
                 //
-                // 与 AFCService.swift:253-260 已经修掉的缺陷同形（那里改为如实抛错）。
+                // 与 AFCService.swift:253-260 已经修掉的缺陷同形（那里改为如实抛错）.
                 // 这里不整表抛错：AFC 的 stat 失败在受权限约束的条目上很常见，
-                // 整表抛错会让本来能看的目录直接空白（比降级更糟）。
+                // 整表抛错会让本来能看的目录直接空白（比降级更糟）.
                 // 折中：类型按「未知」处理，但**把失败原因记进日志并附在条目上**，
-                // 由 UI 显示为未知大小，而不是确定的 0 字节。
+                // 由 UI 显示为未知大小，而不是确定的 0 字节.
                 let message = DeviceErrorText.cleaned(rc?.pointee.message) ?? ""
                 let code = Int(rc?.pointee.code ?? 0)
                 if let rc { idevice_error_free(rc) }
@@ -1317,7 +1317,7 @@ enum FileSharingService {
         let rc = path.withCString { cstr in
             afc_get_file_info(afc, cstr, &info)
         }
-        // v0.3.673：**错误对象要释放**. 旧写法 `guard rc == nil else { return false }`
+        // **错误对象要释放**. 旧写法 `guard rc == nil else { return false }`
         // 直接把 IdeviceFfiError 丢掉，每探测一个读不出的路径泄漏一个.
         guard rc == nil else {
             if let rc { idevice_error_free(rc) }
@@ -1338,8 +1338,8 @@ enum FileSharingService {
             afc_get_file_info(afc, cstr, &info)
         }
         defer { afc_file_info_free(&info) }
-        // v0.3.666：**错误对象要释放**，否则每量一个读不出的文件就泄漏一个
-        // IdeviceFfiError。列表路径（`listDirectory`）已随条目取回 size，
+        // **错误对象要释放**，否则每量一个读不出的文件就泄漏一个
+        // IdeviceFfiError.列表路径（`listDirectory`）已随条目取回 size，
         // 不再逐条调本函数；它现在只服务「按路径单独量大小」的入口.
         guard rc == nil else {
             if let rc { idevice_error_free(rc) }
@@ -1362,7 +1362,7 @@ enum FileSharingService {
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents", isDirectory: true)
         return docs.appendingPathComponent("pairingFile.plist").path
     }
-    /// v0.3.378：建隧道入口——过**闸门**（`tunnelGate`），并把「排队等待」记下来
+    /// 建隧道入口——过**闸门**（`tunnelGate`），并把「排队等待」记下来
     /// （threadDictionary，供 runGated 把排队时长从执行时长里剥离）.
     ///
     /// 闸门保护的是**同 hostname 的 `tunnel_create_rppairing`**（项目铁律：
@@ -1372,7 +1372,7 @@ enum FileSharingService {
     /// `Lookup`，真正会长时间无响应的那部分）都在闸门之外执行，所以一次卡死的
     /// Lookup 不会按住闸门把别的入口一起拖死，它只占住自己那条隧道.
     static func makeTunnel() throws -> TunnelHandles {
-        // v0.3.760：所有回环操作统一卡点 —— 门放在闸门锁**外**，弹窗等待期间不占 tunnelGate.
+        // 所有回环操作统一卡点 —— 门放在闸门锁**外**，弹窗等待期间不占 tunnelGate.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "建立配对通路")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         let waitStarted = Date()
@@ -1391,7 +1391,7 @@ enum FileSharingService {
             throw makeError("无配对文件")
         }
         var pairingFile: OpaquePointer?
-        // v0.3.673：**释放错误对象并保留原文**（旧写法丢指针 + 固定文案）.
+        // **释放错误对象并保留原文**（旧写法丢指针 + 固定文案）.
         if let e = pairingPath().withCString({ rp_pairing_file_read($0, &pairingFile) }) {
             throw error(from: e, fallback: "读取配对文件失败")
         }
@@ -1404,11 +1404,11 @@ enum FileSharingService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.connectIP
-        // v0.3.640：必须校验 inet_pton 返回值（与 AFCService / IPAInstallService 对齐）。
+        // 必须校验 inet_pton 返回值（与 AFCService / IPAInstallService 对齐）.
         //
-        // 原实现 `let _ = ...` 丢弃返回值。`sockaddr_in()` 全 0 初始化，
+        // 原实现 `let _ = ...` 丢弃返回值.`sockaddr_in()` 全 0 初始化，
         // inet_pton 失败时不写入 sin_addr ⇒ 隧道去连 **0.0.0.0:49152**（必然失败），
-        // 而失败只报「建隧道失败（已重试 3 次）」，看不出是 IP 写错。
+        // 而失败只报「建隧道失败（已重试 3 次）」，看不出是 IP 写错.
         let parseResult = deviceIP.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
         guard parseResult == 1 else {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
@@ -1427,7 +1427,7 @@ enum FileSharingService {
                 }
             }
             if let e {
-                // v0.3.673：**错误对象必须释放，且原因必须留下**.
+                // **错误对象必须释放，且原因必须留下**.
                 // 旧写法 `if e != nil { lastError = makeError("建隧道失败") }` 既丢弃
                 // IdeviceFfiError（每次重试泄漏一个），又把真实原因（配对文件过期 /
                 // 端口不通 / 隧道未就绪）压成同一句话，重试 3 次后用户拿到的还是它.
@@ -1439,7 +1439,7 @@ enum FileSharingService {
             if let h = tunnel.handshake { rsd_handshake_free(h) }
             if let a = tunnel.adapter { adapter_free(a) }
         }
-        // v0.3.376：这条路径以前失败也不留痕，用户只能看到「一直读取中」.
+        // 这条路径以前失败也不留痕，用户只能看到「一直读取中」.
         LoginLogger.shared.log("[文件共享] 建隧道失败（已重试 3 次）：\(lastError?.localizedDescription ?? "未知")")
         TunnelDiagnostics.fail("文件共享隧道", error: lastError)
         throw lastError ?? makeError("建隧道失败")
@@ -1450,7 +1450,7 @@ struct AfcEntry: Identifiable {
     let name: String
     let path: String
     let isDirectory: Bool
-    /// v0.3.288：文件大小（字节）与修改时间——原先列表恒显示 0（sizes 字典从未填充）
+    /// 文件大小（字节）与修改时间——原先列表恒显示 0（sizes 字典从未填充）
     var size: Int64 = 0
     var modified: Date? = nil
     var id: String { path }

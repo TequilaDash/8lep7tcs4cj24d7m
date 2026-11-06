@@ -17,7 +17,6 @@ import Darwin
 #endif
 
 // Bridge to bad_query.c: consume a sandbox extension token issued by the
-// LiveContainer host (livecontainer branch) for the MobileGestalt cache.
 @_silgen_name("mg_consume_token") func mg_consume_token(_ token: UnsafePointer<CChar>) -> Int64
 
 // MARK: - BQError (ported from Jade / Wind0ws11Aero)
@@ -230,12 +229,12 @@ final class BQMobileGestaltModel {
             return true
         }
 
-        // v0.3.412：三条路由（system → App Group → internal daemon）**已整体搬进
-        // `BadQueryExploit.consumeExtensionWithFallback`**（路由顺序不变）。
+        // 三条路由（system → App Group → internal daemon）**已整体搬进
+        // `BadQueryExploit.consumeExtensionWithFallback`**（路由顺序不变）.
         //
         // 这里不再直接调 `bad_query` —— 于是「更多 → 漏洞利用」里取消勾选 bad_query 时，
-        // **这条链路会真的失效**。以前取消勾选只影响「列目录」，这里照样能拿到扩展，
-        // 所以用户看到的是"勾不勾选都一个样"（原话：还只是个 UI）。
+        // **这条链路会真的失效**.以前取消勾选只影响「列目录」，这里照样能拿到扩展，
+        // 所以用户看到的是"勾不勾选都一个样"（原话：还只是个 UI）.
         let grant = ExploitRegistry.enabled()
             .shuffled()
             .compactMap { $0.consumeExtensionWithFallback(
@@ -273,19 +272,16 @@ final class BQMobileGestaltModel {
         }
         gestaltPath = path
 
-        // Primary write path (iOS 26 / LiveContainer): issue the sandbox extension
         // and consume it IN THIS process. The host-issued-token handoff has proven
         // unreliable (the token never reaches the guest), so we do it where it can be
         // diagnosed from this process's own (capturable) log.
         issueAndConsumeSelfInProcess()
-        // Fallback: consume a token the LiveContainer host may have issued and passed
         // via ESC_MG_TOKEN (kept for compatibility; has never succeeded so far).
         if !hasExtension {
             consumeLiveContainerToken()
         }
 
         // Get sandbox extension for the container (unless MHA already gave us one).
-        // NOTE: grantExtension (bad_query) is best-effort ONLY. When LiveContainer grants a
         // real sandbox extension to this guest process (livecontainer branch patch), the direct
         // file read/write below succeeds even if bad_query returns -4. So we must NOT gate
         // load() on grantExtension failing.
@@ -300,7 +296,6 @@ final class BQMobileGestaltModel {
             appendLog("using MHA-activated class-13 lease; skipping bad_query grantExtension")
         }
 
-        // Probe whether the gestalt path is directly readable by this process. If LiveContainer
         // granted a sandbox extension for it, this is true and the load below succeeds.
         let directReadable = FileManager.default.isReadableFile(atPath: path)
         appendLog("direct-access probe: readable=\(directReadable) for \(path)")
@@ -370,11 +365,9 @@ final class BQMobileGestaltModel {
         }
     }
 
-    /// Consume the LiveContainer-issued MobileGestalt sandbox extension token in
     /// THIS process. The LiveProcess guest passes the raw token through the
     /// ESC_MG_TOKEN environment variable; consuming it here (not relying on the
     /// LiveProcess parent's consumed extension) is what makes in-place writes
-    /// succeed inside LiveContainer on iOS 26.
     private func consumeLiveContainerToken() {
         let env = ProcessInfo.processInfo.environment
         let keys = env.keys.sorted().joined(separator: ", ")
@@ -395,7 +388,6 @@ final class BQMobileGestaltModel {
     }
 
     /// Issue a raw sandbox extension for the MobileGestalt cache IN THIS process
-    /// and immediately consume it, so in-place writes succeed inside LiveContainer
     /// on iOS 26. This is the supported sandbox pattern (issue+consume in the same
     /// process) and replaces the unreliable host-issued-token handoff. Logs the exact
     /// result so the failure mode is capturable from this app's own (exportable) log.
@@ -485,7 +477,7 @@ final class BQMobileGestaltModel {
         }
     }
 
-    // MARK: - Backup library (v0.3.179，从 GestaltEdit 1.2.1 移植的备份/恢复分栏)
+    // MARK: - Backup library (从 GestaltEdit 1.2.1 移植的备份/恢复分栏)
 
     /// 备份目录：Documents/GestaltBackups（含 SavedGestalt.plist 与时间戳备份）
     var backupDirectory: URL {

@@ -1,10 +1,10 @@
 import Foundation
 
-/// v0.3.294：机型规格表（对齐爱思「设备详情」中的上市日期 / CPU / 屏幕等派生字段）
+/// 机型规格表（对齐爱思「设备详情」中的上市日期 / CPU / 屏幕等派生字段）
 ///
 /// 说明：这些项**设备本身不返回**（爱思也是查它自己的机型库），
 /// 故此处内置公开规格；屏幕分辨率/核心数/内存等仍优先取设备实时值
-/// （`UIScreen.main.nativeBounds` / `hw.ncpu` / `hw.memsize`）。
+/// （`UIScreen.main.nativeBounds` / `hw.ncpu` / `hw.memsize`）.
 struct DeviceSpec {
     var name: String            // 机型名
     var releaseDate: String     // 中国大陆发布日（爱思同口径）
@@ -73,8 +73,8 @@ enum DeviceCatalog {
         return machine
     }
 
-    /// ProductType → 监管型号（Axxxx）。设备不直接返回，用常见机型表兜底；
-    /// 查不到就不显示（不编造）。
+    /// ProductType → 监管型号（Axxxx）.设备不直接返回，用常见机型表兜底；
+    /// 查不到就不显示（不编造）.
     static let regulatoryModel: [String: String] = [
         "iPhone15,4": "A2846", "iPhone15,5": "A2847",
         "iPhone16,1": "A2848", "iPhone16,2": "A2849",
@@ -103,11 +103,11 @@ enum DeviceCatalog {
         return regions[code]
     }
 
-    /// v0.3.305：机身颜色代码（lockdown `DeviceColor`，设备侧只给数字）→ 中文名.
+    /// 机身颜色代码（lockdown `DeviceColor`，设备侧只给数字）→ 中文名.
     ///
-    /// 注意： **只收录有真机/爱思对照实证的映射**：iPhone15,4（`DeviceColor = 1`）爱思显示「黑色」。
+    /// 注意： **只收录有真机/爱思对照实证的映射**：iPhone15,4（`DeviceColor = 1`）爱思显示「黑色」.
     /// 其余代码（2/3/4…）没有实证，一律返回 nil 由 UI 显示原始代码，**不编造颜色表**
-    /// （爱思的颜色名来自它自己的服务端，本地资源里没有该表）。
+    /// （爱思的颜色名来自它自己的服务端，本地资源里没有该表）.
     static let deviceColors: [String: String] = [
         "1": "黑色",
     ]

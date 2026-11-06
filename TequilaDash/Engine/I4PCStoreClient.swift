@@ -1,8 +1,8 @@
 import Foundation
 
-/// v0.3.303：爱思助手 PC 端应用接口客户端（**完全免登录**）
+/// 爱思助手 PC 端应用接口客户端（**完全免登录**）
 ///
-/// 来源：`https://app4.i4.cn/pc_v9/`（爱思 PC V9 的 Vite SPA）里的实际调用，非推测。
+/// 来源：`https://app4.i4.cn/pc_v9/`（爱思 PC V9 的 Vite SPA）里的实际调用，非推测.
 /// 从它的 `index-4f71eb97.js` 取到的接口定义原文：
 /// ```js
 /// const ze = "https://app4.i4.cn"
@@ -22,11 +22,11 @@ import Foundation
 ///      isTs:0, rows, keyword, isHd: model=="iPad"?1:0 })
 /// ```
 /// 资源前缀（同文件原文）：图标 `https://d-image.i4.cn/image/`，
-/// 安装包 `https://d-app6.i4.cn/soft/`。
+/// 安装包 `https://d-app6.i4.cn/soft/`.
 ///
 /// **关键点**：这些接口**不需要登录、不需要签名**，直接 GET 即返回真实数据；
 /// 搜索结果里的 `isSignOK == "1"` 表示服务端存放的就是**已签名的 IPA**
-/// （实测 `d-app6.i4.cn/soft/<path>` 可下载，长度与接口 `sizeByte` 一致）。
+/// （实测 `d-app6.i4.cn/soft/<path>` 可下载，长度与接口 `sizeByte` 一致）.
 enum I4PCStoreClient {
 
     // MARK: - 常量
@@ -75,10 +75,10 @@ enum I4PCStoreClient {
         }
     }
 
-    /// v0.3.364：应用详情里的一个**历史版本**（来自 `appinfo.xhtml` 的 `historyversion`）。
+    /// 应用详情里的一个**历史版本**（来自 `appinfo.xhtml` 的 `historyversion`）.
     ///
     /// 字段名取自爱思 PC V9 商店详情页（`index-4f71eb97.js` 里 `appDetail` 组件）实测渲染：
-    /// `T.Version` / `T.releasetime` / `T.Size` / `T.versionnote`，下载用 `T.path`。
+    /// `T.Version` / `T.releasetime` / `T.Size` / `T.versionnote`，下载用 `T.path`.
     struct I4Version: Identifiable, Hashable {
         var id: String                 // versionid
         var version: String
@@ -97,7 +97,7 @@ enum I4PCStoreClient {
         }
     }
 
-    /// v0.3.364：应用详情（`appinfo.xhtml`）。
+    /// 应用详情（`appinfo.xhtml`）.
     struct I4AppDetail: Hashable {
         var appId: String
         var name: String
@@ -119,7 +119,7 @@ enum I4PCStoreClient {
         var ipaPath: String?
         var plistPath: String?
         var versions: [I4Version] = []
-        /// v0.3.368：App 隐私（`app_privacy.privacycards`），没有这块数据时为空数组
+        /// App 隐私（`app_privacy.privacycards`），没有这块数据时为空数组
         var privacyCards: [I4PrivacyCard] = []
 
         var ipaURL: URL? {
@@ -128,7 +128,7 @@ enum I4PCStoreClient {
         }
     }
 
-    /// v0.3.368：`app_privacy.privacycards[]` 里的一个**分组**（爱思原文 heading）。
+    /// `app_privacy.privacycards[]` 里的一个**分组**（爱思原文 heading）.
     ///
     /// 实测原文（微信）：
     /// ```json
@@ -136,7 +136,7 @@ enum I4PCStoreClient {
     ///  "items":[{"heading":"健康与健身","icon":""}, …]}
     /// ```
     /// **保真度边界**：这份数据比 App Store 的粗 —— 只有「分组 → 数据类别」两层，
-    /// 没有 `purposes` / `dataTypes` 那层，所以只映射存在的层，缺的不编。
+    /// 没有 `purposes` / `dataTypes` 那层，所以只映射存在的层，缺的不编.
     struct I4PrivacyCard: Hashable, Identifiable {
         var heading: String
         var items: [I4PrivacyItem]
@@ -144,8 +144,8 @@ enum I4PCStoreClient {
         var id: String { heading }
     }
 
-    /// v0.3.368：隐私分组里的一条**数据类别**（`items[]`）。
-    /// 实测 `icon` 恒为空串，所以它是「有则显示」的可选字段。
+    /// 隐私分组里的一条**数据类别**（`items[]`）.
+    /// 实测 `icon` 恒为空串，所以它是「有则显示」的可选字段.
     struct I4PrivacyItem: Hashable, Identifiable {
         var heading: String
         var icon: String?
@@ -153,17 +153,17 @@ enum I4PCStoreClient {
         var id: String { heading }
     }
 
-    /// v0.3.304：把服务端给的资源地址规范化成 **https**。
+    /// 把服务端给的资源地址规范化成 **https**.
     ///
     /// **这是真机实测踩到的坑**：列表接口返回的 `path` 是**明文 http**：
     /// `http://d.app6.i4.cn/soft/2026/09/10/23/6466733523/z…_796155.ipa`
     /// iOS 的 ATS 会直接拒绝该连接，用户看到的是
     /// 「The resource could not be loaded because the App Transport Security policy
-    /// requires the use of a secure connection.」——即"点安装没反应/失败"。
+    /// requires the use of a secure connection.」——即"点安装没反应/失败".
     ///
     /// 爱思自己的前端就是这么干的（`index-4f71eb97.js` 原文）：
     /// `path.replace("http://d.app6.i4.cn/soft", "https://d-app6.i4.cn/soft")`
-    /// 实测 https 侧可正常下载（206，长度与接口 `sizebyte` 一致）。
+    /// 实测 https 侧可正常下载（206，长度与接口 `sizebyte` 一致）.
     static func normalizeAssetURL(_ raw: String?) -> String? {
         guard var v = raw?.trimmingCharacters(in: .whitespaces), !v.isEmpty else { return nil }
         v = v.replacingOccurrences(of: "http://d.app6.i4.cn/soft",
@@ -207,7 +207,7 @@ enum I4PCStoreClient {
         case empty
         case notSigned
         case detailUnavailable
-        /// v0.3.366：搜索结果里没有 `itemId` 等于目标 Apple trackId 的应用（映射不到爱思 appid）
+        /// 搜索结果里没有 `itemId` 等于目标 Apple trackId 的应用（映射不到爱思 appid）
         case appNotMatched
 
         var errorDescription: String? {
@@ -247,7 +247,7 @@ enum I4PCStoreClient {
         (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// v0.3.364：表单 POST（`appinfo.xhtml` 是 POST + `application/x-www-form-urlencoded`）
+    /// 表单 POST（`appinfo.xhtml` 是 POST + `application/x-www-form-urlencoded`）
     private static func post(_ url: URL, form: [String: String]) async throws -> Data {
         var comps = URLComponents()
         comps.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -297,7 +297,7 @@ enum I4PCStoreClient {
 
     // MARK: - 搜索
 
-    /// 关键词搜索（免登录）。返回项带 `ipaPath` / `plistPath`。
+    /// 关键词搜索（免登录）.返回项带 `ipaPath` / `plistPath`.
     static func search(keyword: String, page: Int = 1, rows: Int = 20, iPad: Bool = false) async throws -> [I4App] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { return [] }
@@ -335,7 +335,7 @@ enum I4PCStoreClient {
 
     // MARK: - 详情 + 历史版本
 
-    /// v0.3.364：应用详情（免登录）。
+    /// 应用详情（免登录）.
     ///
     /// 来源为爱思 PC V9 商店详情页（`app4.i4.cn/pc_v9` 的 `appDetail` 组件）实测调用：
     /// ```js
@@ -344,7 +344,7 @@ enum I4PCStoreClient {
     /// ```
     /// 实测（2026-09）返回体含 `AppName` / `Version` / `Size` / `Company` / `UpdateTime` /
     /// `TypeName` / `Language` / `MinVersion` / `LongNote` / `NewVersionNote` / `Image[]`（截图）/
-    /// `app_privacy`（App 隐私，v0.3.368），以及 **`historyversion[]`（历史版本）**。`pkagetype` 可省略。
+    /// `app_privacy`（App 隐私，），以及 **`historyversion[]`（历史版本）**.`pkagetype` 可省略.
     static func detail(appId: String,
                        pkagetype: String? = nil,
                        iPad: Bool = false) async throws -> I4AppDetail {
@@ -359,21 +359,21 @@ enum I4PCStoreClient {
 
     // MARK: - Apple trackId → 爱思 appid → 历史版本
 
-    /// v0.3.366：按 **Apple trackId** 取爱思侧的历史版本（用于 `volumeStoreDownloadProduct`
-    /// 静默空包时的 `externalVersionId` 候选；见 `AppStoreLocalInstallService.candidateVersionIDs`）。
+    /// 按 **Apple trackId** 取爱思侧的历史版本（用于 `volumeStoreDownloadProduct`
+    /// 静默空包时的 `externalVersionId` 候选；见 `AppStoreLocalInstallService.candidateVersionIDs`）.
     ///
     /// 两步映射（第一步是实测踩到的坑）：
     /// 1. **映射到爱思 appid**：搜索接口**不接受纯数字的 trackId 当关键词**（实测多个真实 trackId
     ///    全部返回 0 条），所以只能**按应用名搜**，再在结果里挑 `itemId == trackId` 的那条，
     ///    取其 `id`（例：搜「微信」得 `id=165776`，同一项的 `itemId` 就是微信的 App Store trackId）
-    ///    —— `id` 与 `itemId` 是**两个不同字段**，别拿错。
-    /// 2. `POST appinfo.xhtml` 取 `historyversion[]`，字段见 `I4Version`。
+    ///    —— `id` 与 `itemId` 是**两个不同字段**，别拿错.
+    /// 2. `POST appinfo.xhtml` 取 `historyversion[]`，字段见 `I4Version`.
     ///
-    /// **请求上界：1 次搜索 + 1 次详情**（映射失败即止，不再多打）。映射不到抛 `appNotMatched`，
-    /// 调用方按「爱思源不可用」降级。返回顺序与接口一致，**排序/裁剪由调用方统一负责**。
+    /// **请求上界：1 次搜索 + 1 次详情**（映射失败即止，不再多打）.映射不到抛 `appNotMatched`，
+    /// 调用方按「爱思源不可用」降级.返回顺序与接口一致，**排序/裁剪由调用方统一负责**.
     ///
     /// 另注意：爱思的 `historyversion` 是**缓存快照**，实测**不含当前最新版**
-    ///（历史里的 `versionid` 最高值明显小于详情里当前版本的 `versionid`）—— 只适合当兜底来源。
+    ///（历史里的 `versionid` 最高值明显小于详情里当前版本的 `versionid`）—— 只适合当兜底来源.
     static func historyVersions(trackId: String, name: String,
                                 iPad: Bool = false) async throws -> [I4Version] {
         let tid = trackId.trimmingCharacters(in: .whitespaces)
@@ -414,9 +414,9 @@ enum I4PCStoreClient {
         return detail
     }
 
-    /// v0.3.368：解析 `app_privacy.privacycards[]`（App 隐私）。
+    /// 解析 `app_privacy.privacycards[]`（App 隐私）.
     /// 两种「没有」都要落成空数组：整个 `app_privacy` 缺失（实测豆包/汽水音乐），
-    /// 或某个分组没有 `items`（空分组不显示）。
+    /// 或某个分组没有 `items`（空分组不显示）.
     private static func parsePrivacy(_ d: [String: Any]) -> [I4PrivacyCard] {
         guard let privacy = d["app_privacy"] as? [String: Any] else { return [] }
         let cards = privacy["privacycards"] as? [[String: Any]] ?? []
@@ -447,7 +447,7 @@ enum I4PCStoreClient {
     }
 
     /// 详情里的 `LongNote` / `NewVersionNote` 带 HTML 标签，两端客户端都先去标签再展示
-    ///（RN bundle：`n.LongNote.replace(/<\/?[^>]*>/g,'')`）。
+    ///（RN bundle：`n.LongNote.replace(/<\/?[^>]*>/g,'')`）.
     private static func stripHTML(_ s: String?) -> String? {
         guard let s, !s.isEmpty else { return nil }
         let clean = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)

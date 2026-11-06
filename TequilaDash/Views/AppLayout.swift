@@ -5,30 +5,30 @@ import UIKit
 ///
 /// ## 为什么单独成层
 /// 既有设计语言（`DesignSystem.swift`）只有**一种**列表语言：全宽行 + 发丝分隔
-/// （`AppSettingsRow` / `AppHairline`）。设置类页面用它没问题，但**功能入口 / 内容流 / 详情页**
-/// 全用它就会「一屏全是横条」，观感单调。本文件补上**另外四种布局模式**与一套动效系统，
+/// （`AppSettingsRow` / `AppHairline`）.设置类页面用它没问题，但**功能入口 / 内容流 / 详情页**
+/// 全用它就会「一屏全是横条」，观感单调.本文件补上**另外四种布局模式**与一套动效系统，
 /// 让不同语义的内容用不同骨架承载 —— 这是「布局要好看」的落点，也是「不是纯照抄巨魔录音机」
-/// 的地方：TRApp 几乎只有分组全宽行，本仓在此之上扩展出自己的网格 / 横滑 / hero 语言。
+/// 的地方：TRApp 几乎只有分组全宽行，本仓在此之上扩展出自己的网格 / 横滑 / hero 语言.
 ///
 /// ## 五种布局模式（什么时候用）
 /// - **A 分组全宽行**（既有 `AppSettingsRow`；功能入口用本文件 `AppNavRow`）：设置项、开关、说明性列表 ——
-///   每行一个「词条」，需要副标题 + 右箭头时。
+///   每行一个「词条」，需要副标题 + 右箭头时.
 /// - **B 卡片网格**（本文件 `AppCardGrid` + `AppGridTile`）：**平级的多个功能入口**（设备工具 6 项等）——
-///   没有主次之分、彼此并列，用 2 列网格比 6 条横条更省纵向空间、更像「工具箱」。
+///   没有主次之分、彼此并列，用 2 列网格比 6 条横条更省纵向空间、更像「工具箱」.
 /// - **C 横向滚动卡**（本文件 `AppHScrollSection`）：**推荐 / 最近使用 / 精选** —— 数量不定、只需扫一眼、
-///   点进去才展开的次要内容，横滑不占用主纵向流。
+///   点进去才展开的次要内容，横滑不占用主纵向流.
 /// - **D Hero + 内容**（本文件 `AppHeroHeader`）：**详情页首屏** —— 先给「这是什么」（品牌图标块 + 标题 +
-///   关键 stat），再往下才是明细卡片。
+///   关键 stat），再往下才是明细卡片.
 /// - **E 自适应网格**（本文件 `AppAdaptiveGrid`）：**图片 / 图标 / 尺寸不定的条目流** —— 列宽由最小宽度
-///   自动决定列数，横竖屏 / 不同机型都能铺满。
+///   自动决定列数，横竖屏 / 不同机型都能铺满.
 ///
 /// ## 硬规则对齐（不破坏既有语言）
 /// - 卡片一律 `secondarySystemGroupedBackground` + 连续圆角（走既有 `.appCard()`）；
 ///   唯一的例外是 `AppGridTile(tinted: true)` 的模块色档（`AppTheme.surfaceCard` 上叠 14%→3% 渐变，
-///   见 `DesignSystem.swift` `AppSurface` 注释「自定义卡片底应在 token 之上叠加」）。
-/// - 深色品牌色只出现在**紧凑连续圆角图标块** `AppBrandTile` 里（硬规则 1 / 7），不做全宽深色 banner。
-/// - 按钮沿用 `TintedButtonStyle`（半透明着色 + 发丝描边），不用纯蓝实底。
-/// - 颜色一律走 `AppTheme` 语义 token，不写死 RGB。
+///   见 `DesignSystem.swift` `AppSurface` 注释「自定义卡片底应在 token 之上叠加」）.
+/// - 深色品牌色只出现在**紧凑连续圆角图标块** `AppBrandTile` 里（硬规则 1 / 7），不做全宽深色 banner.
+/// - 按钮沿用 `TintedButtonStyle`（半透明着色 + 发丝描边），不用纯蓝实底.
+/// - 颜色一律走 `AppTheme` 语义 token，不写死 RGB.
 ///
 /// ⚠️ 本文件**只新增**组件与扩展，不改 `DesignSystem.swift` 任何既有符号；`AppHaptics` 用
 /// `extension` 补方法（不改原类型定义），既有调用点不受影响.
@@ -56,8 +56,8 @@ enum AppMotion {
     /// 阶梯延迟的**项数上限**：超过它的项不再继续累加延迟.
     ///
     /// ⚠️ 为什么必须有上限（用户报「更多-拉起应用 上滑下滑都要反应一会」的根因之一）：
-    /// 入场延迟按**绝对序号**累加，而懒加载容器是**滚入视野才创建单元格**。长列表（应用列表
-    /// 可达上百项）滚到第 150 项时，延迟已是 `150 × 0.045 = 6.75s` —— 格子空白数秒才淡入。
+    /// 入场延迟按**绝对序号**累加，而懒加载容器是**滚入视野才创建单元格**.长列表（应用列表
+    /// 可达上百项）滚到第 150 项时，延迟已是 `150 × 0.045 = 6.75s` —— 格子空白数秒才淡入.
     /// 封顶后最大延迟恒为 `staggerLimit × step`（默认 12 × 45ms ≈ 0.54s），与列表长度无关.
     static let staggerLimit = 12
 
@@ -78,9 +78,9 @@ enum AppMotion {
 ///
 /// ⚠️ 阶梯入场**只作用于首屏窗口内**的前 `staggerWindow` 项；窗口外的项**立即可见**.
 /// 原因：本修饰符会用在 `AppAdaptiveGrid` / `AppCardGrid` 这类**懒加载**容器的单元格上 ——
-/// 单元格是**滚入视野才创建**，而 `index` 是**绝对序号**。若对每个单元格都按 `index × 步长`
+/// 单元格是**滚入视野才创建**，而 `index` 是**绝对序号**.若对每个单元格都按 `index × 步长`
 /// 延迟入场，长列表（应用列表可达上百项）滚到第 150 项时该格要等 ~6.75s 才淡入，表现就是
-/// 「上滑下滑反应一会」（用户 2026-10-12 报「更多-拉起应用」）。故窗口外零延迟.
+/// 「上滑下滑反应一会」（用户 2026-10-12 报「更多-拉起应用」）.故窗口外零延迟.
 struct AppAppear: ViewModifier {
     var index: Int = 0
     var offset: CGFloat = 14
@@ -172,7 +172,7 @@ extension AppHaptics {
 ///
 /// 泛型 `Trailing` 让调用方挂右侧动作（如「全部」按钮）；不传时用 `EmptyView` 重载.
 ///
-/// `tint`：竖条与符号的取色，**默认品牌蓝 `AppTheme.accent`**（既有调用点行为不变）。主页各分组
+/// `tint`：竖条与符号的取色，**默认品牌蓝 `AppTheme.accent`**（既有调用点行为不变）.主页各分组
 /// 传入**该分组自己的模块色**（`AppModule.xxx.tint`），让分段标题与组内内容**同色** —— 这是
 /// 「全面改造」的抓手：改前所有分组头都是蓝竖条，而组内图标底五颜六色，标题与内容脱节.
 struct AppSectionHeader<Trailing: View>: View {
@@ -237,7 +237,7 @@ extension AppSectionHeader where Trailing == EmptyView {
 ///
 /// 由 `HomeView` 的 `HomeRowLabel` 与 `MoreView` 的 `MoreRowLabel` 合并而来 —— 两者原先逐行相同，
 /// 差异只有两处：副标题换行策略（主页 `.lineLimit(1)` 截断 / 更多页完整换行）与图标取色
-/// （主页传模块色 / 更多页写死品牌蓝）。合并后统一取**完整换行**（长介绍不再显示成省略号），
+/// （主页传模块色 / 更多页写死品牌蓝）.合并后统一取**完整换行**（长介绍不再显示成省略号），
 /// 取色走 `tint` 参数，更多页不传即沿用品牌蓝 `AppTheme.accent`.
 ///
 /// 调用方一律把它当作 `NavigationLink` 的 label，外层配 `.buttonStyle(.plain)` 保留整行点击.
@@ -281,7 +281,7 @@ struct AppNavRow: View {
 
 /// 卡片网格（布局 B）：`columns` 列等宽网格，逐项带阶梯入场动画.
 ///
-/// 适用：**平级的多个功能入口**（无主次、彼此并列）。比一列全宽行更紧凑，观感更像「工具箱」.
+/// 适用：**平级的多个功能入口**（无主次、彼此并列）.比一列全宽行更紧凑，观感更像「工具箱」.
 /// 内容由调用方给（通常是 `AppGridTile`，也可包 `NavigationLink`）.
 struct AppCardGrid<Item: Identifiable, Content: View>: View {
     private let items: [Item]
@@ -316,10 +316,10 @@ struct AppCardGrid<Item: Identifiable, Content: View>: View {
 /// 网格卡片（布局 B 的单元）：连续圆角图标底 + 标题 + 可选副标题（最多 2 行）+ 可选右箭头.
 ///
 /// 与全宽行（`AppSettingsRow`）的区别：**纵向堆叠**（图标在上、文字在下），2 列并排时读起来是
-/// 「格子」而非「列表条」。等宽等高由网格行高对齐（`maxHeight: .infinity`）.
+/// 「格子」而非「列表条」.等宽等高由网格行高对齐（`maxHeight: .infinity`）.
 ///
 /// `tinted`：默认 `false` = 白卡（`.appCard`，与其余网格卡一致）；为 `true` 时整格带**模块色**
-/// —— `surfaceCard` 底 + `tint` 14% → 3% 斜向渐变 + 0.5pt 模块色描边。这是主页 Bento 网格
+/// —— `surfaceCard` 底 + `tint` 14% → 3% 斜向渐变 + 0.5pt 模块色描边.这是主页 Bento 网格
 /// 「彩色中心」那一档，原先由 `HomeView` 的私有 `HomeToolTile` 手拼，合并成同一组件的参数后
 /// 网格卡的取色 / 圆角 / 描边只有一份实现.
 struct AppGridTile: View {
@@ -394,7 +394,7 @@ struct AppGridTile: View {
 
 /// 横向滚动分区（布局 C）：分段标题 + 横向 `LazyHStack` 卡片.
 ///
-/// 适用：**推荐 / 最近使用 / 精选** —— 数量不定、只需扫一眼的次要内容。不占用主纵向流.
+/// 适用：**推荐 / 最近使用 / 精选** —— 数量不定、只需扫一眼的次要内容.不占用主纵向流.
 /// `cardWidth` 控制每张卡宽度（默认 168）；卡片内容由调用方给.
 /// 横向内边距不在此处添加，由外层容器统一控制，避免与页面 `pageInset` 叠加.
 struct AppHScrollSection<Item: Identifiable, Content: View>: View {
@@ -451,7 +451,7 @@ struct AppStat: Identifiable {
 /// Hero 页头（布局 D）：**品牌图标块 + 标题 + 副标题 + 可选关键 stat 行**.
 ///
 /// 适用：**详情页首屏** —— 先交代「这是什么」（紧凑深色品牌块 + 标题），再给一排关键数值，
-/// 下方接明细卡片。深色品牌色只出现在 `AppBrandTile` 这个小圆角块里，**不做全宽深色 banner**
+/// 下方接明细卡片.深色品牌色只出现在 `AppBrandTile` 这个小圆角块里，**不做全宽深色 banner**
 /// （硬规则 1 / 7）.
 struct AppHeroHeader: View {
     let title: String

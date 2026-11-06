@@ -1,17 +1,17 @@
 import Foundation
 
-/// WiFi 射频控制桥（v0.3.105）—— RSD 隧道 MCInstall `SetWiFiPowerState`
+/// WiFi 射频控制桥—— RSD 隧道 MCInstall `SetWiFiPowerState`
 /// （pymobiledevice3 `profile set-wifi-power` 同款）.
 ///
 /// 分工：
 /// - Swift：rp_pairing 隧道建立（配对文件 + LocalDevVPN IP），建好后把
 ///   adapter/handshake **所有权移交**给 Rust（`lua_host_set_mcinstall_handles`）
 /// - Rust：services 查 MCInstall.shim.remote 端口 → adapter.connect（隧道内转发，
-///   裸 TCP 会被拒——v0.3.104 实测 Connection refused）→ XML plist 帧
+///   裸 TCP 会被拒——实测 Connection refused）→ XML plist 帧
 ///   （RSDCheckin 三步握手 + SetWiFiPowerState）
 /// `@unchecked Sendable`：唯一可变状态 `handlerRegistered` 的读写
 /// （`ensureRegistered`）都在 `lock`（`NSLock`）保护下；`prepareTunnelAndHandover`
-/// 用的是方法内局部 FFI 句柄。复用类内已有的锁，跨隔离域共享引用安全。
+/// 用的是方法内局部 FFI 句柄.复用类内已有的锁，跨隔离域共享引用安全.
 final class WiFiPowerBridge: @unchecked Sendable {
     static let shared = WiFiPowerBridge()
     private init() {}

@@ -85,7 +85,7 @@ final class SpoofSession: ObservableObject {
     @Published var travelMode: TravelMode = .walk
     @Published var mapStyleIndex: Int = 0
     @Published var lastError: String?
-    /// v0.3.251：最近一次清除后是否成功 SIGKILL 了 locationd（nil = 未执行过清除）
+    /// 最近一次清除后是否成功 SIGKILL 了 locationd（nil = 未执行过清除）
     @Published var locationdKilled: Bool?
     @Published var isBusy = false
     @Published var joystickActive = false
@@ -159,7 +159,7 @@ final class SpoofSession: ObservableObject {
         routeLoopEnabled = UserDefaults.standard.bool(forKey: "escape.routeLoopEnabled")
         locationGuard = UserDefaults.standard.bool(forKey: "escape.locationGuard")
         // 引擎不熄火（硬规则 31）：隧道就绪翻转是「油门」——挂着待发的坐标立即重发，
-        // 不做任何定时重试。VPN 中途开启的场景（先放图钉后开 VPN）在这里自动接上.
+        // 不做任何定时重试.VPN 中途开启的场景（先放图钉后开 VPN）在这里自动接上.
         readinessCancellable = TunnelReadiness.shared.$isReady
             .receive(on: DispatchQueue.main)
             .sink { [weak self] ready in
@@ -170,7 +170,7 @@ final class SpoofSession: ObservableObject {
                     self.apply(pending, markRecent: false)
                 }
             }
-        // 回前台立刻重发一次（守护 ON 且正在模拟时生效）。挂在单例上而不是某个页面，
+        // 回前台立刻重发一次（守护 ON 且正在模拟时生效）.挂在单例上而不是某个页面，
         // 这样离开虚拟定位页、退后台再回来同样会被守护覆盖.
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
@@ -203,7 +203,7 @@ final class SpoofSession: ObservableObject {
         apply(coordinate, markRecent: true)
     }
 
-    /// 蓝牙链路下发的坐标入口（v0.3.540）.
+    /// 蓝牙链路下发的坐标入口.
     ///
     /// 与 `teleport` 的差别只有**错误文案**：链路场景下用户是在 B 机上等着看结果，
     /// 一句「请先在设置里导入配对文件」比 `teleport` 的通用提示更直接
@@ -246,7 +246,7 @@ final class SpoofSession: ObservableObject {
             endBackground()
             // 设置页保活开关未开时，任务结束即停止保活.
             KeepAliveManager.shared.stop()
-            // v0.3.254：走 RSD 隧道 SIGKILL 设备侧 locationd（App 无越狱，本地 kill 无效）.
+            // 走 RSD 隧道 SIGKILL 设备侧 locationd（App 无越狱，本地 kill 无效）.
             locationdKilled = LocationEngine.killLocationd()
             // 继续轻量定位，让地图定位点回到真实 GPS.
             locationKeeper.start()
@@ -257,7 +257,7 @@ final class SpoofSession: ObservableObject {
         }
     }
 
-    /// v0.3.254：清除流程结束后的状态收敛（**主线程调用**）.
+    /// 清除流程结束后的状态收敛（**主线程调用**）.
     /// success = clear 成功且设备侧 locationd 已被 SIGKILL.
     func applyCleared(success: Bool) {
         isBusy = false
@@ -499,7 +499,7 @@ final class SpoofSession: ObservableObject {
             status = .connecting
         }
         isBusy = true
-        // 硬规则 31：主线程绝不等待隧道。LocationEngine.set（内部 queue.sync）全留在后台线程，
+        // 硬规则 31：主线程绝不等待隧道.LocationEngine.set（内部 queue.sync）全留在后台线程，
         // 完成后回 MainActor 落地状态；隧道未就绪的失败留在 pendingCoordinate，就绪翻转自动重发.
         pendingCoordinate = coordinate
         let systemCoordinate = ChinaCoordinateTransform.mapCoordinateToSystemCoordinate(coordinate)
@@ -590,12 +590,12 @@ final class SpoofSession: ObservableObject {
 
     /// 健康检查（OFF 档 12s / 增强守护档 5s）：掉线自动重连.
     /// 守护 ON 时，检出会话被回收即**立刻**重建，不等下一个重发周期.
-    /// v0.3.422：健康检查的**连续失败退避**状态。
+    /// 健康检查的**连续失败退避**状态.
     ///
     /// 为什么需要（真机事故 2026-09-18）：隧道建不起来时（设备端 `remotepairingd` 不响应），
-    /// 原来的实现会**每 5 秒死循环重连** —— 实测连续 **63 次、持续 7 分钟**、每次都超时。
+    /// 原来的实现会**每 5 秒死循环重连** —— 实测连续 **63 次、持续 7 分钟**、每次都超时.
     /// 这既毫无意义（对方没恢复就永远失败），又会**持续占用设备端**，
-    /// 让排在后面的其它依赖配对文件的功能（空间回收 / AFC / 设备控制…）一起被拖住。
+    /// 让排在后面的其它依赖配对文件的功能（空间回收 / AFC / 设备控制…）一起被拖住.
     private var healthFailureStreak = 0
     private var lastHealthRetryAt: Date?
 
@@ -621,8 +621,8 @@ final class SpoofSession: ObservableObject {
                     return
                 }
 
-                // ▸ 退避窗口：连续失败时把重试间隔指数放大（5s→10s→20s→40s→60s 封顶）。
-                // 目的：对方不响应时**不再每 5 秒硬撞**，给设备端与其它功能让路。
+                // ▸ 退避窗口：连续失败时把重试间隔指数放大（5s→10s→20s→40s→60s 封顶）.
+                // 目的：对方不响应时**不再每 5 秒硬撞**，给设备端与其它功能让路.
                 if let last = self.lastHealthRetryAt {
                     let backoff = min(60, self.healthInterval * pow(2, Double(min(self.healthFailureStreak, 4))))
                     if Date().timeIntervalSince(last) < backoff { return }

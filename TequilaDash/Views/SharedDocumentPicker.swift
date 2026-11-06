@@ -4,7 +4,6 @@ import UIKit
 
 /// Unified document picker used across TequilaDash.
 ///
-/// SwiftUI's `.fileImporter` returns a security-scoped URL that the LiveContainer
 /// guest sandbox often refuses to access (`startAccessingSecurityScopedResource()`
 /// fails unless the host's "fix file picker" hook is enabled). This single call
 /// point uses `UIDocumentPickerViewController` with `asCopy: true`, which copies
@@ -12,16 +11,15 @@ import UIKit
 /// works regardless of the LC file-picker patches.
 ///
 /// Every file-import in the app should route through here — there is exactly one
-/// code path, so the LiveContainer import bug is fixed in one place.
 enum SharedDocumentPicker {
 
     /// Present a document picker and return URLs that already live inside the app
     /// sandbox (the system copied them), so no security-scoped access dance is needed.
-    /// Swift 6：整条链路收敛到主 actor（本类型、delegate 类、UIKit 展示都在主线程）。
+    /// Swift 6：整条链路收敛到主 actor（本类型、delegate 类、UIKit 展示都在主线程）.
     /// 早期把 delegate 的 init 标 `nonisolated` 来消解 `sending` 诊断，结果换来
-    ///「主 actor 隔离属性不能在 nonisolated 上下文里赋值」（CI 实测 :63/:64）。
+    ///「主 actor 隔离属性不能在 nonisolated 上下文里赋值」（CI 实测 :63/:64）.
     /// 收敛到 @MainActor 后闭包从头到尾不跨隔离域，两个诊断同时消失，
-    /// 5 个调用点（都是 SwiftUI 视图上下文）无需改动。
+    /// 5 个调用点（都是 SwiftUI 视图上下文）无需改动.
     @MainActor
     static func present(
         allowedTypes: [UTType],
@@ -62,8 +60,8 @@ final class SharedDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate {
     let onCancelled: (() -> Void)?
 
     /// Swift 6：本类因遵循 UIDocumentPickerDelegate 被推断为 @MainActor，
-    /// 因此 init 也是主 actor 隔离的 —— 属性赋值不再跨隔离域。
-    ///（配套改动见 `SharedDocumentPicker.present` 的 @MainActor 说明。）
+    /// 因此 init 也是主 actor 隔离的 —— 属性赋值不再跨隔离域.
+    ///（配套改动见 `SharedDocumentPicker.present` 的 @MainActor 说明.）
     init(onPicked: @escaping ([URL]) -> Void, onCancelled: (() -> Void)?) {
         self.onPicked = onPicked
         self.onCancelled = onCancelled
@@ -84,7 +82,7 @@ final class SharedDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate {
 /// release them before the delegate callback fires.
 /// `@unchecked Sendable`：唯一可变状态 `delegates` 的读写（`retain` / `release`）
 /// 都在 `lock`（`NSLock`）保护下；本类本身就是要被 picker 回调（可能在其它线程）
-/// 访问的，复用类内已有的锁即可安全跨隔离域共享。
+/// 访问的，复用类内已有的锁即可安全跨隔离域共享.
 final class SharedDocumentPickerDelegateStore: @unchecked Sendable {
     static let shared = SharedDocumentPickerDelegateStore()
     private var delegates: [SharedDocumentPickerDelegate] = []
@@ -102,7 +100,6 @@ final class SharedDocumentPickerDelegateStore: @unchecked Sendable {
 }
 
 extension View {
-    /// Drop-in replacement for `.fileImporter` that works inside LiveContainer.
     /// `onPicked` receives URLs already copied into the app sandbox.
     func documentPicker(
         isPresented: Binding<Bool>,

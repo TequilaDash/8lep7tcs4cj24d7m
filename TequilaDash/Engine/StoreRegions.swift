@@ -1,20 +1,19 @@
 import Foundation
 
-/// App Store 商店区域**全表**（国家码 ↔ storefront id）。
+/// App Store 商店区域**全表**（国家码 ↔ storefront id）.
 ///
-/// 数据来源：二改版 AssppPro 二进制（`Asspp.app/Asspp`）内嵌的 storefront id 常量数组，
 /// 与 `vendor/ApplePackage` 的 `Configuration.countryCode(for:)` 表逐条一致
-/// （134/134 相同，且顺序也完全一致）—— 交叉核对见 v0.3.363 报告。
+/// （134/134 相同，且顺序也完全一致）—— 交叉核对见 报告.
 ///
-/// 界面形态与二改版「全部地区」列表同款：`XX - <storefront id>`，按国家码升序。
+/// 界面形态与二改版「全部地区」列表同款：`XX - <storefront id>`，按国家码升序.
 enum StoreRegions {
 
-    /// 「其他地区」= 全表里**排除常用区**。
+    /// 「其他地区」= 全表里**排除常用区**.
     ///
     /// 为什么需要：区域 Picker 里「常用区域」与「全部地区」两节如果都列出同一个国家码，
     /// 两行会带**相同的 `.tag`**，SwiftUI 可能同时勾选两行、或把折叠标题取成其中一个
-    /// （auth-re 在 v0.3.363 报告里提的风险）。所以常用区留在上面那节，
-    /// 全表这节把常用区剔掉，两节合起来仍然是完整 134 个区域、且 tag 互不重复。
+    /// （auth-re 在 报告里提的风险）.所以常用区留在上面那节，
+    /// 全表这节把常用区剔掉，两节合起来仍然是完整 134 个区域、且 tag 互不重复.
     static func excluding(_ codes: Set<String>) -> [(code: String, storefrontID: String)] {
         all.filter { !codes.contains($0.code.lowercased()) }
     }

@@ -13,7 +13,7 @@ import Darwin
 /// `@unchecked Sendable`：共享的可变状态 `listenFd` / `_port` 的读写全部在
 /// `lock`（`NSLock`）保护下（`port` / `start` / `stop` / `run`）；
 /// `payload` / `payloadFilename` 只在 `start()` 里「先写入、后起线程」，
-/// 与 `run()` 的读取之间由线程启动建立 happens-before。因此可安全跨隔离域共享。
+/// 与 `run()` 的读取之间由线程启动建立 happens-before.因此可安全跨隔离域共享.
 final class ProfileHTTPServer: NSObject, @unchecked Sendable {
     static let shared = ProfileHTTPServer()
 

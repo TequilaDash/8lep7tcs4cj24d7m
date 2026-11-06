@@ -2,7 +2,6 @@
 //  BackgroundAudioManager.swift
 //  TequilaDash
 //
-//  后台静默音频保活.移植自 StikPair / StikDebug：
 //  通过持续播放 0 音量 PCM 缓冲区并占用 AVAudioSession，
 //  使应用在后台/锁屏时仍被系统视为「正在播放音频」，
 //  从而延缓 Bonjour 注册被系统 SRP sweeper 回收.
@@ -11,10 +10,10 @@
 import AVFoundation
 
 final class BackgroundAudioManager {
-    /// Swift 6 并发检查：本类型非 Sendable。可变状态（isRunning / persistentEnabled /
+    /// Swift 6 并发检查：本类型非 Sendable.可变状态（isRunning / persistentEnabled /
     /// activityCount / healthCheckTimer）只在主线程访问 —— 公开入口
     /// `start/stop/requestStart/requestStop` 的调用方 `WirelessKeepAlive` 由配对 UI 触发，
-    /// 通知与定时器回调也在主队列。因此 `shared` 共享无风险。
+    /// 通知与定时器回调也在主队列.因此 `shared` 共享无风险.
     nonisolated(unsafe) static let shared = BackgroundAudioManager()
 
     private var engine = AVAudioEngine()

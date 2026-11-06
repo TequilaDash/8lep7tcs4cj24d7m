@@ -14,18 +14,18 @@ import UIKit
 ///
 /// ## 来源
 /// C++ 层逐字移植自 **AnisetteKit**（`github.com/mahee96/AnisetteKit`）的 `Native/`：
-/// `anisette_core_uc.cpp` + `Loader/elf_loader_emulator.{h,cpp}` + `anisette_base.{h,cpp}`。
+/// `anisette_core_uc.cpp` + `Loader/elf_loader_emulator.{h,cpp}` + `anisette_base.{h,cpp}`.
 /// 用的是**标准 Unicorn API**（`uc_open` / `uc_mem_map` / `uc_emu_start` / `uc_hook_add` …），
-/// 与本仓 SAP 用的同一个 `libunicorn.a` 兼容 —— v0.3.613 起该库含 **x86 + aarch64 双后端**
-/// （x86 给 SAP 的 Apple Mach-O 资产，aarch64 给本机的 ELF ADI 引擎）。
+/// 与本仓 SAP 用的同一个 `libunicorn.a` 兼容 —— 起该库含 **x86 + aarch64 双后端**
+/// （x86 给 SAP 的 Apple Mach-O 资产，aarch64 给本机的 ELF ADI 引擎）.
 ///
 /// ## 许可说明（内部自用，不公开）
-/// AnisetteKit 为 AGPLv3。本仓为**内部自用、不公开分发**，
-/// 分发类许可不构成约束（判据见 `rules/USER.md`「许可 / 限制 / 自我设限」一节）。
+/// AnisetteKit 为 AGPLv3.本仓为**内部自用、不公开分发**，
+/// 分发类许可不构成约束（判据见 `rules/USER.md`「许可 / 限制 / 自我设限」一节）.
 ///
 /// ## 与远程路径的关系
-/// 本文件只负责「本机取数」。是否走本机由 `AnisetteProvider.getAnisetteData` 决定：
-/// 开关开 + 引擎就绪 + 有设备身份 ⇒ 走这里；否则显式回退远程并记日志。
+/// 本文件只负责「本机取数」.是否走本机由 `AnisetteProvider.getAnisetteData` 决定：
+/// 开关开 + 引擎就绪 + 有设备身份 ⇒ 走这里；否则显式回退远程并记日志.
 enum OnDeviceAnisetteClient {
 
     // MARK: - 错误
@@ -105,7 +105,7 @@ enum OnDeviceAnisetteClient {
         ///
         /// 注意方向：`spim` 是 Apple `midStartProvisioning` 的**输入**，
         /// C 层返回的 `cpim` 才是**输出**（见 `anisette_core_uc.cpp` 的 start 分支
-        /// 输出 `{"cpim_base64":…,"session":n}`）。旧注释把两者写反了.
+        /// 输出 `{"cpim_base64":…,"session":n}`）.旧注释把两者写反了.
         let cpim: Data
     }
 
@@ -148,10 +148,10 @@ enum OnDeviceAnisetteClient {
 
     /// 结束配给：把 Apple 回的 `ptm` / `tk` 交给 C 层，产出可长期使用的 `adiPb`.
     ///
-    /// **契约（v0.3.616 修正）**：C 层 `end_provision_uc` 只返回
+    /// **契约（修正）**：C 层 `end_provision_uc` 只返回
     /// `{"adi_pb_base64":"…"}`（见 `anisette_core_uc.cpp` 的 end 分支）——
-    /// **不含** `X-Apple-I-MD*` 任何字段。旧实现按 `AnisetteData` 解析，
-    /// 必然抛 `badResponse`。现改为返回原始 adiPb 字节，由调用方存 keychain 后
+    /// **不含** `X-Apple-I-MD*` 任何字段.旧实现按 `AnisetteData` 解析，
+    /// 必然抛 `badResponse`.现改为返回原始 adiPb 字节，由调用方存 keychain 后
     /// 再调 `headers(...)` 取 OTP.
     static func endProvision(identifier: Data,
                              session: UInt32,
@@ -235,7 +235,7 @@ enum OnDeviceAnisetteClient {
     ///
     /// C 层输出的键与 Apple 的 anisette header 同型（`X-Apple-I-MD` / `X-Apple-I-MD-M` /
     /// `X-Apple-I-MD-RINFO` / `X-Apple-I-MD-LU`），与远程 `get_headers` 的返回一致 ——
-    /// 故这里复用 `AnisetteProvider.extractAnisetteData` 的同一套映射口径。
+    /// 故这里复用 `AnisetteProvider.extractAnisetteData` 的同一套映射口径.
     /// 同时容忍「已经是 AnisetteData 字段名」的输入（有些实现直接吐内部结构）.
     private static func parseHeaders(_ json: String, identity: AnisetteIdentity? = nil) throws -> AnisetteData {
         guard let obj = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {

@@ -284,7 +284,6 @@ extension WallpaperHandler {
     }
 
     private static func listDirectory(_ path: String) -> [String] {
-        // 跨容器目录在 LiveContainer 沙盒下列不出来，走漏洞利用注册表.
         ExploitRegistry.run { $0.paths(at: path, maxInode: 100_000) } ?? []
     }
 }
@@ -295,10 +294,10 @@ extension WallpaperHandler {
 
     /// 移除我们**记录在案**的已应用描述符目录；记录之外的一律不碰.
     ///
-    /// 为什么必须查记录、不能再靠特征猜：v0.3.460 之前这里是按「目录内 identifier 能取到整数」
+    /// 为什么必须查记录、不能再靠特征猜：之前这里是按「目录内 identifier 能取到整数」
     /// 判「自定义」，依据是「Apple 内置用 UUID」—— 真机上 Apple 的默认收藏**也是整数**，
-    /// 于是被一并删掉。任何「按特征猜归属」的判据都不可靠；唯一可靠的依据是**我们自己装的时候
-    /// 记下来的目录名**（`TendiesObject.appliedDescriptors`，由 `applyObjects()` 写入）。
+    /// 于是被一并删掉.任何「按特征猜归属」的判据都不可靠；唯一可靠的依据是**我们自己装的时候
+    /// 记下来的目录名**（`TendiesObject.appliedDescriptors`，由 `applyObjects()` 写入）.
     /// 记录之外的一切 —— Apple 默认收藏、以及本修复之前装的没有记录的目录 —— **一律不删**，
     /// 只如实报个数.
     ///
@@ -348,7 +347,7 @@ extension WallpaperHandler {
             throw WallpaperImportError.operationFailed("未找到 PosterBoard 容器")
         }
 
-        // 第二遍：动手删。单个失败只计数、继续删剩下的，最后把几个数字一起如实报给用户.
+        // 第二遍：动手删.单个失败只计数、继续删剩下的，最后把几个数字一起如实报给用户.
         var removed: [String: [String]] = [:]
         var failed = 0
         var unreadable = 0
@@ -380,7 +379,7 @@ extension WallpaperHandler {
                 // 路径包含性校验：待删目录必须真的在 provider 目录内（防路径穿越误删）.
                 guard child.path.hasPrefix(target.path + "/") else { continue }
 
-                // 判据只有一条：这个目录名在我们自己的记录里。除此之外不看任何特征.
+                // 判据只有一条：这个目录名在我们自己的记录里.除此之外不看任何特征.
                 guard recordedNames.contains(child.name) else {
                     // 不在记录里 ⇒ 可能是 Apple 默认收藏，也可能是本修复之前装的 —— 无法确认归属，不猜、不删.
                     unrecorded += 1

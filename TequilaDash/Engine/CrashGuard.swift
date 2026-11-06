@@ -1,15 +1,14 @@
 import Foundation
 import Darwin
 
-/// 崩溃现场记录（v0.3.742）.
+/// 崩溃现场记录.
 ///
 /// ## 为什么需要它
 /// iOS 把崩溃报告写在沙盒外的 `/var/mobile/Library/Logs/CrashReporter`，
-/// 必须走 `com.apple.crashreportcopymobile` 服务才读得到。排障时经常出现
-/// 「用户说闪退了，但拿不到 .ips」——尤其是崩溃发生在 LiveContainer 宿主进程里时，
-/// 报告可能落到宿主容器名下，设备上也翻不到。
+/// 必须走 `com.apple.crashreportcopymobile` 服务才读得到.排障时经常出现
+/// 报告可能落到宿主容器名下，设备上也翻不到.
 /// 这里装一个最小信号处理器：进程死之前把**信号编号、镜像基址偏移、返回地址链**
-/// 追加写进 `Documents/LoginLogs/crash.log`。下次启动或用 SSH 取回后，
+/// 追加写进 `Documents/LoginLogs/crash.log`.下次启动或用 SSH 取回后，
 /// 拿 CI 产出的符号表（nm -nC，随构建工件上传）就能把地址换算成函数名.
 ///
 /// ## 约束
@@ -35,7 +34,7 @@ enum CrashGuard {
     /// 十六进制字符表（处理器里不能 Array(...) 分配，提前备好）.
     nonisolated(unsafe) private static var hexTable = Array("0123456789abcdef".utf8)
 
-    /// 安装处理器。必须在 App 启动早期调用（越早越好，启动期崩溃也要抓）.
+    /// 安装处理器.必须在 App 启动早期调用（越早越好，启动期崩溃也要抓）.
     static func install() {
         guard !installed else { return }
         installed = true

@@ -6,24 +6,23 @@ import Foundation
 /// · **空间占用 7 项** = `idm_info.dll` 的 `ios_get_detailed_disk_usage` →
 ///   lockdown 域 `com.apple.disk_usage`（系统 = `TotalSystemCapacity`、
 ///   总量 = `TotalDiskCapacity`、剩余 = `AmountRestoreAvailable` 类），
-///   再叠加「应用」（instproxy `StaticDiskUsage` 求和）/「照片」/「音视频」/「U盘」。
-///   真机校验：系统 7.85 GB、应用 23.98~24 GB 与爱思面板一致；「其他」为余量口径。
-/// · **清理分组** = 系统缓存文件 / 用户日志 / 其他临时文件 / 较大应用（> 500 MB）。
+///   再叠加「应用」（instproxy `StaticDiskUsage` 求和）/「照片」/「音视频」/「U盘」.
+///   真机校验：系统 7.85 GB、应用 23.98~24 GB 与爱思面板一致；「其他」为余量口径.
+/// · **清理分组** = 系统缓存文件 / 用户日志 / 其他临时文件 / 较大应用（> 500 MB）.
 /// · **较大应用**（爱思真机截图）：表格「应用名称 / 应用大小 / 文档大小 / 操作」，
-///   勾选 = 重装（清掉文稿与数据）；`(资源缺失无法重装)` = 本地没有可重装的包。
+///   勾选 = 重装（清掉文稿与数据）；`(资源缺失无法重装)` = 本地没有可重装的包.
 ///   设备侧旁证 `/iTunes_Control/iTunes/stopremovewhitelist.acc` 的
-///   `bundleIds = [com.ownbook.notes, rn.notes.best]` 说明它会重装第三方 App 但放行自家移动端。
+///   `bundleIds = [com.ownbook.notes, rn.notes.best]` 说明它会重装第三方 App 但放行自家移动端.
 ///
-/// ## 性能（v0.3.314 重写）
 /// 之前一次进入要遍历媒体分区 **三遍**（空间占用 + 缓存项 + 日志），而 AFC 的
-/// `listDirectory` 对每个条目都要单独 `afc_get_file_info`（≈2 万次往返）→ 慢。
+/// `listDirectory` 对每个条目都要单独 `afc_get_file_info`（≈2 万次往返）→ 慢.
 /// 现改为**单次遍历**同时算出全部所需数值，并把结果**落盘缓存**（含时间戳），
-/// 再次进入秒开；只有点「重新扫描」才真正重走。
+/// 再次进入秒开；只有点「重新扫描」才真正重走.
 ///
 /// ## 可达面（免越狱，iOS 27 实测）
 /// AFC 根 = `/var/mobile/Media`；`house_arrest` 的 `VendContainer` 在 iOS 27 被拒、
-/// `VendDocuments` 只到各 App 的 `Documents`；`/var/mobile/Library/Logs` 不可达。
-/// → 只清理媒体分区内**可再生**的缓存/缩略图，白名单之外一律不碰。
+/// `VendDocuments` 只到各 App 的 `Documents`；`/var/mobile/Library/Logs` 不可达.
+/// → 只清理媒体分区内**可再生**的缓存/缩略图，白名单之外一律不碰.
 enum DeviceSlimService {
 
     // MARK: - 空间占用
@@ -42,7 +41,7 @@ enum DeviceSlimService {
         var capacityText: String = ""
         var slices: [UsageSlice] = []
         var scannedAt: Date?
-        /// v0.3.673：本组数字**不完整**的原因（nil = 完整）.
+        /// 本组数字**不完整**的原因（nil = 完整）.
         /// 旧实现把「应用大小只量到一部分」「扫描时有目录读不出」全部折叠成
         /// 与完整结果完全相同的形状，界面无从区分「真的就这么小」与「没量到」.
         var incompleteReason: String?
@@ -91,7 +90,7 @@ enum DeviceSlimService {
         // 较大应用专用
         var appSize: Int64 = 0
         var docSize: Int64 = 0
-        /// v0.3.708：`docSize` 是**量到的**还是**按 0 占位**的.
+        /// `docSize` 是**量到的**还是**按 0 占位**的.
         ///
         /// 旧写法把「还没量到 / 量失败」一律按 0 计入 `total`，于是文档很重的应用
         ///（微信、游戏）会被 `total > bigAppThreshold` 静默跳过；而进了列表的那批
@@ -118,16 +117,16 @@ enum DeviceSlimService {
         var failures: [String] = []
         /// 删除成功、但**删之前没能计量**的条目数.
         ///
-        /// v0.3.661：这些条目的字节数既不是 0 也无法得知，不能并入 `freed`
-        /// （否则页面会显示「已释放 0 字节」而文件其实删掉了，用户会反复重试）。
-        /// 页面应单独说明「其中 N 项未能统计大小」。
+        /// 这些条目的字节数既不是 0 也无法得知，不能并入 `freed`
+        /// （否则页面会显示「已释放 0 字节」而文件其实删掉了，用户会反复重试）.
+        /// 页面应单独说明「其中 N 项未能统计大小」.
         var unmeasured: Int = 0
     }
 
     struct ReinstallResult {
         var ok: [String] = []
         var failures: [String] = []
-        /// v0.3.708：**卸载已成功、装回失败**的应用.
+        /// **卸载已成功、装回失败**的应用.
         ///
         /// 与 `failures` 分开：这些应用此刻**已经不在设备上**（`UninstallService.uninstall`
         /// 的 non-throwing return 即卸载成功），与「源里没找到包」「安装包不可用」
@@ -157,9 +156,9 @@ enum DeviceSlimService {
     static let pathPhotoCaches = "/PhotoData/Caches"
     static let pathSharedAlbumCaches = "/PhotoData/PhotoCloudSharingData/Caches"
 
-    /// 系统缓存文件 = 可再生缓存目录。
+    /// 系统缓存文件 = 可再生缓存目录.
     /// `/Downloads` 是 Safari 的下载记录数据库（`downloads.28.sqlitedb` + `-wal`/`-shm`），
-    /// 体积随 WAL 波动（实测 369.25 KiB，爱思面板曾显示 361.20 KB）——爱思的清理项里也有它。
+    /// 体积随 WAL 波动（实测 369.25 KiB，爱思面板曾显示 361.20 KB）——爱思的清理项里也有它.
     static var systemCachePaths: [(String, String)] {
         [(pathPhotoThumbnails, "照片缩略图"),
          (pathPhotoCaches, "照片库缓存"),
@@ -210,7 +209,7 @@ enum DeviceSlimService {
         var fileCounts: [String: Int] = [:]
         var logs: [LogHit] = []
         var takenAt: Date = .distantPast
-        /// v0.3.673：**读不出来的子树**. 旧实现在 DFS 里 `try? listDirectory` 失败
+        /// **读不出来的子树**. 旧实现在 DFS 里 `try? listDirectory` 失败
         /// 就 `continue`，被跳过的整棵子树既不计入 totals、也不留任何痕迹 ——
         /// 快照随后被缓存 10 分钟，于是「空间占用」各分片与可清理项列表都按
         /// 「这就是全部」呈现，用户看到的是一个偏小却毫无标注的数字.
@@ -218,7 +217,7 @@ enum DeviceSlimService {
         /// 用 Optional 是为了让旧版本写下的缓存文件仍能解码（缺键 = nil）.
         var unreadablePaths: [String]? = nil
 
-        /// v0.3.694：**因为触顶而被跳过的目录数**. 与 `unreadablePaths` 区分开：
+        /// **因为触顶而被跳过的目录数**. 与 `unreadablePaths` 区分开：
         /// 那些是「读不出」，这里是「能读但按上限没读」，两者的界面提示与对策不同.
         /// 同样用 Optional，让旧版本写下的缓存文件仍能解码（缺键 = nil）.
         var limitSkippedDirectories: Int? = nil
@@ -231,7 +230,7 @@ enum DeviceSlimService {
             .appendingPathComponent("Documents/device_slim_snapshot.json")
     }
 
-    /// v0.3.673：作废磁盘快照（删除失败不再静默吞掉）.
+    /// 作废磁盘快照（删除失败不再静默吞掉）.
     ///
     /// 为什么要单独一个函数：旧实现两处都写 `try? FileManager.default.removeItem`，
     /// 删不掉时缓存文件仍然有效，下一次 `cachedSnapshot()` 会把刚刚被清理掉的项
@@ -256,7 +255,7 @@ enum DeviceSlimService {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let snap = try? decoder.decode(Snapshot.self, from: data) else {
-            // v0.3.673：**坏缓存要清掉**. 旧写法 `try?` 解不开就返回 nil，
+            // **坏缓存要清掉**. 旧写法 `try?` 解不开就返回 nil，
             // 文件却永远留在原地 —— 每次进页面都重试同一份坏 JSON，白付一次读盘，
             // 且没有任何线索. 删掉它，让下一次 buildSnapshot 写一份新的.
             invalidateSnapshot(reason: "缓存解码失败")
@@ -266,9 +265,9 @@ enum DeviceSlimService {
         return snap
     }
 
-    /// **扫描上限**（v0.3.694 引入，2026-10-20 按用户批复核改为不设限）.
+    /// **扫描上限**（引入，2026-10-20 按用户批复核改为不设限）.
     /// 本函数从 "/" 穷举，每访问一个目录就是一次 AFCService.listDirectory.
-    /// v0.3.694 曾给「已展开目录数」和「深度」设硬上限；用户审批 3/4 驳回，
+    /// 曾给「已展开目录数」和「深度」设硬上限；用户审批 3/4 驳回，
     /// 现两个常量均为 Int.max（等于不设限）. 触顶代码路径与 limitSkipped 计数保留，
     /// 真机若出现性能问题再议.
     // 用户 2026-10-20 驳回深度上限（面板审批 3/4）：改回 Int.max（不设限）. 
@@ -284,19 +283,19 @@ enum DeviceSlimService {
         let firstLevels = Set(photoDirs + mediaDirs + [usbDir])
         var logs: [LogHit] = []
         var budget = 0
-        // v0.3.673：读不出的子树（见 Snapshot.unreadablePaths）.
+        // 读不出的子树（见 Snapshot.unreadablePaths）.
         var unreadable: [String] = []
-        // v0.3.694：因为触顶被跳过的目录数（见 Snapshot.limitSkippedDirectories）.
+        // 因为触顶被跳过的目录数（见 Snapshot.limitSkippedDirectories）.
         var limitSkipped = 0
 
         progress?("正在扫描设备文件…")
         try AFCService.shared.batch { client in
             // 迭代式 DFS（显式栈，避免深递归）
             var stack: [(path: String, depth: Int)] = [("/", 0)]
-            // v0.3.694：已展开（listDirectory 过）的目录数，用于兜住性能悬崖.
+            // 已展开（listDirectory 过）的目录数，用于兜住性能悬崖.
             var listedDirectories = 0
             while let node = stack.popLast() {
-                // v0.3.694：先查上限再干活 —— 触顶立即收工，栈里没展开的一并计成跳过.
+                // 先查上限再干活 —— 触顶立即收工，栈里没展开的一并计成跳过.
                 guard listedDirectories < Self.snapshotMaxDirectories else {
                     limitSkipped += stack.count + 1
                     LoginLogger.shared.log(
@@ -305,7 +304,7 @@ enum DeviceSlimService {
                     )
                     break
                 }
-                // v0.3.673：**读不出就记下来**，不再静默跳过.
+                // **读不出就记下来**，不再静默跳过.
                 // 旧写法 `try? … else { continue }` 让整棵子树凭空消失，
                 // 而本函数的结果会被缓存 10 分钟并驱动所有分片数字.
                 let entries: [AFCService.Entry]
@@ -327,7 +326,7 @@ enum DeviceSlimService {
                     let p = entry.path
                     if entry.isDirectory {
                         // 目录自身不累加；继续下探（全部下探——数值要准）
-                        // v0.3.694：深度触顶就不再入栈（超深目录树是性能悬崖的另一半）.
+                        // 深度触顶就不再入栈（超深目录树是性能悬崖的另一半）.
                         if node.depth + 1 > Self.snapshotMaxDepth {
                             limitSkipped += 1
                             continue
@@ -366,7 +365,7 @@ enum DeviceSlimService {
         snap.logs = Array(logs.prefix(40))
         snap.unreadablePaths = unreadable.isEmpty ? nil : unreadable
         snap.limitSkippedDirectories = limitSkipped > 0 ? limitSkipped : nil
-        // v0.3.694：触顶只在日志里说是不够的 —— 用户看不到「数字偏小」，
+        // 触顶只在日志里说是不够的 —— 用户看不到「数字偏小」，
         // 所以 usage()/scan() 也会把它带成「不完整」提示（见下）.
         if limitSkipped > 0 {
             LoginLogger.shared.log(
@@ -378,7 +377,7 @@ enum DeviceSlimService {
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        // v0.3.673：**缓存写失败不再静默**. 旧写法 `if let data = try? encode { try? write }`
+        // **缓存写失败不再静默**. 旧写法 `if let data = try? encode { try? write }`
         // 把编码/写盘两处失败都吞掉 —— 页面照常显示数字，用户以为快照是最新的，
         // 下一次进页面又读到上一次的旧快照. 现在写不进去就留日志（不中断扫描，
         // 本轮数字仍然可用，只是没有缓存）.
@@ -398,7 +397,7 @@ enum DeviceSlimService {
         var apps: [FileSharingApp] = []
         /// 快路径（`get_apps`）是否拿到数据 —— false = 真拿不到，页面应显示错误态 + 重试
         var usable = false
-        /// **是否真的拿到了可用的大小**（v0.3.401 起不再看「增强回填了几条」）——
+        /// **是否真的拿到了可用的大小**（不再看「增强回填了几条」）——
         /// false = 没有精确大小，只能按可得信息出数据（「应用」分片会偏小、
         /// 「较大应用」判不出「> 500MB」），页面据此提示「应用大小不可用」.
         /// 背景：带属性 Lookup 已把大小字段移出请求（为解决它卡 ~25 秒的回归），
@@ -406,37 +405,37 @@ enum DeviceSlimService {
         var sizeComplete = false
         /// 快路径失败的真实原因（`usable == false` 时才有值）.
         ///
-        /// v0.3.661：原来 `.failed(message)` 与 `.timedOut` 都是「usable=false」，
-        /// 页面统一显示「应用读取超时」+ 重试。但两者自救动作完全不同：
+        /// 原来 `.failed(message)` 与 `.timedOut` 都是「usable=false」，
+        /// 页面统一显示「应用读取超时」+ 重试.但两者自救动作完全不同：
         ///   · 超时 → 等一会儿重试**有意义**；
         ///   · 没配对文件 / LocalDevVPN 没连 / house_arrest 未授权 → 重试 100 次也不会成功，
-        ///     用户得去修配对或连 VPN。折成同一句会把人的动作引错。
+        ///     用户得去修配对或连 VPN.折成同一句会把人的动作引错.
         var failureReason: String? = nil
     }
 
-    /// v0.3.378：设备瘦身页读取已装应用（空间占用的「应用」分片 / 「较大应用」分组）.
+    /// 设备瘦身页读取已装应用（空间占用的「应用」分片 / 「较大应用」分组）.
     ///
     /// 改成「快路径 + 可选增强」（真机 16:30 日志的教训：原先直接等带属性 Lookup →
     /// 每轮都「应用列表读取超时，本轮按空处理」→「应用」分片恒 0、「较大应用」恒空，
     /// 用户看到的是「功能坏了」）：
     ///   1. **快路径 `get_apps`**（真机 333 应用 2.5 秒级）→ 保证一定有应用列表；
-    ///   2. **可选增强**（带属性 Lookup，独立 15 秒；v0.3.379 由 8 秒提到 15——后台可选、
+    ///   2. **可选增强**（带属性 Lookup，独立 15 秒；由 8 秒提到 15——后台可选、
     ///      不阻塞首屏，且单飞保证同一时刻只有一条在飞）→ 补 appSize/docSize，
     ///      「应用」分片与「较大应用」才有意义；失败就退化为「没有精确大小」；
     ///   3. **结果缓存 30 秒**：`loadUsage` 与 `bigApps` 在同一轮页面加载里共用一份，
     ///      不再重复开隧道；
     ///   4. 只有**快路径也失败**时才回空数组，并置问题文案 → 页面显示
     ///      「应用读取超时」+ 重试，**不显示成静默空列表**.
-    /// 注意：大小的可得性分两种（v0.3.406 起）——
+    /// 注意：大小的可得性分两种——
     ///   - **应用大小** `appSize`：只能来自第 2 步的带属性 Lookup（`StaticDiskUsage`，
-    ///     v0.3.406 加回请求；`get_apps` 从来不带）。取不到时「应用」分片与「较大应用」
+    ///     加回请求；`get_apps` 从来不带）.取不到时「应用」分片与「较大应用」
     ///     会退化，页面必须明确提示「应用大小不可用」（判据见 sizeComplete）.
     ///   - **文档大小** `docSize`（`DynamicDiskUsage`）：**不再从请求里拿**（疑为「带属性 Lookup
     ///     卡 ~25 秒」的元凶，见 FileSharingService / installation_proxy.rs 注释）——
-    ///     v0.3.408 起改走**本机通道**按需量：`containerPath`（`Container` 键；v0.3.600 起
+    ///     起改走**本机通道**按需量：`containerPath`（`Container` 键；起
     ///     带属性 Lookup 也返回，见 `FileSharingApp.containerPath`）
     ///     + `SandboxEscape` + `FileService.countTree`，与「空间回收」页同一套，
-    ///     每轮后台补一批、跨轮累积。落地与代价见 `startDocSizePass`.
+    ///     每轮后台补一批、跨轮累积.落地与代价见 `startDocSizePass`.
     private static func readAppsForSlim() -> AppReadResult {
         appReadLock.lock()
         if let cache = appReadCache, Date().timeIntervalSince(cache.at) < 30 {
@@ -449,13 +448,13 @@ enum DeviceSlimService {
         var result = AppReadResult()
         // ① 快路径：**带属性 Lookup**（额度 ≥ 10s 时 `listAppsWithFileSharing(timeout:)` 的主路径
         //    就是它，失败/超时才降级 `get_apps`；见 FileSharingService
-        //    `listAppsWithAttributesWithFallback`）。它同时给出 `appSize`（StaticDiskUsage）
-        //    与 `containerPath`（Container，v0.3.600 起）—— 后者是下面文档大小通道的入口，
-        //    所以这一条命令必须能拿到 `Container`，否则 docSize 恒 0（v0.3.600 修的正是它）.
+        //    `listAppsWithAttributesWithFallback`）.它同时给出 `appSize`（StaticDiskUsage）
+        //    与 `containerPath`（Container，起）—— 后者是下面文档大小通道的入口，
+        //    所以这一条命令必须能拿到 `Container`，否则 docSize 恒 0（修的正是它）.
         switch FileSharingService.listAppsWithFileSharing(timeout: 20) {
         case .ok(let found):
             result.apps = found
-            // v0.3.666：`usable` 的判据是「**读到了**」，不是「读到非空」.
+            // `usable` 的判据是「**读到了**」，不是「读到非空」.
             //
             // `.ok` 只会在 `try work()` 真的成功时出现（见 FileSharingService
             // :630-634 / :223-268，降级链全失败是抛错走 `.failed`），所以空数组
@@ -467,13 +466,13 @@ enum DeviceSlimService {
             LoginLogger.shared.log("[设备瘦身] 快路径（带属性 Lookup → get_apps 降级）：\(found.count) 条")
         case .failed(let message):
             LoginLogger.shared.log("[设备瘦身] 快路径失败：\(message)")
-            // v0.3.661：**留住真实原因**，页面据此给不同的自救方向（见 AppReadResult.failureReason）.
+            // **留住真实原因**，页面据此给不同的自救方向（见 AppReadResult.failureReason）.
             result.failureReason = message.trimmingCharacters(in: .whitespacesAndNewlines)
         case .timedOut:
             LoginLogger.shared.log("[设备瘦身] 快路径超时（排队与执行分开计）")
             result.failureReason = "超时"
         }
-        // ①' v0.3.408：拿到列表就**立刻**发起「文档大小」（本机通道）——它要真的把每个应用
+        // ①' ：拿到列表就**立刻**发起「文档大小」（本机通道）——它要真的把每个应用
         //     的容器文件树走一遍，所以放在这里与后面（最长 15 秒的带属性 Lookup + 空间快照）
         //     **重叠**，不额外占首屏时间；`bigApps()` 取到什么算什么，见 `startDocSizePass`.
         startDocSizePass(result.apps)
@@ -491,7 +490,7 @@ enum DeviceSlimService {
                 if result.apps[index].appleId == nil { result.apps[index].appleId = e.appleId }
                 patched += 1
             }
-            // v0.3.401（补修）：`sizeComplete` 改成按「**是否真的拿到大小**」判定.
+            // `sizeComplete` 改成按「**是否真的拿到大小**」判定.
             // 原来按「回填了几条」（`patched > 0`）判定 —— 只要带属性增强返回了列表就算
             // 成功；而本版已把 StaticDiskUsage / DynamicDiskUsage 移出请求（为解决
             // 「带属性 Lookup 卡 ~25 秒」），于是 `patched` 仍 > 0 但 appSize 全为 nil：
@@ -507,10 +506,10 @@ enum DeviceSlimService {
                 "[设备瘦身] 大小增强回填 \(patched) 条，其中真的带 appSize \(sizedApps) 条"
                 + " / 带 docSize \(sizedDocs) 条（sizeComplete=\(result.sizeComplete)）"
             )
-            // v0.3.408：**没有 appSize 的那批到底是什么**（真机：334 条里只有 125 条有大小）——
+            // **没有 appSize 的那批到底是什么**（真机：334 条里只有 125 条有大小）——
             // 一次真机日志即可判定要不要管：`ApplicationType=System/HiddenSystemApp` 的应用
-            // 本来就被 `bigApps()` 排除，若这批几乎全是系统应用，「125/334」就不再是缺陷。
-            // 只有「三方 + 有安装路径」那部分才是「较大应用」漏判的真实来源。
+            // 本来就被 `bigApps()` 排除，若这批几乎全是系统应用，「125/334」就不再是缺陷.
+            // 只有「三方 + 有安装路径」那部分才是「较大应用」漏判的真实来源.
             let missing = result.apps.filter { $0.appSize == nil }
             let missingSystem = missing.filter { isSystemApp($0) }.count
             let missingNoPath = missing.filter { ($0.path ?? "").isEmpty }.count
@@ -522,9 +521,9 @@ enum DeviceSlimService {
 
         appReadLock.lock()
         if !result.usable {
-            // v0.3.661：按**真实原因**分文案，不再一律「应用读取超时」.
+            // 按**真实原因**分文案，不再一律「应用读取超时」.
             // 判据：只有真的是超时才说超时；其它（无配对文件 / VPN 未连 / house_arrest
-            // 未授权 / AFC 报错）都把原始信息透出，并明确「重试无效，需先修 X」。
+            // 未授权 / AFC 报错）都把原始信息透出，并明确「重试无效，需先修 X」.
             let raw = (result.failureReason ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if raw.isEmpty {
                 appReadIssueFlag = "应用列表读取失败（原因未知）"
@@ -542,7 +541,7 @@ enum DeviceSlimService {
                 appReadIssueFlag = "读不到应用列表：\(raw)"
             }
         } else if result.apps.isEmpty {
-            // v0.3.666：**读到了，但确实是 0 条** —— 不能报「应用大小不可用」.
+            // **读到了，但确实是 0 条** —— 不能报「应用大小不可用」.
             //
             // 空列表时 sizeComplete 必然是 false（没东西可回填），若不加这一支，
             // 页面会对着一台真的没装第三方应用的设备说「应用大小不可用」，
@@ -563,7 +562,7 @@ enum DeviceSlimService {
     private static let appReadLock = NSLock()
     /// Swift 6 并发检查：`appReadCache` / `appReadIssueFlag` 的**全部**读写都在上面的
     /// `appReadLock` 内（见 `readAppsForSlim` / `consumeAppReadIssue` / `invalidateAppReadCache`），
-    /// 因此这两个静态变量本身线程安全。
+    /// 因此这两个静态变量本身线程安全.
     nonisolated(unsafe) private static var appReadCache: (result: AppReadResult, at: Date)?
     /// 本轮需要向用户说明的问题（nil = 一切正常）——页面取走后清零，避免跨轮残留.
     nonisolated(unsafe) private static var appReadIssueFlag: String?
@@ -576,7 +575,7 @@ enum DeviceSlimService {
         return value
     }
 
-    /// v0.3.673：取走「空间占用数字不完整」的原因（页面在 usage 落地后调用一次）.
+    /// 取走「空间占用数字不完整」的原因（页面在 usage 落地后调用一次）.
     ///
     /// 为什么单独一条通道：`SpaceUsage.incompleteReason` 是**数据自带的**说明，
     /// 页面即使不读它也不会错；但「扫描时有目录读不出」属于**本轮扫描**的事实，
@@ -598,12 +597,12 @@ enum DeviceSlimService {
         appReadIssueFlag = nil
     }
 
-    // MARK: - v0.3.408：文档大小的本机通道
+    // MARK: - 文档大小的本机通道
 
     private static let docSizeLock = NSLock()
     /// Swift 6 并发检查：`docSizeCache` / `docSizeInFlight` 的**全部**读写都在上面的
-    /// `docSizeLock` 内（见 `cachedDocSize` / `startDocSizePass` 的量取任务），本身线程安全。
-    /// 量过的 `docSize`（bundleId → 字节 + 量到的时刻）。**跨轮保留** ——
+    /// `docSizeLock` 内（见 `cachedDocSize` / `startDocSizePass` 的量取任务），本身线程安全.
+    /// 量过的 `docSize`（bundleId → 字节 + 量到的时刻）.**跨轮保留** ——
     /// 「较大应用」的文档大小因此一轮比一轮全，而不是每轮都从头发一遍.
     nonisolated(unsafe) private static var docSizeCache: [String: (bytes: Int64, at: Date)] = [:]
     /// 正在量的 bundleId（`readAppsForSlim` 缓存刚失效时，两个调用方可能同时发起）.
@@ -628,22 +627,22 @@ enum DeviceSlimService {
         app.applicationType == "System" || app.applicationType == "HiddenSystemApp"
     }
 
-    /// 单轮待量的一个应用。用 struct 而不是元组：`Task.detached` 的闭包要 `@Sendable`，
+    /// 单轮待量的一个应用.用 struct 而不是元组：`Task.detached` 的闭包要 `@Sendable`，
     /// 具名类型的 Sendable 语义最明确.
     private struct DocSizeTarget: Sendable {
         let bundleId: String
         let path: String
     }
 
-    /// **文档大小（`docSize`）的落地点**（v0.3.408）.
+    /// **文档大小（`docSize`）的落地点**.
     ///
     /// ## 为什么必须有它
     /// `docSize` 以前恒为 0，因为它的来源字段 `DynamicDiskUsage` **根本不在请求里**
     ///（`FileSharingService.attributeRequestFields` 与 Rust 的 `attrs` 都只有
-    /// `StaticDiskUsage`）—— 不是"请求了没人填"，是**从来没请求过**。
+    /// `StaticDiskUsage`）—— 不是"请求了没人填"，是**从来没请求过**.
     /// 于是「较大应用」的判据 `appSize + docSize` 里那一半恒等于 0：
     /// **App 本体不大、文档却几十 GB 的应用（微信、游戏）永远进不了这个分组**，
-    /// 用户看到的就是「没有扫到文档的」。
+    /// 用户看到的就是「没有扫到文档的」.
     ///
     /// ## 为什么不把 `DynamicDiskUsage` 加回请求
     /// 它是「带属性 Lookup 卡 ~25 秒」的头号嫌疑（见 `FileSharingService` 注释），
@@ -659,7 +658,7 @@ enum DeviceSlimService {
     /// ## 实际通道：本机沙盒扩展 + 递归求和（与「空间回收」页同一套）
     /// `escape.withHandle(for: 容器路径)` 消费沙盒扩展 → `files.countTree` 递归求和.
     /// 只要 instproxy 给了 `Container`（`get_apps` 默认响应自带；带属性 Lookup 自
-    /// v0.3.600 起也在请求里，见 `FileSharingApp.containerPath`）就能量 ——
+    /// 起也在请求里，见 `FileSharingApp.containerPath`）就能量 ——
     /// 不需要应用配合，也不需要额外隧道.
     /// 量的是**整个数据容器**（Documents + Library + tmp），与 `DynamicDiskUsage` 的口径一致
     ///（不是只量 Documents）.
@@ -701,7 +700,7 @@ enum DeviceSlimService {
                 let startedAt = Date()
                 let bytes = measureContainerBytes(entry.path)
                 // Swift 6：NSLock 的 lock/unlock 在 async 上下文不可用，改用作用域加锁
-                // `withLock`（临界区内没有 await，语义与原来的 lock/unlock 完全一致）。
+                // `withLock`（临界区内没有 await，语义与原来的 lock/unlock 完全一致）.
                 let nowDone = docSizeLock.withLock { () -> Int in
                     if let bytes {
                         docSizeCache[entry.bundleId] = (bytes, Date())
@@ -748,11 +747,11 @@ enum DeviceSlimService {
     static func loadUsage(snapshot: Snapshot? = nil,
                           progress: ((String) -> Void)? = nil) throws -> SpaceUsage {
         var usage = SpaceUsage()
-        // v0.3.673：「剩余容量」是否真的读到了（false = 按 0 呈现，需在界面上说明）.
+        // 「剩余容量」是否真的读到了（false = 按 0 呈现，需在界面上说明）.
         var freeUnknown = false
         let snap = try snapshot ?? buildSnapshot(progress: progress)
 
-        // v0.3.673：**读不到容量就报错，不要报 0**. 旧写法 `try? … ?? [:]` 把
+        // **读不到容量就报错，不要报 0**. 旧写法 `try? … ?? [:]` 把
         // lockdown 读取失败折成空字典，于是 total/free 全落 0：环形图空、图例全 0、
         // 标题写着「已用 0 B / 总量 0 B」—— 一台 256GB 的手机会被显示成一台空手机，
         // 而用户没有任何线索知道这是"没读到". 现在把失败原文抛出去，页面按读取失败
@@ -778,7 +777,7 @@ enum DeviceSlimService {
         }
         usage.total = total
         let system = num("TotalSystemCapacity") ?? 0
-        // v0.3.673：**剩余容量没读到也不能按 0 报**. 三个键全缺时 free = 0，
+        // **剩余容量没读到也不能按 0 报**. 三个键全缺时 free = 0，
         // 差额会被 other = total - ... - 0 全部吞掉 ——「剩余 0 B、其他巨大」是纯假象.
         let free = num("AmountRestoreAvailable") ?? num("AmountDataAvailable") ?? num("TotalDataAvailable")
         usage.free = free ?? 0
@@ -792,13 +791,13 @@ enum DeviceSlimService {
         }
 
         var apps: Int64 = 0
-        // v0.3.378：快路径（get_apps）保底出数据，不再「超时按空处理」；
+        // 快路径（get_apps）保底出数据，不再「超时按空处理」；
         // 精确大小依赖可选增强，取不到时该分片会偏小，页面以「应用大小不可用」明确说明.
         let appRead = readAppsForSlim()
         for app in appRead.apps where app.applicationType != "System" {
             apps += app.appSize ?? 0
         }
-        // v0.3.673：**部分和不能当全量**. 没有 appSize 的应用被按 0 累加，
+        // **部分和不能当全量**. 没有 appSize 的应用被按 0 累加，
         // 于是「应用」分片是一个下界，差额全部被下面的 other 兜走 ——
         // 图上看起来"应用很小、其他很大"，其实是没量到. 现在把这种状态标出来.
         var partial = false
@@ -828,14 +827,14 @@ enum DeviceSlimService {
             UsageSlice(id: "free", label: "剩余", bytes: usage.free, colorHex: 0xBDBDBD),
         ]
         usage.scannedAt = snap.takenAt
-        // v0.3.673：把「这个数字不完整」带到界面上，而不是只在日志里.
+        // 把「这个数字不完整」带到界面上，而不是只在日志里.
         // 两个来源：① 应用大小只量到一部分（partial）；② 扫描时有目录读不出.
         let unreadable = snap.unreadablePaths ?? []
         var notes: [String] = []
         if partial { notes.append("应用大小不完整") }
         if freeUnknown { notes.append("剩余容量未读到") }
         if !unreadable.isEmpty { notes.append("\(unreadable.count) 个目录读不出") }
-        // v0.3.694：触顶与「读不出」是两回事，分开说（数字同样偏小，但原因与对策不同）.
+        // 触顶与「读不出」是两回事，分开说（数字同样偏小，但原因与对策不同）.
         if let limitSkipped = snap.limitSkippedDirectories, limitSkipped > 0 {
             notes.append("\(limitSkipped) 个目录未展开")
         }
@@ -866,7 +865,7 @@ enum DeviceSlimService {
         let snap = try snapshot ?? buildSnapshot(progress: progress)
         var groups: [Group] = []
 
-        // v0.3.673：**「没量到」与「量到 0」分开**. 旧实现 `?? 0` + `guard bytes > 0`
+        // **「没量到」与「量到 0」分开**. 旧实现 `?? 0` + `guard bytes > 0`
         // 把两种完全不同的情况并成"这一项不显示"：目录读不出（或本轮被跳过）时，
         // 可清理项会静默消失，用户看到的是"这台设备没缓存"，而不是"这次没扫到".
         let unreadable = snap.unreadablePaths ?? []
@@ -892,7 +891,7 @@ enum DeviceSlimService {
 
         var tempItems: [Item] = []
         for (path, why) in tempPaths {
-            // v0.3.673：同「系统缓存」—— 没量到 ≠ 0 字节.
+            // 同「系统缓存」—— 没量到 ≠ 0 字节.
             guard let bytes = snap.totals[path] else {
                 skippedUnmeasured += 1
                 continue
@@ -905,7 +904,7 @@ enum DeviceSlimService {
         groups.append(Group(kind: .tempFiles, items: tempItems))
 
         groups.append(Group(kind: .bigApps, items: bigApps()))
-        // v0.3.694：触顶同样属于「这份列表不完整」，要一起说.
+        // 触顶同样属于「这份列表不完整」，要一起说.
         let limitSkipped = snap.limitSkippedDirectories ?? 0
         if skippedUnmeasured > 0 || !unreadable.isEmpty || limitSkipped > 0 {
             LoginLogger.shared.log(
@@ -931,17 +930,17 @@ enum DeviceSlimService {
         }
 
         var out: [Item] = []
-        // v0.3.673：文档大小未知的应用条数（见循环内说明）.
+        // 文档大小未知的应用条数（见循环内说明）.
         var unmeasuredDocCount = 0
-        // v0.3.378：快路径（get_apps）保底出数据；没有精确大小时（增强未成功）
+        // 快路径（get_apps）保底出数据；没有精确大小时（增强未成功）
         // 该分组判不出「> 500MB」，页面以「应用大小不可用」明确说明，而不是静默变空.
         let appRead = readAppsForSlim()
         for app in appRead.apps {
             guard app.applicationType != "System" else { continue }
             let appSize = app.appSize ?? 0
-            // v0.3.408：文档大小取**本机通道**量到的结果（`DynamicDiskUsage` 不在请求里，
-            // 见 `startDocSizePass`）。还没量到的按 0 算 —— 与从前一字不差，不是回退.
-            // v0.3.673：**但"没量到"必须可分辨**. `cachedDocSize` 返回 nil 有两种含义
+            // 文档大小取**本机通道**量到的结果（`DynamicDiskUsage` 不在请求里，
+            // 见 `startDocSizePass`）.还没量到的按 0 算 —— 与从前一字不差，不是回退.
+            // **但"没量到"必须可分辨**. `cachedDocSize` 返回 nil 有两种含义
             // （还没量 / 量失败），旧写法一律 `?? 0`，于是「较大应用」的判定
             // `total > bigAppThreshold` 会把文档很重的应用漏掉，界面也不说为什么.
             // 现在把"文档大小未知"的应用条数写进日志，让漏判可被看见.
@@ -950,7 +949,7 @@ enum DeviceSlimService {
             let docSizeKnown = measuredDoc != nil
             if !docSizeKnown { unmeasuredDocCount += 1 }
             let total = appSize + docSize
-            // v0.3.708：**文档大小未知的应用不参与阈值跳过判定**.
+            // **文档大小未知的应用不参与阈值跳过判定**.
             // 未知时 `total` 只是下界（= 应用本体），照旧 `guard total > 阈值` 会把
             // 文档很重的应用（微信、游戏）静默跳过 —— 上面那行注释指的正是它.
             // 现在未知的一律先收进候选，由 `docSizeKnown` 让界面把「文档」显示成「—」.
@@ -990,8 +989,8 @@ enum DeviceSlimService {
         return name.isEmpty ? path : name
     }
 
-    /// 探测「免登录源里有没有这些应用」，回填 `sourceAvailable`（爱思的「资源缺失无法重装」）。
-    /// 值为 nil = 该项这次没查成（**不是**资源缺失，UI 不应拦）。
+    /// 探测「免登录源里有没有这些应用」，回填 `sourceAvailable`（爱思的「资源缺失无法重装」）.
+    /// 值为 nil = 该项这次没查成（**不是**资源缺失，UI 不应拦）.
     static func probeSourceAvailability(_ targets: [(bundleId: String, name: String)],
                                         progress: ((Int, Int) -> Void)? = nil) async -> [String: Bool?] {
         await SourcePackageLocator.probe(bundleIds: targets, progress: progress)
@@ -1015,13 +1014,13 @@ enum DeviceSlimService {
         try AFCService.shared.batch { client in
             for (index, item) in targets.enumerated() {
                 progress?(index + 1, targets.count)
-                // 删除前先量一次：删完路径就没了，那时再量只会得到 0。
+                // 删除前先量一次：删完路径就没了，那时再量只会得到 0.
                 //
                 // 原实现删完又量了一次（`measure(...).bytes`），而 `measure` 在路径不存在时
-                // 返回 (0, 0) —— 于是 `max(0, before - after)` 变成 `max(0, before - 0)`。
+                // 返回 (0, 0) —— 于是 `max(0, before - after)` 变成 `max(0, before - 0)`.
                 // 当 before 也读失败（同样是 0）时，`freed` 恒为 0：
-                // 用户看到「已释放 0 字节」，但文件其实已经删掉了 —— 会以为功能失效并反复清理。
-                // v0.3.661：`measure` 现在可空 —— 量不到就是「不知道」，不是 0。
+                // 用户看到「已释放 0 字节」，但文件其实已经删掉了 —— 会以为功能失效并反复清理.
+                // `measure` 现在可空 —— 量不到就是「不知道」，不是 0.
                 let before = measure(client: client, path: item.id)?.bytes
                 if let ffiError = item.id.withCString({ afc_remove_path_and_contents(client, $0) }) {
                     let message = DeviceErrorText.cleaned(ffiError.pointee.message) ?? "rc=\(ffiError.pointee.code)"
@@ -1029,9 +1028,9 @@ enum DeviceSlimService {
                     result.failures.append("\(item.name)：\(message)")
                     continue
                 }
-                // 删成功即视为释放了 before 字节，不再二次测量（路径已不存在）。
+                // 删成功即视为释放了 before 字节，不再二次测量（路径已不存在）.
                 // 量不到时**不累加**（之前的写法会把「量不到」当 0 加进 freed，
-                // 结果是「已释放 0 字节」而文件已经没了），只记一个 unmeasured 计数。
+                // 结果是「已释放 0 字节」而文件已经没了），只记一个 unmeasured 计数.
                 if let before {
                     result.freed += before
                 } else {
@@ -1041,21 +1040,21 @@ enum DeviceSlimService {
             }
         }
         // 数值已变，作废缓存.
-        // v0.3.673：**作废失败要留痕**. 旧写法 `try?` 吞掉失败，缓存文件仍在，
+        // **作废失败要留痕**. 旧写法 `try?` 吞掉失败，缓存文件仍在，
         // 下次进页面（10 分钟内）又把刚删掉的项原样列出来 —— 用户以为删除没生效.
         invalidateSnapshot(reason: "清理完成")
-        // v0.3.675：`clean` 返回 `CleanResult`，上面两行只是副作用调用 —— 少 `return` 时
+        // `clean` 返回 `CleanResult`，上面两行只是副作用调用 —— 少 `return` 时
         // swiftc 报 `missing return in static method expected to return 'DeviceSlimService.CleanResult'`（CI run 39139842642 实测）.
         return result
     }
 
     // MARK: - 重装（较大应用）
 
-    /// 卸载 + 重装（**会清掉该 App 的文稿与数据**）。
+    /// 卸载 + 重装（**会清掉该 App 的文稿与数据**）.
     ///
     /// 本地「免登录下载」库里没有该包时，**现场去免登录源按 bundleId 找并下载**
-    /// ——这正是爱思的做法（它的包不落本地，重装时从自己服务端取）。
-    /// 源里也找不到才判定为「资源缺失」。
+    /// ——这正是爱思的做法（它的包不落本地，重装时从自己服务端取）.
+    /// 源里也找不到才判定为「资源缺失」.
     static func reinstall(items: [Item],
                           progress: (@Sendable (ReinstallProgress) -> Void)? = nil) async -> ReinstallResult {
         var result = ReinstallResult()
@@ -1064,7 +1063,7 @@ enum DeviceSlimService {
             // Swift 6：report 会被下面两个 @Sendable 的 progress 闭包捕获 ——
             // 标 @Sendable，并且只捕获 Sendable 的快照（进度回调、序号、总数、名称），
             // 不再捕获可能非 Sendable 的 `item` / `targets`（原写法触发
-            // SendableClosureCaptures，CI 实测 :797）。语义不变。
+            // SendableClosureCaptures，CI 实测 :797）.语义不变.
             let progressHandler = progress
             let itemIndex = index + 1
             let itemTotal = targets.count
@@ -1108,7 +1107,7 @@ enum DeviceSlimService {
                 // ② 卸载 → 装回
                 report(.installing, 0.6)
                 try UninstallService.shared.uninstall(bundleId: item.id)
-                // v0.3.708：卸载之后的失败**另记一类** —— 这一步成功即设备上已无此应用，
+                // 卸载之后的失败**另记一类** —— 这一步成功即设备上已无此应用，
                 // 与上面「源里没有包」「安装包不可用」（原应用还在）不是同一种后果，
                 // 折进同一个 failures 会让用户以为只是「没装上」.
                 do {
@@ -1138,11 +1137,11 @@ enum DeviceSlimService {
 
     /// 量一个路径的字节数 / 文件数.
     ///
-    /// v0.3.661：**改为可空**。原来 stat 失败直接 `return (0, 0)`，调用方无从分辨
+    /// **改为可空**.原来 stat 失败直接 `return (0, 0)`，调用方无从分辨
     /// 「真的是 0 字节」与「压根没量到」：`clean()` 里会把量失败当成 0 累加进
     /// `result.freed`，用户看到「已释放 0 字节」而文件其实已被删掉 —— 与该方法上方
-    /// :760-765 已经修过的「删完再量」缺陷是同一个坑的另一半。
-    /// 现在失败返回 nil，由调用方决定「未计量」怎么呈现（不冒充 0）。
+    /// :760-765 已经修过的「删完再量」缺陷是同一个坑的另一半.
+    /// 现在失败返回 nil，由调用方决定「未计量」怎么呈现（不冒充 0）.
     static func measure(client: OpaquePointer, path: String) -> (bytes: Int64, files: Int)? {
         var info = AfcFileInfo()
         let rc = path.withCString { afc_get_file_info(client, $0, &info) }
@@ -1160,7 +1159,7 @@ enum DeviceSlimService {
         var files = 0
         var stack = [path]
         while let current = stack.popLast() {
-            // v0.3.666：**任何一级子目录读失败都不能返回部分和**.
+            // **任何一级子目录读失败都不能返回部分和**.
             //
             // 旧写法 `try? ... else { continue }` 会把「这一层没读成」悄悄跳过，
             // 函数照样返回一个 (bytes, files) —— 但它只是**已遍历部分**的和，

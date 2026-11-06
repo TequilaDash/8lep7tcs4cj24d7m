@@ -1,10 +1,10 @@
 import Foundation
 import CryptoKit
 
-/// v0.3.251：GrandSlam / Apple API 专用请求通道.
+/// GrandSlam / Apple API 专用请求通道.
 ///
 /// 根因（AltSign PR #52 实锤，2026-08-31 起）：Apple 在 gsa.apple.com 前面的边缘节点
-/// 现在**每条连接最多放行 1~2 个请求**，之后的请求一律回 503 HTML。登录要连发三个请求
+/// 现在**每条连接最多放行 1~2 个请求**，之后的请求一律回 503 HTML.登录要连发三个请求
 /// （o=init → o=complete → o=apptokens），`URLSession.shared` 会复用连接 →
 /// `apptokens` 必中 503，HTML 被 plist 解析器吃掉就成了
 /// `NSCocoaErrorDomain 3840「数据格式不正确」`——密码其实已经验证通过.
@@ -36,9 +36,9 @@ enum GrandSlamHTTP {
 /// 使用本项目自带的 `GSAAuth`（SRP-6a）完成 init → complete 握手，支持两步验证（受信任设备 / 短信），
 /// 成功后返回 `Account` 与 `AppleAPISession`.全程只依赖原生框架.
 enum AppleAuthenticator {
-    /// Swift 6 并发检查：`ISO8601DateFormatter` 不是 Sendable，无法作为共享静态实例。
+    /// Swift 6 并发检查：`ISO8601DateFormatter` 不是 Sendable，无法作为共享静态实例.
     /// 改为**按需构造**的计算属性：原来是「无参构造、不再修改」的静态实例，
-    /// 输出与配置完全一致，只是不再共享同一个对象（调用点在认证流程里，开销可忽略）。
+    /// 输出与配置完全一致，只是不再共享同一个对象（调用点在认证流程里，开销可忽略）.
     static var dateFormatter: ISO8601DateFormatter { ISO8601DateFormatter() }
 
     static let gsaURL = URL(string: "https://gsa.apple.com/grandslam/GsService2")!
@@ -54,7 +54,7 @@ enum AppleAuthenticator {
         password: String,
         anisetteData: AnisetteData,
         // Swift 6：内层「提交验证码」回调 reply 也会被 @Sendable 闭包捕获
-        // （AppleIDLoginSheet:179），所以内层同样要标 @Sendable（CI 实测）。
+        // （AppleIDLoginSheet:179），所以内层同样要标 @Sendable（CI 实测）.
         verificationHandler: (@Sendable (@escaping @Sendable (String?) -> Void) async -> Void)? = nil,
         refreshAnisette: (() async throws -> AnisetteData)? = nil
     ) async throws -> (Account, AppleAPISession) {
@@ -144,10 +144,10 @@ enum AppleAuthenticator {
 
         context.dsid = dsid
 
-        // v0.3.613：GSA 改了 2FA 响应形态 —— 现在**返回 409 且不带 `au` 字段**，
-        // 自己弹 2FA。此前只读 `au`，于是 authType=nil 落到 default 分支，
+        // GSA 改了 2FA 响应形态 —— 现在**返回 409 且不带 `au` 字段**，
+        // 自己弹 2FA.此前只读 `au`，于是 authType=nil 落到 default 分支，
         // 拿不到 sk/c 直接抛 badServerResponse，用户看到的就是
-        // 「Apple ID 验证失败 / Code -80045」。
+        // 「Apple ID 验证失败 / Code -80045」.
         // 依据：SideSign PR #5「Fix 2FA failing」（2026-10-13，merged）——
         //   let authType = (statusDictionary?["au"] as? String)
         //      ?? ((statusDictionary?["hsc"] as? Int) == 409 ? "pushedCode" : nil)
@@ -157,23 +157,23 @@ enum AppleAuthenticator {
         switch authType {
         case "trustedDeviceSecondaryAuth", "pushedCode":
             // `pushedCode` = GSA 主动推送到受信任设备的验证码（与 trustedDeviceSecondaryAuth 同一条处理链，
-            // 对齐 SideSign 把二者并入同一 case 的做法）。
+            // 对齐 SideSign 把二者并入同一 case 的做法）.
             guard let verificationHandler else { throw AppleAPIError.requiresTwoFactorAuthentication }
             try await requestTrustedDeviceTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, verificationHandler: verificationHandler)
-            // v0.3.265：2FA 通过后用【同一份 anisetteData】重新握手，禁止刷新！
+            // 2FA 通过后用【同一份 anisetteData】重新握手，禁止刷新！
             // 对齐 AltSign 原版（ALTAppleAPI+Authentication.m：验证成功后 restart
-            // authentication 传入的就是原 anisetteData，注释 "which will now succeed"）。
+            // authentication 传入的就是原 anisetteData，注释 "which will now succeed"）.
             // 此前 refreshAnisette 换新 OTP → 服务器重新 provision → MD-M 机器标识
             // 变化（真机 20:23 日志：三次 provision 三个不同 MD-M）→ 2FA 验证绑的是
             // 机器 A、重新握手变成机器 B → Apple 视机器 B 为未验证 2FA → 又要求
-            // 2FA → 死循环（用户被迫反复输码，最终「登录失败: 需要两步验证」）。
+            // 2FA → 死循环（用户被迫反复输码，最终「登录失败: 需要两步验证」）.
             // AltSign 千万用户验证过：同一份 anisetteData（含已消费 OTP）走两轮握手可行.
             return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, verificationHandler: verificationHandler, refreshAnisette: refreshAnisette)
 
         case "secondaryAuth":
             guard let verificationHandler else { throw AppleAPIError.requiresTwoFactorAuthentication }
             try await requestSMSTwoFactorCode(dsid: dsid, idmsToken: idmsToken, anisetteData: anisetteData, verificationHandler: verificationHandler)
-            // v0.3.265：短信路径同款修复（同死循环根因）.
+            // 短信路径同款修复（同死循环根因）.
             return try await authenticate(appleID: unsanitizedAppleID, password: password, anisetteData: anisetteData, verificationHandler: verificationHandler, refreshAnisette: refreshAnisette)
 
         default:
@@ -257,15 +257,15 @@ enum AppleAuthenticator {
         guard errorCode == 0 else {
             switch errorCode {
             // 2026-10-15 起「查无此 Apple ID」由 -20101 变为 -20970（对齐 SideInstaller
-            // a93da4697 的 Engine.swift credentialErrorCodes）；-20101/-22406 仍是密码错误。
+            // a93da4697 的 Engine.swift credentialErrorCodes）；-20101/-22406 仍是密码错误.
             case -20101, -20970, -22406: throw AppleAPIError.incorrectCredentials
             case -22421:
                 LoginLogger.shared.log("[失败] Apple 拒绝 Anisette(-22421): \(errorMessage)", category: .appleID)
                 throw AppleAPIError.customError(code: -22421, message: "Anisette 被 Apple 拒绝: \(errorMessage)")
             case -20209: throw AppleAPIError.accountLocked
             // 2026-10-12 起 GSA 拒绝「登录客户端系统 ≠ 机器标识所用 ADI 库」的登录：
-            // 公共 Anisette 服务器多用 Android ADI 库，客户端标识却报 macOS → 必现 -80045。
-            // 判据收口对齐 SideInstaller d9c283190「Fix Apple ID sign-in failing with -80045」。
+            // 公共 Anisette 服务器多用 Android ADI 库，客户端标识却报 macOS → 必现 -80045.
+            // 判据收口对齐 SideInstaller d9c283190「Fix Apple ID sign-in failing with -80045」.
             case -80045:
                 LoginLogger.shared.log("[失败] Apple 拒绝登录(-80045): \(errorMessage)", category: .appleID)
                 throw AppleAPIError.customError(

@@ -56,7 +56,7 @@ enum BluetoothLinkState: Equatable {
 /// 链路常量（UUID 双方一致；广播名按角色区分）.
 enum BluetoothLink {
     /// Swift 6 并发检查：`CBUUID` 非 Sendable，但这三个都是**构造后永不修改的常量**
-    /// （只用于广播/订阅时的匹配比较），跨线程只读访问安全。
+    /// （只用于广播/订阅时的匹配比较），跨线程只读访问安全.
     nonisolated(unsafe) static let serviceUUID = CBUUID(string: "E5C0A100-1B2F-4E6A-9A11-0E50F1A1B001")
     /// A 机 notify、B 机订阅：坐标下行（同上：不可变常量）.
     nonisolated(unsafe) static let coordinateCharacteristicUUID = CBUUID(string: "E5C0A101-1B2F-4E6A-9A11-0E50F1A1B001")
@@ -169,25 +169,25 @@ struct BluetoothLocationPayload {
 
 /// B→A 回报：1 字节消息类型 + 负载.
 ///
-/// ## v0.3.540：上行通道从「只报状态」扩成「带类型的消息」
+/// ## ：上行通道从「只报状态」扩成「带类型的消息」
 ///
-/// 背景：用户拍板把选图钉的位置改到 **B 机**（符合直觉 —— 谁要用谁选）。
-/// 这需要一条 **B→A 的反向请求**：B 机放图钉后告诉 A 机「请把这个坐标下发给我」。
+/// 背景：用户拍板把选图钉的位置改到 **B 机**（符合直觉 —— 谁要用谁选）.
+/// 这需要一条 **B→A 的反向请求**：B 机放图钉后告诉 A 机「请把这个坐标下发给我」.
 ///
 /// 设计上**不新增特征**，直接复用既有的「状态」write 特征（`E5C0A102-…`）：
-/// 所有上行消息共用它，靠**首字节的类型标签**区分。
+/// 所有上行消息共用它，靠**首字节的类型标签**区分.
 ///
 /// ## 注意： 类型标签为什么从 0x80 起（不能从 0/1 起）
 ///
 /// 历史线格式里，状态消息的首字节是**状态码 0~4**（idle / connecting / active /
-/// reconnecting / dropped）。若把 `requestPush` 的标签取成 `1`，就会和
-/// 「正在连接」这个状态码**撞车**，A 机无法区分两者。
+/// reconnecting / dropped）.若把 `requestPush` 的标签取成 `1`，就会和
+/// 「正在连接」这个状态码**撞车**，A 机无法区分两者.
 /// 所以新类型的标签一律取 **`0x80` 以上**（状态码永远 ≤ 4），
-/// A 机读到 `≥ 0x80` 就当新消息处理，读到 `≤ 4` 就当老格式的状态回报 —— 天然不冲突。
+/// A 机读到 `≥ 0x80` 就当新消息处理，读到 `≤ 4` 就当老格式的状态回报 —— 天然不冲突.
 ///
 /// ## 线格式
 /// ```
-/// status       ：[code(0~4)][error]                     共 2 字节（与 v0.3.539 一致）
+/// status ：[code(0~4)][error] 共 2 字节（与 一致）
 /// requestPush  ：[0x80][纬度 8 字节小端][经度 8 字节小端]  共 17 字节
 /// ```
 struct BluetoothUplinkMessage: Equatable {
@@ -207,10 +207,10 @@ struct BluetoothUplinkMessage: Equatable {
     let requestedCoordinate: CLLocationCoordinate2D
 
     /// 手写 `==`：`CLLocationCoordinate2D` 是 C 结构体，**不满足 `Equatable`**，
-    /// 所以编译器无法合成 `Equatable` 一致性（v0.3.540 CI 实测报错：
-    /// `stored property type 'CLLocationCoordinate2D' does not conform to protocol 'Equatable'`）。
+    /// 所以编译器无法合成 `Equatable` 一致性（CI 实测报错：
+    /// `stored property type 'CLLocationCoordinate2D' does not conform to protocol 'Equatable'`）.
     /// 按经纬度逐字段比较即可 —— 浮点用 `==` 是有意的：这里比的是「同一个坐标原样往返」，
-    /// 不涉及计算，位级相等才说明编码/解码没丢精度。
+    /// 不涉及计算，位级相等才说明编码/解码没丢精度.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.kind == rhs.kind
             && lhs.requestedCoordinate.latitude == rhs.requestedCoordinate.latitude

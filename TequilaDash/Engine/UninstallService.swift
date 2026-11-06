@@ -40,8 +40,8 @@ enum UninstallServiceError: LocalizedError {
 }
 
 /// `@unchecked Sendable`：本类**没有可变存储属性**，唯一存储属性是只读的
-/// `tunnel`（`TunnelContext` 自身负责其线程安全）；`uninstall` 全程用局部变量。
-/// 因为 `tunnel` 的类型未标注 `Sendable`，编译器无法自动推导，故用 unchecked 显式声明。
+/// `tunnel`（`TunnelContext` 自身负责其线程安全）；`uninstall` 全程用局部变量.
+/// 因为 `tunnel` 的类型未标注 `Sendable`，编译器无法自动推导，故用 unchecked 显式声明.
 final class UninstallService: @unchecked Sendable {
     static let shared = UninstallService()
 
@@ -58,8 +58,8 @@ final class UninstallService: @unchecked Sendable {
             throw UninstallServiceError.notConfigured
         }
         // Cellular隧道支持（默认关）：与 `AppDiscovery.fetchInstalledApps` 同一接线，
-        // 蜂窝（开关开 + 无 Wi-Fi）下建隧道前有界等隧道就绪，**不碰蜂窝开关**. 开关关时是 no-op。
-        // 返回值要用起来：蜂窝模式下区分「等到了、但卸载仍失败」与「等待超时、根本没等到」。
+        // 蜂窝（开关开 + 无 Wi-Fi）下建隧道前有界等隧道就绪，**不碰蜂窝开关**. 开关关时是 no-op.
+        // 返回值要用起来：蜂窝模式下区分「等到了、但卸载仍失败」与「等待超时、根本没等到」.
         let tunnelReady = CellularTunnelManager.shared.prepareForTunnel()
         // `uninstallAppWithBundleId:error:` is imported as a throwing method
         // `uninstallApp(withBundleId:)` that returns Void (the BOOL result is
@@ -68,7 +68,7 @@ final class UninstallService: @unchecked Sendable {
         do {
             try tunnel.uninstallApp(withBundleId: bundleId)
         } catch {
-            // 蜂窝模式下如实点明是「没等到隧道」还是「隧道在、卸载失败」（其余情况原样上报 installd 的错误）。
+            // 蜂窝模式下如实点明是「没等到隧道」还是「隧道在、卸载失败」（其余情况原样上报 installd 的错误）.
             if CellularTunnelManager.shared.isCellularMode {
                 let reason = tunnelReady
                     ? "本地隧道已就绪但卸载失败（LocalDevVPN 可能已断开）"

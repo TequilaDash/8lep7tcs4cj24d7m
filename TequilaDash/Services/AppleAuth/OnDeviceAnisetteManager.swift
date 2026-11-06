@@ -4,7 +4,6 @@ import Security   // SecRandomCopyBytes / kSecRandomDefault / errSecSuccess（�
 
 /// 本机 Anisette（On-Device Anisette，ODA）模式管理器.
 ///
-/// ## 机制（据 SideStore / SideSign 源码 + 实测载荷）
 /// ODA 的开关分两条路：
 ///   · 关 → 远程：把 `identifier` + `adi_pb` 发给 anisette 服务器取 headers；
 ///   · 开 → 本机：下载一份**元数据载荷**（`https://zzz.haus/oda.json`），解出 ADI 引擎库，
@@ -30,7 +29,6 @@ import Security   // SecRandomCopyBytes / kSecRandomDefault / errSecSuccess（�
 /// ## 参考实现（本轮实证）
 /// SideStore 的 `SideStore/Core/Anisette/OnDeviceAnisetteManager.swift` 只是薄壳，
 /// 真逻辑在 SPM 依赖 **`SideSign`** 的 `Sources/Anisette/AnisetteDataManager.swift`
-/// （`github.com/SideStore/SideSign`，main @ `6b68651697f99791ef85404b7aea1891a26a285d`）：
 ///   · 模式枚举 `AnisetteMode.remoteODA(sourceURL:fallbackURL:)`；
 ///   · `getClient(for:)` 的 `remoteODA` 分支：`createDirectory(libsDir)` 后，
 ///     **若 `validateLibrariesExist(libsDir)` 为假就自动 `setupFromRemote(...)`**
@@ -47,23 +45,21 @@ import Security   // SecRandomCopyBytes / kSecRandomDefault / errSecSuccess（�
 /// 走 Apple 的 ADI 协议产出 headers（等价于移植 SideSign 的 `AnisetteDataManager` +
 /// AnisetteKit 的 C++ `anisette_core_uc` / `EmulatorVM` / `elf_loader_emulator`）.
 ///
-/// 卡点重新评估（v0.3.613，撤回旧判断）：
-///   1. **Unicorn 架构** —— **已解**：`prepare.sap.py` 改为 `-DUNICORN_ARCH=x86;aarch64`。
+/// 卡点重新评估（撤回旧判断）：
+///   1. **Unicorn 架构** —— **已解**：`prepare.sap.py` 改为 `-DUNICORN_ARCH=x86;aarch64`.
 ///      UNICORN_ARCH 本来就支持分号分隔多值（其 `CMakeLists.txt:88` 的默认值就是十个架构并列，
 ///      `:92-95` 是 foreach 逐个开开关，不是二选一），故一个 `libunicorn.a` 同时含两个后端，
-///      无符号冲突。x86 给 SAP 的 Apple Mach-O 资产用，aarch64 给本机 Anisette 的 ELF 用。
+///      无符号冲突.x86 给 SAP 的 Apple Mach-O 资产用，aarch64 给本机 Anisette 的 ELF 用.
 ///   2. **许可** —— **不是卡点，本条撤回**：AnisetteKit 确是 AGPLv3，但**分发类许可只在
-///      「产物要公开」时才约束**；本项目内部自用、不公开（用户已明确多次）。
-///      ⇒ 取数层可以照它的实现搬（自用可读可参考）。
+///      「产物要公开」时才约束**；本项目内部自用、不公开（用户已明确多次）.
+///      ⇒ 取数层可以照它的实现搬（自用可读可参考）.
 ///
-/// 参考实现（照搬对象）：
 ///   · `SideStore/SideSign` → `Sources/Anisette/AnisetteDataManager.swift`（`remoteODA` 分支）
 ///   · AnisetteKit 的 C++ 取数层（`anisette_core_uc` / `EmulatorVM` / `elf_loader_emulator`）
 ///
 /// 相关坑（MJorb 踩过，我们也要核）：`.so` **必须真的能被打到 App 能读到的位置**，
-/// 否则本机 anisette 永远回退远程 -> machineID 漂移 -> Apple ID 失效。
-/// 本仓走的是与 SideStore 同款的**运行时惰性下载**（`remoteODA` 语义），
-/// 落盘在 App 自己的 `.anisette/libs`，不依赖 bundle 内嵌。
+/// 否则本机 anisette 永远回退远程 -> machineID 漂移 -> Apple ID 失效.
+/// 落盘在 App 自己的 `.anisette/libs`，不依赖 bundle 内嵌.
 ///
 /// 故本类**不臆造**取数接口；在它接线之前，`AnisetteProvider` 对已就绪的本机模式仍会
 /// **显式回退远程**并记录原因（绝不静默）.
@@ -77,7 +73,6 @@ final class OnDeviceAnisetteManager: ObservableObject {
     /// 默认关（`UserDefaults` 无值即 `false`）⇒ 不开开关时引擎层零行为变化.
     static let enabledKey = "TequilaDash.OnDeviceAnisette"
 
-    /// ODA 元数据源（ADI 引擎载荷 + 校验字段），对齐 SideStore
     /// `AppConstants.Anisette.defaultODAMetadataURL`（实测 = `https://zzz.haus/oda.json`）.
     static let metadataURL = "https://zzz.haus/oda.json"
     /// 元数据源主机（供 UI 展示）.
@@ -146,7 +141,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
         case missingLibrary(String)
         case notELF(String)
         case unzipFailed(String)
-        /// v0.3.662（task-13 发现11）：载荷 sha256 与元数据声明不符 —— 拒绝安装.
+        /// 载荷 sha256 与元数据声明不符 —— 拒绝安装.
         case sha256Mismatch(expected: String, actual: String)
 
         var errorDescription: String? {
@@ -249,7 +244,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
     private nonisolated static func fetchAndInstallEngine(into directory: URL) async throws -> InstalledEngine {
         let meta = try await fetchMetadata()
         // `resolvePayload(_:)` 形参是非可选 `String`，而 `meta.payload` 是 `String?`
-        // ⇒ 必须先解包（CI 报的正是这一行：value of optional type 'String?' must be unwrapped）。
+        // ⇒ 必须先解包（CI 报的正是这一行：value of optional type 'String?' must be unwrapped）.
         guard let rawPayload = meta.payload, !rawPayload.isEmpty else {
             throw EngineError.malformedMetadata
         }
@@ -257,16 +252,16 @@ final class OnDeviceAnisetteManager: ObservableObject {
 
         // sha256 校验：`s` = sha256(base64 载荷 + "\n")（实测确认）.
         //
-        // ⚠️ v0.3.662（task-13 发现11）：**不匹配必须硬失败，不能只记日志**。
+        // ⚠️ ：**不匹配必须硬失败，不能只记日志**.
         // 原实现「对齐 SideSign：不匹配只记日志、不中断 —— 最终以解压出的库文件（存在 + ELF 魔数）为准」，
         // 但这两份库随后会被本进程**解释执行**（OnDeviceAnisetteClient -> Unicorn AArch64），
         // sha256 是这个载荷**唯一的完整性锚点**；而下面 292-296 行的次级检查
-        // （文件存在 + ELF 魔数）反倒是硬失败 ⇒ 强弱校验倒置。
-        // 服务器被劫持 / 中间人替换后只需同时改 `oda.json` 的 `s` 字段即可绕过旧逻辑。
+        // （文件存在 + ELF 魔数）反倒是硬失败 ⇒ 强弱校验倒置.
+        // 服务器被劫持 / 中间人替换后只需同时改 `oda.json` 的 `s` 字段即可绕过旧逻辑.
         //
         // 用显式绑定名（`let b64 = base64String`）而不是 `let base64String` 简写：
         // CI 上后者报「value of optional type 'String?' must be unwrapped」
-        // （简写在部分工具链 / 与同名形参共存时会退化为恒真绑定）。
+        // （简写在部分工具链 / 与同名形参共存时会退化为恒真绑定）.
         if let expected = meta.sha, let b64 = base64String {
             let actual = SHA256.hash(data: Data((b64 + "\n").utf8))
                 .map { String(format: "%02x", $0) }.joined()
@@ -368,7 +363,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             // 拆成多步：CI 上链式 `??` 太长会报
             // 「the compiler is unable to type-check this expression in reasonable time」
-            // —— 编译器自己建议「break up the expression into distinct sub-expressions」。
+            // —— 编译器自己建议「break up the expression into distinct sub-expressions」.
             let shaA = try c.decodeIfPresent(String.self, forKey: .s)
             let shaB = try c.decodeIfPresent(String.self, forKey: .sha)
             let shaC = try c.decodeIfPresent(String.self, forKey: .sha256)
@@ -405,7 +400,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
     /// 探测本机模式是否就绪. 判据全部是**可验证的实据**（文件存在性 / 钥匙串内容），
     /// 不是占位返回.
     ///
-    /// v0.3.619：开关打开但缺 `identifier` 时**主动生成**.
+    /// 开关打开但缺 `identifier` 时**主动生成**.
     ///
     /// 真机证据（2026-10-17 诊断页）：开关已开、引擎已装，但显示
     /// 「未就绪（缺 设备身份 identifier）」—— 因为 `identifier` 只在
@@ -489,7 +484,7 @@ final class OnDeviceAnisetteManager: ObservableObject {
 
     /// 供 `AnisetteProvider` 记录「本次为何回退远程」的可读原因.
     ///
-    /// **契约（v0.3.616 修正，此前写反）**：`nil` = **可以走本机**（开关开且引擎就绪）；
+    /// **契约（修正，此前写反）**：`nil` = **可以走本机**（开关开且引擎就绪）；
     /// 非 nil = 回退远程的原因. 调用方 `AnisetteProvider` 的判据是
     /// `if let reason = ... { 回退 } else if let local = try? fetch { 用本机 }`，
     /// 所以**只有 `.ready` 才能返回 nil** —— 旧实现在 `.ready` 时返回「尚未接线」，

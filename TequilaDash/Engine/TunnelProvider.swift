@@ -12,7 +12,7 @@ import UIKit
 /// ⚠️ 关键纪律（2026-10-10 修正，勿违反）：**设备地址始终由 `LocalDevVPN` 提供**.
 /// 上一版把 40 处调用点改走 `TunnelManager.targetIP` / `TunnelManager.isConnected`，
 /// 结果用户一旦选中 Shadowrocket（其 `isConnected` 恒 `false`、不提供设备连接）⇒
-/// AFC / lockdown / 安装 / 电池健康等**全部失效**。故本文件**不再暴露** `targetIP` /
+/// AFC / lockdown / 安装 / 电池健康等**全部失效**.故本文件**不再暴露** `targetIP` /
 /// `isConnected` 转发；`LocalDevVPN.targetIP` 读的是本机 utun 的**对端地址**，
 /// `LocalDevVPN.isConnected` 读的是「本机是否有 utun」，二者与「用哪个 App 建隧道」无关，
 /// 因此对 LocalDevVPN 与内置隧道同样成立. 本文件只决定**跳转目标**与**内置隧道启停**.
@@ -156,9 +156,9 @@ struct ShadowrocketTunnel: TunnelProviding {
     ///
     /// 为什么是 `shadowrocket://open`：Shadowrocket 官方 wiki 的 URL-Schemes 一节
     /// （github.com/LOWERTOP/Shadowrocket，README「URL-Schemes」）明确列出
-    /// `shadowrocket://connect` 与 `shadowrocket://open`，均标注为「启动 VPN 隧道」。
-    /// 这证明 `shadowrocket` 已注册在其 `CFBundleURLSchemes` 里（未注册则系统不派发）。
-    /// 取 `open` 而非 `connect`：两者同为「启动 VPN 隧道」，`open` 更贴近「把 App 拉起」的本意。
+    /// `shadowrocket://connect` 与 `shadowrocket://open`，均标注为「启动 VPN 隧道」.
+    /// 这证明 `shadowrocket` 已注册在其 `CFBundleURLSchemes` 里（未注册则系统不派发）.
+    /// 取 `open` 而非 `connect`：两者同为「启动 VPN 隧道」，`open` 更贴近「把 App 拉起」的本意.
     /// 反例说明：早期写的 `sub://` 是订阅导入用途，实测 `canOpenURL(sub://)` 不可靠，已弃用.
     private static let openURL = URL(string: "shadowrocket://open")!
 
@@ -187,11 +187,11 @@ struct ShadowrocketTunnel: TunnelProviding {
         //      `[UIApplication.OpenExternalURLOptionsKey: Any]` 跨隔离传 ⇒ 报
         //      「sending value of non-Sendable type ... risks causing data races」；
         //   ③ 显式写全三参（同步重载）⇒ **仍被判成 async**（该重载的 `options` 默认值与
-        //      async 版本重载解析歧义）。
+        //      async 版本重载解析歧义）.
         // 正解：把调用整体放进 MainActor —— `UIApplication.shared` 本就是 MainActor 隔离的，
-        // 字典在闭包内就地构造、不跨隔离传递。闭包只捕获 `Self.openURL` / `Self.appStoreURL`
-        // （均为 static let URL，Sendable）。带 completion 则明确落到 completion 重载
-        // （不会歧义到 async 版），用它如实记下「系统有没有受理」。
+        // 字典在闭包内就地构造、不跨隔离传递.闭包只捕获 `Self.openURL` / `Self.appStoreURL`
+        // （均为 static let URL，Sendable）.带 completion 则明确落到 completion 重载
+        // （不会歧义到 async 版），用它如实记下「系统有没有受理」.
         await MainActor.run {
             UIApplication.shared.open(Self.openURL, options: [:]) { accepted in
                 if accepted {
@@ -593,10 +593,10 @@ enum VPNPermissionProbe {
 
 /// 全仓隧道**选择**入口（只表达用户偏好，不是设备地址的来源）.
 ///
-/// ⚠️ 设计纪律（2026-10-10 修正）：**设备地址不从这里取**。此前把全仓
+/// ⚠️ 设计纪律（2026-10-10 修正）：**设备地址不从这里取**.此前把全仓
 /// `LocalDevVPN.targetIP` / `LocalDevVPN.isConnected` 的调用点改走本类型，导致用户一旦
 /// 选中 Shadowrocket（其 `isConnected` 恒 `false`、且不提供设备连接）⇒ AFC / lockdown /
-/// 安装 / 电池健康 / 崩溃日志等**全部失效**。现明确：
+/// 安装 / 电池健康 / 崩溃日志等**全部失效**.现明确：
 ///   · 依赖设备连接的功能**一律直接读** `LocalDevVPN.targetIP` / `LocalDevVPN.isConnected`
 ///     —— 它读的是本机 utun 的**对端地址**与「本机是否有 utun」，与「用哪个 App 建隧道」无关.
 ///   · 本类型只用于设置页呈现、跳转目标（Shadowrocket / Surge / Loon）与内置隧道的启停.

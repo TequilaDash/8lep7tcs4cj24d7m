@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// v0.3.217：AFC 文本文件查看/编辑（下载 → TextEditor → 保存上传）.
+/// AFC 文本文件查看/编辑（下载 → TextEditor → 保存上传）.
 /// 仅支持小文本（<1MB），二进制/大文件不提供编辑.
 struct AfcTextEditorView: View {
     let load: () throws -> Data

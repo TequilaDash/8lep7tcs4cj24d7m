@@ -15,15 +15,13 @@ import Darwin
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写（唯一消费者 ProcessManagerView）→
 /// 标 `@MainActor` 是语义正确的隔离，同时让 `self` 成为 Sendable：
 /// 各 Task / Task.detached 内层 `MainActor.run { self.x = … }` 捕获 self 的
-/// `sending 'self'` 诊断自然消失（那些闭包本来就在主线程执行，线程语义与顺序不变）。
+/// `sending 'self'` 诊断自然消失（那些闭包本来就在主线程执行，线程语义与顺序不变）.
 /// verifyKill 注释中「@MainActor 类内 Task {} 继承主线程隔离」即为此预留.
 @MainActor
 final class ProcessManagerViewModel: ObservableObject {
     @Published private(set) var processes: [ProcessEntry] = []
-    /// v0.3.47：排序模式
-    /// v0.3.47：排序模式
     @Published var sortMode: ProcessSortMode = .defaultOrder
-    /// v0.3.45：内存监控开关（持久化到 UserDefaults）
+    /// 内存监控开关（持久化到 UserDefaults）
     @Published var memoryWatchEnabled: Bool = UserDefaults.standard.bool(forKey: "ProcessMemoryWatch") {
         didSet { UserDefaults.standard.set(memoryWatchEnabled, forKey: "ProcessMemoryWatch") }
     }
@@ -41,7 +39,7 @@ final class ProcessManagerViewModel: ObservableObject {
     /// SIGKILL 后的二次验证任务（检查目标 PID 是否真的消失）.
     private var killVerifyTask: Task<Void, Never>?
 
-    /// v0.3.47：排序后的进程列表（在搜索过滤基础上）
+    /// 排序后的进程列表（在搜索过滤基础上）
     var sortedProcesses: [ProcessEntry] {
         switch sortMode {
         case .defaultOrder:
@@ -96,7 +94,7 @@ final class ProcessManagerViewModel: ObservableObject {
         killVerifyTask = nil
     }
 
-    /// v0.3.38：内存查询完全异步——独立 Task，绝不阻塞进程列表
+    /// 内存查询完全异步——独立 Task，绝不阻塞进程列表
     func fetchMemoryAsync() {
         Task.detached(priority: .utility) { [weak self] in
             guard let vm = self else { return }
@@ -118,7 +116,7 @@ final class ProcessManagerViewModel: ObservableObject {
         isRefreshing = true
         Task.detached(priority: .utility) { [weak self] in
             do {
-                // v0.3.38：先立即显示进程列表（不再等内存查询，避免几秒空白）
+                // 先立即显示进程列表（不再等内存查询，避免几秒空白）
                 let entries = try ProcessManagerService.shared.listProcesses()
                 await MainActor.run {
                     guard let self else { return }
@@ -135,7 +133,7 @@ final class ProcessManagerViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     guard let self else { return }
-                    // v0.3.251: 无配对文件属预期状态(页面已有独立引导卡片),
+                    // 无配对文件属预期状态(页面已有独立引导卡片),
                     // 不再弹窗 —— 否则弹窗[好] -> refresh() -> 再弹窗, 无限循环.
                     if PairingGate.isPairingError(error.localizedDescription)
                         || !TunnelContext.shared.hasPairingFile {

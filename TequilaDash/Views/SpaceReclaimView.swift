@@ -12,7 +12,6 @@ enum ReclaimSegment: String, CaseIterable, Identifiable {
 /// 用分段控件（分栏）在两类清理之间切换，二者底层共用同一个
 /// `ReclaimAppView` 详情页：
 /// - **常规清理**：扫描并回收**系统应用**的缓存与临时文件（`ReclaimTabView`）.
-/// - **容器管理**：扫描并回收 **LiveContainer 内应用**的缓存与临时文件（`LiveCleanTabView`）.
 ///
 /// 标题统一由本视图持有（"空间回收"），子视图不再设置各自标题，
 /// 避免切到容器管理时大标题变成"容器管理".

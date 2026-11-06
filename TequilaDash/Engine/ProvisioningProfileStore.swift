@@ -1,6 +1,5 @@
 import Foundation
 
-/// 描述文件（provisioning profile）仓库（汉化移植自 StikDebug 的
 /// IdeviceFFIBridge + ProfileView 数据层）.
 ///
 /// 数据来源：设备上的 **misagent** 服务（`misagent_copy_all`）返回设备全部的
@@ -18,14 +17,14 @@ enum ProvisioningProfileStore {
         let appId: String       // application-identifier
         let expirationDate: Date?
         let entitlements: [String: Any]
-        /// v0.3.187：mobileprovision 顶层 ProvisionsAllDevices.
+        /// mobileprovision 顶层 ProvisionsAllDevices.
         /// true 即企业 / In-House profile（Apple TN3125 权威字段）.
         /// 默认 false 让旧调用点（memberwise init）免改.
         var provisionsAllDevices: Bool = false
-        /// v0.3.187：mobileprovision 顶层 ProvisionedDevices 数组长度.
+        /// mobileprovision 顶层 ProvisionedDevices 数组长度.
         /// >0 即 Ad-Hoc profile（特定设备列表）;0 即 Development/Distribution 团队签.
         var provisionedDevicesCount: Int = 0
-        /// v0.3.187：mobileprovision 顶层 TeamIdentifier（首项）或 ApplicationIdentifierPrefix.
+        /// mobileprovision 顶层 TeamIdentifier（首项）或 ApplicationIdentifierPrefix.
         /// 用于 AppType 调色板的同 team 多 App 关联.
         var teamIdentifier: String? = nil
 
@@ -71,18 +70,18 @@ enum ProvisioningProfileStore {
 
     // MARK: - 隧道（与 JITEnableService 同机制）
 
-    /// v0.3.377：本 hostname（"TequilaDashProfiles"）的**共享串行队列**.
+    /// 本 hostname（"TequilaDashProfiles"）的**共享串行队列**.
     ///
     /// RSD 隧道并发铁律（AFCService.swift:15）：**同一 hostname 并发
     /// `tunnel_create_rppairing` 会互相抢占**. 这个 hostname 有**两个入口**——
     /// 本文件 `createTunnel()`（hostname 见下）与 `ProfileConfigService.swift:87`
     /// （同一字面量 `"TequilaDashProfiles"`），此前各自直接建隧道、无任何串行保护，
-    /// 与 v0.3.376 修的 FileSharingService 是同一类 bug.
+    /// 与 修的 FileSharingService 是同一类 bug.
     ///
     /// 队列挂在本类型上（`ProfileConfigService` 本来就用本类型做 add/remove），
     /// 保证两个模块拿到的是**同一条队列**——各建一条等于没保护.
     /// 只锁「建隧道」这一步，不锁调用方后续的隧道生命周期：一次卡死不会把
-    /// 另一个入口一起拖死（理由同 v0.3.376 FileSharingService.tunnelQueue）.
+    /// 另一个入口一起拖死（理由同 FileSharingService.tunnelQueue）.
     static let tunnelQueue = DispatchQueue(label: "com.tequila.profiles.tunnel")
 
     private static func createTunnel() throws -> (adapter: OpaquePointer, handshake: OpaquePointer) {
@@ -138,7 +137,7 @@ enum ProvisioningProfileStore {
             }
         }
         if let ffiError {
-            // v0.3.377：这条路径此前失败也不留痕. 注意 error(from:) 会消费并释放
+            // 这条路径此前失败也不留痕. 注意 error(from:) 会消费并释放
             // ffiError，所以必须先建成 NSError 复用，不能调两次（会 double free）.
             let failure = error(from: ffiError, fallback: "创建开发者隧道失败（请确认 LocalDevVPN 已连接）")
             LoginLogger.shared.log("[描述文件] 建隧道失败（hostname=TequilaDashProfiles）：\(failure.localizedDescription)")
@@ -178,11 +177,11 @@ enum ProvisioningProfileStore {
         let name: String
         let applicationIdentifier: String?
         let entitlements: [String: Any]
-        /// v0.3.187：从匹配的 .mobileprovision 顶层读到的企业标志（权威）.
+        /// 从匹配的 .mobileprovision 顶层读到的企业标志（权威）.
         var provisionsAllDevices: Bool = false
-        /// v0.3.187：mobileprovision 顶层 ProvisionedDevices 数组长度;>0 = Ad-Hoc profile.
+        /// mobileprovision 顶层 ProvisionedDevices 数组长度;>0 = Ad-Hoc profile.
         var provisionedDevicesCount: Int = 0
-        /// v0.3.187：mobileprovision 顶层的 team identifier（前缀）.
+        /// mobileprovision 顶层的 team identifier（前缀）.
         var teamIdentifier: String? = nil
     }
 
@@ -269,10 +268,10 @@ enum ProvisioningProfileStore {
                 entitlements: entitlements
             ))
         }
-        // v0.3.190：删除 v0.3.187 在此处调 fetchAllProfiles() 的代码——
+        // 删除 在此处调 fetchAllProfiles() 的代码——
         // 本函数内 installation_proxy 隧道（defer 在末尾才释放）仍活着时，
         // fetchAllProfiles() 会再建一条 LocalDevVPN 隧道并发 RSD 握手 →
-        // 隧道状态竞争/死锁 → 真机闪退（v0.3.187~189 连续闪退元凶）.
+        // 隧道状态竞争/死锁 → 真机闪退（~189 连续闪退元凶）.
         // 需要 profile 顶层字段时由调用方（AppListView.loadAppTypes）顺序串行
         // 调 fetchSideloadedApps() + fetchAllProfiles() 并自行按 appId 匹配.
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -321,7 +320,7 @@ enum ProvisioningProfileStore {
         let uuid = dict["UUID"] as? String ?? UUID().uuidString
         let expiration = dict["ExpirationDate"] as? Date
         let entitlements = dict["Entitlements"] as? [String: Any] ?? [:]
-        // v0.3.187：从 mobileprovision 顶层解析企业/Ad-Hoc 权威字段.
+        // 从 mobileprovision 顶层解析企业/Ad-Hoc 权威字段.
         let provisionsAllDevices = dict["ProvisionsAllDevices"] as? Bool ?? false
         let provisionedDevicesCount = (dict["ProvisionedDevices"] as? [Any])?.count ?? 0
         // teamIdentifier 取 TeamIdentifier 数组首项；fallback ApplicationIdentifierPrefix.

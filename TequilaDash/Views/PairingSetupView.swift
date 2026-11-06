@@ -71,7 +71,7 @@ struct PairingSetupView: View {
 
     /// 顶部说明块：品牌图标块 + 标题 + 配对状态.
     ///
-    /// v0.3.721 重构：原先是 48pt 裸图标 + .title2 居中标题的「欢迎页」语汇，
+    /// 重构：原先是 48pt 裸图标 + .title2 居中标题的「欢迎页」语汇，
     /// 与全仓二级页的 AppHeroHeader / AppBrandTile 语言不一致；改用
     /// AppHeroHeader 同款结构，并带上配对状态 stat，让用户进页第一眼就知道
     /// 现在到底有没有配对文件.
@@ -92,13 +92,13 @@ struct PairingSetupView: View {
 
     /// 导入区：两条导入通道收进同一个 Section，错误统一到一个错误槽.
     ///
-    /// v0.3.721 重构：原先「导入文件」与「剪贴板导入」是两个 44pt 大按钮，
+    /// 重构：原先「导入文件」与「剪贴板导入」是两个 44pt 大按钮，
     /// 外加两条各自独立的 AppErrorRow；两条错误槽在界面上是两行灰字，
     /// 用户分不清是哪条通道失败的. 现在改成 List 原生行（与 PairingInstallView /
     /// IncreaseMemoryView 一致），错误只留一个槽，由 importErrorText 归并.
     private var importSection: some View {
         Section {
-            // v0.3.724：两行都必须 `.buttonStyle(.plain)`. List 里裸 Button 会把整个 label
+            // 两行都必须 `.buttonStyle(.plain)`. List 里裸 Button 会把整个 label
             // 的前景色换成 accent，于是 `.primary` 解析成深蓝、`.secondary` 解析成同色淡化的
             // 浅蓝（真机截图取样实测 #3B85F0 / #98BFE6）—— 这就是用户说的「一个深蓝一个浅蓝文本」.
             Button {
@@ -130,7 +130,7 @@ struct PairingSetupView: View {
     }
 
     /// 已导入但解析不了的配对文件是**最坏的一种状态**：页面显示「已检测到」，隧道却全线失败.
-    /// v0.3.724：把 Rust 侧的解析结果并进脚注，坏文件当场说清原因.
+    /// 把 Rust 侧的解析结果并进脚注，坏文件当场说清原因.
     private var pairingFooterText: String {
         guard viewModel.hasPairingFile else {
             return "导入后无需重启，返回即可看到设备上的应用列表."
@@ -144,7 +144,7 @@ struct PairingSetupView: View {
     private func importRow(title: String, subtitle: String, systemImage: String) -> some View {
         HStack(spacing: 12) {
             // 这是通用「导入文件」动作，不是签名动作 —— 用签名粉（HSL 338°）在真机上读成
-            // 「红色滥用」（v0.3.724 反馈）. 统一回品牌强调色，本页只留一个彩色.
+            // 「红色滥用」（反馈）. 统一回品牌强调色，本页只留一个彩色.
             AppRowIcon(systemName: systemImage, tint: AppTheme.accent, symbolSize: 17, frameSize: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -165,7 +165,7 @@ struct PairingSetupView: View {
 
     /// 三步准备：编号步骤改用行内编号圆点 + 标题 + 说明.
     ///
-    /// v0.3.721 重构：原先复用 RootView 里的 SetupStep（28×28 圆底 + headline），
+    /// 重构：原先复用 RootView 里的 SetupStep（28×28 圆底 + headline），
     /// 与 List 行高体系不匹配；现在编号圆点改用 AppTheme.accentSoft 淡底，
     /// 视觉与「导入」区同族.
     private var stepsSection: some View {
@@ -472,7 +472,7 @@ struct PairingSetupView: View {
                     // keepAliveCard 较高把菊花+文字重心拉下，看起来偏下）.
                     Spacer(minLength: 8)
                     VStack(spacing: 12) {
-                        // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                        // 整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
                         AppLoadingRow(title: wirelessStatus, level: .page)
                         if let code = wirelessBroadcastErrorCode {
                             Text("广播未确认（错误码 \(code)）")
@@ -540,9 +540,8 @@ struct PairingSetupView: View {
             }
         }
         // Bonjour 广播失败（NSNetService didNotPublish）：
-        // v0.2.76 之前只 NSLog，LiveContainer 共享应用 guest 等嵌入环境下
         // 静默失败让用户以为广播成功却搜不到——现在把错误码回报给 UI 提示.
-        // v0.3.721 修：这段注册原本错放在 unregisterWirelessObservers() 末尾，
+        // 这段注册原本错放在 unregisterWirelessObservers() 末尾，
         // 每次 onDisappear 都会新增一个永不注销的观察者并覆盖旧 token（泄漏）.
         wirelessBroadcastObserver = center.addObserver(
             forName: Notification.Name("WirelessPairingDidFailBroadcastNotification"),

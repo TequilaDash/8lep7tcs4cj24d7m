@@ -11,13 +11,13 @@ import Foundation
 final class BLECoordinator: NSObject, ObservableObject {
     /// Swift 6 并发检查：本类型非 Sendable，但**全部可变状态只在私有串行队列 `queue` 内读写** ——
     /// 公开 API 一律 `queue.async` 进入（CoreBluetooth 回调也在同一条队列），
-    /// `@Published` 更新统一经 `DispatchQueue.main.async` 回主线程。
-    /// 因此实例本身线程安全，`shared` 跨线程共享无风险。
+    /// `@Published` 更新统一经 `DispatchQueue.main.async` 回主线程.
+    /// 因此实例本身线程安全，`shared` 跨线程共享无风险.
     nonisolated(unsafe) static let shared = BLECoordinator()
 
     @Published private(set) var state: BluetoothLinkState = .off
     @Published private(set) var isActive = false
-    /// 当前角色（v0.3.540：桥接层要按角色决定「谁下发、谁请求」，故对外只读开放）.
+    /// 当前角色（桥接层要按角色决定「谁下发、谁请求」，故对外只读开放）.
     @Published private(set) var currentRole: BluetoothLinkRole = .broadcaster
     @Published private(set) var peerName: String?
     @Published private(set) var lastSent: CLLocationCoordinate2D?
@@ -39,8 +39,8 @@ final class BLECoordinator: NSObject, ObservableObject {
     var onReport: ((BluetoothStatusReport) -> Void)?
     /// A 机收到 B 机的「请求下发」—— 参数是 B 机选的图钉坐标（回调在 BLE 队列）.
     ///
-    /// v0.3.540：B 机选图钉模式的反向链路。A 机收到后应把该坐标当成
-    /// 「本次要下发的目标」，走 `send(latitude:longitude:)` 推回去。
+    /// B 机选图钉模式的反向链路.A 机收到后应把该坐标当成
+    /// 「本次要下发的目标」，走 `send(latitude:longitude:)` 推回去.
     var onPushRequest: ((CLLocationCoordinate2D) -> Void)?
 
     private let queue = DispatchQueue(label: "com.tequila.ble")
@@ -151,7 +151,7 @@ final class BLECoordinator: NSObject, ObservableObject {
         }
     }
 
-    /// B 机请求 A 机下发指定坐标（v0.3.540：B 机选图钉模式）.
+    /// B 机请求 A 机下发指定坐标（B 机选图钉模式）.
     ///
     /// 走的是与状态回报**同一条**上行特征，靠首字节类型标签区分（见 `BluetoothUplinkMessage`）.
     func requestPush(latitude: Double, longitude: Double) {
@@ -161,7 +161,7 @@ final class BLECoordinator: NSObject, ObservableObject {
     }
 
     func clearLog() {
-        // 面板预览与独立存储一起清 —— 否则「清空」之后进独立日志页还看得到旧内容。
+        // 面板预览与独立存储一起清 —— 否则「清空」之后进独立日志页还看得到旧内容.
         publish { self.log.removeAll() }
         BluetoothLogStore.shared.clear()
     }
@@ -378,7 +378,7 @@ final class BLECoordinator: NSObject, ObservableObject {
         peripheral.writeValue(report.encoded(), for: characteristic, type: .withResponse)
     }
 
-    /// B 机请求 A 机下发坐标（v0.3.540）.
+    /// B 机请求 A 机下发坐标.
     ///
     /// 与 `reportLocked` 走同一特征、同一 `.withResponse` 写类型；
     /// 差别只在载荷 —— 这里发的是 `BluetoothUplinkMessage`（首字节 `0x80`）.
@@ -534,11 +534,11 @@ final class BLECoordinator: NSObject, ObservableObject {
         lastLogLine = line
         lastLogAt = now
         let stamped = "\(Self.timeString()) \(line)"
-        // v0.3.546：**先落独立存储**，再更新面板用的内存预览。
+        // **先落独立存储**，再更新面板用的内存预览.
         //
         // 面板里那个 `log` 数组只留 60 行（下面那句），**不能**当成日志本体 ——
         // 用户要求的「独立日志界面」读的是 `BluetoothLogStore`（无 60 行限制、
-        // 与 LoginLogger 的各板块完全隔离）。两处一起写，读法各取所需。
+        // 与 LoginLogger 的各板块完全隔离）.两处一起写，读法各取所需.
         BluetoothLogStore.shared.append(line)
         let run = {
             self.log.insert(stamped, at: 0)
@@ -643,7 +643,7 @@ extension BLECoordinator: CBPeripheralManagerDelegate {
             if authorized,
                request.characteristic.uuid == BluetoothLink.statusCharacteristicUUID,
                let value = request.value {
-                // v0.3.540：上行通道现在有两种载荷，靠首字节区分：
+                // 上行通道现在有两种载荷，靠首字节区分：
                 //   · 首字节 ≥ 0x80 → `BluetoothUplinkMessage`（B 机请求下发）
                 //   · 否则           → 老格式的状态回报（2 字节）
                 if let message = BluetoothUplinkMessage(data: value) {
@@ -662,7 +662,7 @@ extension BLECoordinator: CBPeripheralManagerDelegate {
                 }
             }
             if request.characteristic.properties.contains(.write) {
-                // 这是 write 请求 → 拒绝必须用 .writeNotPermitted（CBATTError.Code 里没有 .notPermitted）。
+                // 这是 write 请求 → 拒绝必须用 .writeNotPermitted（CBATTError.Code 里没有 .notPermitted）.
                 peripheral.respond(to: request, withResult: authorized ? .success : .writeNotPermitted)
             }
         }

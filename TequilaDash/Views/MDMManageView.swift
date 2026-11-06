@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.3.228：MDM 管理（「更多」板块入口）——
+/// MDM 管理（「更多」板块入口）——
 /// 移植 mond-main MDM 绕过：5 层沙盒逃逸策略 + 描述文件备份/清空/还原.
 /// 仅个人测试用途；iOS 26.5+ 侧载环境可能被沙盒策略拦截（结果如实显示）.
 struct MDMManageView: View {
@@ -22,7 +22,7 @@ struct MDMManageView: View {
                     Label("MDM 配置目录沙盒逃逸", systemImage: "shield.lefthalf.filled.badge.checkmark")
                         .font(.headline)
                     if probing {
-                        // v0.3.699：区块级加载行收口到共享 AppLoadingRow（.block 档）.
+                        // 区块级加载行收口到共享 AppLoadingRow（.block 档）.
                         AppLoadingRow(title: "正在逐层尝试逃逸策略…", level: .block)
                     } else if let m = escapeMethod {
                         Text("逃逸成功：\(m)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.success)

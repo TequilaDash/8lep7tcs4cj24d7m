@@ -2,18 +2,18 @@ import SwiftUI
 import UIKit
 
 /// Swift 6：`DeviceInfoModel` 含 `raw: [String: Any]`（`Any` 非 Sendable），
-/// 整个类型因此不是 Sendable，不能作为 `Task.detached` 的返回类型跨 actor 边界传回。
+/// 整个类型因此不是 Sendable，不能作为 `Task.detached` 的返回类型跨 actor 边界传回.
 /// 这里用薄包装**转移**（不是共享）该值：它由 detached 任务内部一次性构造完成，
-/// 返回后只作为 `@State` 被主线程只读展示，之后没有任何线程再写入或并发访问。
+/// 返回后只作为 `@State` 被主线程只读展示，之后没有任何线程再写入或并发访问.
 private struct DeviceInfoBox<T>: @unchecked Sendable { let value: T }
 
-/// v0.3.208：设备信息面板 —— 字段清单对齐爱思「设备详情」.
+/// 设备信息面板 —— 字段清单对齐爱思「设备详情」.
 ///
-/// v0.3.307：**改成数据驱动**。所有行/分组由 `sections(_:)` 组装成
-/// `[DeviceInfoSectionSpec]`，渲染交给 `DeviceInfoSectionCard` 等独立小视图。
+/// **改成数据驱动**.所有行/分组由 `sections(_:)` 组装成
+/// `[DeviceInfoSectionSpec]`，渲染交给 `DeviceInfoSectionCard` 等独立小视图.
 /// 原因见 `DeviceInfoSections.swift` 顶部注释：原先单 body 堆 11 个分组 + Group，
 /// 编译出的嵌套泛型类型过深，Swift 运行时解析该类型时栈溢出（真机崩溃
-/// LiveProcess-2026-09-11-163343.ips，主线程 swizzling 在 `decodeMangledType` 递归里）。
+/// LiveProcess-2026-09-11-163343.ips，主线程 swizzling 在 `decodeMangledType` 递归里）.
 struct DeviceInfoView: View {
     @State private var info: DeviceInfoModel?
     @State private var errorText: String?
@@ -21,7 +21,7 @@ struct DeviceInfoView: View {
     /// HARD-RULES 31：隧道未就绪导致的失败是「待隧道」，不是终态错误.
     /// 挂起期间由 onTunnelReady 自动续跑，不开定时器、不等用户切回前台.
     @State private var waitingTunnel = false
-    /// v0.3.531：保修期限（爱思服务端按设备 SN 查表，见 `I4WarrantyClient`）.
+    /// 保修期限（爱思服务端按设备 SN 查表，见 `I4WarrantyClient`）.
     /// 面板先出，联网结果到了再刷新该行；未取到则保持 nil -> 显示原来的「—」.
     @State private var warrantyTime: String?
     /// 隐私敏感字段统一小眼睛状态（默认全部隐藏）
@@ -79,7 +79,7 @@ struct DeviceInfoView: View {
             }
             ToolbarItem(placement: .topBarLeading) {
                 Button { showSensitive.toggle() } label: {
-                    // v0.3.221：图标=当前状态（显示中=睁眼，隐藏中=闭眼）
+                    // 图标=当前状态（显示中=睁眼，隐藏中=闭眼）
                     Image(systemName: showSensitive ? "eye" : "eye.slash")
                 }
             }
@@ -106,7 +106,7 @@ struct DeviceInfoView: View {
             }.value
             info = boxed.value
             errorText = nil
-            // v0.3.531：保修期限只在爱思服务端（按设备 SN 查表，不是 MLB）.
+            // 保修期限只在爱思服务端（按设备 SN 查表，不是 MLB）.
             // 面板出完后异步取，不阻塞渲染；失败保持「—」.
             // 注意： 该请求会把设备序列号发到爱思服务器（见 `I4WarrantyClient` 顶部隐私说明）.
             let serialNumber = boxed.value.serialNumber
@@ -130,7 +130,7 @@ struct DeviceInfoView: View {
         UIPasteboard.general.string = s
     }
 
-    /// v0.3.531：保修期限已由 `I4WarrantyClient` 联网取回（爱思服务端）.
+    /// 保修期限已由 `I4WarrantyClient` 联网取回（爱思服务端）.
     /// 行尾这里保留 Apple 官方查询页作为**兜底入口**（Apple 要过验证码，
     /// 爱思自己也有 Capcha 任务）—— 在内置浏览器打开，序列号带上省得手输.
     private func warrantyURL(_ info: DeviceInfoModel) -> String {
@@ -180,7 +180,7 @@ struct DeviceInfoView: View {
          storageSection(info)]
     }
 
-    /// v0.3.324：**设备概要** —— 与爱思 9.0 设备信息首屏逐行对齐
+    /// **设备概要** —— 与爱思 9.0 设备信息首屏逐行对齐
     /// （系统版本 / 序列号 / IMEI1 / IMEI2 / 产品类型 / 型号名称 / 销售地区 /
     ///   激活状态 / 越狱状态 / 激活锁(ID锁) / iCloud / 生产日期 / 保修期限 / 崩溃日志）
     private func overviewSection(_ info: DeviceInfoModel) -> DeviceInfoSectionSpec {
@@ -196,7 +196,7 @@ struct DeviceInfoView: View {
                   value: [info.region, info.regionName].compactMap { $0 }.joined(separator: " "),
                   sensitive: false),
             .init(id: 8, label: "激活状态", value: activationText(info.activationState), sensitive: false),
-                        // v0.3.711（R4）：检测失败时明说「读取失败」，不再伪装成「未越狱」
+                        // 检测失败时明说「读取失败」，不再伪装成「未越狱」
             .init(id: 9, label: "越狱状态",
                   value: info.jailbroken.map { $0 ? "已越狱" : "未越狱" }
                       ?? (info.jailbrokenError.map { _ in "读取失败" }),
@@ -210,13 +210,13 @@ struct DeviceInfoView: View {
                   value: info.iCloudSignedIn.map { $0 ? "已开启" : "未开启" },
                   sensitive: false),
             .init(id: 12, label: "生产日期", value: productionDateText(info), sensitive: false),
-            // v0.3.531：保修期限改为联网取爱思服务端 `warrantyTime` 字符串**原样透传**
+            // 保修期限改为联网取爱思服务端 `warrantyTime` 字符串**原样透传**
             // （见 `I4WarrantyClient`）；未取到则 value 为 nil -> 显示「—」.
             // 行尾的「查询 ›」仍保留为 Apple 官方保修页兜底入口（爱思自己的 fallback，需过验证码）.
             .init(id: 13, label: "保修期限", value: warrantyTime, sensitive: false, link: warrantyURL(info)),
-            // v0.3.661：读不到时如实说明原因，不再与「0 次」共用同一个「—」.
+            // 读不到时如实说明原因，不再与「0 次」共用同一个「—」.
             // 「0 次」= 设备确实没有 panic；「读取失败」= 没配对文件 / VPN 没开 /
-            // 服务不可用 —— 两者自救动作完全不同，必须能区分。
+            // 服务不可用 —— 两者自救动作完全不同，必须能区分.
             .init(id: 14, label: "崩溃日志",
                   value: info.crashLogCount.map { "\($0) 次" }
                       ?? (info.crashLogCountError.map { _ in "读取失败" }),
@@ -224,7 +224,7 @@ struct DeviceInfoView: View {
         ])
     }
 
-    /// v0.3.324：**设备详情** —— 概要之外的机型/识别类字段
+    /// **设备详情** —— 概要之外的机型/识别类字段
     private func deviceSection(_ info: DeviceInfoModel) -> DeviceInfoSectionSpec {
         DeviceInfoSectionSpec(title: "设备详情", icon: "doc.text.magnifyingglass", rows: [
             .init(id: 1, label: "设备名称", value: info.deviceName, sensitive: false),
@@ -334,7 +334,7 @@ struct DeviceInfoView: View {
 
     // MARK: - 取值辅助
 
-    /// 容量 + 机身颜色（爱思显示「512GB 黑色」）。颜色名只在有实证映射时才翻译。
+    /// 容量 + 机身颜色（爱思显示「512GB 黑色」）.颜色名只在有实证映射时才翻译.
     private func capacityColorText(_ info: DeviceInfoModel) -> String? {
         guard info.storageTotalGB > 0 else { return nil }
         let cap = "\(info.storageTotalGB)GB"
@@ -343,7 +343,7 @@ struct DeviceInfoView: View {
         return cap
     }
 
-    /// v0.3.531：生产日期改为**纯本地**由主板序列号算出（`DeviceSerialDate`，不联网、不外发）.
+    /// 生产日期改为**纯本地**由主板序列号算出（`DeviceSerialDate`，不联网、不外发）.
     /// 输入就是 lockdown 的 `MLBSerialNumber`（已在设备上）；长度/字符不合法或走数字分支
     /// 时返回 nil，界面保持「未知」.
     private func productionDateText(_ info: DeviceInfoModel) -> String {

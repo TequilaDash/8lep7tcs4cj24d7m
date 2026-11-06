@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 /// IPA 安装（已签名包在线安装 / 覆盖升级降级）—— 爱思助手同款通道.
 ///
 /// 与「IPA 侧载」的区别：侧载走 isideload 签名流程（Apple ID 登录签名）；
-/// 本页接收**已经签好名**的 .ipa（App Store 下载包、爱思/AltStore 签过的
 /// 包等），经 RSD 隧道直接交给 installation_proxy 安装，无需再次签名：
 /// - 在线安装：`Install` 命令（新装 / 覆盖已存在同 bundle id 应用）
 /// - 覆盖升级 / 降级安装：`Upgrade` 命令（installd 允许降级，
@@ -69,7 +68,7 @@ struct SignedIPAInstallView: View {
 
             if let errorMessage {
                 Section {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: errorMessage)
                 } header: {
                     Label("错误", systemImage: "info.circle")

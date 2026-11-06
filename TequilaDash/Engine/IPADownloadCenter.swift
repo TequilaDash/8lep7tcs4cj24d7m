@@ -1,16 +1,16 @@
 import Foundation
 
 /// **统一下载 / 安装中心** —— AppStore 商店的「免登录下载」与（预留的）「Apple ID 下载」
-/// 共用同一条下载管理接口，并支持**中途暂停 / 继续 / 删除安装包**。
+/// 共用同一条下载管理接口，并支持**中途暂停 / 继续 / 删除安装包**.
 ///
-/// · 队列**并发**执行（v0.3.413 起，上限 `maxConcurrentDownloads = 3`），超出的排队等槽位；
+/// · 队列**并发**执行（上限 `maxConcurrentDownloads = 3`），超出的排队等槽位；
 /// · 下载落地 `Documents/AppStoreDownloads/<bundleId>-<version>.ipa`，完成后自动登记
 ///   `IPADownloadLibrary`（下载管理页看到的就是它），可选自动安装（RSD 隧道）；
 /// · 暂停用 `URLSessionDownloadTask.cancel(byProducingResumeData:)`，恢复用 resumeData
-///   （爱思 CDN 支持 Range，实测可续传）。
-///   v0.3.583：两条下载通道都能暂停 / 继续 / 取消 —— 免登录直链走 `runners`
+///   （爱思 CDN 支持 Range，实测可续传）.
+///   两条下载通道都能暂停 / 继续 / 取消 —— 免登录直链走 `runners`
 ///   （`RemoteDownloader`），AppleID 通道走 `appleIDControls`（`IPADownloadControl` →
-///   `IPAFileDownloader`）。中心对两者一视同仁地触达底层传输。
+///   `IPAFileDownloader`）.中心对两者一视同仁地触达底层传输.
 @MainActor
 final class IPADownloadCenter: ObservableObject {
 
@@ -21,46 +21,46 @@ final class IPADownloadCenter: ObservableObject {
 
     enum Source: String {
         case i4Free = "爱思免登录"
-        /// v0.3.406：免登录商店的**第二个来源**（牛蛙）。它的包得先打一发
+        /// 免登录商店的**第二个来源**（牛蛙）.它的包得先打一发
         /// `/appstore/download` 才拿得到直链，但拿到之后走的是同一条下载/安装链路，
         /// 所以只是"来源"这一栏的口径不同 —— 以前借用 `.i4Free`，
-        /// 下载管理页那一行会把牛蛙的包标成「爱思免登录」。
+        /// 下载管理页那一行会把牛蛙的包标成「爱思免登录」.
         case niuwa = "牛蛙免登录"
-        /// v0.3.414：免登录商店的**第三个来源**（NB Pro，bundle id `com.nbmaster.app`）。
-        /// 与牛蛙同构：服务端随直链下发 `sinfs[].dataHex`，安装前必须写回包内 `SC_Info/`。
+        /// 免登录商店的**第三个来源**（NB Pro，bundle id `com.nbmaster.app`）.
+        /// 与牛蛙同构：服务端随直链下发 `sinfs[].dataHex`，安装前必须写回包内 `SC_Info/`.
         case nb = "NB免登录"
-        /// 软件源管理（用户自加 URL 的**第三方软件源**）。
+        /// 软件源管理（用户自加 URL 的**第三方软件源**）.
         ///
-        /// 与前三档硬编码免登录来源是两回事：这里的源由用户在「软件源管理」里自行添加。
-        /// 显示名**严禁含「牛蛙」**（用户明确划界：这不是牛蛙官方源、也不是牛蛙 AppStore）。
-        /// 与既有 `.niuwa`（「牛蛙免登录」= 内置商店）在枚举值上本就可区分。
+        /// 与前三档硬编码免登录来源是两回事：这里的源由用户在「软件源管理」里自行添加.
+        /// 显示名**严禁含「牛蛙」**（用户明确划界：这不是牛蛙官方源、也不是牛蛙 AppStore）.
+        /// 与既有 `.niuwa`（「牛蛙免登录」= 内置商店）在枚举值上本就可区分.
         ///
         /// 本轮边界：软件源**只负责下载**，不签名/不安装 ⇒ 下载传 `sinfBase64: nil`，
-        /// 故 `needsSinfWriteback` 取 `false`（见下）。
+        /// 故 `needsSinfWriteback` 取 `false`（见下）.
         case thirdPartySource = "第三方软件源"
         case appleID = "Apple ID"
 
-        /// 安装前是否需要把服务端下发的 sinf 写回包内 `SC_Info/`。
+        /// 安装前是否需要把服务端下发的 sinf 写回包内 `SC_Info/`.
         ///
         /// 牛蛙与 NB 下发的都是 **Apple 原始加密包**（FairPlay 未剥离），
         /// 必须补上本机专用 sinf 才能过验证；爱思源的服务端包已签名、
-        /// AppleID 通道由 `SignatureInjector` 自行写回，均不需要。
+        /// AppleID 通道由 `SignatureInjector` 自行写回，均不需要.
         var needsSinfWriteback: Bool {
             switch self {
             case .niuwa, .nb: return true
-            // 软件源（`.thirdPartySource`）：本轮只下载、不签名，下载层不做 sinf 写回。
+            // 软件源（`.thirdPartySource`）：本轮只下载、不签名，下载层不做 sinf 写回.
             case .i4Free, .appleID, .thirdPartySource: return false
             }
         }
     }
 
-    /// 日志板块：按包的**来源**选分类 —— 三方软件源独立成「软件源」，其余一律归「下载」。
+    /// 日志板块：按包的**来源**选分类 —— 三方软件源独立成「软件源」，其余一律归「下载」.
     ///
     /// 为什么其余不再写 `.appStore`：下载链路（下载中心 / 下载面板 / 落盘 / 注入 sinf /
     /// 安装 / 重试 / 暂停 / 取消）与 AppStore 商店业务**无关**，只是**调用了**同一条下载管理
-    /// 接口；写进 `.appStore` 会让「AppStore 日志」页混着下载记录（用户实测指正）。
+    /// 接口；写进 `.appStore` 会让「AppStore 日志」页混着下载记录（用户实测指正）.
     /// 只从主 actor 调用（`handle` / `installLocal` 体内）；安装链在 detached 里用的是
-    /// 主 actor 上预先算好的 `LoginLogger.Category`，不把 `Source` 带过隔离边界。
+    /// 主 actor 上预先算好的 `LoginLogger.Category`，不把 `Source` 带过隔离边界.
     private func logCategory(for source: Source) -> LoginLogger.Category {
         source == .thirdPartySource ? .signSource : .download
     }
@@ -94,9 +94,9 @@ final class IPADownloadCenter: ObservableObject {
 
     struct Job: Identifiable {
 
-        /// v0.3.383：失败发生在**哪个阶段** —— 界面上「下载失败」与「安装失败」是两件事：
-        /// 前者文件可能根本不完整/不存在，后者文件是好的、卡在安装环节。
-        /// 一律报「安装失败」属于错标（性质同「多行齐显安装中」：显示错 > 显示少）。
+        /// 失败发生在**哪个阶段** —— 界面上「下载失败」与「安装失败」是两件事：
+        /// 前者文件可能根本不完整/不存在，后者文件是好的、卡在安装环节.
+        /// 一律报「安装失败」属于错标（性质同「多行齐显安装中」：显示错 > 显示少）.
         enum FailureStage {
             /// 下载链路（取直链/下载/落盘/文件不存在）
             case download
@@ -110,66 +110,66 @@ final class IPADownloadCenter: ObservableObject {
         var version: String?
         var iconURL: String?
         var remoteURL: String?
-        /// v0.3.391：**App Store 商品号（`trackId`）** —— 落盘时写进台账，供「复制商店链接」用。
-        /// AppleID 通道由 `startWithAppleID` 填（直接取 `AppStoreItem.id`）；其它来源为 nil。
+        /// **App Store 商品号（`trackId`）** —— 落盘时写进台账，供「复制商店链接」用.
+        /// AppleID 通道由 `startWithAppleID` 填（直接取 `AppStoreItem.id`）；其它来源为 nil.
         var storeItemId: String?
         var source: Source
         var accountEmail: String?
-        /// v0.3.578：**逐行唯一的行键** —— 专治「同名多行串台」。
+        /// **逐行唯一的行键** —— 专治「同名多行串台」.
         ///
         /// 背景（真机 bug）：软件源列表一行 = 源 JSON 里的一条 `apps[]`，同一个 App 可以有多行
-        /// （样本里 3 条 `name == "全能签"`，且该 schema 家族**整源没有 `bundleIdentifier`**）。
+        /// （样本里 3 条 `name == "全能签"`，且该 schema 家族**整源没有 `bundleIdentifier`**）.
         /// 旧的 `activeJob(bundleId:name:)` 在 `bundleId == nil` 时退化成「同名即命中」，
         /// 于是一个进行中的任务被同时挂到全部同名行上：3 行齐显「下载中」，
-        /// 而任一行点「取消 / 暂停」都作用在**同一个**真实任务上（误操作，见诊断 §1.5）。
+        /// 而任一行点「取消 / 暂停」都作用在**同一个**真实任务上（误操作，见诊断 §1.5）.
         ///
         /// 行键取值：**源列表那一行的 `downloadURL`**（逐行唯一；`start(...)` 收到的
-        /// `remoteURL` 就是它）。只有 `.thirdPartySource` 的任务带行键 ——
+        /// `remoteURL` 就是它）.只有 `.thirdPartySource` 的任务带行键 ——
         /// 其它来源（爱思 / 牛蛙 / NB / AppleID）的列表是「一行一个 App」，
-        /// `bundleId` 已能唯一认行，不需要行键，也就不会改变它们既有的匹配语义。
+        /// `bundleId` 已能唯一认行，不需要行键，也就不会改变它们既有的匹配语义.
         ///
-        /// **用途（v0.3.578 修订）**：行键的**匹配**由源列表视图自己做
+        /// **用途（修订）**：行键的**匹配**由源列表视图自己做
         /// （`SignSourceAppListView.activeJob(for:)` 按 `remoteURL` 比），引擎侧**没有**按行键
         /// 认行的 API —— `activeJob(bundleId:name:)` / `lastFinishedJob(bundleId:name:)` 只把它当
-        /// 「这是源列表任务」的标记：`job.rowKey == nil` 的任务才参与 bundleId / 名称口径匹配。
+        /// 「这是源列表任务」的标记：`job.rowKey == nil` 的任务才参与 bundleId / 名称口径匹配.
         /// 保留这个字段是因为那条 `guard` 是**防止源列表任务被商店页按 `name` 误认**的保险 ——
-        /// 别删（删了源列表里 `name` 与某个商店页 App 同名的任务会跨页串台）。
+        /// 别删（删了源列表里 `name` 与某个商店页 App 同名的任务会跨页串台）.
         var rowKey: String? = nil
-        /// v0.3.407：**牛蛙源**随直链一起下发的 sinf（`ba_sinfs`，base64 的标准 `.sinf` 容器）。
+        /// **牛蛙源**随直链一起下发的 sinf（`ba_sinfs`，base64 的标准 `.sinf` 容器）.
         ///
         /// 为什么它得跟着任务走：这类包是 Apple 的**原始加密包**，安装前必须把这份 sinf 写回
-        /// `Payload/<App>.app/SC_Info/<CFBundleExecutable>.sinf`（见 `PackageSINFWriter`）。
+        /// `Payload/<App>.app/SC_Info/<CFBundleExecutable>.sinf`（见 `PackageSINFWriter`）.
         /// 只有 `source == .niuwa` 且非空时才用；爱思源（服务端存的是已签名包）与 AppleID 通道
-        /// （`SignatureInjector` 自己会写回）都不需要，所以默认 `nil`、不传即无行为变化。
+        /// （`SignatureInjector` 自己会写回）都不需要，所以默认 `nil`、不传即无行为变化.
         var sinfBase64: String? = nil
         var phase: Phase = .waiting
         var progress: Double = 0
-        /// v0.3.583：**对外只读** —— 唯一写入口是 `Job.setStage(_:phase:)`（见文件末尾的
-        /// `Job` extension）。设为 `private(set)` 是为了让「只有引擎内部能写 `stageText`」
-        /// 成为**编译器强制**：视图层再想直接改它，编译不过。
+        /// **对外只读** —— 唯一写入口是 `Job.setStage(_:phase:)`（见文件末尾的
+        /// `Job` extension）.设为 `private(set)` 是为了让「只有引擎内部能写 `stageText`」
+        /// 成为**编译器强制**：视图层再想直接改它，编译不过.
         private(set) var stageText = "等待中"
         var localFileName: String?
         var error: String?
         /// 仅当 `phase == .failed` 时有意义；按**失败发生在哪个阶段**打标，不去猜错误码
         var failureStage: FailureStage? = nil
 
-        // MARK: v0.3.394：下载中的实时数据（界面显示「已下/总量 · 速度」用）
+        // MARK: - 下载中的实时数据（界面显示「已下/总量 · 速度」用）
 
         /// 已收到字节（下载阶段有意义）
         var receivedBytes: Int64 = 0
         /// 包总字节 —— 来自 URLSession 的 `totalBytesExpectedToWrite`；
         /// 服务器不给 `Content-Length` 时保持 0（界面就不显示分母，只显示已下）
         var totalBytes: Int64 = 0
-        /// **瞬时速度**（字节/秒）。用两次回调的**字节差 ÷ 时间差**算，再指数平滑。
-        /// 刻意**不用全程平均**：掉速时全程平均会长时间停留在虚高的数字上，等于骗人。
+        /// **瞬时速度**（字节/秒）.用两次回调的**字节差 ÷ 时间差**算，再指数平滑.
+        /// 刻意**不用全程平均**：掉速时全程平均会长时间停留在虚高的数字上，等于骗人.
         var speedBytesPerSecond: Double = 0
         /// 任务创建时间（合并列表里「下载中」那一行显示时间用）
         var createdAt = Date()
 
-        /// v0.3.387：这个任务**落地后会用**的文件名（与 `startDownload` 里的 `safeName` 同源）。
+        /// 这个任务**落地后会用**的文件名（与 `startDownload` 里的 `safeName` 同源）.
         ///
         /// 「下载中」的任务还没落台账（`localFileName == nil`），但直链要**在下载时就写进台账**，
-        /// 「下载中」那行弹操作面板也要能算出一个文件名 → 统一由这里出，避免两处各拼一遍。
+        /// 「下载中」那行弹操作面板也要能算出一个文件名 → 统一由这里出，避免两处各拼一遍.
         var expectedFileName: String {
             "\(bundleId ?? name)-\(version ?? "x").ipa"
                 .replacingOccurrences(of: "/", with: "_")
@@ -179,19 +179,19 @@ final class IPADownloadCenter: ObservableObject {
         var canPause: Bool {
             remoteURL != nil && (phase == .downloading || phase == .paused)
         }
-        /// 整条链路的进度（0~1），给界面画进度环用。
+        /// 整条链路的进度（0~1），给界面画进度环用.
         ///
-        /// v0.3.578：**修正进度模型** —— 下载与安装现在是**两条独立的任务**，不再共享一条
-        /// 0~1 的链路：v0.3.412 起「下载完成不再自动安装」，`handle` 与 AppleID 通道都在
+        /// **修正进度模型** —— 下载与安装现在是**两条独立的任务**，不再共享一条
+        /// 0~1 的链路：起「下载完成不再自动安装」，`handle` 与 AppleID 通道都在
         /// 下载完成后把任务收在 `.done`（文案「已下载」），安装是用户后来点「安装」时
-        /// **另起**一个 `.installing` 任务（`installLocal`）。所以：
+        /// **另起**一个 `.installing` 任务（`installLocal`）.所以：
         /// · `.downloading` / `.paused` 的 `progress` 就是**下载分数**（0~1），直接返回 ——
         ///   以前乘 0.75 是「下载占链路 75%、安装占 25%」那套已被废弃的模型留下的；
         ///   它会让下载条全程只走到 75%、完成瞬间跳到 100%，正是用户看到的
-        ///   「下载完成却停在 75%」（诊断 §1.5）。
+        ///   「下载完成却停在 75%」（诊断 §1.5）.
         /// · `.installing` 的 `progress` 是安装链自己的 0~1（`AppStoreInstallService.installLocalIPA`
-        ///   内部把 AFC 上传 0~0.75、installd 0.75~1 拼好），直接返回。
-        /// · `.done` 恒 1（终态「已下载」/「已完成」）。
+        ///   内部把 AFC 上传 0~0.75、installd 0.75~1 拼好），直接返回.
+        /// · `.done` 恒 1（终态「已下载」/「已完成」）.
         var overall: Double {
             switch phase {
             case .downloading, .paused, .installing: return progress
@@ -203,16 +203,16 @@ final class IPADownloadCenter: ObservableObject {
 
     @Published private(set) var jobs: [Job] = []
 
-    /// v0.3.394：**「该重新读台账了」的信号** —— 任务**换阶段**时 +1。
+    /// **「该重新读台账了」的信号** —— 任务**换阶段**时 +1.
     ///
     /// 为什么需要它：下载管理页的**行内容**来自磁盘上的台账（`IPADownloadLibrary`，
     /// 它不是 `@Published`），而「装完 → 这一行从『安装中』变回『重装』」靠的是台账里的
-    /// `lastInstalledAt`。不重新读，用户就得退出这一页再进来才看到变化
-    /// —— 正是用户骂的「不要等到返回上一级目录才能刷新状态」。
+    /// `lastInstalledAt`.不重新读，用户就得退出这一页再进来才看到变化
+    /// —— 正是用户骂的「不要等到返回上一级目录才能刷新状态」.
     ///
     /// 为什么用「换阶段」而不是「`jobs` 变了」：`jobs` 在**每个下载进度回调**里都会变
     /// （每秒几十次），跟着它重读台账等于把磁盘读爆；而阶段变化一个任务只有 2~3 次，
-    /// 重读的代价可以忽略。
+    /// 重读的代价可以忽略.
     @Published private(set) var finishedTick = 0
 
     /// 正在运行的（含暂停）
@@ -221,19 +221,19 @@ final class IPADownloadCenter: ObservableObject {
 
     func job(_ id: UUID) -> Job? { jobs.first { $0.id == id } }
 
-    /// 某应用当前正在进行的任务（**行键优先 → bundleId → 名称**）。
+    /// 某应用当前正在进行的任务（**行键优先 → bundleId → 名称**）.
     ///
-    /// 适用：商店列表 / 详情页 —— 那里一行 = 一个应用，只关心「这个应用有没有在装/在下」。
+    /// 适用：商店列表 / 详情页 —— 那里一行 = 一个应用，只关心「这个应用有没有在装/在下」.
     /// 注意： **不要**拿它给「同一个应用的多个版本行」判状态：它只认 bundleId，
-    /// 会把同一个活跃任务挂到所有版本行上（v0.3.381 修的「多版本一起显示安装中」就是这个坑）。
-    /// 下载管理页请用 `activeJob(fileName:bundleId:version:name:allowBundleIdFallback:)`。
+    /// 会把同一个活跃任务挂到所有版本行上（修的「多版本一起显示安装中」就是这个坑）.
+    /// 下载管理页请用 `activeJob(fileName:bundleId:version:name:allowBundleIdFallback:)`.
     ///
-    /// v0.3.578：**带行键的任务（源列表发起）不在这里认领** ——
+    /// **带行键的任务（源列表发起）不在这里认领** ——
     /// 软件源列表里 3 行同名（且该源整源没有 `bundleIdentifier`）会同时命中同一个任务
-    /// （真机 bug：3 行齐显「下载中」，任一行「取消 / 暂停」都作用在那**唯一**的真实任务上）。
+    /// （真机 bug：3 行齐显「下载中」，任一行「取消 / 暂停」都作用在那**唯一**的真实任务上）.
     /// 源列表行由它自己的 `activeJob(for:)` 按 `remoteURL`（= 该行 `downloadURL`）精确认行
     /// （`SignSourceAppListView.swift:416`），所以这里只要**排除**带行键的任务即可 ——
-    /// 宁可少显示（这一行暂时不显示进度），也不能显示错、更不能让按钮作用到别的行。
+    /// 宁可少显示（这一行暂时不显示进度），也不能显示错、更不能让按钮作用到别的行.
     func activeJob(bundleId: String?, name: String) -> Job? {
         jobs.first { job in
             guard job.phase.isBusy, job.rowKey == nil else { return false }
@@ -242,21 +242,21 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// v0.3.381：某**一条已下载的条目**（含版本）当前正在进行的任务 —— **文件名优先**。
+    /// 某**一条已下载的条目**（含版本）当前正在进行的任务 —— **文件名优先**.
     ///
     /// 为什么不能只按 `bundleId`：同一应用常有多版本条目（ChatGPT v1.2026.224 / v230），
-    /// 按 bundleId 匹配会把同一个活跃任务挂到**所有版本行**上 → 多行一起显示「安装中」（用户实测 BUG）。
+    /// 按 bundleId 匹配会把同一个活跃任务挂到**所有版本行**上 → 多行一起显示「安装中」（用户实测 BUG）.
     /// 库与文件本身都是按 `fileName` 记的（`IPADownloadLibrary.markInstalled(fileName:)`、
-    /// `Job.localFileName`），所以按文件名匹配才对得上唯一一行。
+    /// `Job.localFileName`），所以按文件名匹配才对得上唯一一行.
     ///
     /// 回落规则（**只对「还没落地」的任务生效**，即 `job.localFileName == nil`）：
     /// · `allowBundleIdFallback == false` → **只按 fileName**，整个回落段直接拒绝
-    ///   （v0.3.578：拦截提到版本判断之前，见下方实现处的说明）；
+    ///   （拦截提到版本判断之前，见下方实现处的说明）；
     /// · `allowBundleIdFallback == true` 时：任务**自带 version** 则要求版本一致；
-    ///   任务 version 未知（`startFromI4Source` 的「查找安装包」阶段）则按 bundleId / 名称认行。
+    ///   任务 version 未知（`startFromI4Source` 的「查找安装包」阶段）则按 bundleId / 名称认行.
     ///
-    /// - Parameter allowBundleIdFallback: 该 bundleId 在列表里是否唯一（唯一才允许按 bundleId 认行）。
-    ///   由调用方按台账算；列表页 `IPADownloadManagerView` 会传 `false` 表示「这个 bundleId 有多行」。
+    /// - Parameter allowBundleIdFallback: 该 bundleId 在列表里是否唯一（唯一才允许按 bundleId 认行）.
+    ///   由调用方按台账算；列表页 `IPADownloadManagerView` 会传 `false` 表示「这个 bundleId 有多行」.
     func activeJob(fileName: String?,
                    bundleId: String?,
                    version: String?,
@@ -270,13 +270,13 @@ final class IPADownloadCenter: ObservableObject {
         // 2) 回落：只考虑还没有文件名的进行中任务
         return jobs.first { job in
             guard job.phase.isBusy, job.localFileName == nil else { return false }
-            // v0.3.578（诊断方案 C）：`allowBundleIdFallback == false` 现在**真正**意味着
-            // 「只按 fileName」—— 拦截提到版本判断**之前**，整个回落段直接拒绝。
+            // `allowBundleIdFallback == false` 现在**真正**意味着
+            // 「只按 fileName」—— 拦截提到版本判断**之前**，整个回落段直接拒绝.
             //
             // 旧实现在 `else if !allowBundleIdFallback` 里才拦截，于是任务**自带版本**时
             // （第三方软件源 `start(version:)` 必带版本）流程会跳过那条 `else`，
             // 照样落到 `bid == jbid` / `job.name == name` —— 开关名不副实，
-            // 下载管理页仍可能把同一个任务挂到多行（诊断 §1.4）。
+            // 下载管理页仍可能把同一个任务挂到多行（诊断 §1.4）.
             guard allowBundleIdFallback else { return false }
             if let jv = job.version, !jv.isEmpty {
                 // 任务自带版本：版本对不上就不是这一行
@@ -287,8 +287,8 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// 某应用最近一次结束的任务（失败提示用，bundleId → 名称）。
-    /// 口径与 `activeJob(bundleId:name:)` 完全一致（同样**排除带行键的源列表任务**）。
+    /// 某应用最近一次结束的任务（失败提示用，bundleId → 名称）.
+    /// 口径与 `activeJob(bundleId:name:)` 完全一致（同样**排除带行键的源列表任务**）.
     func lastFinishedJob(bundleId: String?, name: String) -> Job? {
         jobs.first { job in
             guard !job.phase.isBusy, job.rowKey == nil else { return false }
@@ -297,9 +297,9 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// v0.3.381：某**一条已下载的条目**最近一次结束的任务 —— 与 `activeJob(fileName:…)` 同口径，
-    /// 供按行提示「这条装的成/败」用（同样是文件名优先，避免多版本行互相串状态）。
-    /// 回落规则与 `allowBundleIdFallback` 的含义同上。
+    /// 某**一条已下载的条目**最近一次结束的任务 —— 与 `activeJob(fileName:…)` 同口径，
+    /// 供按行提示「这条装的成/败」用（同样是文件名优先，避免多版本行互相串状态）.
+    /// 回落规则与 `allowBundleIdFallback` 的含义同上.
     func lastFinishedJob(fileName: String?,
                          bundleId: String?,
                          version: String?,
@@ -311,7 +311,7 @@ final class IPADownloadCenter: ObservableObject {
         }
         return jobs.first { job in
             guard !job.phase.isBusy, job.localFileName == nil else { return false }
-            // v0.3.578：与 `activeJob(fileName:…)` 同口径 —— 不允许兜底 = 只按 fileName
+            // 与 `activeJob(fileName:…)` 同口径 —— 不允许兜底 = 只按 fileName
             guard allowBundleIdFallback else { return false }
             if let jv = job.version, !jv.isEmpty {
                 if let v = version, !v.isEmpty, v != jv { return false }
@@ -325,105 +325,105 @@ final class IPADownloadCenter: ObservableObject {
         guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
         let before = jobs[i].phase
         change(&jobs[i])
-        // v0.3.394：阶段变了 → 台账可能已经跟着变（刚落盘 / 刚装完 / 刚失败），
-        // 通知列表重读。只在这一处发信号，所有调用点自动都覆盖到。
+        // 阶段变了 → 台账可能已经跟着变（刚落盘 / 刚装完 / 刚失败），
+        // 通知列表重读.只在这一处发信号，所有调用点自动都覆盖到.
         if jobs[i].phase != before { finishedTick &+= 1 }
     }
 
     // MARK: - 启动
 
-    /// v0.3.413：**并发下载** —— 每个进行中的任务一个下载器，按 job id 索引。
+    /// **并发下载** —— 每个进行中的任务一个下载器，按 job id 索引.
     ///
-    /// 以前是单个 `runner` + `runningID`（`pump()` 保证一次只下一个）。
-    /// 改成字典后可以同时跑多个；上限见 `maxConcurrentDownloads`。
+    /// 以前是单个 `runner` + `runningID`（`pump()` 保证一次只下一个）.
+    /// 改成字典后可以同时跑多个；上限见 `maxConcurrentDownloads`.
     private var runners: [UUID: RemoteDownloader] = [:]
 
-    /// v0.3.583：**AppleID 通道的传输控制面**，按 job id 索引 —— 与 `runners` 并列的第二张表。
+    /// **AppleID 通道的传输控制面**，按 job id 索引 —— 与 `runners` 并列的第二张表.
     ///
     /// `startWithAppleID` 的字节传输在 `IPAFileDownloader` 里（那条链不登记 `runners`），
-    /// 它把控制面登记到这里 ⇒ `pause` / `resume` / `cancel` 同时查两张表，两条通道一套口径。
+    /// 它把控制面登记到这里 ⇒ `pause` / `resume` / `cancel` 同时查两张表，两条通道一套口径.
     /// 不并进 `runners` 的原因：`runners.count` 被 `pump()` 当作**并发下载槽**在用
-    /// （`maxConcurrentDownloads`），AppleID 任务不走 `pump()`，混进去会干扰调度计数。
+    /// （`maxConcurrentDownloads`），AppleID 任务不走 `pump()`，混进去会干扰调度计数.
     private var appleIDControls: [UUID: IPADownloadControl] = [:]
-    /// D1 续（task-3）：**已经被 `cancel()` 取走**的 AppleID 产物路径，按 job id 索引。
+    /// D1 续（task-3）：**已经被 `cancel()` 取走**的 AppleID 产物路径，按 job id 索引.
     ///
     /// 为什么控制面之外还要单独留一份：`cancel()` 删完文件后会把控制面那份登记
     /// `takeDestination()` **取走**（取走是刻意的 —— `<bundleID>-<version>.ipa` 这个文件名
     /// 会被下一次下载复用，留着登记就可能删到用户新下的包）；而这次下载的 detached 任务
     /// 还在跑，它收尾时若发现「任务已被删除」，控制面登记与 `appleIDControls[id]` 都已失效，
-    /// 就再也拼不出自己这一次的产物路径。于是「取消落在 `keep` → `dest` 的搬运窗口里
-    /// （`abort()` 那一刻 dest 还不存在）、随后注入 sinf 又失败」这一支留下的包没人认领。
+    /// 就再也拼不出自己这一次的产物路径.于是「取消落在 `keep` → `dest` 的搬运窗口里
+    /// （`abort()` 那一刻 dest 还不存在）、随后注入 sinf 又失败」这一支留下的包没人认领.
     /// 单独记一份，就是把那条路径留到收尾那一刻：成功 / 失败两条收尾都即用即删，
-    /// 不会越界到别人的下载。
+    /// 不会越界到别人的下载.
     private var appleIDTargets: [UUID: URL] = [:]
 
-    /// v0.3.583：**安装看门狗的常量**（机制见 `installLocal`）。
+    /// **安装看门狗的常量**（机制见 `installLocal`）.
     ///
-    /// `installWatchdogTimeout` = 「连续多少秒**一次进度都没有**」就判安装失败。
+    /// `installWatchdogTimeout` = 「连续多少秒**一次进度都没有**」就判安装失败.
     /// 取 120s 的理由：判据是「无进展」而非「总时长」—— 安装链的进度回调（AFC 上传逐块 /
     /// installd 逐档）会刷新心跳，所以只有**真正卡住**才会连续这么久没有一次回调；
-    /// 而 120s 仍比真机实测的卡死时长（约 4m45s）小 2.4 倍，够快报错又留足余量不误杀慢包。
+    /// 而 120s 仍比真机实测的卡死时长（约 4m45s）小 2.4 倍，够快报错又留足余量不误杀慢包.
     private static let installWatchdogTimeout: TimeInterval = 120
-    /// 看门狗轮询间隔（15s）：只读一个时间戳，代价可忽略。
+    /// 看门狗轮询间隔（15s）：只读一个时间戳，代价可忽略.
     private static let installWatchdogPoll: TimeInterval = 15
 
-    /// 每个 `.installing` 任务「最近一次有进展」的时刻（`installLocal` 的进度回调刷新它）。
+    /// 每个 `.installing` 任务「最近一次有进展」的时刻（`installLocal` 的进度回调刷新它）.
     private var installHeartbeats: [UUID: Date] = [:]
-    /// 每个 `.installing` 任务的看门狗；任务结束 / 取消时停掉，避免后台空转。
+    /// 每个 `.installing` 任务的看门狗；任务结束 / 取消时停掉，避免后台空转.
     private var installWatchdogs: [UUID: Task<Void, Never>] = [:]
 
-    /// 同时进行的下载数上限。
+    /// 同时进行的下载数上限.
     ///
     /// 用户要求「并发下载」；加上限是为了不把网络 / 内存打满 ——
     /// 每个下载各有独立的 `URLSession` 与落盘缓冲，同时太多会互相抢带宽、
-    /// 也会让「下载管理」页的速度显示与进度更新变得难以阅读。
+    /// 也会让「下载管理」页的速度显示与进度更新变得难以阅读.
     private static let maxConcurrentDownloads = 3
 
-    /// v0.3.398（②，第二层防护）：**「这次暂停是我发起的」的显式记录**。
+    /// **「这次暂停是我发起的」的显式记录**.
     ///
     /// 为什么光有「先写 `.paused`」不够：那一层只覆盖「回调到达时状态已经写成 `.paused`」
-    /// 这一种时序。回调是**跨队列**来的（`URLSession` delegate 队列 → `Task { @MainActor }`），
+    /// 这一种时序.回调是**跨队列**来的（`URLSession` delegate 队列 → `Task { @MainActor }`），
     /// 写入与回调谁先到并没有硬保证；而且状态位本身也分不清
-    /// 「因为暂停而被取消」与「下载真的断了」。
+    /// 「因为暂停而被取消」与「下载真的断了」.
     /// 所以再记一份**只属于主 actor 的意图**：`pause()` 一开始就插入，回调到达时读它，
-    /// 与「状态何时写入」「回调何时到达」全都无关。
+    /// 与「状态何时写入」「回调何时到达」全都无关.
     ///
     /// 生命周期：`pause()` 插入；`resume()` / `cancel()` 移除（离开 `.paused` 就不再需要它，
-    /// 否则之后**真**的网络错误会被误判成暂停而永远显示「已暂停」）。
+    /// 否则之后**真**的网络错误会被误判成暂停而永远显示「已暂停」）.
     private var pausingIDs: Set<UUID> = []
 
-    // MARK: v0.3.394：瞬时速度的采样窗口（v0.3.659 起按任务各一套，v0.3.674 复核）
+    // MARK: - 瞬时速度的采样窗口（按任务各一套，复核）
     //
-    // 历史：v0.3.394 写下这段时下载是串行的（一次只下一个），一套窗口变量够用；
-    // v0.3.413 把并发开到 `maxConcurrentDownloads = 3` 之后，一套全局窗口就不成立了 ——
+    // 历史：写下这段时下载是串行的（一次只下一个），一套窗口变量够用；
+    // 把并发开到 `maxConcurrentDownloads = 3` 之后，一套全局窗口就不成立了 ——
     // 三个任务共用同一对（上次时刻, 上次字节），A 的字节数去减 B 的，差值为负被丢弃，
-    // 于是速度在三个任务之间乱跳、并且会长期停在 0。
+    // 于是速度在三个任务之间乱跳、并且会长期停在 0.
     //
-    // v0.3.659（提交 e302d9d）已经把这件事改对了：`speedSamples` 是 `[UUID: SpeedSample]`，
+    // 已经把这件事改对了：`speedSamples` 是 `[UUID: SpeedSample]`，
     // `SpeedSample` 的三个字段都是**实例存储属性**（不是 `static var`），每个任务各存一份 ——
-    // 三路并发各算各的，互不干扰。本轮（v0.3.674 / D5）复核后**没有再改这段逻辑**，
-    // 只订正了类头那句过时的「队列串行执行」注释（见文件开头）。
-    // 窗口长度 0.8s：太短数字乱跳，太长反应迟钝。
+    // 三路并发各算各的，互不干扰.本轮（/ D5）复核后**没有再改这段逻辑**，
+    // 只订正了类头那句过时的「队列串行执行」注释（见文件开头）.
+    // 窗口长度 0.8s：太短数字乱跳，太长反应迟钝.
 
-    /// 一个任务的**独立**速度采样器：窗口起点 / 窗口起点时的字节数 / 平滑后的速度。
+    /// 一个任务的**独立**速度采样器：窗口起点 / 窗口起点时的字节数 / 平滑后的速度.
     ///
     /// 三个字段都是实例存储属性，由 `speedSamples` 按任务 id 各存一份 —— 这是「按任务采样」
-    /// 能成立的前提：只要有一项退化成 `static var`，三路并发就会互相覆盖成全局单套。
+    /// 能成立的前提：只要有一项退化成 `static var`，三路并发就会互相覆盖成全局单套.
     private struct SpeedSample {
         var windowStart: Date
         var bytes: Int64
         var smoothed: Double
     }
     /// 只放**正在跑**的任务：收工 / 暂停 / 取消 / 失败都调 `resetSpeedWindow(_:)` 删掉，
-    /// 否则字典会随历史任务无限长。
+    /// 否则字典会随历史任务无限长.
     private var speedSamples: [UUID: SpeedSample] = [:]
     private static let speedWindow: TimeInterval = 0.8
 
-    /// 把「已下字节 / 总字节」写进任务，顺便估一个**瞬时速度**。
+    /// 把「已下字节 / 总字节」写进任务，顺便估一个**瞬时速度**.
     ///
     /// 速度 = 两次采样的字节差 ÷ 时间差，再做指数平滑（新样本 45% / 旧值 55%）：
-    /// 既不跟着每个回调乱跳，掉速时也不会像全程平均那样长时间停在虚高的数字上。
-    /// 采样窗口没满时沿用上一次的值（不刷新），所以界面上的数字是稳定的。
+    /// 既不跟着每个回调乱跳，掉速时也不会像全程平均那样长时间停在虚高的数字上.
+    /// 采样窗口没满时沿用上一次的值（不刷新），所以界面上的数字是稳定的.
     private func applyDownloadProgress(_ id: UUID, written: Int64, expected: Int64) {
         let now = Date()
         var sample = speedSamples[id]
@@ -450,25 +450,25 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// 换任务 / 暂停 / 续传 / 失败 / 结束时清掉该任务的速度窗口。
-    /// 不清的话，续传后第一次采样的字节差会跨过暂停那段空档，把速度算成天文数字。
+    /// 换任务 / 暂停 / 续传 / 失败 / 结束时清掉该任务的速度窗口.
+    /// 不清的话，续传后第一次采样的字节差会跨过暂停那段空档，把速度算成天文数字.
     private func resetSpeedWindow(_ id: UUID) {
         speedSamples[id] = nil
     }
 
     /// 免登录源：直接给直链
     ///
-    /// v0.3.406：加 `source` 参数（**默认 `.i4Free`**，既有调用点一个都不用改）——
-    /// 牛蛙源要能在下载管理页显示成「牛蛙免登录」，不能借用爱思那一档。
-    /// v0.3.407：加 `sinfBase64`（**默认 nil**）—— 牛蛙源把 `ba_sinfs` 一起带进来，
-    /// 落盘后由 `PackageSINFWriter` 写回包内再安装；不传即与从前完全一致。
-    /// v0.3.578：源列表（第三方软件源）任务**自动**带上行键 = `remoteURL`（= 该行 downloadURL）。
-    /// 其它来源保持 `nil` —— 它们的列表「一行一个 App」，bundleId 已能唯一认行。
+    /// 加 `source` 参数（**默认 `.i4Free`**，既有调用点一个都不用改）——
+    /// 牛蛙源要能在下载管理页显示成「牛蛙免登录」，不能借用爱思那一档.
+    /// 加 `sinfBase64`（**默认 nil**）—— 牛蛙源把 `ba_sinfs` 一起带进来，
+    /// 落盘后由 `PackageSINFWriter` 写回包内再安装；不传即与从前完全一致.
+    /// 源列表（第三方软件源）任务**自动**带上行键 = `remoteURL`（= 该行 downloadURL）.
+    /// 其它来源保持 `nil` —— 它们的列表「一行一个 App」，bundleId 已能唯一认行.
     /// 行键的**认行**由源列表视图按 `remoteURL` 自己做（`SignSourceAppListView.activeJob(for:)`）；
-    /// 引擎侧只用它把源列表任务**排除**出 bundleId / 名称口径（见 `Job.rowKey`）。
+    /// 引擎侧只用它把源列表任务**排除**出 bundleId / 名称口径（见 `Job.rowKey`）.
     @discardableResult
-    // v0.3.412：彻底去掉自动装（用户明确要求），所以不再接受也不需要 autoInstall 参数。
-    // 旧的「autoInstall: Bool = true」默认参数也一并删除 —— 没有调用方再传它。
+    // 彻底去掉自动装（用户明确要求），所以不再接受也不需要 autoInstall 参数.
+    // 旧的「autoInstall: Bool = true」默认参数也一并删除 —— 没有调用方再传它.
     func start(name: String,
                bundleId: String?,
                version: String?,
@@ -479,8 +479,8 @@ final class IPADownloadCenter: ObservableObject {
         var job = Job(name: name, bundleId: bundleId, version: version, iconURL: iconURL,
                       remoteURL: remoteURL, source: source, accountEmail: nil,
                       sinfBase64: sinfBase64)
-        // 行键：源列表（第三方软件源）任务用 downloadURL（= `remoteURL`）当行键。
-        // 其它来源保持 `nil` —— 它们的列表「一行一个 App」，bundleId 已能唯一认行。
+        // 行键：源列表（第三方软件源）任务用 downloadURL（= `remoteURL`）当行键.
+        // 其它来源保持 `nil` —— 它们的列表「一行一个 App」，bundleId 已能唯一认行.
         job.rowKey = source == .thirdPartySource ? remoteURL : nil
         job.setStage("排队中")
         jobs.insert(job, at: 0)
@@ -490,9 +490,9 @@ final class IPADownloadCenter: ObservableObject {
 
     /// 免登录源：只给 bundleId/名称，自己按 bundleId 去源里找包
     ///
-    /// v0.3.392：新增 `storeItemId`（App Store trackId）—— 用来给**爱思来源**的包也记上「商店链接」。
+    /// `storeItemId`（App Store trackId）—— 用来给**爱思来源**的包也记上「商店链接」.
     /// 调用点手上就有（`AppStoreItem.id` 就是 trackId）；若没给，稍后用爱思返回的
-    /// `I4App.itemId`（**接口里本来就带的 App Store trackId**）兜底。
+    /// `I4App.itemId`（**接口里本来就带的 App Store trackId**）兜底.
     @discardableResult
     func startFromI4Source(name: String, bundleId: String, iconURL: String?,
                            storeItemId: String? = nil) async -> UUID {
@@ -518,11 +518,11 @@ final class IPADownloadCenter: ObservableObject {
             if ($0.storeItemId ?? "").isEmpty { $0.storeItemId = hit.itemId }
             $0.setStage("排队中")
         }
-        // v0.3.387：直链与版本刚开始确定 → 也立刻落盘一次（此刻台账多半还没有这一行，属 no-op；
-        // 重下同版本时才真正生效）。真正写入在 `startDownload` 与 `handle` 两处。
+        // 直链与版本刚开始确定 → 也立刻落盘一次（此刻台账多半还没有这一行，属 no-op；
+        // 重下同版本时才真正生效）.真正写入在 `startDownload` 与 `handle` 两处.
         // 注意： 必须写 `self.job(id)`：本函数开头有 `var job = Job(...)`（`:242` 附近），
         // 裸写 `job(id)` 会被那个局部变量遮蔽 →
-        // `error: cannot call value of non-function type 'IPADownloadCenter.Job'`（v0.3.387 CI 实测）。
+        // `error: cannot call value of non-function type 'IPADownloadCenter.Job'`（CI 实测）.
         if let name = self.job(id)?.expectedFileName {
             IPADownloadLibrary.shared.updateSourceURL(fileName: name, url: hit.ipaURL)
         }
@@ -532,9 +532,9 @@ final class IPADownloadCenter: ObservableObject {
 
     /// Apple ID 通道（预留）：用指定账号从 App Store 官方源取包
     ///
-    /// v0.3.335：`externalVersionID` 非空时取**指定历史版本**（版本历史页用）。
-    /// v0.3.578：**不再自动安装** —— 下载 + 注入 sinf 后停在「已下载」，
-    /// 由用户在「下载管理」点「安装」手动装（与 v0.3.412 对免登录通道的改动对齐）。
+    /// `externalVersionID` 非空时取**指定历史版本**（版本历史页用）.
+    /// **不再自动安装** —— 下载 + 注入 sinf 后停在「已下载」，
+    /// 由用户在「下载管理」点「安装」手动装（与 对免登录通道的改动对齐）.
     @discardableResult
     func startWithAppleID(item: AppStoreItem,
                           email: String,
@@ -544,56 +544,56 @@ final class IPADownloadCenter: ObservableObject {
         var job = Job(name: item.name, bundleId: item.bundleId, version: shownVersion,
                       iconURL: item.iconSmallURL ?? item.iconURL, remoteURL: nil,
                       source: .appleID, accountEmail: email)
-        // v0.3.391：**下载时就知道商品号**，直接记进任务 → 落盘时写进台账。
+        // **下载时就知道商品号**，直接记进任务 → 落盘时写进台账.
         // 用户要的「商店链接」= App Store 的跳转链接（`https://apps.apple.com/app/id<itemId>`），
         // 而 `AppStoreItem.id` 本身就是 `trackId` —— 根本不需要去读包内 `iTunesMetadata`
-        // （重签包那个文件会被删掉，读包必然失败）。
+        // （重签包那个文件会被删掉，读包必然失败）.
         job.storeItemId = item.id
         job.setStage("准备中", phase: .downloading)
         jobs.insert(job, at: 0)
         let id = job.id
 
-        // ▸▸▸ v0.3.583：**建控制面并登记** —— 让中心的暂停 / 继续 / 删除安装包能触达这条链的
-        // `IPAFileDownloader`。旧实现这条链不登记任何句柄 ⇒ `runners[id]` 恒 nil ⇒ 三个动作
-        // 全是空操作（暂停无效、删除安装包假成功，见 `诊断_暂停无效_底层角度` §①/§4.3）。
+        // ▸▸▸ ：**建控制面并登记** —— 让中心的暂停 / 继续 / 删除安装包能触达这条链的
+        // `IPAFileDownloader`.旧实现这条链不登记任何句柄 ⇒ `runners[id]` 恒 nil ⇒ 三个动作
+        // 全是空操作（暂停无效、删除安装包假成功，见 `诊断_暂停无效_底层角度` §①/§4.3）.
         let control = IPADownloadControl()
         appleIDControls[id] = control
-        // v0.3.677（D1 续）：下面两个「用户已删除任务」的分支要清理**本次调用的产物**。
+        // 下面两个「用户已删除任务」的分支要清理**本次调用的产物**.
         //
         // 为什么不能只用 download 的返回值：那个返回值要等「传输 + 落盘」都结束才拿到，
         // 而用户点「删除安装包」恰好可能落在这之前 —— 那一刻 job 已被 cancel 移除，
         // 两处 guard self.job(id) != nil 会直接返回，于是：
         // · 下载还没落地 ⇒ cancel 里的 abort() 能删（半成品 + 目标文件）；
-        // · 下载已落地、正在注入 sinf ⇒ 只有控制面那条登记还指着那个文件（下载器已 finished）。
+        // · 下载已落地、正在注入 sinf ⇒ 只有控制面那条登记还指着那个文件（下载器已 finished）.
         // 取登记一律在各自的 MainActor.run 闭包里用局部 let 完成，**不**用跨闭包的可变变量
-        // （那会被 @Sendable 的 Task.detached 捕获，Swift 6 严格并发下直接编译不过）。
+        // （那会被 @Sendable 的 Task.detached 捕获，Swift 6 严格并发下直接编译不过）.
 
         Task.detached(priority: .userInitiated) { [item, email] in
             do {
-                // v0.3.578：AppleID 通道**不再自动安装**（与 v0.3.412 对免登录通道的改动对齐）。
+                // AppleID 通道**不再自动安装**（与 对免登录通道的改动对齐）.
                 //
                 // 旧实现走 `AppStoreLocalInstallService.downloadAndInstall` —— 「下载 → 注入 sinf →
-                // 安装」焊在同一个调用里，下载一完成就自动 `installLocalIPA`：无开关、无确认。
+                // 安装」焊在同一个调用里，下载一完成就自动 `installLocalIPA`：无开关、无确认.
                 // 而 installd 的 `Install` 对同 bundleId 的已装应用**天然覆盖**，等于**未经用户同意
-                // 替换他已装的 App**（诊断：`诊断_自动安装与本地标签.md` §1.1/§4.1）。
-                // v0.3.412 只删了免登录通道的自动装（那条走 `handle`），AppleID 通道不走 `handle`，
-                // 于是被整条漏掉。现在只下载 + 注入 sinf，安装交给用户手动点「安装」。
+                // 替换他已装的 App**（诊断：`诊断_自动安装与本地标签.md` §1.1/§4.1）.
+                // 只删了免登录通道的自动装（那条走 `handle`），AppleID 通道不走 `handle`，
+                // 于是被整条漏掉.现在只下载 + 注入 sinf，安装交给用户手动点「安装」.
                 //
-                // 注意： 没有 `installProgress` 回调了 —— 这条链路里**不存在**安装段。
+                // 注意： 没有 `installProgress` 回调了 —— 这条链路里**不存在**安装段.
                 let dest = try await AppStoreLocalInstallService.download(
                     item: item,
                     email: email,
                     externalVersionID: externalVersionID,
                     downloadProgress: { p in
                         Task { @MainActor in
-                            // ▸▸▸ v0.3.583（用户截图 IMG_6740）：**只在仍处「下载中」时写进度**。
+                            // ▸▸▸ ：**只在仍处「下载中」时写进度**.
                             //
                             // 这条下载跑在一个 detached 任务里（`AppStoreLocalInstallService.download`
                             // → `IPAFileDownloader`），它的进度回调**不受主 actor 控制**：以前无条件
                             // `$0.stageText = "下载中"`，于是任何离开 `.downloading` 的状态（取消 /
                             // 失败 / 用户以为暂停了）都会被这一句改回去 —— 界面就会出现「已暂停」
-                            // 旁边还挂着「下载中」且百分比继续涨的自相矛盾（截图那一帧）。
-                            // 加这道 phase 判据后，回调再也改不动已经落定的状态。
+                            // 旁边还挂着「下载中」且百分比继续涨的自相矛盾（截图那一帧）.
+                            // 加这道 phase 判据后，回调再也改不动已经落定的状态.
                             self.update(id) {
                                 guard $0.phase == .downloading else { return }
                                 $0.progress = p
@@ -601,9 +601,9 @@ final class IPADownloadCenter: ObservableObject {
                             }
                         }
                     },
-                    // v0.3.659（task-3 D3）：字节级进度 —— 写 receivedBytes / totalBytes / 速度。
+                    // 字节级进度 —— 写 receivedBytes / totalBytes / 速度.
                     // 旧实现只有下面那个 0~1 的百分比回调，下载管理里这条通道的
-                    // 「已下 X MB / 共 Y MB」与速度恒为 0（对照 `applyDownloadProgress` 才写这三项）。
+                    // 「已下 X MB / 共 Y MB」与速度恒为 0（对照 `applyDownloadProgress` 才写这三项）.
                     byteProgress: { written, expected in
                         Task { @MainActor in
                             guard self.job(id)?.phase == .downloading else { return }
@@ -611,13 +611,13 @@ final class IPADownloadCenter: ObservableObject {
                         }
                     },
                     onResolvedURL: { url in
-                        // v0.3.391：Apple 一签发下载地址就挂到 job 上 ——
+                        // Apple 一签发下载地址就挂到 job 上 ——
                         // ① `handle` 落盘时会把它写进台账（用户要的「记住这次下载的链接」）；
-                        // ② 「下载中」那一行的「提取下载链接」也能立刻取到（不必等下载完）。
+                        // ② 「下载中」那一行的「提取下载链接」也能立刻取到（不必等下载完）.
                         //
-                        // v0.3.392：**加一行日志定案** —— 真机实测出现过「下载中能取到、
-                        // 落盘后台账里却是空」的现象，而光读代码看不出原因（链路看着都对）。
-                        // 这条日志 + `handle` 里那条，一次就能定位到底哪一步断掉。
+                        // **加一行日志定案** —— 真机实测出现过「下载中能取到、
+                        // 落盘后台账里却是空」的现象，而光读代码看不出原因（链路看着都对）.
+                        // 这条日志 + `handle` 里那条，一次就能定位到底哪一步断掉.
                         LoginLogger.shared.log("[下载中心] 拿到直链 → 写入任务：\(String(url.prefix(56)))…",
                                                category: .download)
                         Task { @MainActor in
@@ -629,23 +629,23 @@ final class IPADownloadCenter: ObservableObject {
                         LoginLogger.shared.log("[下载中心] \(line)", category: .download)
                     })
                 await MainActor.run {
-                    // v0.3.677（D1 续）：摘控制面前先把登记路径**取走** —— 下面那个
+                    // 摘控制面前先把登记路径**取走** —— 下面那个
                     // 「任务已被删除」的分支要用它兜底删；取走同时让登记失效，
-                    // 避免后续任何一次清理删到用户重下的同名包。
+                    // 避免后续任何一次清理删到用户重下的同名包.
                     let stagedDest = self.appleIDControls[id]?.takeDestination()
-                    // 下载已结束（成功）→ 控制面使命完成，摘掉。
+                    // 下载已结束（成功）→ 控制面使命完成，摘掉.
                     self.appleIDControls[id] = nil
                     // D1 续（task-3）：取消那一刻留下的那份路径记录到这里也用完了 ——
                     // 这一支要么写台账（下面的 `record`）、要么就地把 `stagedDest ?? dest`
-                    // 删掉。摘掉，免得随取消次数越积越多。
+                    // 删掉.摘掉，免得随取消次数越积越多.
                     self.appleIDTargets[id] = nil
-                    // v0.3.583：若这期间用户点了「删除安装包」（job 已被 `cancel` 移除），
+                    // 若这期间用户点了「删除安装包」（job 已被 `cancel` 移除），
                     // **不要再写台账**，并把刚落盘的包删掉 —— 否则会留下一个「列表里看不到、
-                    // 磁盘上还在」的孤儿文件（`cancel` 对「还没落地」的任务不会删文件）。
+                    // 磁盘上还在」的孤儿文件（`cancel` 对「还没落地」的任务不会删文件）.
                     //
-                    // v0.3.677（D1 续）：删**登记过的那条路径**。dest 与它本该是同一个文件
+                    // 删**登记过的那条路径**.dest 与它本该是同一个文件
                     // （都来自 downloadIPA 的 dest），但登记路径不依赖「返回值已到手」这个前提，
-                    // 语义上也更准：要清的是「本次调用的产物」。
+                    // 语义上也更准：要清的是「本次调用的产物」.
                     guard self.job(id) != nil else {
                         try? FileManager.default.removeItem(at: stagedDest ?? dest)
                         LoginLogger.shared.log(
@@ -653,14 +653,14 @@ final class IPADownloadCenter: ObservableObject {
                             category: .download)
                         return
                     }
-                    // ▸▸▸ v0.3.392 根因修复：**这条链路必须自己写台账**。
+                    // ▸▸▸ 根因修复：**这条链路必须自己写台账**.
                     //
                     // AppleID 通道**不走 `startDownload` → 从不经过 `handle`**，
-                    // 而写台账（含 `sourceURL` / `storeItemId`）的逻辑在 `handle` 里。
+                    // 而写台账（含 `sourceURL` / `storeItemId`）的逻辑在 `handle` 里.
                     // 以前这里只更新内存里的 job，台账条目是事后靠**磁盘扫描现场补登记**
                     // 生成的 —— 那条路径根本不知道这两个字段，
-                    // 于是「已下载」面板里「提取下载链接」和「复制商店链接」双双显示「无」。
-                    // 真机实证：11:51「下载中」能提取到直链，11:52 落盘后台账里却是空。
+                    // 于是「已下载」面板里「提取下载链接」和「复制商店链接」双双显示「无」.
+                    // 真机实证：11:51「下载中」能提取到直链，11:52 落盘后台账里却是空.
                     let live = self.job(id)
                     IPADownloadLibrary.shared.record(
                         fileURL: dest,
@@ -675,10 +675,10 @@ final class IPADownloadCenter: ObservableObject {
                                            + "sourceURL=\(live?.remoteURL.map { String($0.prefix(40)) + "…" } ?? "nil") "
                                            + "storeItemId=\(live?.storeItemId ?? "nil")", category: .download)
                     self.update(id) {
-                        // v0.3.578：**终态 = 「已下载」**，与免登录通道 `handle` 的收尾完全一致。
+                        // **终态 = 「已下载」**，与免登录通道 `handle` 的收尾完全一致.
                         // 不再自动进入安装 ⇒ 也不会再出现「下载完成却停在 75%」那种状态：
                         // `phase == .done` ⇒ `overall == 1`（见 `Job.overall`），
-                        // 进度环走满、文案「已下载」，用户在「下载管理」点该行的「安装」才装。
+                        // 进度环走满、文案「已下载」，用户在「下载管理」点该行的「安装」才装.
                         $0.progress = 1
                         $0.setStage("已下载", phase: .done)
                         $0.localFileName = dest.lastPathComponent
@@ -686,28 +686,28 @@ final class IPADownloadCenter: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    // v0.3.677（D1 续）：与成功分支同样先取走登记路径 —— 失败时它同样是
-                    // 「本次调用可能已经落盘、但永远不会进台账」的那份产物。
+                    // 与成功分支同样先取走登记路径 —— 失败时它同样是
+                    // 「本次调用可能已经落盘、但永远不会进台账」的那份产物.
                     let stagedDest = self.appleIDControls[id]?.takeDestination()
                     self.appleIDControls[id] = nil
                     // D1 续（task-3）：控制面那份登记可能已经被 `cancel()` 取走（用户点
                     // 「删除安装包」时取走是刻意的）；这条下载还在跑，此刻还认得本次产物路径的
-                    // 只剩取消时在中心留的那一份。取本地 let，供下面「任务已被删除」那支使用。
+                    // 只剩取消时在中心留的那一份.取本地 let，供下面「任务已被删除」那支使用.
                     let cancelledDest = self.appleIDTargets.removeValue(forKey: id)
-                    // v0.3.583：用户点「删除安装包」会**先**把 job 从 `jobs` 移除、**再**取消底层
-                    // task ⇒ 这里回调到达时 job 已不在。此时既无 job 可改，也不该写「下载失败」
-                    // —— 用户主动取消不是失败（`abort()` 抛的是 `CancellationError`）。
+                    // 用户点「删除安装包」会**先**把 job 从 `jobs` 移除、**再**取消底层
+                    // task ⇒ 这里回调到达时 job 已不在.此时既无 job 可改，也不该写「下载失败」
+                    // —— 用户主动取消不是失败（`abort()` 抛的是 `CancellationError`）.
                     //
-                    // v0.3.677（D1 续）：但**必须把产物清掉**。旧实现这里直接 `return`，
+                    // 但**必须把产物清掉**.旧实现这里直接 `return`，
                     // 于是「下载已落盘、正在注入 sinf 时用户点删除」这条路径留下的包
                     // （`dest` 已存在、台账里没有、列表里也没有）永久留在磁盘上 —— 这正是
                     // D1 的另一半：控制面那一侧的 `abort()` 只删得掉「它当时登记的那一份」，
-                    // 之后重新落盘 / 注入过程中再产生的文件没人认领。
+                    // 之后重新落盘 / 注入过程中再产生的文件没人认领.
                     guard self.job(id) != nil else {
                         // D1 续（task-3）：`stagedDest` 拿不到时退回「取消时留下的那份」——
                         // 这正是 D1 剩下的最后一条可复现路径：cancel 落在搬运窗口里（`abort()`
                         // 删空、`fileExists` 判否、任务行已移除）+ 注入 sinf 失败 ⇒
-                        // 包在磁盘上、列表里没有、台账里也没有（只能靠 `items()` 事后按「来源未知」扫出来）。
+                        // 包在磁盘上、列表里没有、台账里也没有（只能靠 `items()` 事后按「来源未知」扫出来）.
                         if let orphan = stagedDest ?? cancelledDest {
                             try? FileManager.default.removeItem(at: orphan)
                             LoginLogger.shared.log(
@@ -717,15 +717,15 @@ final class IPADownloadCenter: ObservableObject {
                         return
                     }
                     self.update(id) {
-                        // v0.3.578：这条链路只剩「下载 + 注入 sinf」，**没有安装段** ⇒
-                        // 失败一律属下载链路。旧的 `$0.phase == .installing ? .install : .download`
-                        // 已无意义（phase 不会再进 `.installing`），留着会把下载失败错标成「安装失败」。
+                        // 这条链路只剩「下载 + 注入 sinf」，**没有安装段** ⇒
+                        // 失败一律属下载链路.旧的 `$0.phase == .installing ? .install : .download`
+                        // 已无意义（phase 不会再进 `.installing`），留着会把下载失败错标成「安装失败」.
                         $0.failureStage = .download
                         $0.error = error.localizedDescription
                         $0.setStage("失败", phase: .failed)
                     }
-                    // v0.3.578：**失败必须可见** —— 以前这里只改内存状态、一行日志都不写，
-                    // 真机上表现为「点了下载、什么都不发生」。与 `installLocal` / `handle` 同口径落日志。
+                    // **失败必须可见** —— 以前这里只改内存状态、一行日志都不写，
+                    // 真机上表现为「点了下载、什么都不发生」.与 `installLocal` / `handle` 同口径落日志.
                     LoginLogger.shared.log("[下载中心] AppleID 下载失败：\(error.localizedDescription)",
                                            category: .download)
                 }
@@ -737,13 +737,13 @@ final class IPADownloadCenter: ObservableObject {
     /// 安装库里已有的包（下载管理页用）
     ///
     /// `source`：这个包**从哪来** —— 决定它的安装日志写进哪个板块（三方软件源 → 「软件源」，
-    /// 其余 → AppStore）。默认 `.i4Free` 与历史行为一致（旧调用方不传即零变化）。
-    /// 想让三方软件源的安装日志正确分板，调用方需把台账里那条的 `source` 传进来。
+    /// 其余 → AppStore）.默认 `.i4Free` 与历史行为一致（旧调用方不传即零变化）.
+    /// 想让三方软件源的安装日志正确分板，调用方需把台账里那条的 `source` 传进来.
     @discardableResult
     func installLocal(fileName: String, displayName: String, bundleId: String?,
                       version: String?, iconURL: String?,
                       source: Source = .i4Free) -> UUID {
-        // v0.3.383：文件不在（被外部删除/移走）→ 属「下载/文件类」，**不是**安装失败
+        // 文件不在（被外部删除/移走）→ 属「下载/文件类」，**不是**安装失败
         let path = IPADownloadLibrary.shared.path(forFileName: fileName)
         guard FileManager.default.fileExists(atPath: path) else {
             LoginLogger.shared.log("[下载中心] 本地包不存在 \(fileName)",
@@ -758,38 +758,38 @@ final class IPADownloadCenter: ObservableObject {
         job.localFileName = fileName
         jobs.insert(job, at: 0)
         let id = job.id
-        // ▸▸▸ v0.3.413（D8 修法 B）：**安装前把台账里的 sinf 写回包内**。
+        // ▸▸▸ ：**安装前把台账里的 sinf 写回包内**.
         //
-        // 这是 D8 的核心修复。牛蛙源的加密包只有包内有 `SC_Info/<CFBundleExecutable>.sinf`
+        // 这是 D8 的核心修复.牛蛙源的加密包只有包内有 `SC_Info/<CFBundleExecutable>.sinf`
         // 才能过 FairPlay 验证；而「下载管理 → 重装」走的是本方法（`installLocal`），
         // 它以前**读不到**内存里的 `Job.sinfBase64`（那个 Job 早就结束了）→ 必然报
-        // 「该 IPA 是加密包，但缺少 SC_Info/*.sinf」（真机日志实证）。
+        // 「该 IPA 是加密包，但缺少 SC_Info/*.sinf」（真机日志实证）.
         //
         // 现在 sinf 跟着台账落盘（见 `IPADownloadLibrary.record(sinfBase64:)`），
-        // 这里读回来写进包内即可 —— **不需要重下**。
-        // 写包是几百 MB 的 ZIP 操作，必须在 detached 里跑（不能占主线程）。
+        // 这里读回来写进包内即可 —— **不需要重下**.
+        // 写包是几百 MB 的 ZIP 操作，必须在 detached 里跑（不能占主线程）.
         let sinfBase64 = IPADownloadLibrary.shared.sinf(forFileName: fileName)
         // 安装日志的板块按来源**在主 actor 上先算好**，再带进后台安装链 ——
-        // 避免在 detached 里引用 `Source`（跨隔离边界）。`LoginLogger.Category` 是 Sendable。
+        // 避免在 detached 里引用 `Source`（跨隔离边界）.`LoginLogger.Category` 是 Sendable.
         let sourceCategory = logCategory(for: source)
 
-        // ▸▸▸ v0.3.583：**安装看门狗**。安装确实会卡：安装链第一步是建 RSD 隧道，Rust 侧
+        // ▸▸▸ ：**安装看门狗**.安装确实会卡：安装链第一步是建 RSD 隧道，Rust 侧
         // `tunnel_create_rppairing` 的首个 `connect` **没有超时**（见下段注释），LocalDevVPN
         // 不通时会一直等到 OS 的 TCP 建连超时 —— 真机实测「下载完成 → 安装报错」隔了约 **4m45s**
         // （`_devicelog/LoginLogs__login.log:607` 的 `connect: Operation timed out (os error 60)`），
-        // 期间进度 / 文案 / 错误全不动，用户看到的就是「永远转圈」。
+        // 期间进度 / 文案 / 错误全不动，用户看到的就是「永远转圈」.
         //
         // 判据是「**无进展**」而不是「总时长」：安装大包本身可能要几十秒甚至更久，只要 AFC 上传
         // （逐块回调）/ installd（逐档回调）还在回报进度，心跳就被刷新（见下面的 `progress` 闭包）；
         // 只有连续 `installWatchdogTimeout` 秒**一次进度都没有**才判死 —— 正常安装不可能出现
-        // 这么长的空档，所以不会误杀「慢慢传的大包」。超时后是**可重试**的失败：行上显示
-        // 「安装失败」，点那一行即可重新安装（`IPADownloadManagerView` 的失败行按钮）。
+        // 这么长的空档，所以不会误杀「慢慢传的大包」.超时后是**可重试**的失败：行上显示
+        // 「安装失败」，点那一行即可重新安装（`IPADownloadManagerView` 的失败行按钮）.
         installHeartbeats[id] = Date()
         installWatchdogs[id] = Task { @MainActor [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Self.installWatchdogPoll))
-                // 行已被删除 / 取消，或心跳已被清 → 收工，并把自己从字典摘掉（不留残留项）。
+                // 行已被删除 / 取消，或心跳已被清 → 收工，并把自己从字典摘掉（不留残留项）.
                 guard self.job(id) != nil, self.installHeartbeats[id] != nil else {
                     self.installWatchdogs[id] = nil
                     self.installHeartbeats[id] = nil
@@ -814,24 +814,24 @@ final class IPADownloadCenter: ObservableObject {
         }
 
         Task.detached(priority: .userInitiated) {
-            // ▸▸▸ v0.3.581：**隧道探测全部降级为提示，不再有任何安装硬门**。
+            // ▸▸▸ ：**隧道探测全部降级为提示，不再有任何安装硬门**.
             //
             // 背景：安装的第一步是建 RSD 隧道，而 Rust 侧 `tunnel_create_rppairing` 的首个
-            // `TcpStream::connect` **没有超时**（`rust/idevice-ffi/src/tunnel_provider.rs:873`）。
+            // `TcpStream::connect` **没有超时**（`rust/idevice-ffi/src/tunnel_provider.rs:873`）.
             // LocalDevVPN 未连接时目标地址是黑洞，`connect` 只能等操作系统的 TCP 建连超时 ——
             // 真机实测「下载完成 17:03:29 → 安装报错 17:08:14」（约 4m45s），期间进度、文案、
-            // 错误全不动，用户看到的就是「卡住」（诊断 §1.5 / §1.6）。所以前几版在这里加探测，
-            // 想把它变成「1 秒明确报错」。
+            // 错误全不动，用户看到的就是「卡住」（诊断 §1.5 / §1.6）.所以前几版在这里加探测，
+            // 想把它变成「1 秒明确报错」.
             //
-            // v0.3.578 曾把探测降级为「提示」，但**保留了 `!isConnected` 这个硬门**，理由写在
-            // 当时的注释里：「本机连 10.7.0.x 的 utun 地址都不存在时安装必然失败」。**那个理由
+            // 曾把探测降级为「提示」，但**保留了 `!isConnected` 这个硬门**，理由写在
+            // 当时的注释里：「本机连 10.7.0.x 的 utun 地址都不存在时安装必然失败」.**那个理由
             // 是错的** —— 真机探针（`P4_全能签逆向/_devicelog3/ddi_probe.txt:7` /
             // `cd_probe.txt:8`，2026-10-05）两次都出现 `isConnected=false` 而
             // `tunnel_create_rppairing(10.7.0.1:49152)` **成功**（隧道 OK）；根因是
-            // `isConnected` 假设 utun 地址落在 10.7.0.x，而真机 utun 上没有该网段的 IPv4 地址。
+            // `isConnected` 假设 utun 地址落在 10.7.0.x，而真机 utun 上没有该网段的 IPv4 地址.
             // 后果：连续 6 条安装全部被这条硬门误判为「隧道未连接」并直接标失败
-            // （`_devicelog3/login.log:48-54`，用户「明明连了 LocalDevVPN」）。
-            // ⇒ 判据是**间接推断**、且已被证伪 ⇒ 不再设硬门。`isConnected` /
+            // （`_devicelog3/login.log:48-54`，用户「明明连了 LocalDevVPN」）.
+            // ⇒ 判据是**间接推断**、且已被证伪 ⇒ 不再设硬门.`isConnected` /
             //   `isTunnelReachable` 一律只记日志、继续尝试安装，由 `IPAInstallService.createTunnel()`
             //   自己的 3 次退避重试兜底；真的连不上时，安装链会给出**真实**错误.
             if !LocalDevVPN.isConnected {
@@ -856,8 +856,8 @@ final class IPADownloadCenter: ObservableObject {
             }
             if let sinfBase64 {
                 PackageSINFWriter.writeIfNeeded(sinfBase64: sinfBase64, ipaPath: path)
-                // v0.3.568：写回后台账的 hasSINF 仍是「写回前」的旧快照 → 现读包内定正，
-                // 否则这一行会一直显示「缺 sinf」（见 `syncLedgerSinf`）。
+                // 写回后台账的 hasSINF 仍是「写回前」的旧快照 → 现读包内定正，
+                // 否则这一行会一直显示「缺 sinf」（见 `syncLedgerSinf`）.
                 await Self.syncLedgerSinf(fileName: fileName, ipaPath: path)
             }
             do {
@@ -865,14 +865,14 @@ final class IPADownloadCenter: ObservableObject {
                     path,
                     progress: { p in
                         Task { @MainActor in
-                            // 有进展 → 刷新看门狗心跳（这是「不误杀」的关键：只有真卡住才不刷新）。
+                            // 有进展 → 刷新看门狗心跳（这是「不误杀」的关键：只有真卡住才不刷新）.
                             self.installHeartbeats[id] = Date()
                             self.update(id) { $0.progress = p }
                         }
                     },
                     onLog: { LoginLogger.shared.log("[下载中心] \($0)", category: sourceCategory) })
                 await MainActor.run {
-                    // 安装结束 → 停掉看门狗。
+                    // 安装结束 → 停掉看门狗.
                     self.installWatchdogs[id]?.cancel()
                     self.installWatchdogs[id] = nil
                     self.installHeartbeats[id] = nil
@@ -882,16 +882,16 @@ final class IPADownloadCenter: ObservableObject {
                     self.update(id) { $0.progress = 1; $0.setStage("已完成", phase: .done) }
                 }
             } catch {
-                // v0.3.382：失败原因只进日志 —— 界面行上只显示「安装失败」四个字，不把长错误塞进 UI
+                // 失败原因只进日志 —— 界面行上只显示「安装失败」四个字，不把长错误塞进 UI
                 LoginLogger.shared.log("[下载中心] 安装失败 \(fileName)：\(error.localizedDescription)",
                                        category: sourceCategory)
-                // v0.3.581：把本机实际的 IPv4 接口地址一并落日志（纯事实枚举）。
-                // 用途：下次失败时一眼分清「真的没连隧道」还是「接口枚举/网段判断漏了」。
+                // 把本机实际的 IPv4 接口地址一并落日志（纯事实枚举）.
+                // 用途：下次失败时一眼分清「真的没连隧道」还是「接口枚举/网段判断漏了」.
                 LoginLogger.shared.log(
                     "[下载中心] 本机 IPv4 接口地址：\(LocalDevVPN.ipv4InterfaceSummary()).",
                     category: .download)
                 await MainActor.run {
-                    // 安装结束（失败）→ 停掉看门狗。
+                    // 安装结束（失败）→ 停掉看门狗.
                     self.installWatchdogs[id]?.cancel()
                     self.installWatchdogs[id] = nil
                     self.installHeartbeats[id] = nil
@@ -907,9 +907,9 @@ final class IPADownloadCenter: ObservableObject {
         return id
     }
 
-    /// v0.3.383：登记一次**文件/下载类**失败（本地包不存在等）。
-    /// 文件本身不完整/不存在，和「装失败」不是一回事 —— 行上要显示「下载失败」而不是「安装失败」。
-    /// 同文件的旧失败记录先清掉，避免反复点重试时把 jobs 堆满。
+    /// 登记一次**文件/下载类**失败（本地包不存在等）.
+    /// 文件本身不完整/不存在，和「装失败」不是一回事 —— 行上要显示「下载失败」而不是「安装失败」.
+    /// 同文件的旧失败记录先清掉，避免反复点重试时把 jobs 堆满.
     @discardableResult
     func recordFileFailure(fileName: String, displayName: String, bundleId: String?,
                            version: String?, iconURL: String?, reason: String) -> UUID {
@@ -928,24 +928,24 @@ final class IPADownloadCenter: ObservableObject {
 
     func pause(_ id: UUID) {
         guard let job = job(id), job.canPause, job.phase == .downloading else { return }
-        // ▸▸▸ v0.3.583：**真正能停住传输的只有两条通道各自的下载器** ——
+        // ▸▸▸ ：**真正能停住传输的只有两条通道各自的下载器** ——
         // 免登录直链走 `runners`（`RemoteDownloader`），AppleID 走 `appleIDControls`
-        // （`IPADownloadControl` → `IPAFileDownloader`）。两条都没有 = 这条下载**根本无法暂停**：
+        // （`IPADownloadControl` → `IPAFileDownloader`）.两条都没有 = 这条下载**根本无法暂停**：
         // 那就**一个状态位都不改**、如实告知，绝不制造「显示已暂停但传输还在跑」的自相矛盾
-        // （宁可功能少，不能显示错 —— 用户截图 IMG_6740 的「已暂停 + 下载中 + 64%」就是这么来的）。
+        // （宁可功能少，不能显示错 —— 用户截图 IMG_6740 的「已暂停 + 下载中 + 64%」就是这么来的）.
         guard runners[id] != nil || appleIDControls[id] != nil else {
             LoginLogger.shared.log("[下载中心] 该任务没有本地下载器，无法暂停：\(job.name)",
                                    category: logCategory(for: job.source))
             ToastCenter.shared.show("该下载不支持暂停.")
             return
         }
-        // v0.3.398（②，两层防护的第一层）：**先记意图、再写状态、最后才动下载流**。
+        // **先记意图、再写状态、最后才动下载流**.
         //
-        // 原来的顺序是 `runner?.pause()` → 最后才写 `.paused`。而「暂停」是靠
+        // 原来的顺序是 `runner?.pause()` → 最后才写 `.paused`.而「暂停」是靠
         // `URLSessionDownloadTask.cancel(byProducingResumeData:)` 实现的，取消会产生一个
         // `URLError.cancelled` 回调；那个回调只要**先于**这次写入到达（异步，时机不定），
         // `handle` 的失败分支看到的就是 `phase == .downloading` → 把「暂停」判成「下载失败」
-        // → 用户实测的「暂停后几率变失败、进度归 0」（`.failed` 的 `overall` 恒为 0）。
+        // → 用户实测的「暂停后几率变失败、进度归 0」（`.failed` 的 `overall` 恒为 0）.
         pausingIDs.insert(id)
         update(id) { $0.setStage("已暂停", phase: .paused); $0.speedBytesPerSecond = 0 }
         runners[id]?.pause()
@@ -958,29 +958,29 @@ final class IPADownloadCenter: ObservableObject {
         pausingIDs.remove(id)
         if let r = runners[id] {
             r.resume()
-            // v0.3.394：续传要重新起窗口（见 `resetSpeedWindow` 注释）
+            // 续传要重新起窗口（见 `resetSpeedWindow` 注释）
             resetSpeedWindow(id)
             update(id) { $0.setStage("下载中", phase: .downloading) }
             return
         }
-        // v0.3.583：AppleID 通道 —— 传输在 `IPAFileDownloader` 里，控制面同样是「续传」
-        // （`resumeData` 接着下）。**绝不能**落到下面的兜底：那条会把任务当「排队」重新
+        // AppleID 通道 —— 传输在 `IPAFileDownloader` 里，控制面同样是「续传」
+        // （`resumeData` 接着下）.**绝不能**落到下面的兜底：那条会把任务当「排队」重新
         // `pump()`，而 AppleID 任务的 `remoteURL` 已被 `onResolvedURL` 写入 ⇒ 会再起一个
-        // `RemoteDownloader` 下载同一个 URL ⇒ 两个任务写同一个文件（诊断 §③ 的重复下载风险）。
+        // `RemoteDownloader` 下载同一个 URL ⇒ 两个任务写同一个文件（诊断 §③ 的重复下载风险）.
         if let c = appleIDControls[id] {
             c.resume()
             resetSpeedWindow(id)
             update(id) { $0.setStage("下载中", phase: .downloading) }
             return
         }
-        // v0.3.398：下载流已经不在了 → 当**重新排队**处理。
+        // 下载流已经不在了 → 当**重新排队**处理.
         //
         // 为什么不能直接 `pump()`：`pump()` 只挑 `phase == .waiting` 的任务
         // （见其注释与筛选条件），而这个任务还是 `.paused` → **永远选不中**
-        // → 用户点了「继续」**永久无反应**（实测 bug）。也**不能**改 `pump()` 去收 `.paused`：
-        // 那会让「暂停」的任务被自动拉起，违背暂停意图。
+        // → 用户点了「继续」**永久无反应**（实测 bug）.也**不能**改 `pump()` 去收 `.paused`：
+        // 那会让「暂停」的任务被自动拉起，违背暂停意图.
         // 走这条兜底说明流已断（`resumeData` 也随流一起没了）→ 只能从头下，
-        // 所以把进度归零：界面显示 44% 却从头传是在骗人。
+        // 所以把进度归零：界面显示 44% 却从头传是在骗人.
         update(id) {
             $0.setStage("排队中", phase: .waiting)
             $0.progress = 0
@@ -992,14 +992,14 @@ final class IPADownloadCenter: ObservableObject {
 
     /// 取消并**删除安装包**（下载中的部分文件一并丢弃）
     ///
-    /// v0.3.580（一致性修复）：**返回删除结果**，不再丢弃 —— 旧实现无论删除成败都
+    /// **返回删除结果**，不再丢弃 —— 旧实现无论删除成败都
     /// `jobs.removeAll`，台账只读（损坏）/ 文件被占用时用户以为「已取消并删除该安装包」，
-    /// 磁盘上的包与台账条目却都还在 ⇒ **假成功**。现在：删除失败时**保留任务行**
-    /// （进行中的收成 `.failed`，让用户看得见、能重试），调用方拿返回值按实际结果提示。
+    /// 磁盘上的包与台账条目却都还在 ⇒ **假成功**.现在：删除失败时**保留任务行**
+    /// （进行中的收成 `.failed`，让用户看得见、能重试），调用方拿返回值按实际结果提示.
     ///
     /// `@discardableResult`：既有调用方（商店页 / 源列表 / 下载管理）不关心结果时可照旧忽略，
-    /// 不必一次性改动全部 8 个调用点。
-    /// 返回 `nil` 表示「没有落地文件可删」（任务还在下载、或 id 不存在）—— 此时任务照旧移除。
+    /// 不必一次性改动全部 8 个调用点.
+    /// 返回 `nil` 表示「没有落地文件可删」（任务还在下载、或 id 不存在）—— 此时任务照旧移除.
     @discardableResult
     func cancel(_ id: UUID) -> IPADownloadLibrary.RemoveResult? {
         guard let job = job(id) else { return nil }
@@ -1009,26 +1009,26 @@ final class IPADownloadCenter: ObservableObject {
             runners[id] = nil
             resetSpeedWindow(id)
         }
-        // ▸▸▸ v0.3.583：AppleID 通道 —— 旧实现只查 `runners`（对这条链恒为 nil）⇒ `abort()`
-        // 是空操作，「删除安装包」变成**假成功**：行没了、传输照跑、跑完还落盘写台账（诊断 §4.3）。
-        // 现在控制面负责取消底层 `URLSessionDownloadTask` 并清掉半成品 / 目标文件。
-        // v0.3.677（D1 续）：这条通道有没有控制面、它登记的产物在哪 —— 收尾时要用它
-        // 如实回报「到底删掉没有」（见下面的 `appleIDTarget` 判据）。
+        // ▸▸▸ ：AppleID 通道 —— 旧实现只查 `runners`（对这条链恒为 nil）⇒ `abort()`
+        // 是空操作，「删除安装包」变成**假成功**：行没了、传输照跑、跑完还落盘写台账（诊断 §4.3）.
+        // 现在控制面负责取消底层 `URLSessionDownloadTask` 并清掉半成品 / 目标文件.
+        // 这条通道有没有控制面、它登记的产物在哪 —— 收尾时要用它
+        // 如实回报「到底删掉没有」（见下面的 `appleIDTarget` 判据）.
         let hadAppleIDControl = appleIDControls[id] != nil
         var appleIDTarget: URL?
         if let c = appleIDControls[id] {
             c.abort()
-            // 取走登记：`abort()` 已按它删过一次。删成功 ⇒ 这条路径不该再被任何人用；
-            // 删失败（文件被占用）⇒ 文件还在，下面据此把「删除失败」报上去。
+            // 取走登记：`abort()` 已按它删过一次.删成功 ⇒ 这条路径不该再被任何人用；
+            // 删失败（文件被占用）⇒ 文件还在，下面据此把「删除失败」报上去.
             appleIDTarget = c.takeDestination()
             // D1 续（task-3）：取走的同时在中心留一份 —— 这条路径不只为下面那句
             // `fileExists` 判据服务，还要留给这次下载的收尾：`abort()` 那一刻 dest
-            // 可能还没被搬出来（`keep` → `dest` 的搬运窗口），文件是之后才出现的。
+            // 可能还没被搬出来（`keep` → `dest` 的搬运窗口），文件是之后才出现的.
             appleIDTargets[id] = appleIDTarget
             appleIDControls[id] = nil
             resetSpeedWindow(id)
         }
-        // 安装看门狗：这一行要没了 → 停掉（否则会对着一个不存在的 job 空转）。
+        // 安装看门狗：这一行要没了 → 停掉（否则会对着一个不存在的 job 空转）.
         installWatchdogs[id]?.cancel()
         installWatchdogs[id] = nil
         installHeartbeats[id] = nil
@@ -1036,24 +1036,24 @@ final class IPADownloadCenter: ObservableObject {
         if let fileName = job.localFileName {
             result = IPADownloadLibrary.shared.remove(fileName: fileName)
         }
-        // v0.3.677（D1 续）：AppleID 通道的「删除安装包」必须**如实回报**。
+        // AppleID 通道的「删除安装包」必须**如实回报**.
         //
         // 它的落盘文件名是 `<bundleID>-<Apple 回的版本号>.ipa`，只有控制面那条登记知道；
         // 而 `job.localFileName` 要等「落盘 + 写台账」那一步才赋值 ——
         // 「网络已下完、正在注入 sinf」正是这段时间 ⇒ 上面那条 `remove(fileName:)`
         // 一次都不会执行，`result` 恒为 nil ⇒ 界面显示删除成功，而 `abort()` 里
-        // `try?` 吞掉的失败无人知晓（假成功）。
+        // `try?` 吞掉的失败无人知晓（假成功）.
         // 现在按登记路径核对一次：登记过、且文件仍在 ⇒ 如实报「文件删不掉」，
-        // 由下面既有的分支保留行并标「删除失败」。宁可误报，也不放行假成功。
+        // 由下面既有的分支保留行并标「删除失败」.宁可误报，也不放行假成功.
         if result == nil, hadAppleIDControl, let target = appleIDTarget,
            FileManager.default.fileExists(atPath: target.path) {
             result = .fileRemovalFailed
         }
         // 删除被拒（台账只读）/ 文件删不掉时，**不能把任务从 `jobs` 抹掉**：
-        // 文件与台账都还在，任务凭空消失就是假成功（旧行为）。
+        // 文件与台账都还在，任务凭空消失就是假成功（旧行为）.
         if result == .rejectedReadOnly || result == .fileRemovalFailed {
             // 只把**还在进行中**的任务收成 `.failed`：终态（`.done` / `.failed`）保持原样，
-            // 别把一次「下载成功但没删掉」误标成下载失败。
+            // 别把一次「下载成功但没删掉」误标成下载失败.
             if job.phase.isBusy {
                 update(id) {
                     $0.failureStage = .download
@@ -1077,9 +1077,9 @@ final class IPADownloadCenter: ObservableObject {
         update(id) {
             $0.setStage("排队中", phase: .waiting)
             $0.progress = 0
-            // v0.3.398：已下字节也要归零。`applyDownloadProgress` 只在 `written > receivedBytes`
+            // 已下字节也要归零.`applyDownloadProgress` 只在 `written > receivedBytes`
             // 时才写，留着上次的 120 MB 会让「进度条 0%」和「已下 120 MB/271 MB」自相矛盾，
-            // 而且要等新下载超过 120 MB 才会开始动 —— 等于一直在骗人。
+            // 而且要等新下载超过 120 MB 才会开始动 —— 等于一直在骗人.
             $0.receivedBytes = 0
             $0.speedBytesPerSecond = 0
             $0.error = nil
@@ -1093,17 +1093,17 @@ final class IPADownloadCenter: ObservableObject {
         jobs.removeAll { !$0.phase.isBusy }
     }
 
-    // MARK: - 调度（v0.3.413：并发，上限 `maxConcurrentDownloads`）
+    // MARK: - 调度（并发，上限 `maxConcurrentDownloads`）
 
-    /// 把排队中的任务尽量填满并发槽。
+    /// 把排队中的任务尽量填满并发槽.
     ///
     /// `startDownload` 会把命中的 job 改成 `.downloading`，所以下一轮
-    /// `jobs.last(where: { .waiting })` 取到的是**下一个**任务 —— 不会死循环。
+    /// `jobs.last(where: { .waiting })` 取到的是**下一个**任务 —— 不会死循环.
     private func pump() {
-        // v0.3.659（task-3 D4）：排队中却没有**可下载直链**的任务永远选不中 ⇒ 永久停在
-        // 「排队中」。AppleID 通道在「还没拿到直链」时失败（账号 / 票据那一步）就是这种：
+        // 排队中却没有**可下载直链**的任务永远选不中 ⇒ 永久停在
+        // 「排队中」.AppleID 通道在「还没拿到直链」时失败（账号 / 票据那一步）就是这种：
         // `retry()` 把它改回 .waiting，`pump()` 因 remoteURL == nil 跳过 —— 用户点重试
-        // 什么都不会发生，界面一直转圈。这里先把它收成明确失败并说清下一步。
+        // 什么都不会发生，界面一直转圈.这里先把它收成明确失败并说清下一步.
         for stuck in jobs where stuck.phase == .waiting && stuck.remoteURL == nil {
             markNoDownloadAddress(stuck.id)
         }
@@ -1113,11 +1113,11 @@ final class IPADownloadCenter: ObservableObject {
         }
     }
 
-    /// v0.3.659（task-3 D4）：排队中却没有直链 —— 如实收成失败，不让它无限「排队中」。
+    /// 排队中却没有直链 —— 如实收成失败，不让它无限「排队中」.
     ///
     /// 为什么不自动重跑 AppleID 链路：那条链需要 `AppStoreItem`（商品号 + 账号），
-    /// 任务里只剩 bundleId / 名称，凭现有字段重建会对不上号。宁可让用户回商店页重点一次，
-    /// 也不做一个「看起来在重试、其实下错了包」的入口。
+    /// 任务里只剩 bundleId / 名称，凭现有字段重建会对不上号.宁可让用户回商店页重点一次，
+    /// 也不做一个「看起来在重试、其实下错了包」的入口.
     private func markNoDownloadAddress(_ id: UUID) {
         guard let job = job(id) else { return }
         LoginLogger.shared.log("[下载中心] 该任务没有可下载的直链，无法继续：\(job.name)",
@@ -1143,12 +1143,12 @@ final class IPADownloadCenter: ObservableObject {
         req.setValue("https://app4.i4.cn/pc_v9/index.html", forHTTPHeaderField: "Referer")
 
         let safeName = job.expectedFileName
-        // v0.3.387：**文件名与直链这一刻都确定了 → 立刻写进台账并落盘**（用户要求「下载时就记住
-        // 这一次的下载链接」）。幂等：台账里还没有这一行时是 no-op，真正落盘在 `handle` 那一次。
-        // 失败/取消都**保留**已写入的值 —— 链接可能过期，但「当初从哪下的」要留住。
+        // **文件名与直链这一刻都确定了 → 立刻写进台账并落盘**（用户要求「下载时就记住
+        // 这一次的下载链接」）.幂等：台账里还没有这一行时是 no-op，真正落盘在 `handle` 那一次.
+        // 失败/取消都**保留**已写入的值 —— 链接可能过期，但「当初从哪下的」要留住.
         IPADownloadLibrary.shared.updateSourceURL(fileName: safeName, url: urlString)
 
-        // v0.3.394：新任务起一个新窗口
+        // 新任务起一个新窗口
         resetSpeedWindow(id)
         let downloader = RemoteDownloader(
             request: req,
@@ -1165,10 +1165,10 @@ final class IPADownloadCenter: ObservableObject {
     }
 
     private func handle(id: UUID, safeName: String, result: Result<URL, Error>) {
-        // v0.3.677（D8 同类）：任务已被「删除安装包」移除时，`.success` 递进来的那个
+        // 任务已被「删除安装包」移除时，`.success` 递进来的那个
         // `dl-<UUID>.part` 就没人再认领了（`cancel()` 里的 `abort()` 只在文件**已登记**时
         // 才删得到，而 `onFinish` 与 `abort()` 的先后没有保证）⇒ 就地删掉，
-        // 与下面 moveItem 失败分支同口径。否则又是一份永久失联的完整包。
+        // 与下面 moveItem 失败分支同口径.否则又是一份永久失联的完整包.
         guard let current = job(id) else {
             if case .success(let orphan) = result { try? FileManager.default.removeItem(at: orphan) }
             return
@@ -1180,8 +1180,8 @@ final class IPADownloadCenter: ObservableObject {
                 let dest = dir.appendingPathComponent(safeName)
                 try? FileManager.default.removeItem(at: dest)
                 try FileManager.default.moveItem(at: tmp, to: dest)
-                // v0.3.392：落盘前先记一行「到底拿到什么」—— 真机出现过「下载中能提取、
-                // 落盘后台账为空」的现象，这行 + `onResolvedURL` 那行能一次定位断点。
+                // 落盘前先记一行「到底拿到什么」—— 真机出现过「下载中能提取、
+                // 落盘后台账为空」的现象，这行 + `onResolvedURL` 那行能一次定位断点.
                 let writeURL = self.job(id)?.remoteURL ?? current.remoteURL
                 let writeSID = self.job(id)?.storeItemId ?? current.storeItemId
                 LoginLogger.shared.log("[下载中心] 落盘写台账 \(dest.lastPathComponent)："
@@ -1197,69 +1197,69 @@ final class IPADownloadCenter: ObservableObject {
                                                  // 注意： 必须**重新取一次** job，不能用上面的 `current`：
                                                  // `current` 是本函数开头取的值类型快照，而直链是下载过程中
                                                  // 才由 `onResolvedURL` 回填到 job 上的（AppleID 通道尤其如此）
-                                                 // → 用快照会**永远写进 nil**。
+                                                 // → 用快照会**永远写进 nil**.
                                                  sourceURL: writeURL,
                                                  storeItemId: writeSID,
-                                                 // v0.3.413（D8 修法 B）：sinf 一并落台账 ——
+                                                 // sinf 一并落台账 ——
                                                  // 于是「下载管理 → 重装」也能把它读回来写进包内，
-                                                 // 不必重下（以前 sinf 只活在内存 Job 里，重装必失败）。
+                                                 // 不必重下（以前 sinf 只活在内存 Job 里，重装必失败）.
                                                  sinfBase64: current.sinfBase64)
-                // v0.3.412：把 sinf 写回包内 —— 这是「安装前的准备」，与「是否自动装」**无关**。
-                // 牛蛙源的用户即使手动点安装也必须有 sinf 才能过 FairPlay 验证。
+                // 把 sinf 写回包内 —— 这是「安装前的准备」，与「是否自动装」**无关**.
+                // 牛蛙源的用户即使手动点安装也必须有 sinf 才能过 FairPlay 验证.
                 // 以前 `installAfterDownload` 顺手做这一步；现在彻底不自动装，这一步独立出来：
-                // 在主 actor 上 dispatch 到后台队列跑（写几百 MB 的 IPA 不能卡 UI）。
+                // 在主 actor 上 dispatch 到后台队列跑（写几百 MB 的 IPA 不能卡 UI）.
                 // 只对**牛蛙源 / NB 源**做（两者都是 Apple 原始加密包 + 服务端下发 sinf）；
-                // 爱思源的服务端包已签名、AppleID 通道由 SignatureInjector 自己写回，都不需要。
+                // 爱思源的服务端包已签名、AppleID 通道由 SignatureInjector 自己写回，都不需要.
                 if current.source.needsSinfWriteback, let sinf = current.sinfBase64 {
                     let ipaPath = dest.path
                     Task.detached(priority: .userInitiated) {
                         PackageSINFWriter.writeIfNeeded(sinfBase64: sinf, ipaPath: ipaPath)
-                        // v0.3.568：写回成功后把台账 hasSINF 定正（`record()` 记的是写回前的旧值）。
+                        // 写回成功后把台账 hasSINF 定正（`record()` 记的是写回前的旧值）.
                         await Self.syncLedgerSinf(fileName: safeName, ipaPath: ipaPath)
                     }
                 }
                 update(id) {
                     $0.localFileName = dest.lastPathComponent
                     $0.progress = 1
-                    // v0.3.412：彻底去掉自动装 —— 用户明确要求「以后安装都不能自动安装
-                    // 否则怕出bug」。下载完成永远停在「已下载」，由用户在「下载管理」
-                    // 里点对应行的「安装」手动装。
+                    // 彻底去掉自动装 —— 用户明确要求「以后安装都不能自动安装
+                    // 否则怕出bug」.下载完成永远停在「已下载」，由用户在「下载管理」
+                    // 里点对应行的「安装」手动装.
                     $0.setStage("已下载", phase: .done)
-                    // v0.3.394：收工了 → 速度归零、已下字节对齐总量（别留个 99.8% 的尾巴）
+                    // 收工了 → 速度归零、已下字节对齐总量（别留个 99.8% 的尾巴）
                     if $0.totalBytes > 0 { $0.receivedBytes = $0.totalBytes }
                     $0.speedBytesPerSecond = 0
                 }
                 resetSpeedWindow(id)
-                // v0.3.390：同名文件**刚刚成功落地** → 清掉之前那条「文件不存在」之类的失败记录。
+                // 同名文件**刚刚成功落地** → 清掉之前那条「文件不存在」之类的失败记录.
                 //
                 // 为什么必须清（真 bug，`dl-ui` 定位）：`recordFileFailure` 插入的失败任务**不会自己消失**，
-                // 而「已下载」列表是按 `finishedJob(for:)` 判失败态的。下载成功后本条 job 会进 `.installing`
+                // 而「已下载」列表是按 `finishedJob(for:)` 判失败态的.下载成功后本条 job 会进 `.installing`
                 // （`isBusy == true`）→ **不算 finished、被过滤掉** → 那一行能匹配到的**只剩那条旧失败记录**
-                // → 用户会看到**刚下好的包被标成红色「下载失败」**，点它还会重试一次安装。
-                // 清掉之后这一行就恢复正常（「安装」/「重装」）。
+                // → 用户会看到**刚下好的包被标成红色「下载失败」**，点它还会重试一次安装.
+                // 清掉之后这一行就恢复正常（「安装」/「重装」）.
                 jobs.removeAll {
                     $0.id != id && $0.localFileName == dest.lastPathComponent && $0.phase == .failed
                 }
                 runners[id] = nil
-                // v0.3.412：彻底不自动装 —— 见上面 $0.phase = .done 处的说明。
-                // v0.3.413：并发下载 —— 一个任务收工后把并发槽让给下一个排队的。
+                // 彻底不自动装 —— 见上面 $0.phase = .done 处的说明.
+                // 并发下载 —— 一个任务收工后把并发槽让给下一个排队的.
                 pump()
             } catch {
-                // v0.3.659（task-3 D8）：moveItem 失败时，系统临时目录里那个
+                // moveItem 失败时，系统临时目录里那个
                 // dl-<uuid>.part 就没人管了 —— 一次失败留一个几百 MB 的孤儿文件，
-                // 而设置页的「清理」只认下载目录。这里当场删掉再报错。
+                // 而设置页的「清理」只认下载目录.这里当场删掉再报错.
                 try? FileManager.default.removeItem(at: tmp)
                 finishWithError(id, error)
             }
         case .failure(let error):
-            // 暂停导致的取消不算失败。
+            // 暂停导致的取消不算失败.
             //
-            // v0.3.398（②）两道判据，缺一不可：
+            // 两道判据，缺一不可：
             // · `pausingIDs.contains(id)` —— 主 actor 上的**显式暂停意图**，与回调到达时机无关；
-            // · `job(id)?.phase == .paused` —— 状态兜底（`pause()` 已保证先写状态）。
+            // · `job(id)?.phase == .paused` —— 状态兜底（`pause()` 已保证先写状态）.
             // 把「取消」当失败会直接毁掉这一行的可恢复性：`.failed` 不 `isBusy` →
             // 列表把它归入「已结束」，`overall` 对 `.failed` 恒返回 0 → 用户看到「暂停的 44%」
-            // 变成「失败 0%」，而且再点继续也回不去（实测截图就是这两帧）。
+            // 变成「失败 0%」，而且再点继续也回不去（实测截图就是这两帧）.
             if pausingIDs.contains(id) || job(id)?.phase == .paused {
                 runners[id] = nil; pump(); return
             }
@@ -1268,15 +1268,15 @@ final class IPADownloadCenter: ObservableObject {
     }
 
     private func finishWithError(_ id: UUID, _ error: Error) {
-        // v0.3.398：这条任务已经离开「暂停」语义 → 清掉可能残留的暂停意图，
-        // 否则将来它真失败时会被那句 `pausingIDs.contains(id)` 误判成暂停。
+        // 这条任务已经离开「暂停」语义 → 清掉可能残留的暂停意图，
+        // 否则将来它真失败时会被那句 `pausingIDs.contains(id)` 误判成暂停.
         pausingIDs.remove(id)
         update(id) {
             // 下载链路（取流/落盘/HTTP 状态码）失败 —— 文件可能根本不完整
             $0.failureStage = .download
             $0.error = error.localizedDescription
             $0.setStage("失败", phase: .failed)
-            // v0.3.394：失败 → 速度归零（界面上不该挂着一个速度数字）
+            // 失败 → 速度归零（界面上不该挂着一个速度数字）
             $0.speedBytesPerSecond = 0
         }
         resetSpeedWindow(id)
@@ -1284,24 +1284,24 @@ final class IPADownloadCenter: ObservableObject {
         pump()
     }
 
-    // v0.3.412：彻底删除 `installAfterDownload` —— 用户明确要求"以后安装都不能自动安装"。
+    // 彻底删除 `installAfterDownload` —— 用户明确要求"以后安装都不能自动安装".
     // 安装入口现统一走 `IPADownloadManagerView.install(item)` → `installLocal(...)`
-    // （用户点"安装"/"重装"按钮触发），不再由下载完成自动启动。
+    // （用户点"安装"/"重装"按钮触发），不再由下载完成自动启动.
     //
-    // 牛蛙源的 sinf 写入也由手动安装流程接管（见 `installLocal` 里的处理）。
+    // 牛蛙源的 sinf 写入也由手动安装流程接管（见 `installLocal` 里的处理）.
 
-    /// v0.3.568：sinf 写回包内之后，把台账的 `hasSINF` / `sinfStructurallyValid` **定正**。
+    /// sinf 写回包内之后，把台账的 `hasSINF` / `sinfStructurallyValid` **定正**.
     ///
     /// 为什么需要：`record()` 是在「写回之前」记的（见 `handle` 的落盘段），所以走写回链路的
     /// 加密包一开始必然是 `hasSINF == false`；写回成功后若不更新，下载管理会一直显示
-    /// 「缺 sinf」（本仓实测的假阳性来源）。`IPADownloadLibrary.items()` 的现算能兜住
-    /// **历史**记录，这里让**新下载 / 重装**当场就正确，不必等下一次列表重算。
+    /// 「缺 sinf」（本仓实测的假阳性来源）.`IPADownloadLibrary.items()` 的现算能兜住
+    /// **历史**记录，这里让**新下载 / 重装**当场就正确，不必等下一次列表重算.
     ///
-    /// 现读包内字节判定（不猜）：`extractSINF` 只判存在性，结构交给 `isStructurallyValidSinf`。
+    /// 现读包内字节判定（不猜）：`extractSINF` 只判存在性，结构交给 `isStructurallyValidSinf`.
     ///
     /// **`nonisolated`**：本类是 `@MainActor`，静态方法默认继承主 actor 隔离；
-    /// 而这里要**开包读几百 MB 的 IPA** —— 若在主 actor 上跑会卡 UI。标 `nonisolated`
-    /// 让它留在调用方（detached 后台任务）的线程上，只有写台账那一步回主 actor。
+    /// 而这里要**开包读几百 MB 的 IPA** —— 若在主 actor 上跑会卡 UI.标 `nonisolated`
+    /// 让它留在调用方（detached 后台任务）的线程上，只有写台账那一步回主 actor.
     nonisolated private static func syncLedgerSinf(fileName: String, ipaPath: String) async {
         guard let sinf = IPAPackageInspector.extractSINF(ipaPath: ipaPath) else { return }
         // 三态：`unrecognized`（格式不认识）→ nil（未知），不写成 false 冻死成「sinf 异常」
@@ -1312,118 +1312,118 @@ final class IPADownloadCenter: ObservableObject {
     }
 }
 
-// MARK: - v0.3.583：阶段文案的**唯一真源**与**唯一写入口**
+// MARK: - 阶段文案的**唯一真源**与**唯一写入口**
 
 extension IPADownloadCenter.Job {
 
-    /// 对外显示的阶段文案 —— **唯一真源**。
+    /// 对外显示的阶段文案 —— **唯一真源**.
     ///
-    /// 视图**只读这个**，不得再自行用 `phase` / `stageText` 推导。
+    /// 视图**只读这个**，不得再自行用 `phase` / `stageText` 推导.
     ///
-    /// 规则：**只特判 `.paused`，其余一律用 `stageText`**。
+    /// 规则：**只特判 `.paused`，其余一律用 `stageText`**.
     /// 这与迁移前 6 个视图里逐字重复的防御式写法
-    /// （`job.phase == .paused ? "已暂停" : job.stageText`）**逐字等价**。
+    /// （`job.phase == .paused ? "已暂停" : job.stageText`）**逐字等价**.
     ///
     /// 为什么只特判 `.paused`（而不是把 `.failed` / `.done` 也归一）：
     ///   - `.paused` 时 `stageText` 可能被滞后回调刷成「下载中」（历史 bug）——
-    ///     用 `phase` 写死「已暂停」才能盖住那条滞后写入。
+    ///     用 `phase` 写死「已暂停」才能盖住那条滞后写入.
     ///   - `.failed` / `.done` 时 `stageText` 里带**具体原因**：
     ///     失败态会写「文件不存在」/「未找到安装包」/「删除失败」，
-    ///     完成态会写「已下载」。把这些归一成「失败」/「已完成」会**丢掉信息**，
-    ///     是观感回归 —— 故这里**必须**原样透出 `stageText`。
+    ///     完成态会写「已下载」.把这些归一成「失败」/「已完成」会**丢掉信息**，
+    ///     是观感回归 —— 故这里**必须**原样透出 `stageText`.
     var displayStage: String {
         phase == .paused ? "已暂停" : stageText
     }
 
-    /// **唯一的状态写入口** —— 「改阶段」与「改文案」从此只能一起写。
+    /// **唯一的状态写入口** —— 「改阶段」与「改文案」从此只能一起写.
     ///
-    /// 为什么必须收敛：`phase`（枚举）与 `stageText`（自由字符串）本是**同一阶段的两个描述**。
+    /// 为什么必须收敛：`phase`（枚举）与 `stageText`（自由字符串）本是**同一阶段的两个描述**.
     /// 以前引擎里允许各写各的（20+ 处单独写 `stageText`），于是会出现
     /// 「`phase == .paused` 而 `stageText == "下载中"`」这种自相矛盾 ——
     /// 视图只能各自打补丁（`phase == .paused ? "已暂停" : stageText`）去遮，
-    /// 6 个视图各补一次，补到哪个漏哪个。
+    /// 6 个视图各补一次，补到哪个漏哪个.
     ///
     /// 现在两者**只能一起写**：显式给 `phase` 表示「这次要迁移阶段」；
     /// 传 `nil` 表示「只更新文案、阶段不变」（例如 AppleID 通道的进度回调：
-    /// 仍在 `.downloading`，只是把文案刷成「下载中」）。
-    /// 不存在「只改一个、另一个偷偷留在旧值」的写法。
+    /// 仍在 `.downloading`，只是把文案刷成「下载中」）.
+    /// 不存在「只改一个、另一个偷偷留在旧值」的写法.
     ///
     /// - Parameters:
-    ///   - text: 本次写入的 `stageText`。
-    ///   - phase: 本次要迁移到的阶段；`nil` = 沿用当前 `phase`。
+    ///   - text: 本次写入的 `stageText`.
+    ///   - phase: 本次要迁移到的阶段；`nil` = 沿用当前 `phase`.
     ///
     /// 注意参数类型必须写全限定名 `IPADownloadCenter.Phase`：`Phase` 是
     /// `IPADownloadCenter` 的**直接成员**（与 `Job` 平级），而 Swift 在
     /// `extension Outer.Inner` 里做名字查找时**只往 `Inner` 与模块作用域找、不往 `Outer` 找**
-    /// ⇒ 裸写 `Phase` 会报 `cannot find type 'Phase' in scope`（v0.3.584 首次 CI 实测）。
+    /// ⇒ 裸写 `Phase` 会报 `cannot find type 'Phase' in scope`（首次 CI 实测）.
     mutating func setStage(_ text: String, phase: IPADownloadCenter.Phase? = nil) {
         if let phase { self.phase = phase }
         self.stageText = text
     }
 }
 
-// MARK: - v0.3.407：把外部下发的 sinf 写回包内（牛蛙源专用）
+// MARK: - 把外部下发的 sinf 写回包内（牛蛙源专用）
 
-/// 把**外部下发**的 sinf 追加进一个已经下载好的 IPA。
+/// 把**外部下发**的 sinf 追加进一个已经下载好的 IPA.
 ///
 /// ## 为什么必须有这一步
 /// 本项目两条安装链路的 sinf 都是**从包内读**的，不是"传参数"进去的：
 /// `AppStoreInstallService.installLocalIPA`（`:111`）判到加密包后走
-/// `IPAPackageInspector.extractSINF(ipaPath:)`，读的是 `Payload/<App>.app/SC_Info/<exe>.sinf`。
+/// `IPAPackageInspector.extractSINF(ipaPath:)`，读的是 `Payload/<App>.app/SC_Info/<exe>.sinf`.
 /// 所以「从接口拿到一份 sinf」只有**写回包内**才可能生效 —— 这正是牛蛙源
-/// （`ba_ipaURL` + `ba_sinfs`）与爱思源（服务端给的已是签名包）的根本差别。
+/// （`ba_ipaURL` + `ba_sinfs`）与爱思源（服务端给的已是签名包）的根本差别.
 ///
 /// ## 为什么不用现成的 `SignatureInjector`
 /// 那是 AppleID 通道用的：路径由 `SC_Info/Manifest.plist` 的 `SinfPaths` **按数组下标**配对，
-/// 且**条目已存在就抛错**（`sinf file already exists`）。而这里要写的是由
+/// 且**条目已存在就抛错**（`sinf file already exists`）.而这里要写的是由
 /// `CFBundleExecutable` **唯一确定**的那一个路径，并且「已存在」时正确的动作是
-/// **不写**（见下），所以直接调底层 ZIP 写入器更可控。
+/// **不写**（见下），所以直接调底层 ZIP 写入器更可控.
 ///
-/// ## 覆盖策略（重要，v0.3.546 改）
+/// ## 覆盖策略（重要，改）
 /// 现有 ZIP 写入器（`vendor/ApplePackage/Supplement/ZipFoundationShim.swift`）
-/// 追加条目时会重写中央目录 —— v0.3.546 起给它加了 `removeEntry(with:)`：
-/// **先从中央目录摘掉同名旧条目、再追加新条目**，从而真正做到「替换」。
+/// 追加条目时会重写中央目录 —— 起给它加了 `removeEntry(with:)`：
+/// **先从中央目录摘掉同名旧条目、再追加新条目**，从而真正做到「替换」.
 ///
-/// v0.3.546 **之前**的做法是「已存在就跳过」，那是个真 bug（真机日志实证）：
+/// **之前**的做法是「已存在就跳过」，那是个真 bug（真机日志实证）：
 /// NB 源拿到的 Apple CDN 直链 IPA 自带一份 sinf，但那是**不绑定本机**的；
-/// 跳过 = 装的是错的那份 → **装得上、一启动就崩**。
-/// 现在改成替换，装的是服务端为本设备签发的那份。
+/// 跳过 = 装的是错的那份 → **装得上、一启动就崩**.
+/// 现在改成替换，装的是服务端为本设备签发的那份.
 ///
 /// ## 只做该做的事
 /// · 调用方（`IPADownloadCenter.handle`）已经限定**只有牛蛙源**才传 sinf 进来
 ///   （爱思源与 AppleID 通道传的是 nil）；
 /// · 只处理**加密包**（`cryptid == 1`）：明文/已重签的包加一个 `SC_Info/*.sinf` 反而可能
 ///   破坏它自己的代码签名，而它本来也不需要 sinf；
-/// · 解出来的 base64 就是**标准 `.sinf` 容器**，直接写入，**不做任何包装/再加密**。
-/// · v0.3.412：写入时机从「自动装之前」改为「下载落盘之后」，与「是否自动装」解耦。
-///   哪怕用户手动点安装也得先有 sinf 才能过 FairPlay 验证。
+/// · 解出来的 base64 就是**标准 `.sinf` 容器**，直接写入，**不做任何包装/再加密**.
+/// · ：写入时机从「自动装之前」改为「下载落盘之后」，与「是否自动装」解耦.
+///   哪怕用户手动点安装也得先有 sinf 才能过 FairPlay 验证.
 ///
 /// ## ▸▸ 复现样本：**别删工作区里的 `_tmp_ssh/syllabic/` 解压目录**
 /// 那个目录是牛蛙客户端（`JCD.app`，`com.dinh.syllabic` 9.0.1）的**解压产物**，
-/// **包内自带 `SC_Info/`** —— 它是 v0.3.407「加密包…缺少 SC_Info/*.sinf」这个问题的
-/// **唯一复现来源**：既能复现"包内没有可用 sinf"的失败，也能验证本写入器追加后的成品。
-/// 删了它 = 这条链路以后**没法在本地复现/回归**（真机重下一次代价大得多）。
+/// **包内自带 `SC_Info/`** —— 它是 「加密包…缺少 SC_Info/*.sinf」这个问题的
+/// **唯一复现来源**：既能复现"包内没有可用 sinf"的失败，也能验证本写入器追加后的成品.
+/// 删了它 = 这条链路以后**没法在本地复现/回归**（真机重下一次代价大得多）.
 ///
-/// ## ▸▸ v0.3.560：整包重写替换，不再原地改 ZIP
+/// ## ▸▸ ：整包重写替换，不再原地改 ZIP
 ///
 /// 0.3.546 → 0.3.559 用的是「摘中央目录记录 + 在旧中央目录起点追加新条目」的原地改法，
 /// 真机上加密包**一直**报 `PackageExtractionFailed (Could not extract archive)`
 /// —— 从 3.5MB 的 Via 到 230MB 的 ChatGPT 全都失败，而**未加密**的包（不注入 sinf）
-/// 走同一条 AFC 上传链路就能装成功。⇒ 问题出在「我们改过的那个 ZIP」本身。
+/// 走同一条 AFC 上传链路就能装成功.⇒ 问题出在「我们改过的那个 ZIP」本身.
 ///
 /// 原地改法会留下两个苹果解压通道不吃的痕迹：
 /// 1. 旧 sinf 的 local header + 数据块还在文件里（只摘了索引）
 ///    → 文件里多一个**无中央目录记录指向的 `PK\x03\x04`**；
 /// 2. 新条目属性是自己拼的（`version made by = 20`、无 extra），
-///    与苹果自己的条目（`0x314` = Unix + 2.0，带 extra）不同源。
+///    与苹果自己的条目（`0x314` = Unix + 2.0，带 extra）不同源.
 ///
 /// 现在改为「整包重写」（`ApplePackageArchive.replaceEntries`）：逐条复制成一份新包，
-/// 被替换的那条写新内容。产物与「苹果自己压的包」同构，无孤儿字节、无属性差异。
+/// 被替换的那条写新内容.产物与「苹果自己压的包」同构，无孤儿字节、无属性差异.
 ///
-/// 每次写包的每一步（成功 / 跳过 / 失败原因）都写 `[下载中心]` 日志 —— 不许静默。
+/// 每次写包的每一步（成功 / 跳过 / 失败原因）都写 `[下载中心]` 日志 —— 不许静默.
 ///
-/// v0.3.568：由 `private` 改为 `internal` —— 多路径注入 `injectAllPaths(sinf:ipaPath:)`
-/// 需要被 `RepairService`（共享修补线）复用，避免两套注入逻辑。`writeIfNeeded` 行为不变。
+/// 由 `private` 改为 `internal` —— 多路径注入 `injectAllPaths(sinf:ipaPath:)`
+/// 需要被 `RepairService`（共享修补线）复用，避免两套注入逻辑.`writeIfNeeded` 行为不变.
 enum PackageSINFWriter {
 
     static func writeIfNeeded(sinfBase64: String?, ipaPath: String) {
@@ -1433,20 +1433,20 @@ enum PackageSINFWriter {
             return
         }
 
-        // 2) 归一化成 Data，并做**结构自检**。
+        // 2) 归一化成 Data，并做**结构自检**.
         //
-        // 注意： 2026-10-05 真机定案：这一步**不能**只判「base64 解码有没有返回 nil」。
-        // hex 字符串（NB 的 `dataHex`，以及 v0.3.562 及以前落进台账的旧值）的字符集
+        // 注意： 2026-10-05 真机定案：这一步**不能**只判「base64 解码有没有返回 nil」.
+        // hex 字符串（NB 的 `dataHex`，以及 及以前落进台账的旧值）的字符集
         // `[0-9a-f]` 恰好全在 base64 字母表内，长度又是 4 的倍数 ⇒ 解码**静默成功**，
-        // 产出 1.5 倍长度的垃圾（1056 字节正确件 → 1584 字节垃圾），全程无一行报错。
+        // 产出 1.5 倍长度的垃圾（1056 字节正确件 → 1584 字节垃圾），全程无一行报错.
         //
-        // 判据因此换成**结构**：头 4 字节大端 == 实际长度，且第 5-8 字节 == `"sinf"`。
+        // 判据因此换成**结构**：头 4 字节大端 == 实际长度，且第 5-8 字节 == `"sinf"`.
         // 顺序：先按 base64 解，结构不对再按 hex 解（兼容旧台账里的 hex 值）；
-        // 两个都不对就**明确报错不写** —— 宁可装不上报「缺少 SC_Info/*.sinf」，也不写垃圾进包。
+        // 两个都不对就**明确报错不写** —— 宁可装不上报「缺少 SC_Info/*.sinf」，也不写垃圾进包.
         guard let sinf = decodeSinfPayload(raw) else {
             // 注意措辞：这里只是「**本次跳过写入**」，**不等于**「包内没有 sinf」——
-            // 如果包内本来就有 sinf（Apple CDN 的包都有 `SC_Info/<exe>.sinf`），它会原样保留。
-            // 以前这句写成「包内不会带 sinf」，会让人以为包被写坏了，真机上就出现过这个误读。
+            // 如果包内本来就有 sinf（Apple CDN 的包都有 `SC_Info/<exe>.sinf`），它会原样保留.
+            // 以前这句写成「包内不会带 sinf」，会让人以为包被写坏了，真机上就出现过这个误读.
             let head = raw.count >= 16 ? String(raw.prefix(16)) : raw
             log("sinf 载荷解不出合法结构（\(raw.count) 字符，开头 \(head)）——"
                 + " base64 与 hex 两种解法的结果都不像 sinf（既非「长度+sinf+TLV」也非 SuperBlob)."
@@ -1454,11 +1454,11 @@ enum PackageSINFWriter {
             return
         }
 
-        // 3) 只有加密包需要 sinf。**读不出加密状态 ≠ 未加密** ——
+        // 3) 只有加密包需要 sinf.**读不出加密状态 ≠ 未加密** ——
         //    `isFairPlayEncrypted` 返回 nil（包读不出 / 主二进制读不出）时，
         //    旧代码用 `== true` 判定，把「没能观察」当成了「确定未加密」并跳过写 sinf，
-        //    日志还谎称「包未加密（cryptid=0）」。现在三态显式处理：
-        //    只有**明确读到 cryptid=0** 才跳过；未知一律按「不排除加密」继续尝试写入。
+        //    日志还谎称「包未加密（cryptid=0）」.现在三态显式处理：
+        //    只有**明确读到 cryptid=0** 才跳过；未知一律按「不排除加密」继续尝试写入.
         switch IPAPackageInspector.inspect(ipaPath: ipaPath)?.encryption {
         case .plaintext:
             log("包是明文（明确读到 cryptid=0），不需要 sinf，跳过")
@@ -1478,21 +1478,21 @@ enum PackageSINFWriter {
         }
     }
 
-    /// **把同一份 sinf 写进包内全部 `SC_Info/*.sinf` 路径**（v0.3.568：主包单路径 → 全部路径）。
+    /// **把同一份 sinf 写进包内全部 `SC_Info/*.sinf` 路径**（主包单路径 → 全部路径）.
     ///
     /// ## 为什么全铺（前提已按实测收窄）
     ///
-    /// Apple CDN 的包对 `SC_Info` 是「每个二进制一套」（主包 + 每个 framework + 每个 appex）。
+    /// Apple CDN 的包对 `SC_Info` 是「每个二进制一套」（主包 + 每个 framework + 每个 appex）.
     /// **部分包**（如 XNZS）内多份 sinf 逐字节相同（一份会话 sinf 被复制到各路径）；
     /// 但**真实 App Store 包可以只有 1 份**——实测 Loon（`Loon_3.3.0_NBTool.ipa`，2026-10-05）：
-    /// `Manifest.plist` 的 `SinfReplicationPaths` 列 22 条，包内实际只有 `SC_Info/Loon.sinf` 1 份。
-    /// ⇒ 不能假定「一定有多份」。
+    /// `Manifest.plist` 的 `SinfReplicationPaths` 列 22 条，包内实际只有 `SC_Info/Loon.sinf` 1 份.
+    /// ⇒ 不能假定「一定有多份」.
     ///
     /// 旧实现只写主包一条：在**包内确实有多份 sinf 的包**上会漏掉 framework / appex 那份，
     /// 若两份不一致则 `dlopen` 时解密失败 → 崩；但在**包内仅 1 份的真实包**上，
-    /// 「只写主包」与 Apple 发布内容一致，**不构成漏注**。
+    /// 「只写主包」与 Apple 发布内容一致，**不构成漏注**.
     /// 「全铺」的收益**未在真实多份包上验证**，且会**追加 Apple 未发布的条目**（Loon 情形下多出 21 条），
-    /// 其安全性**待复核**。【实测 + 未证实】
+    /// 其安全性**待复核**.【实测 + 未证实】
     ///
     /// ## 目标路径来源（按优先级）
     ///
@@ -1500,15 +1500,15 @@ enum PackageSINFWriter {
     ///      （权威；缺失回退 `SinfPaths`）；
     ///   2. 兜底扫描中央目录里**所有** `Payload/…/SC_Info/*.sinf`
     ///      （Apple CDN 包不带 `Manifest.plist` 也可能有多份）；
-    ///   3. **始终并入主路径** `SC_Info/<exe>.sinf`。
+    ///   3. **始终并入主路径** `SC_Info/<exe>.sinf`.
     ///
     /// ## 写入方式
     ///
     /// 一次整包重写批量替换（`ApplePackageArchive.replaceEntries`）—— 逐条替换
-    /// 一次只能安全换一条，逐条各开一次 = N 次整包重写，性能不可接受。
-    /// 写后**逐条复读**长度与内容（须重开新实例，原实例偏移已失效）；不一致则抛错，**不静默**。
+    /// 一次只能安全换一条，逐条各开一次 = N 次整包重写，性能不可接受.
+    /// 写后**逐条复读**长度与内容（须重开新实例，原实例偏移已失效）；不一致则抛错，**不静默**.
     ///
-    /// - Returns: 实际写入的路径（相对 IPA 根）。
+    /// - Returns: 实际写入的路径（相对 IPA 根）.
     @discardableResult
     static func injectAllPaths(sinf: Data, ipaPath: String) throws -> [String] {
         let archive = try ApplePackageArchive(url: URL(fileURLWithPath: ipaPath), accessMode: .update)
@@ -1532,20 +1532,20 @@ enum PackageSINFWriter {
 
         let mainPath = "\(appPrefix).app/SC_Info/\(exe).sinf"
         // `collectSinfTargets` 会并入 `mainPath`（见其步骤 3），但**出口做签名封存过滤**
-        // （步骤 4）—— 若主路径的兄弟二进制不存在（畸形包），它同样会被丢弃 ⇒ 返回集**可能为空**。
+        // （步骤 4）—— 若主路径的兄弟二进制不存在（畸形包），它同样会被丢弃 ⇒ 返回集**可能为空**.
         // 故本 guard 不再是「防御性断言」而是**硬约束**：畸形包宁可拒写（fail closed），
-        // 也不写出会落进 `^.*` 兜底规则、破坏代码签名的条目。
+        // 也不写出会落进 `^.*` 兜底规则、破坏代码签名的条目.
         let targets = collectSinfTargets(archive: archive, appPrefix: appPrefix, mainPath: mainPath)
         guard !targets.isEmpty else { throw SinfInjectError.noTargets }
 
         // **入口校验（硬约束）**：这些路径来自**不可信**的包内容（`CFBundleExecutable` /
         // `SinfReplicationPaths` / 中央目录条目名），会被 `replaceEntries` **原样**写成 ZIP
-        // 条目名。若不校验，恶意包可注入 `../` 或绝对路径条目，产出一个带越界条目的 IPA。
+        // 条目名.若不校验，恶意包可注入 `../` 或绝对路径条目，产出一个带越界条目的 IPA.
         // 复用仓库唯一的 ZIP-slip 防线 `ArchiveEntryPath.resolve`，并补上它不覆盖的
-        // NUL 与绝对路径判定。**任一非法 → 抛错，不写包**。
+        // NUL 与绝对路径判定.**任一非法 → 抛错，不写包**.
         for t in targets { try validateSinfTarget(t) }
 
-        // v0.3.568：一次整包重写批量替换。
+        // 一次整包重写批量替换.
         let written = try archive.replaceEntries(with: targets, data: sinf)
 
         // 写后逐条复读（必须重开新实例：`replaceEntries` 后原实例的 entries 偏移已失效）
@@ -1553,12 +1553,12 @@ enum PackageSINFWriter {
         return written
     }
 
-    /// 收集「要写 sinf 的全部路径」（相对 IPA 根）。优先级见 `injectAllPaths`。
+    /// 收集「要写 sinf 的全部路径」（相对 IPA 根）.优先级见 `injectAllPaths`.
     ///
     /// **注意**：`SinfReplicationPaths` 是**声明清单**，不等于包内实际存在的条目
-    /// （实测 Loon：声明 22 条、包内仅 1 条）。**声明的用途是「告诉系统安装期把主包那份
+    /// （实测 Loon：声明 22 条、包内仅 1 条）.**声明的用途是「告诉系统安装期把主包那份
     /// sinf 复制到哪些路径」，不是「包里必须预先存在这些文件」** —— 所以本函数**只替换
-    /// 包内已存在的条目**，不按声明追加（见出口判据 4；主路径例外）。
+    /// 包内已存在的条目**，不按声明追加（见出口判据 4；主路径例外）.
     private static func collectSinfTargets(archive: ApplePackageArchive,
                                            appPrefix: String,
                                            mainPath: String) -> [String] {
@@ -1585,20 +1585,20 @@ enum PackageSINFWriter {
         // 2) 兜底：扫描包内**所有** `Payload/…/SC_Info/*.sinf`
         //
         // 收集条件与出口判据 `isSealingSafe`（判据 1-2）**严格对齐**：父目录名必须**恰好**
-        // 是 `SC_Info`、文件名必须以**小写** `.sinf` 结尾。
+        // 是 `SC_Info`、文件名必须以**小写** `.sinf` 结尾.
         //
         // 为什么不「放宽」：本步历史上曾放宽为「忽略大小写 + 不要求位于 `SC_Info/` 目录」，
         // 但下游 `isSealingSafe` 又把父目录不是 `SC_Info` / 后缀不是小写 `.sinf` 的条目
         // **全部丢弃** ⇒ 那段放宽**从不产生任何存活目标**（死代码），其注释还会误导读者以为
-        // 「非 `SC_Info` 下的 `.sinf` 也会被替换」。故收紧到与判据一致：少一次无效遍历，
-        // 也不再暗示存在这样一条路径。
+        // 「非 `SC_Info` 下的 `.sinf` 也会被替换」.故收紧到与判据一致：少一次无效遍历，
+        // 也不再暗示存在这样一条路径.
         //   · `.sinf` 大小写敏感：`.SINF`/`.Sinf` 不受 `CodeResources` 的 omit 规则覆盖
-        //     （见判据 2 注释），收进来也必被丢弃，故此处同样只收小写。
+        //     （见判据 2 注释），收进来也必被丢弃，故此处同样只收小写.
         //   · `payload/` 前缀仍忽略大小写：`isSealingSafe` **不**校验前缀，真实条目名若为
-        //     小写 `payload/…` 仍应被替换，故此处保持原判定不变。
+        //     小写 `payload/…` 仍应被替换，故此处保持原判定不变.
         // 本步只收**包内已存在**的条目（遍历 `archive.entries`），因此不会引入新条目；
-        // 与出口判据 4 一致。注：与上面 Manifest 那步是**并集**（不是「优先级回退」）——
-        //     「只要发现多于一条 SC_Info/*.sinf 就必须全部替换」。
+        // 与出口判据 4 一致.注：与上面 Manifest 那步是**并集**（不是「优先级回退」）——
+        //     「只要发现多于一条 SC_Info/*.sinf 就必须全部替换」.
         for e in archive.entries {
             let comps = e.path.split(separator: "/", omittingEmptySubsequences: false)
             guard comps.count >= 2,
@@ -1611,61 +1611,60 @@ enum PackageSINFWriter {
         // 3) 始终并入主路径
         add(mainPath)
 
-        // 4) **签名封存过滤（判据 1-3，2026-10-05 加固）**：只保留满足三条判据的候选目标。
+        // 4) **签名封存过滤（判据 1-3，2026-10-05 加固）**：只保留满足三条判据的候选目标.
         //
         // ## 为什么必须过滤
         // 候选目标来自**不可信**的包内容（Manifest 的 `SinfReplicationPaths`/`SinfPaths`、
-        // 中央目录条目名、`CFBundleExecutable`）。而 `_CodeSignature/CodeResources` 用
+        // 中央目录条目名、`CFBundleExecutable`）.而 `_CodeSignature/CodeResources` 用
         // 「逐二进制一条 omit 规则 + `^.* = True` 兜底」决定封存：
         //   · omit 正则形如 `SC_Info/<该二进制名>\.(sinf|supp|supf|supx)$`，其中
         //     **`(sinf|supp|supf|supx)` 全小写、整个正则大小写敏感**（实测：`SC_Info/Loon.SINF`
         //     不命中 `SC_Info/Loon\.(sinf|supp|supf|supx)$`）；
         //   · 任何不匹配更具体规则的文件，都被 `^.* = True` **封存**（Loon 实测：`files2`
-        //     里的 `hash`/`hash2` 就是文件内容哈希，改动即失配）。
+        //     里的 `hash`/`hash2` 就是文件内容哈希，改动即失配）.
         // ⇒ 只要写出一个「目录不是 `SC_Info` / 后缀不是小写 `.sinf` / 名字不是任何真实二进制名」
-        //    的条目，它就会落进兜底规则：覆盖已封存文件 = 封存失配；新增 = 包内出现未封存内容。
-        //    两者都会**破坏代码签名**。过滤即把这类目标挡在写入之前（fail closed，不静默）。
+        //    的条目，它就会落进兜底规则：覆盖已封存文件 = 封存失配；新增 = 包内出现未封存内容.
+        //    两者都会**破坏代码签名**.过滤即把这类目标挡在写入之前（fail closed，不静默）.
         //
         // ## 注意： 本判据是「近似」，**不是** `CodeResources` omit 规则的实现
         // 上面三条判据（父目录 `SC_Info` / 小写 `.sinf` / 兄弟二进制存在）**只是**对
         // `CodeResources` omit 规则的**结构近似** —— 本函数**从不读** `_CodeSignature/CodeResources`，
-        // 更不解析其 omit 正则。为什么这样是安全的（而非偷懒）：
+        // 更不解析其 omit 正则.为什么这样是安全的（而非偷懒）：
         //   · **Apple 原生加密包**：`cryptid=1` 由 FairPlay 打包产生，而 `SC_Info/*.sinf`
-        //     正是**同一步**在资源封存之后注入 ⇒ `CodeResources` **必然**带 SC_Info omit 规则。
+        //     正是**同一步**在资源封存之后注入 ⇒ `CodeResources` **必然**带 SC_Info omit 规则.
         //     此时近似判据与真实 omit 规则**必然等价**（`verify-omit-reachability` 实测：
-        //     45 个 `cryptid=1` 包中 24 个带 `CodeResources`，**24/24 全含 omit 规则**）。
-        //   · **无 `CodeResources` 的包**（NB 源 / 重签派生物 / `_work_*`）：签名已被上游剥离
+        //     45 个 `cryptid=1` 包中 24 个带 `CodeResources`，**24/24 全含 omit 规则**）.
         //     ⇒ **无封存**，写 sinf 本来就安全，近似判据**恰好正确**（实测：21 个 `cryptid=1`
-        //     包根本没有 `CodeResources`）。
+        //     包根本没有 `CodeResources`）.
         //   · **唯一反例 `Syllabic`**（`CodeResources` 存在但无 omit 规则、31 份 sinf 全被封存）
         //     是 **`cryptid=0`** 的**解密后重签**包（解密 ⇒ cryptid=0，与「有无 omit 规则」
-        //     **反相关**）⇒ `RepairService` 判明文包、**跳过注入**，本判据根本不会执行。
+        //     **反相关**）⇒ `RepairService` 判明文包、**跳过注入**，本判据根本不会执行.
         // ⇒ **不要**为了「更严谨」改成真读 `CodeResources`：那会让上述 21 个无 `CodeResources`
-        //    的包**全部无法修补**（净损失），而收益为 0（可达性交集为空）。
+        //    的包**全部无法修补**（净损失），而收益为 0（可达性交集为空）.
         //
         // 说明：本过滤与 `validateSinfTarget`（ZIP-slip 防线）**互补、不合并** ——
-        // 后者防「条目名越界（`..`/绝对路径）」，本条防「落进签名封印规则」，两件事不同。
+        // 后者防「条目名越界（`..`/绝对路径）」，本条防「落进签名封印规则」，两件事不同.
         func isSealingSafe(_ path: String) -> Bool {
-            // 按 `/` 手工切分（不用 NSString 路径 API，避免其规范化改变语义）。
+            // 按 `/` 手工切分（不用 NSString 路径 API，避免其规范化改变语义）.
             let comps = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             guard comps.count >= 2 else { return false }
             let fileName = comps[comps.count - 1]
-            // 判据 1：父目录名必须**恰好**是 `SC_Info`（大小写敏感；`sc_info` 不受 omit 覆盖）。
+            // 判据 1：父目录名必须**恰好**是 `SC_Info`（大小写敏感；`sc_info` 不受 omit 覆盖）.
             guard comps[comps.count - 2] == "SC_Info" else { return false }
-            // 判据 2：必须以**小写** `.sinf` 结尾（`.SINF`/`.Sinf` 都不受 omit 覆盖）。
+            // 判据 2：必须以**小写** `.sinf` 结尾（`.SINF`/`.Sinf` 都不受 omit 覆盖）.
             guard fileName.hasSuffix(".sinf") else { return false }
             let stem = String(fileName.dropLast(".sinf".count))
             guard !stem.isEmpty else { return false }
-            // 判据 3：兄弟二进制必须存在 —— `<dir>/SC_Info/<stem>.sinf` ⇒ 归档里要有 `<dir>/<stem>`。
+            // 判据 3：兄弟二进制必须存在 —— `<dir>/SC_Info/<stem>.sinf` ⇒ 归档里要有 `<dir>/<stem>`.
             // omit 规则的 `<该二进制名>` 恒等于真实二进制文件名，故此判据一次挡掉
-            // 「目录对但名字错」（如 `SC_Info/evil.sinf`：没有名为 `evil` 的兄弟二进制）。
+            // 「目录对但名字错」（如 `SC_Info/evil.sinf`：没有名为 `evil` 的兄弟二进制）.
             let sibling = comps.dropLast(2).joined(separator: "/") + "/" + stem
             return archive[sibling] != nil
         }
 
         // 可观测性（**只记录、不阻断、不改变行为**）：本判据从不核对真实 omit 规则，
-        // 一旦包内缺 `CodeResources`（或读不出），「近似 vs 真实」的差异就**不可交叉验证**。
-        // 此处记一行（**一次修补仅一行**，不刷屏），使将来包形态变化时能被发现。
+        // 一旦包内缺 `CodeResources`（或读不出），「近似 vs 真实」的差异就**不可交叉验证**.
+        // 此处记一行（**一次修补仅一行**，不刷屏），使将来包形态变化时能被发现.
         let codeResourcesPath = "\(appPrefix).app/_CodeSignature/CodeResources"
         var canCrossCheckOmitRules = false
         if let crEntry = archive[codeResourcesPath] {
@@ -1675,41 +1674,41 @@ enum PackageSINFWriter {
             log("包内无 _CodeSignature/CodeResources（或读不出），无法核对 omit 规则，按结构近似放行")
         }
 
-        // 5) **存在性过滤（判据 4，2026-10-05 加固）**：只写「包内本来就有的」目标 + 主路径例外。
+        // 5) **存在性过滤（判据 4，2026-10-05 加固）**：只写「包内本来就有的」目标 + 主路径例外.
         //
         // ## 为什么还需要这一条（判据 1-3 不够）
-        // 判据 1-3 只保证「**写的地方**签名安全」，但它**不阻止往包里塞 Apple 从没发过的条目**。
+        // 判据 1-3 只保证「**写的地方**签名安全」，但它**不阻止往包里塞 Apple 从没发过的条目**.
         // `SinfReplicationPaths` 是「给系统的**安装期复制指令**」，**不是包内必须存在的文件清单**
-        // （实测 Loon：声明 22 条、包内实际只有 1 份 `SC_Info/Loon.sinf`）。旧行为按声明全铺
+        // （实测 Loon：声明 22 条、包内实际只有 1 份 `SC_Info/Loon.sinf`）.旧行为按声明全铺
         // ⇒ 会**追加 21 条 Apple 未发布的条目**，把包改成非原生形态（且对「只发 1 份」的真实包
-        // 没有已知收益）。本条只保留**包内已存在**的目标，从根上避免「凭空新增」。
+        // 没有已知收益）.本条只保留**包内已存在**的目标，从根上避免「凭空新增」.
         //   · 真实 Loon ⇒ 21 条 framework/appex 目标包内不存在 ⇒ 全部丢弃，只剩 1 条主路径；
-        //   · `nb.ipa`（41 份 sinf 全部存在）⇒ 41 条全部保留，**「替换已存在」语义不变**。
+        //   · `nb.ipa`（41 份 sinf 全部存在）⇒ 41 条全部保留，**「替换已存在」语义不变**.
         //
         // ## 主路径例外（豁免「存在性」，**不**豁免签名封存）
         // `mainPath`（`SC_Info/<CFBundleExecutable>.sinf`）**在通过 `isSealingSafe` 之后**，
         // **不再要求它已存在于包内**（即豁免判据 4 的「存在性」）：它是本功能的根本目的
         // —— NB 源下发的 sinf 在包内**常常缺失**，必须由我们写进去（旧日志里的「缺少
-        // SC_Info/*.sinf」正是这一情形），不能因为「包内没有」就丢弃。
-        // **注意：这不是「无条件保留」。** `mainPath` 仍须通过上面的 `isSealingSafe`（判据 1-3）
-        // 才可能进入 `sealingSafe`，本行只豁免判据 4。对抗审计实测：恶意 `CFBundleExecutable`
+        // SC_Info/*.sinf」正是这一情形），不能因为「包内没有」就丢弃.
+        // **注意：这不是「无条件保留」.** `mainPath` 仍须通过上面的 `isSealingSafe`（判据 1-3）
+        // 才可能进入 `sealingSafe`，本行只豁免判据 4.对抗审计实测：恶意 `CFBundleExecutable`
         // （如 `../../evil`、`a/b`）构造出的 `mainPath` 会因父目录不是 `SC_Info`
-        // （`comps[-2] != "SC_Info"`）被 `isSealingSafe` 丢弃 ⇒ fail closed。
-        // 正常包里 `<exe>` 兄弟二进制恒存在，故主路径必然通过。
+        // （`comps[-2] != "SC_Info"`）被 `isSealingSafe` 丢弃 ⇒ fail closed.
+        // 正常包里 `<exe>` 兄弟二进制恒存在，故主路径必然通过.
         let existing = Set(archive.entries.map { $0.path })
         let sealingSafe = paths.filter(isSealingSafe)
         return sealingSafe.filter { $0 == mainPath || existing.contains($0) }
     }
 
-    /// 校验一条「将被写成 ZIP 条目名」的目标路径。**来源不可信**，必须全部过关才允许写入。
+    /// 校验一条「将被写成 ZIP 条目名」的目标路径.**来源不可信**，必须全部过关才允许写入.
     ///
-    /// 拒绝：空串 / 含 NUL / 绝对路径 / `..` / 标准化后逃逸。前两项 `ArchiveEntryPath.resolve`
-    /// 不覆盖，故在此显式判定；后两项复用该函数（本仓唯一的 ZIP-slip 防线）。
-    /// 路径是「ZIP 条目名（相对 IPA 根）」，故传入一个固定哨兵根，仅用于触发其越界判定。
+    /// 拒绝：空串 / 含 NUL / 绝对路径 / `..` / 标准化后逃逸.前两项 `ArchiveEntryPath.resolve`
+    /// 不覆盖，故在此显式判定；后两项复用该函数（本仓唯一的 ZIP-slip 防线）.
+    /// 路径是「ZIP 条目名（相对 IPA 根）」，故传入一个固定哨兵根，仅用于触发其越界判定.
     private static func validateSinfTarget(_ path: String) throws {
         // 绝对路径判定必须在**反斜杠归一化之后**：`\etc\passwd` 归一成 `/etc/passwd`，
-        // 否则会绕过 `hasPrefix("/")`，再经 `resolve` 丢掉前导空段变成相对名 `etc/passwd`。
-        // 归一化仅用于这处「空 / NUL / 绝对路径」前置判定；越界判定仍唯一交给 `ArchiveEntryPath.resolve`。
+        // 否则会绕过 `hasPrefix("/")`，再经 `resolve` 丢掉前导空段变成相对名 `etc/passwd`.
+        // 归一化仅用于这处「空 / NUL / 绝对路径」前置判定；越界判定仍唯一交给 `ArchiveEntryPath.resolve`.
         let normalized = path.replacingOccurrences(of: "\\", with: "/")
         guard !path.isEmpty,
               !path.contains("\0"),
@@ -1723,9 +1722,9 @@ enum PackageSINFWriter {
         }
     }
 
-    /// 写后逐条复读：每条目标路径的字节必须 == 传入的 sinf。不一致 → 抛错（不静默）。
+    /// 写后逐条复读：每条目标路径的字节必须 == 传入的 sinf.不一致 → 抛错（不静默）.
     private static func verifyWritten(targets: [String], sinf: Data, ipaPath: String) throws {
-        // 注意： 必须重开新实例：`replaceEntries` 调用后原实例的 `entries` 偏移已失效。
+        // 注意： 必须重开新实例：`replaceEntries` 调用后原实例的 `entries` 偏移已失效.
         let verify = try ApplePackageArchive(url: URL(fileURLWithPath: ipaPath), accessMode: .read)
         var bad: [String] = []
         for p in targets {
@@ -1751,32 +1750,31 @@ enum PackageSINFWriter {
         }
     }
 
-    /// 把 sinf 载荷归一化成 `Data`，并校验它真的是一个 sinf 容器。
+    /// 把 sinf 载荷归一化成 `Data`，并校验它真的是一个 sinf 容器.
     ///
     /// 输入可能是两种编码之一（历史原因）：
     ///   · **base64** —— 牛蛙的 `ba_sinfs`、AppleID 的 plist、以及修好之后的新值
-    ///   · **hex**    —— NB 的 `dataHex`，以及 v0.3.562 及以前落进台账的旧值
+    ///   · **hex** —— NB 的 `dataHex`，以及 及以前落进台账的旧值
     ///
-    /// **不靠猜**：谁解出来的东西结构自洽就用谁；两个都不对返回 nil。
-    /// 这样即使上游某个调用点又漏了编码转换，这里也不会把垃圾写进包内。
+    /// **不靠猜**：谁解出来的东西结构自洽就用谁；两个都不对返回 nil.
     private static func decodeSinfPayload(_ raw: String) -> Data? {
         if let d = Data(base64Encoded: raw), isStructurallyValidSinf(d) { return d }
         if let d = hexDecoded(raw), isStructurallyValidSinf(d) { return d }
         return nil
     }
 
-    /// sinf 容器的结构判定（v0.3.570：三态）。
+    /// sinf 容器的结构判定（三态）.
     ///
     /// **为什么必须三态**：旧实现只返回 `Bool`，于是「**格式不认识**」（可能是我们尚未见过的
     /// 第三种合法形态）与「**格式认识但结构坏了**」被压成同一个 `false` —— 前者是「不知道」，
-    /// 后者是「确定坏」。v0.3.565 已经因为「只认一种格式」误杀过合法 SuperBlob；
-    /// 把「不认识」当成「坏」并写进台账，就会被标签永久冻结成「sinf 异常」。
+    /// 后者是「确定坏」.已经因为「只认一种格式」误杀过合法 SuperBlob；
+    /// 把「不认识」当成「坏」并写进台账，就会被标签永久冻结成「sinf 异常」.
     enum SinfStructure {
         case valid          // 格式可识别且自洽
         case invalid        // 格式可识别但结构坏了（长度对不上等）
         case unrecognized   // 格式不认识 —— **未知**，不等于坏
 
-        /// 存台账用：`unrecognized → nil`（未知），绝不当成「坏」。
+        /// 存台账用：`unrecognized → nil`（未知），绝不当成「坏」.
         var isValid: Bool? {
             switch self {
             case .valid: return true
@@ -1786,7 +1784,7 @@ enum PackageSINFWriter {
         }
     }
 
-    /// 判定 sinf 容器结构。判据见 `isStructurallyValidSinf`。
+    /// 判定 sinf 容器结构.判据见 `isStructurallyValidSinf`.
     static func sinfStructure(_ d: Data) -> SinfStructure {
         let b = [UInt8](d)
         guard b.count >= 8 else { return .unrecognized }
@@ -1808,7 +1806,7 @@ enum PackageSINFWriter {
         return .unrecognized
     }
 
-    /// sinf 容器结构自检。**两种真实格式都要认**，否则会误杀合法件。
+    /// sinf 容器结构自检.**两种真实格式都要认**，否则会误杀合法件.
     ///
     /// 格式一（本项目实测的主流形态，`SC_Info` 里常见）：
     ///   `{4B 大端总长}` + `"sinf"` + TLV 块序列（每块 `{4B tag}{4B 大端块长}{body}`）
@@ -1818,22 +1816,22 @@ enum PackageSINFWriter {
     ///   `SuperBlob` = `{4B magic 0xFADE0CC0}{4B 大端总长}{4B 大端 count}` + BlobIndex[]
     ///   判据：magic 命中 **且** 长度字段 == 实际长度
     ///
-    /// 注意： **不能**把 `00 00 04 30` 当固定魔数 —— 前 4 字节是**长度**。
+    /// 注意： **不能**把 `00 00 04 30` 当固定魔数 —— 前 4 字节是**长度**.
     /// 1056 字节的合法 sinf 头是 `00 00 04 20 73 69 6e 66`；
-    /// 拿 `00000430` 去校验会**误杀合法件**。
+    /// 拿 `00000430` 去校验会**误杀合法件**.
     ///
     /// 注意： 2026-10-05 修正：本函数**最初只认格式一**，结果把合法的 SuperBlob sinf
-    /// 判成「不合法」⇒ 跳过写入 + 打出「缺 sinf」的日志（真机反馈的现象）。
-    /// 两种格式都实测存在于 `SC_Info` 里，必须都放行。
+    /// 判成「不合法」⇒ 跳过写入 + 打出「缺 sinf」的日志（真机反馈的现象）.
+    /// 两种格式都实测存在于 `SC_Info` 里，必须都放行.
     ///
-    /// v0.3.570：本函数退化为 `sinfStructure(_:) == .valid` 的兼容壳 ——
-    /// **只有确定合法才 true**；`.unrecognized`（不认识）与 `.invalid`（坏）都返回 false。
-    /// 需要区分「未知」时请直接用 `sinfStructure(_:)`。
+    /// 本函数退化为 `sinfStructure(_:) == .valid` 的兼容壳 ——
+    /// **只有确定合法才 true**；`.unrecognized`（不认识）与 `.invalid`（坏）都返回 false.
+    /// 需要区分「未知」时请直接用 `sinfStructure(_:)`.
     static func isStructurallyValidSinf(_ d: Data) -> Bool {
         sinfStructure(d) == .valid
     }
 
-    /// hex 字符串 → Data。容忍空格/换行（服务端偶尔分行发）。
+    /// hex 字符串 → Data.容忍空格/换行（服务端偶尔分行发）.
     private static func hexDecoded(_ s: String) -> Data? {
         let cleaned = s.filter { !$0.isWhitespace }
         guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
@@ -1842,9 +1840,9 @@ enum PackageSINFWriter {
         var i = cleaned.startIndex
         while i < cleaned.endIndex {
             let j = cleaned.index(i, offsetBy: 2)
-            // v0.3.664：不能只靠 `UInt8(_:radix:16)` 判非法 —— 它对**空串**返回 `Optional(0)`
-            // 而不是 nil，所以 `"_"` / `"__"` 这类占位符会被静默解成 0x00，产出一份「非 nil 的垃圾」。
-            // 与 `NBStoreClient.hexByte` 同一处修正（那边修的是同一个 bug 的另一个副本）。
+            // 不能只靠 `UInt8(_:radix:16)` 判非法 —— 它对**空串**返回 `Optional(0)`
+            // 而不是 nil，所以 `"_"` / `"__"` 这类占位符会被静默解成 0x00，产出一份「非 nil 的垃圾」.
+            // 与 `NBStoreClient.hexByte` 同一处修正（那边修的是同一个 bug 的另一个副本）.
             let pair = cleaned[i..<j]
             guard pair.count == 2, pair.allSatisfy({ $0.isHexDigit }),
                   let v = UInt8(pair, radix: 16) else { return nil }
@@ -1856,7 +1854,7 @@ enum PackageSINFWriter {
 
     /// sinf 注入的日志固定走 `.download`：本类型是**静态工具**（没有 Job / 来源上下文），
     /// 但唯一入口 `writeIfNeeded` 只被下载链路调用（`handle` / `installLocal`）；
-    /// 共享修补线（`RepairService`）只调 `injectAllPaths`（不写日志），故不会串进「共享转换」。
+    /// 共享修补线（`RepairService`）只调 `injectAllPaths`（不写日志），故不会串进「共享转换」.
     private static func log(_ message: String) {
         LoginLogger.shared.log("[下载中心] sinf 注入：\(message)", category: .download)
     }
@@ -1864,12 +1862,12 @@ enum PackageSINFWriter {
 
 // MARK: - 可暂停的下载器
 
-/// 支持 `pause / resume / abort` 的单文件下载器（暂停用 resumeData）。
+/// 支持 `pause / resume / abort` 的单文件下载器（暂停用 resumeData）.
 private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
 
     private let request: URLRequest
-    /// v0.3.394：回调改成给**原始字节数**（已下 / 总量），不再自己折算成 0~1 ——
-    /// 界面要显示「70.3 MB/271.7 MB」，速度也要靠字节差算，所以在中心那一侧统一处理。
+    /// 回调改成给**原始字节数**（已下 / 总量），不再自己折算成 0~1 ——
+    /// 界面要显示「70.3 MB/271.7 MB」，速度也要靠字节差算，所以在中心那一侧统一处理.
     private let onProgress: (Int64, Int64) -> Void
     private let onFinish: (Result<URL, Error>) -> Void
 
@@ -1879,21 +1877,21 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
     private var finished = false
     private var paused = false
 
-    /// v0.3.677（D8 同类）：已经搬到稳定位置的成品（`dl-<UUID>.part`）——**所有权登记**。
+    /// 已经搬到稳定位置的成品（`dl-<UUID>.part`）——**所有权登记**.
     ///
     /// 为什么要登记：`didFinishDownloadingTo` 把系统临时文件搬成 `dl-<UUID>.part` 之后，
-    /// 这份文件的路径只存在于那个回调的栈上。回调一返回，除了 `onFinish` 递出去的那次
-    /// `handle()`，**没有任何代码还知道它叫什么**（UUID 每次都不一样）。
+    /// 这份文件的路径只存在于那个回调的栈上.回调一返回，除了 `onFinish` 递出去的那次
+    /// `handle()`，**没有任何代码还知道它叫什么**（UUID 每次都不一样）.
     /// 于是「文件已搬好、`finish(.success)` 已发出、主 actor 上的 `handle()` 还没轮到跑」
     /// 这段窗口里用户点「删除安装包」时，`abort()` 首行 `guard !finished` 直接返回
-    /// （`finish()` 已经把 `finished` 置位）⇒ 行删了、文件留在 tmp 里，永远不会再被引用。
-    /// 与 `IPAFileDownloader.stagedPartial` 是同一个问题的同一种修法。
+    /// （`finish()` 已经把 `finished` 置位）⇒ 行删了、文件留在 tmp 里，永远不会再被引用.
+    /// 与 `IPAFileDownloader.stagedPartial` 是同一个问题的同一种修法.
     private var stagedPartial: URL?
 
-    /// v0.3.549：`paused` / `finished` / `task` / `resumeData` 会被**两条线程**碰 ——
-    /// `URLSession` 的 delegate 回调（后台队列）与主 actor 上的 `pause()` / `resume()`。
+    /// `paused` / `finished` / `task` / `resumeData` 会被**两条线程**碰 ——
+    /// `URLSession` 的 delegate 回调（后台队列）与主 actor 上的 `pause()` / `resume()`.
     /// 以前它们全是裸变量：暂停后进度还在走、暂停后立刻继续会丢续传数据，
-    /// 都出在这个竞态上。加一把锁把读写收口.
+    /// 都出在这个竞态上.加一把锁把读写收口.
     private let lock = NSLock()
 
     init(request: URLRequest,
@@ -1928,7 +1926,7 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
         guard !finished, let t = task else { lock.unlock(); return }
         paused = true
         lock.unlock()
-        // v0.3.549：`resumeData` 是**回调异步**给的，而 `resume()` 会立刻来读它 ——
+        // `resumeData` 是**回调异步**给的，而 `resume()` 会立刻来读它 ——
         // 两条线程（delegate 队列 vs 主 actor）之间必须有锁，
         // 否则用户「暂停后马上继续」很可能读到 nil → 白白从头重下.
         //
@@ -1945,7 +1943,7 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
         guard !finished else { lock.unlock(); return }
         paused = false
         let data = resumeData
-        // 从暂停态恢复时，用一个全新的 task（旧的那个已被 cancel）。
+        // 从暂停态恢复时，用一个全新的 task（旧的那个已被 cancel）.
         // 创建 task 与赋值在**同一段持锁区**内完成 —— 中间不留空档，
         // 否则「解锁 → 建 task → 再上锁」之间挤进一次 `pause()` 就会把新 task 漏掉.
         let t: URLSessionDownloadTask?
@@ -1962,13 +1960,13 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
 
     func abort() {
         lock.lock()
-        // v0.3.677（D8 同类）：**先取登记，再判 finished**.
+        // **先取登记，再判 finished**.
         //
         // `finish(.success(keep))` 一执行 `finished` 就是 true，而 `keep` 要等主 actor 上的
-        // `handle()` 才搬进下载目录。旧实现首行 `guard !finished` 直接返回 ⇒ 这段窗口里
+        // `handle()` 才搬进下载目录.旧实现首行 `guard !finished` 直接返回 ⇒ 这段窗口里
         // 用户点「删除安装包」是空操作：任务行被移除、`handle()` 又因 job 不存在直接 return，
-        // 那份 `dl-<UUID>.part` 就永久失联（每次取消留一个几百 MB 的孤儿）。
-        // 所以这里不依赖状态位：只要登记还在，就按登记删。
+        // 那份 `dl-<UUID>.part` 就永久失联（每次取消留一个几百 MB 的孤儿）.
+        // 所以这里不依赖状态位：只要登记还在，就按登记删.
         let staged = stagedPartial
         stagedPartial = nil
         guard !finished else {
@@ -2005,12 +2003,12 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
                     didWriteData bytesWritten: Int64,
                     totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
-        // v0.3.549：**暂停后不再上报进度**.
+        // **暂停后不再上报进度**.
         //
         // 「暂停」是靠 `cancel(byProducingResumeData:)` 实现的，而取消是**异步生效**的 ——
-        // 在它真正落地之前，已经在网络上的数据包仍会送到这里。以前这里不看 `paused`，
+        // 在它真正落地之前，已经在网络上的数据包仍会送到这里.以前这里不看 `paused`，
         // 于是用户点完暂停之后进度条**还在往前爬**（用户报的「点击暂停下载是没有用的，
-        // 我发现它会继续下载」就是这个）。这里加一道：一旦进入暂停态就不再上报，
+        // 我发现它会继续下载」就是这个）.这里加一道：一旦进入暂停态就不再上报，
         // 界面立刻停住；`resume()` 会把 `paused` 归 false，进度自然继续.
         guard !isPausedOrFinished() else { return }
         guard totalBytesExpectedToWrite > 0 else { return }
@@ -2020,12 +2018,12 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession,
                     downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
-        // v0.3.549：**暂停期间落地的文件不算下载完成**.
+        // **暂停期间落地的文件不算下载完成**.
         //
         // `pause()` 与「下载刚好完成」这两件事可能撞在一起：`cancel(byProducingResumeData:)`
-        // 对**已完成**的任务是 no-op，回调解不成 `resumeData`，而文件已经躺在 `location` 了。
+        // 对**已完成**的任务是 no-op，回调解不成 `resumeData`，而文件已经躺在 `location` 了.
         // 不挡的话这次暂停等于没发生 —— 文件照常落盘、任务照常进 `.done`，
-        // 与用户「我明明按了暂停」的预期完全相反。这里直接丢弃并结束，
+        // 与用户「我明明按了暂停」的预期完全相反.这里直接丢弃并结束，
         // 磁盘与状态都不动（用户仍留在「已暂停」，可以再点继续）.
         if isPausedOrFinished() {
             try? FileManager.default.removeItem(at: location)
@@ -2041,12 +2039,12 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
             finish(.failure(error))
             return
         }
-        // v0.3.677（D8 同类）：文件已落到稳定位置 ⇒ 立刻登记所有权（见 stagedPartial）。
+        // 文件已落到稳定位置 ⇒ 立刻登记所有权（见 stagedPartial）.
         //
         // 这里必须**同时**复查一次取消态：上面那道 `isPausedOrFinished()` 与本句之间
         // 用户可能刚点了「删除安装包」/「暂停」（`abort()` / `pause()` 那时登记还是 nil，
-        // 什么也删不到）。不复查的话，`abort()` 已经置位的 `finished` 会让下面的
-        // `finish()` 直接返回，于是这份刚搬出来的文件既没人接手、也没人删 —— 又变成孤儿。
+        // 什么也删不到）.不复查的话，`abort()` 已经置位的 `finished` 会让下面的
+        // `finish()` 直接返回，于是这份刚搬出来的文件既没人接手、也没人删 —— 又变成孤儿.
         lock.lock()
         let dropped = finished || paused
         if !dropped { stagedPartial = keep }
@@ -2055,25 +2053,25 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
             // 只删文件，**不改状态位**：与上面 :1910 那道早退保持同一语义 ——
             // 「暂停恰好撞上完成」时下载器必须仍然可 `resume()`（调用 `finish()` 会把
             // `finished` 置位，而 `resume()` 首行是 `guard !finished` ⇒ 「继续」变死按钮）；
-            // 「取消（abort）」时 `finished` 早已置位，这里本来也无需再收尾。
+            // 「取消（abort）」时 `finished` 早已置位，这里本来也无需再收尾.
             try? FileManager.default.removeItem(at: keep)
             return
         }
         if let http = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(http.statusCode) {
-            // v0.3.676（D8 同类）：**失败分支必须把刚搬出来的 keep 删掉**.
+            // **失败分支必须把刚搬出来的 keep 删掉**.
             //
             // 上面已经把系统临时文件搬到了 `dl-<UUID>.part` —— 不删的话，
             // 这个 UUID 命名的文件永远不会再被任何代码引用（下次下载会用新 UUID），
-            // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**。重定向到登录页 /
-            // 错误页时这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满。
+            // 于是**每一次 HTTP 非 2xx 的失败都留下一份完整的包体**.重定向到登录页 /
+            // 错误页时这个体量可以到 GB 级，几次之后就把 App 的 tmp 目录塞满.
             //
-            // v0.3.677：现在这条通道也有 `stagedPartial` 登记了（与 `IPAFileDownloader`
+            // 现在这条通道也有 `stagedPartial` 登记了（与 `IPAFileDownloader`
             // 同一个修法），所以这里删完必须同步摘登记 —— 否则 `abort()` 会拿着一条已失效的
-            // 路径再删一次。但**不能只靠 `abort()` 兜底**：这条失败路径自己就要删干净，
-            // 因为 `onFinish` 交给 `handle()` 的是 `.failure`，那边没有文件可清。
+            // 路径再删一次.但**不能只靠 `abort()` 兜底**：这条失败路径自己就要删干净，
+            // 因为 `onFinish` 交给 `handle()` 的是 `.failure`，那边没有文件可清.
             // 注意：moveItem 的 catch 分支不用删 —— 那条路径下 keep 从未被创建，
-            // 系统会在回调返回后自己清掉 `location`。
+            // 系统会在回调返回后自己清掉 `location`.
             try? FileManager.default.removeItem(at: keep)
             lock.lock(); stagedPartial = nil; lock.unlock()
             finish(.failure(NSError(domain: "IPADownloadCenter", code: http.statusCode,
@@ -2086,21 +2084,21 @@ private final class RemoteDownloader: NSObject, URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     didCompleteWithError error: Error?) {
-        // v0.3.549：`finished` / `paused` 统一走锁读（与 `pause()` / `resume()` 收口）.
+        // `finished` / `paused` 统一走锁读（与 `pause()` / `resume()` 收口）.
         lock.lock()
         let done = finished
         let isPaused = paused
         lock.unlock()
         if done { return }
-        // v0.3.398：**本地取消永远不是「下载失败」** —— 这是「暂停后几率变失败」的根因层。
+        // **本地取消永远不是「下载失败」** —— 这是「暂停后几率变失败」的根因层.
         //
-        // 暂停是靠 `cancel(byProducingResumeData:)` 实现的，它必然产生一个 `URLError.cancelled`。
+        // 暂停是靠 `cancel(byProducingResumeData:)` 实现的，它必然产生一个 `URLError.cancelled`.
         // 只靠下面的 `paused` 挡不住：`resume()` 会把 `paused` 改回 `false`，
         // 而被取消任务的取消错误**可能晚于** `resume()` 才到达（旧任务先报错，新的还在传）
-        // → 那一刻 `paused == false` → 被判成真失败。
+        // → 那一刻 `paused == false` → 被判成真失败.
         // `URLError.cancelled` 只可能来自**本地** `cancel`（`pause()` / `abort()`），
         // 网络层的断开/超时是 `networkConnectionLost` / `timedOut` 等**别的**码，
-        // 所以这里无条件丢弃它最稳，而且不依赖任何跨线程状态的读数时序。
+        // 所以这里无条件丢弃它最稳，而且不依赖任何跨线程状态的读数时序.
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if isPaused {
             // 暂停/取消产生的取消错误：不当作失败

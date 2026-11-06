@@ -2,7 +2,6 @@
 //  TunnelReadiness.swift
 //  TequilaDash
 //
-//  隧道就绪状态机（v0.3.726）—— 把「点一下功能 → 现场探测 3 秒 / 直连卡 4 分钟」
 //  换成「后台持续探测 + 调用方读缓存」.
 //
 //  ## 为什么
@@ -18,7 +17,6 @@
 //  - `TunnelGate`：无隔离的线程安全缓存 + 同步闸门 `guardReady()` —— 供任意线程的
 //    同步 `createTunnel()` 零等待调用；缓存说通 → 立刻放行，说不通 → 立刻抛人话错误
 //    （并踢一次立即重探），绝不现场长探测.
-//  - `TunnelReadiness`：@MainActor ObservableObject，纯事件驱动（v0.3.769，用户硬规则：
 //    零延迟、禁轮询）—— 网络路径变化、回前台、guardReady 按需补探三类事件触发
 //    probeOnce，结论写回 `TunnelGate` 并发布到 `isReady`，无任何后台常驻循环.
 //
@@ -70,7 +68,6 @@ enum TunnelGate {
             let frames = Thread.callStackSymbols.dropFirst(2).prefix(3).joined(separator: " <- ")
             TunnelDiagnostics.note("主线程隧道调用", frames.isEmpty ? "guardReady 在主线程同步等待" : frames)
         }
-        // v0.3.773（凭证定版）：探测对象 == 建链对象（主地址 = utun 对端）.
         if LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: probeTimeout) {
             setReady(true)
             // 让 MainActor 侧的发布状态跟上（后台补一拍，不阻塞调用方）.
@@ -99,6 +96,10 @@ final class TunnelReadiness: ObservableObject {
     @Published private(set) var becameReadyAt: Date?
 
     private var started = false
+    /// utun 仍在时连续探测未命中的次数（凭证保持窗口）.
+    private var heldMissStreak = 0
+    /// 允许「探测未命中但 utun 仍在」的连续次数，超过即清凭证.
+    private static let maxHeldMisses = 2
     private var pathMonitor: NWPathMonitor?
     /// 单次探测超时（非阻塞 connect + poll）.
     private static let probeTimeout: TimeInterval = 0.5
@@ -119,7 +120,7 @@ final class TunnelReadiness: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 await self.probeOnce()
-                // v0.3.766（Gnoix 对齐）：网络恢复而隧道仍不可达 ⇒ 事件驱动拉起重建.
+        // 网络恢复而隧道仍不可达 ⇒ 事件驱动拉起重建.
                 self.rebuildTunnelIfNeeded(networkSatisfied: path.status == .satisfied)
             }
         }
@@ -141,29 +142,38 @@ final class TunnelReadiness: ObservableObject {
         let ip = LocalDevVPN.targetIP
         let port = RemotePairingPort.current
         let timeout = Self.probeTimeout
-        // v0.3.773（凭证定版）：只探 utun 对端 —— 探测对象 == 建链主地址.
-        // 回环 TCP 预演已被 v0.3.772 真机证伪（设备 remoted listener 恒监听回环，
-        // 回环 TCP 通 ≠ 隧道通，蜂窝下假放行导致功能 Connection reset）.
+        // 只探 utun 对端：探测对象 == 建链主地址. 回环 TCP 通 ≠ 隧道通，故不参与判定.
         let reachable = await Task.detached(priority: .utility) {
             LocalDevVPN.isReachable(ip: ip, timeout: timeout, port: port)
         }.value
         let now = Date()
-        // 探测对象 == 建链对象：通即置真，不通即清假（蜂窝切换时立即清凭证）.
-        TunnelGate.setReady(reachable)
-        lastCheckedAt = now
-        if reachable && !isReady { becameReadyAt = now }
-        if reachable != isReady {
-            TunnelDiagnostics.note("隧道就绪", reachable
-                ? "状态翻转：不可达 → 可达（\(ip):\(port)）"
-                : "状态翻转：可达 → 不可达（\(ip):\(port)）")
+        // 通即置真；未命中但 utun 仍在时保留凭证，连续未命中满 maxHeldMisses 次或
+        // utun 消失才判死 —— 蜂窝重开瞬间的探测抖动不该把刚建好的通路清掉，否则每次
+        // 都要重新弹卡.
+        var gateReady = reachable
+        if reachable {
+            heldMissStreak = 0
+        } else if TunnelGate.isReady, LocalDevVPN.isConnected {
+            heldMissStreak += 1
+            gateReady = heldMissStreak < Self.maxHeldMisses
+        } else {
+            heldMissStreak = 0
         }
-        isReady = reachable
+        TunnelGate.setReady(gateReady)
+        lastCheckedAt = now
+        if gateReady && !isReady { becameReadyAt = now }
+        if gateReady != isReady {
+            TunnelDiagnostics.note("隧道就绪", gateReady
+                ? "状态翻转：不可达 → 可达（\(ip):\(port)）"
+                : "状态翻转：可达 → 不可达（\(ip):\(port)），utun=\(LocalDevVPN.isConnected)")
+        }
+        isReady = gateReady
     }
 
-    /// 网络恢复事件驱动的隧道重建（Gnoix 对齐）.
+    /// 网络恢复事件驱动的隧道重建.
     ///
     /// 蜂窝开关 / Wi-Fi 切换时 iOS 可能拆掉 LocalDevVPN 的 NE tunnel；探测循环
-    /// 只探不建 ⇒ 隧道死后 App 停在「未就绪」，只能手动重进页面。这里在「网络
+    /// 只探不建 ⇒ 隧道死后 App 停在「未就绪」，只能手动重进页面.这里在「网络
     /// 恢复（path satisfied）而隧道仍不可达」时调 `LocalDevVPN.startWhenNeeded()`：
     /// 其内部判据（选中 localDevVPN + 无任何 utun + 5 秒冷却 + 用户开关）保证
     /// utun 幸存时是零副作用空操作；卡点弹窗进行中不拉起（不能抢用户前台），

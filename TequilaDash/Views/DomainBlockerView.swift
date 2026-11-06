@@ -355,7 +355,7 @@ private struct DomainBlockerAlert: Identifiable {
 ///
 /// `@MainActor`：本类**只被 `DomainBlockerView`（SwiftUI `View`，主 actor）读写**
 /// （全仓库仅此一个调用方），没有任何非主线程访问点，因此收敛到主 actor 是
-/// 正确的隔离，而不是 escape hatch。
+/// 正确的隔离，而不是 escape hatch.
 @MainActor
 final class DomainBlockerStore {
     static let shared = DomainBlockerStore()

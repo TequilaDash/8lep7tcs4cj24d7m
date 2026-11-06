@@ -17,7 +17,7 @@ import Foundation
 /// （`_CTServerConnectionInstallCarrierBundle`），需要 CoreTrust 授予的系统级
 /// entitlement —— **不是我们的路子**.
 /// `Sendable`（非 unchecked）：本类**没有任何存储属性**（`recordsKey` 是计算属性，
-/// 状态全部落在 `UserDefaults`），因此编译器可直接证明其可安全跨隔离域共享。
+/// 状态全部落在 `UserDefaults`），因此编译器可直接证明其可安全跨隔离域共享.
 final class IPCCInstallService: Sendable {
 
     static let shared = IPCCInstallService()
@@ -147,12 +147,12 @@ final class IPCCInstallService: Sendable {
         step("解析成功：bundle=\(parsed.bundleName) 标识=\(parsed.identifier.isEmpty ? "未知" : parsed.identifier)")
         do {
             try IPAInstallService.shared.installIPCC(ipccURL.path, log: { step($0) })
-            // v0.3.662（task-8 发现8）：**别再谎报 success**.
+            // **别再谎报 success**.
             //
             // `installIPCC` 的成功只代表 *「Install 命令已被受理」* —— 它自己的收尾日志就是
-            // 「Install 命令已受理（installd/CommCenter 后台处理中）」（IPAInstallService.swift:599）。
+            // 「Install 命令已受理（installd/CommCenter 后台处理中）」（IPAInstallService.swift:599）.
             // 真正的解包 / 校验 / 写入运营商配置由 CommCenter 在**本函数返回之后**异步完成，
-            // 失败时既不会回调到这里、也不会抛错。旧代码在这里立刻写 `success: true` 并显示绿勾，
+            // 失败时既不会回调到这里、也不会抛错.旧代码在这里立刻写 `success: true` 并显示绿勾，
             // 用户看到「安装成功」却发现运营商版本没变，等于把后台失败记成了成功.
             //
             // 现已无法在此拿到最终结果，所以如实记为「已提交」，并把后续校验交给用户：

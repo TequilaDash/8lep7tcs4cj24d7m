@@ -28,7 +28,6 @@ final class ContainerNameResolver {
         enum Reason: Sendable {
             /// `consume` 抛错（附 SandboxEscape 的错误文本）.
             case consumeFailed
-            /// 命中了 LiveContainer 容器扩展的哨兵分支（未真取扩展），且读 plist 失败.
             case sentinelHandle
             /// 拿到了句柄，但元数据 plist 读不出来（文件不存在 / 读不动）.
             case metadataUnreadable
@@ -63,7 +62,7 @@ final class ContainerNameResolver {
 
     /// Swift 6 并发检查：本类型非 Sendable，但唯一的可变状态 `cache` 的**全部**读写
     /// 都在 `lock`（NSLock）内（见 `resolveAll` / `displayName`），实例本身线程安全
-    /// —— `resolveAll` 的文档也声明「任意线程可调」。
+    /// —— `resolveAll` 的文档也声明「任意线程可调」.
     nonisolated(unsafe) static let shared = ContainerNameResolver()
 
     private let escape = SandboxEscape()

@@ -6,47 +6,47 @@ import UIKit
 /// ## 这个功能是什么
 /// 爱思的「高级功能」（APP 更新 / 验机 / 导入铃声）**不是 PC 端直接做的**，而是由设备端
 /// 「爱思移动端」（一组伪装成笔记 / 工具类的 RN 马甲包，首选 `com.ownbook.notes`）起一个
-/// VPN（NetworkExtension）去转发 Apple 锁定的流量。要让它起得来，PC 端得先往**该 App 的沙盒**
+/// VPN（NetworkExtension）去转发 Apple 锁定的流量.要让它起得来，PC 端得先往**该 App 的沙盒**
 /// 写三份文件（见 `P3_爱思助手_逆向/_简报/爱思9_配对与设备端Agent.md` §①）：
 ///
 ///   1. `/Documents/pair.config` —— 无线锁定（wireless_lockdown）**配对记录**，由 PC 端
 ///      `idm_info!ios_repair_record` 生成；设备端 Agent 靠它 `DevManager.autoStart(pair.config)`
-///      起 VPN（JS：`exists(Documents/pair.config)` 是前置条件）。
-///   2. `/Documents/RTD.cfg` —— 设备端**资源清单**，PC 从本地 `/files/other/RTD.cfg` 读后下发。
+///      起 VPN（JS：`exists(Documents/pair.config)` 是前置条件）.
+///   2. `/Documents/RTD.cfg` —— 设备端**资源清单**，PC 从本地 `/files/other/RTD.cfg` 读后下发.
 ///   3. `/Documents/8es1421dg.be` —— **授权标记**（plist），内容 = `i4tool2.acc` 的 auth plist
-///      （`auth/serial/imei/productiondate/region/modelnumber/udid/cid`）。设备端 Agent 会把它
-///      从 `Documents/` 拷到 `Library/`，`isauth = exists(Library/8es1421dg.be)`。
+///      （`auth/serial/imei/productiondate/region/modelnumber/udid/cid`）.设备端 Agent 会把它
+///      从 `Documents/` 拷到 `Library/`，`isauth = exists(Library/8es1421dg.be)`.
 ///      （`com.diary.mood` 的标记文件直接叫 `i4tool2.acc`；`com.MK.AwsomeFiles` 是空文件
-///      `1954c668802341a120e240ceefe27d97.epl`。见该报告 §3.3 的 5 项清单。）
+///      `1954c668802341a120e240ceefe27d97.epl`.见该报告 §3.3 的 5 项清单.）
 ///
 /// ## 本服务实际能做什么（**不美化**）
-/// - ✅ **授权标记 `8es1421dg.be`：可写、可读回校验。** 内容由 `I4AppFixService` 的设备身份
+/// - ✅ **授权标记 `8es1421dg.be`：可写、可读回校验.** 内容由 `I4AppFixService` 的设备身份
 ///   + 8 键构造器产出（`deviceIdentity()` / `accDictionary(_:)` / `makeAccData(_:)`），
 ///   经 **house_arrest**（`FileSharingService.openAppDocuments(bundleId:)`）写进载体 App 的
-///   `Documents/`。**为什么走 house_arrest 而不是 `AFCService`**：`AFCService` 的根是设备级
+///   `Documents/`.**为什么走 house_arrest 而不是 `AFCService`**：`AFCService` 的根是设备级
 ///   `/var/mobile/media`（`com.apple.afc`），够不到 App 沙盒；App 沙盒只能经 house_arrest
-///   （`com.apple.mobile.house_arrest`）的 `vend_documents` 进。两者是同一 AFC 协议、不同服务。
-/// - ⚙️ **`pair.config`：可尝试「现场配对」（路径 A）。** 见 `attemptLockdownPair` —— 经 RSD
+///   （`com.apple.mobile.house_arrest`）的 `vend_documents` 进.两者是同一 AFC 协议、不同服务.
+/// - ⚙️ **`pair.config`：可尝试「现场配对」（路径 A）.** 见 `attemptLockdownPair` —— 经 RSD
 ///   隧道连设备本机的 `lockdownd`，用 `idevice-ffi` 的 `lockdownd_pair` 发一次真 lockdown
 ///   `Pair` 请求；**设备接受**则拿到它签发的配对记录（`idevice_pairing_file_serialize` 出 XML），
-///   再经 house_arrest 写进载体 `Documents/pair.config`。**能不能成，取决于设备认不认** ——
+///   再经 house_arrest 写进载体 `Documents/pair.config`.**能不能成，取决于设备认不认** ——
 ///   这是唯一真正的未知，所以本步把设备返回的**原始错误**（如 `InvalidHostID` /
-///   `UserDeniedPairing` / `PasswordProtected`）如实摆出来，绝不把「请求已发出」说成「已配对」。
+///   `UserDeniedPairing` / `PasswordProtected`）如实摆出来，绝不把「请求已发出」说成「已配对」.
 ///   （对照：`pair.config` 的**离线**构造不可能 —— 本应用只有 RSD 远程配对文件 `RpPairingFile`
 ///   （Ed25519，见 `rust/idevice-ffi/src/rp_pairing_file.rs`），不含 lockdown 记录的
-///   HostCertificate / RootCertificate / EscrowBag 等字段。）
-/// - ❌ **`RTD.cfg`：造不出。** 它是 PC 本地 `/files/other/RTD.cfg` 的资源清单（字段 `//config/v711/file`、
-///   `items/item/name/size`、`minos`、`maxos`），本应用没有这份文件，格式亦未完全解出。
+///   HostCertificate / RootCertificate / EscrowBag 等字段.）
+/// - ❌ **`RTD.cfg`：造不出.** 它是 PC 本地 `/files/other/RTD.cfg` 的资源清单（字段 `//config/v711/file`、
+///   `items/item/name/size`、`minos`、`maxos`），本应用没有这份文件，格式亦未完全解出.
 ///
 /// ⇒ 结论：本服务能把**授权标记**如实写进去并校验；`pair.config` 走「现场配对」**尝试**，
-/// 成败以设备对 `Pair` 的应答为准。两者齐备后设备端 Agent 才可能起 VPN ⇒ **完整「高级功能」
-/// 是否可开，由设备对 `Pair` 的应答决定**。这一点在 `Report.verdict`、`LivePairReport.detail`
+/// 成败以设备对 `Pair` 的应答为准.两者齐备后设备端 Agent 才可能起 VPN ⇒ **完整「高级功能」
+/// 是否可开，由设备对 `Pair` 的应答决定**.这一点在 `Report.verdict`、`LivePairReport.detail`
 /// 与 `notConstructed` 里逐条写明，不假装能开.
 ///
 /// ## 为什么是 `enum` + `static` 方法
 /// 底层 `AppDiscovery` / `DeviceInfoService` / `FileSharingService` 都是**同步阻塞**且各自管着
 /// 自己的 RSD 串行队列；本服务自身**没有任何可变状态**，用 `static` 方法即可，避免引入需要
-/// `nonisolated(unsafe)` 的非 Sendable 单例（Swift 6 严格并发）。调用方负责把阻塞调用放到后台线程.
+/// `nonisolated(unsafe)` 的非 Sendable 单例（Swift 6 严格并发）.调用方负责把阻塞调用放到后台线程.
 enum I4PairingService {
 
     // MARK: - 常量（照 `爱思9_配对与设备端Agent.md` §3.3 的 5 项马甲包清单）
@@ -94,10 +94,9 @@ enum I4PairingService {
     /// 现场配对优先连的 lockdown RSD 服务名 —— **未受信版**.
     ///
     /// RSD 服务表里 lockdown 有两条（pymobiledevice3 `misc/RemoteXPC.md`）：
-    /// - `com.apple.mobile.lockdown.remote.trusted`：受信版，上游 `idevice` crate 写死的那条，
     ///   期待「已受信的 host」；
     /// - `com.apple.mobile.lockdown.remote.untrusted`：未受信版，**给尚未配对的对端用** ——
-    ///   配对（`Pair`）本该走这条。设备侧不接电脑时回 `InvalidHostID` 的成因与「连了受信版」相关，
+    ///   配对（`Pair`）本该走这条.设备侧不接电脑时回 `InvalidHostID` 的成因与「连了受信版」相关，
     ///   故本服务改为**先连未受信版**.
     static let untrustedLockdownService = "com.apple.mobile.lockdown.remote.untrusted"
 
@@ -143,7 +142,7 @@ enum I4PairingService {
         /// 打不开载体 App 的 Documents 沙盒（未配对 / 未开启文档共享 / App 无数据容器）.
         case sandboxOpenFailed(String, String)
         /// 载体 App 从未启动过，没有数据容器（house_arrest 因此拿不到 Documents）.
-        /// v0.3.xxx：真机 iPhone 11 实证 —— 这正是「创建文件失败」的根因.
+        /// iPhone 11 实证 —— 这正是「创建文件失败」的根因.
         case carrierNotLaunched(String, String)
         /// 写入失败.
         case writeFailed(String, String)
@@ -274,7 +273,7 @@ enum I4PairingService {
 
     // MARK: - ① 探测（只读）
 
-    /// 读设备实际状态：装了哪个载体、三个文件在不在。**不抛错**（失败记进 `Probe.error`）.
+    /// 读设备实际状态：装了哪个载体、三个文件在不在.**不抛错**（失败记进 `Probe.error`）.
     ///
     /// - Note: 阻塞调用（建 RSD 隧道 + instproxy 枚举 + house_arrest 打开沙盒），放后台线程.
     static func probe() async -> Probe {
@@ -316,8 +315,8 @@ enum I4PairingService {
     /// - Throws: 无载体（`noCarrier`）、标记构造失败、沙盒打不开、写入失败、写后读回**缺失**.
     ///   上述**致命**失败必抛，绝不静默.
     /// - Important: 写后读回**不一致**（文件在、但字节不同）**不抛错**，而是如实放进
-    ///   `Report.verified`（为空）+ `Report.warnings`。调用方必须据 `verified` 决定「成功 / 失败」，
-    ///   **不得**只看「有没有抛错」—— 否则会把「写入未生效」显示成成功（v0.3.660 审计 P-5）.
+    ///   `Report.verified`（为空）+ `Report.warnings`.调用方必须据 `verified` 决定「成功 / 失败」，
+    ///   **不得**只看「有没有抛错」—— 否则会把「写入未生效」显示成成功（审计 P-5）.
     /// - Note: 可取消 —— 各阻塞步骤前检查 `Task.isCancelled`.
     static func enable(onLog: (@Sendable (String) -> Void)? = nil) async throws -> Report {
         func log(_ line: String) {
@@ -341,7 +340,7 @@ enum I4PairingService {
 
         // 1.5 载体若无数据容器（从未启动），先启动一次让 iOS 建容器；仍无则如实报错 ——
         //     house_arrest 的 vend_documents 依赖数据容器，缺容器时底层应答被丢弃，
-        //     只在第一次 AFC 写时炸成误导性的「创建文件失败」（v0.3.xxx 真机实证）.
+        //     只在第一次 AFC 写时炸成误导性的「创建文件失败」（ 真机实证）.
         let carrier = try await ensureCarrierContainer(picked)
         guard carrier.hasContainer else {
             log("[i4高级] 启动后仍无数据容器，中止")
@@ -379,8 +378,8 @@ enum I4PairingService {
                                                    path: FileSharingService.appDocumentsPath + "/" + markerName) ?? -1
             }.value
         } catch {
-            // P-4：容器路径「存在」≠ house_arrest 拿得到沙盒（vendor 仍可能被拒）。
-            // 这种情况原先只抛通用「house_arrest 未授到沙盒」，用户得不到可执行指引。
+            // P-4：容器路径「存在」≠ house_arrest 拿得到沙盒（vendor 仍可能被拒）.
+            // 这种情况原先只抛通用「house_arrest 未授到沙盒」，用户得不到可执行指引.
             // 这里补一次「强制拉起 + 重探」，仍失败才如实上报两种可能.
             log("[i4高级] 写入 \(markerName) 失败：\(error.localizedDescription)")
             log("[i4高级] 尝试拉起 \(carrier.bundleId) 一次以建立数据容器，然后重试写入")
@@ -462,13 +461,13 @@ enum I4PairingService {
     /// 现场配对（路径 A）：经 RSD 隧道连设备本机 `lockdownd`，发一次真 lockdown `Pair`；
     /// 设备接受则把签发的配对记录序列化后写进载体 App 的 `Documents/pair.config`，并读回校验.
     ///
-    /// - Important: **成败取决于设备是否接受来自它自身隧道的 `Pair` 请求** —— 这是唯一真正的未知。
+    /// - Important: **成败取决于设备是否接受来自它自身隧道的 `Pair` 请求** —— 这是唯一真正的未知.
     ///   本方法把设备返回的**原始错误**如实放进 `LivePairReport.deviceError`，绝不把「请求已发出」
     ///   说成「已配对」.
     /// - Parameter onLog: 逐条事实日志回调（调用方可转发到 `LoginLogger`）.
     /// - Returns: `LivePairReport`（配对 / 写入 / 读回的逐条事实）.
     /// - Throws: 无 RSD 配对文件（`noPairingFile`）、建隧道 / 连 lockdownd / 序列化失败
-    ///   （`pairTransportFailed`）、写入失败 / 写后读回缺失（`writeFailed` / `readBackMissing`）。
+    ///   （`pairTransportFailed`）、写入失败 / 写后读回缺失（`writeFailed` / `readBackMissing`）.
     ///   **设备拒绝 Pair 不抛错**，而以 `paired=false` + `deviceError` 如实返回.
     /// - Note: 可取消 —— 各阻塞步骤前检查 `Task.isCancelled`.
     static func attemptLockdownPair(
@@ -492,7 +491,7 @@ enum I4PairingService {
 
         // 载体（可选）：没装也照样做配对实验，只是无处写入.
         // ⚠️ 必须区分「枚举失败」与「真的没装」—— 两者原先被 try? 折叠成同一句
-        // 「未安装爱思移动端」，会在设备其实装了载体时给出**假结论**（v0.3.660 审计 P-6）.
+        // 「未安装爱思移动端」，会在设备其实装了载体时给出**假结论**（审计 P-6）.
         var carrierPickError: String?
         var carrier: CarrierInfo? = await {
             do {
@@ -514,11 +513,11 @@ enum I4PairingService {
 
         if Task.isCancelled { throw CancellationError() }
 
-        // ⚠️ 先把载体容器准备好，**再**去配对（v0.3.660 审计 P-3）.
+        // ⚠️ 先把载体容器准备好，**再**去配对（审计 P-3）.
         // 原实现把 ensureCarrierContainer 放在「拿到配对记录之后」：载体从未启动时，
         // 那里会 process_control 拉起载体 ⇒ 本 App 立刻退到后台，iOS 数秒内挂起进程，
-        // 而随后的 house_arrest 写入 / 读回正处在最脆弱的位置（CarrierLaunchLease 已在 :770 invalidate）。
-        // 提前到这里：拉起的副作用发生在「还没有任何成果要保」的时刻。
+        // 而随后的 house_arrest 写入 / 读回正处在最脆弱的位置（CarrierLaunchLease 已在 :770 invalidate）.
+        // 提前到这里：拉起的副作用发生在「还没有任何成果要保」的时刻.
         if let c = carrier, !c.hasContainer {
             carrier = try await ensureCarrierContainer(c)
         }
@@ -661,14 +660,14 @@ enum I4PairingService {
                 "隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
-        // 超时（v0.3.660 审计 T 项）：整条配对链是同步 FFI，进不了 Task 取消的语义，
+        // 超时（审计 T 项）：整条配对链是同步 FFI，进不了 Task 取消的语义，
         // 而 tunnel_create_rppairing / lockdownd_* 对端的超时由 FFI 决定（仓内 Rust 侧
-        // 没有可以按调用传入的 deadline）。这里能做的、且不改 FFI 签名的事是：
+        // 没有可以按调用传入的 deadline）.这里能做的、且不改 FFI 签名的事是：
         //   · 每次尝试失败前都不阻塞太久：下面 3 次重试的间隔是 0.3s / 0.6s，合计不到 1s；
         //   · 「卡住」的真正表现为整个 await 不返回 —— 由调用方（performPairOnQueue）观察
         //     的 pairQueue 是否还活着来暴露，本函数不假装能中断 FFI.
         //
-        // 实测方案（v0.3.660 审计第三轮，判定「立即失败」还是「挂住」）：
+        // 实测方案（审计第三轮，判定「立即失败」还是「挂住」）：
         //   ① 前置：真机已装本版，LocalDevVPN 未连接（设置里关掉），RSD 配对文件已生成；
         //   ② 进「设置 → 配对」点一次配对，同时用秒表 / 系统录屏计时；
         //   ③ 看结论落在哪一支：
@@ -734,16 +733,15 @@ enum I4PairingService {
         defer { tunnel.release() }
 
         // 3. 连 lockdownd（RSD 隧道即信任边界，**无 StartSession**）.
-        //    ⚠️ 这里是本文件最容易被误读的一处，写清楚为什么没有 StartSession（v0.3.660 审计 P-7）：
+        //    ⚠️ 这里是本文件最容易被误读的一处，写清楚为什么没有 StartSession（审计 P-7）：
         //    lockdownd_start_session 要求的是 `IdevicePairingFile`（内部 PairingFile），
         //    而本流程手里只有 RSD 的 `RpPairingFile`（内部 RpPairingFile，Ed25519 远程配对），
         //    二者是不同的 Rust 类型；仓内 rust/idevice-ffi 不提供任何 RP→lockdown 的转换，
-        //    硬把 RpPairingFile 句柄强转成 IdevicePairingFile 是未定义行为。
-        //    ⇒ 对 RSD 隧道，`Pair` 只能在**未授权会话**上发出。这条路径是否被设备接受，
+        //    硬把 RpPairingFile 句柄强转成 IdevicePairingFile 是未定义行为.
+        //    ⇒ 对 RSD 隧道，`Pair` 只能在**未授权会话**上发出.这条路径是否被设备接受，
         //      必须在真机上按「设备原始错误」判读（见 .refused 分支的文案），
         //      **不能**因为报了 InvalidHostID 就断言「路径 A 不通」.
         //    先连**未受信版**（`com.apple.mobile.lockdown.remote.untrusted`，配对本该走的那条），
-        //    服务表里没有它时回退**受信版**（`…remote.trusted`，上游写死的那条，旧系统兼容）；
         //    注意回退到受信版**不等于**做了 StartSession（同样是未授权会话，只是换了个服务端口）.
         //    端口一律由 FFI 从设备回的服务表按名查表取得，不在此硬编码.
         var client: OpaquePointer?
@@ -767,7 +765,7 @@ enum I4PairingService {
         }
         guard let client else {
             // 带阶段前缀：让用户能把「隧道建好了、死在连 lockdownd」与「设备真的拒了 Pair」区分开
-            // （后者走 .refused，不抛错）. v0.3.660 审计 P-8.
+            // （后者走 .refused，不抛错）. 审计 P-8.
             throw PairingError.pairTransportFailed(
                 "阶段：RSD 隧道已建立 ✓ → 连接 lockdownd 失败（未受信 / 受信两条均失败）：\(lastConnectError ?? "未知")")
         }
@@ -829,12 +827,12 @@ enum I4PairingService {
     }
 
     /// 载体 App 从未启动时 iOS 不会给它建数据容器，house_arrest 因此拿不到 Documents
-    /// （表现为误导性的「创建文件失败」）。这里先启动一次载体让 iOS 建容器，再重探容器路径.
+    /// （表现为误导性的「创建文件失败」）.这里先启动一次载体让 iOS 建容器，再重探容器路径.
     ///
     /// - 启动复用本工程既有的普通启动原语 `JITEnableService.launchApp(bundleID:)`
-    ///   （RSD 隧道 → process_control，与「拉起应用」页同一条，不启用 JIT）。
+    ///   （RSD 隧道 → process_control，与「拉起应用」页同一条，不启用 JIT）.
     /// - 启动后本应用会退到后台、数秒内被挂起，故先取后台租约，保证随后的重探跑得完.
-    /// - 容器已存在则原样返回（正常路径零副作用）。
+    /// - 容器已存在则原样返回（正常路径零副作用）.
     /// - 启动失败 / 容器仍缺时**不抛错**，原样返回，由调用方按 `carrierNotLaunched` 如实上报.
     /// - Note: 阻塞（启动 + 重探都走 RSD 隧道）；可取消.
     private static func ensureCarrierContainer(_ carrier: CarrierInfo) async throws -> CarrierInfo {
@@ -896,8 +894,8 @@ enum I4PairingService {
 }
 
 /// 启动载体 App 期间的后台存活租约：iOS 会把发起方切后台并在数秒内挂起，
-/// 没有它「重探数据容器」可能来不及跑完。与 `JITBackgroundLease` 同款收敛到主线程，
-/// 到期回调里自动续期（会话只有几秒，最多续一两次，不会触发系统惩罚）。
+/// 没有它「重探数据容器」可能来不及跑完.与 `JITBackgroundLease` 同款收敛到主线程，
+/// 到期回调里自动续期（会话只有几秒，最多续一两次，不会触发系统惩罚）.
 @MainActor
 private final class CarrierLaunchLease {
     private var taskID: UIBackgroundTaskIdentifier = .invalid

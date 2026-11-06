@@ -9,7 +9,7 @@
 //
 //  线程模型（与 RemotePairingPort.BonjourPortWorker 同款）：NetServiceBrowser schedule
 //  在主 RunLoop，delegate 回调天然主线程；NWBrowser 兜底探测跑在全局队列，
-//  结果回主线程后并入 @Published。本类 @unchecked Sendable：@Published 只在主线程写，
+//  结果回主线程后并入 @Published.本类 @unchecked Sendable：@Published 只在主线程写，
 //  NWBrowser 的 @Sendable 闭包只持弱引用回主线程消费.
 //
 
@@ -289,7 +289,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     /// 把枚举层的原始类型串拆成 NetServiceBrowser 能吃的（类型, 域）：
     /// "_apple-mobdev2._tcp.local." → ("_apple-mobdev2._tcp.", "local.")；
-    /// "_remotepairing._tcp." + domain "local" → ("_remotepairing._tcp.", "local.")。
+    /// "_remotepairing._tcp." + domain "local" → ("_remotepairing._tcp.", "local.").
     /// meta-query 回来的是 PTR 全名（类型里自带域），浏览时必须剥掉，否则 code -65563.
     static func browseComponents(rawType: String, domain: String) -> (type: String, domain: String) {
         var t = rawType.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -481,7 +481,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         guard browser !== domainBrowser else { return }
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
         // guest 声明不合并；缺类型时该浏览器报错且权限弹窗不弹（_remotepairing._tcp
-        // 宿主已声明，可用）。列表里有服务时不打扰用户；回环建连不需要本地网络权限.
+        // 宿主已声明，可用）.列表里有服务时不打扰用户；回环建连不需要本地网络权限.
         if services.isEmpty {
             lastErrorText = "浏览失败（Bonjour code \(code)）.在 LiveContainer 内多为宿主未声明该服务类型，不影响回环建连."
         }

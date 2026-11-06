@@ -1,30 +1,30 @@
 import Foundation
 import Security
 
-/// v0.3.383：在线安装（OTA）的**清单生成 + HTTPS 托管**。
+/// 在线安装（OTA）的**清单生成 + HTTPS 托管**.
 ///
-/// iOS 自 iOS 7.1 起**不收 http 清单**，manifest.plist 必须落在 HTTPS 且证书受设备信任。
+/// iOS 自 iOS 7.1 起**不收 http 清单**，manifest.plist 必须落在 HTTPS 且证书受设备信任.
 /// 本机 HTTP 服务器（局域网 IP / 回环）只用来发 IPA 本体（`software-package`），
-/// 清单必须放到公网 HTTPS。托管方式按优先级：
+/// 清单必须放到公网 HTTPS.托管方式按优先级：
 ///
 /// 1. **用户自定义的 HTTPS 地址**（更多 → 设置 → HTTPS 托管）→ 只用它，不向任何第三方发请求：
 ///    · 填**完整 URL**（已含路径）→ `PUT` 覆盖它；
-///    · 填**基址** → `POST <基址>/sign/install.plist`，响应体若是纯文本 URL 就用它，否则用请求地址本身。
+///    · 填**基址** → `POST <基址>/sign/install.plist`，响应体若是纯文本 URL 就用它，否则用请求地址本身.
 /// 2. **GitHub Token**（下载管理右上角齿轮 → GitHub Token）→ 只用 gist（**secret gist**，
 ///    `"public": false`：不被列出，但 `raw_url` 知道地址即可读、**不需要 token**，iOS 无 token 也能拉）；
-///    上传/解析失败才回落匿名候选，失败日志写明 `POST /gists` 的 **HTTP 状态码**（如 `gist 失败（HTTP 401），回落匿名`）。
+///    上传/解析失败才回落匿名候选，失败日志写明 `POST /gists` 的 **HTTP 状态码**（如 `gist 失败（HTTP 401），回落匿名`）.
 /// 3. **匿名、免账号**候选（仅在没填上面两项时），逐个上传 + **GET 回读校验**，失败静默换下一个：
-///    `litterbox.catbox.moe`（1h）→ `0x0.st` → `tmpfiles.org`（1h）→ `uguu.se`（3h）→ `paste.rs`。
-///    临时件排前（清单只活几分钟，且含 bundleId/版本，少留痕）；**单候选超时 8s**。
-///    注意： `envs.sh` 已删除：真机回读被劫持到广告域名（`ob.sd559908.js.2gnc.com`），有安全风险。
+///    `litterbox.catbox.moe`（1h）→ `0x0.st` → `tmpfiles.org`（1h）→ `uguu.se`（3h）→ `paste.rs`.
+///    临时件排前（清单只活几分钟，且含 bundleId/版本，少留痕）；**单候选超时 8s**.
+///    注意： `envs.sh` 已删除：真机回读被劫持到广告域名（`ob.sd559908.js.2gnc.com`），有安全风险.
 ///
 /// **回读校验**：内容必须一致；匿名候选另需 `Content-Type` 属 XML 家族
-/// （`application/xml` / `text/xml` / `application/x-plist` / 任意 `*+xml`）。
+/// （`application/xml` / `text/xml` / `application/x-plist` / 任意 `*+xml`）.
 /// 若所有匿名候选都不是 XML 类型，则用第一个「内容一致」的兜底并**明确记日志**
-/// （iOS 是否接受非 XML 清单**未验证**，不把这条当结论）。gist / 自有地址不套这条闸，
-/// 但会把回读到的 `Content-Type` 写进日志。
+/// （iOS 是否接受非 XML 清单**未验证**，不把这条当结论）.gist / 自有地址不套这条闸，
+/// 但会把回读到的 `Content-Type` 写进日志.
 ///
-/// **IPA 本体一字节都不上传**，这里只上传那份几百字节的 plist。
+/// **IPA 本体一字节都不上传**，这里只上传那份几百字节的 plist.
 enum ManifestPublisher {
 
     /// 清单里 `items[0]` 需要的字段
@@ -59,7 +59,7 @@ enum ManifestPublisher {
 
     // MARK: - 生成清单
 
-    /// 生成标准明文 plist（`items[].assets[]` + `items[].metadata`）。
+    /// 生成标准明文 plist（`items[].assets[]` + `items[].metadata`）.
     static func makeManifest(_ info: ManifestInfo) throws -> Data {
         var assets: [[String: Any]] = [
             ["kind": "software-package", "url": info.packageURL]
@@ -80,20 +80,20 @@ enum ManifestPublisher {
 
     // MARK: - 发布（阻塞式；调用方已在后台队列）
 
-    /// 发布清单，回调返回可直接 GET 的 HTTPS 地址。全部失败才报错。
+    /// 发布清单，回调返回可直接 GET 的 HTTPS 地址.全部失败才报错.
     ///
     /// 托管方式优先级：
     /// 1. **用户自定义的 HTTPS 地址**（设置项）→ 只用它，不向任何第三方发请求；
     /// 2. **GitHub Token（下载管理右上角设置）**→ 只用 gist，失败才回落匿名候选；
-    /// 3. 匿名候选链。
+    /// 3. 匿名候选链.
     ///
-    /// - Parameter logCategory: 本次发布所有日志写入的板块分类。**默认 `.appStore`** ——
-    ///   App Store 板块的既有调用方行为不变；共享转换等板块由调用方显式传入自己的分类。
+    /// - Parameter logCategory: 本次发布所有日志写入的板块分类.**默认 `.appStore`** ——
+    ///   App Store 板块的既有调用方行为不变；共享转换等板块由调用方显式传入自己的分类.
     static func publish(manifest: Data,
                         logCategory: LoginLogger.Category = .appStore,
                         completion: @escaping (Result<String, Error>) -> Void) {
         if let endpoint = OnlineInstallConfig.endpoint {
-            // 用户自有托管：只用它，不向任何第三方发请求。
+            // 用户自有托管：只用它，不向任何第三方发请求.
             LoginLogger.shared.log("[在线安装] 托管方式：自有 HTTPS 地址（未对外发起任何第三方请求）", category: logCategory)
             do {
                 let url = try publishToUserEndpoint(manifest: manifest, endpoint: endpoint, logCategory: logCategory)
@@ -113,7 +113,7 @@ enum ManifestPublisher {
                 completion(.success(url))
                 return
             }
-            // 失败日志必须带 HTTP 状态码：真机一次就能分清「鉴权 401/403」还是别的。
+            // 失败日志必须带 HTTP 状态码：真机一次就能分清「鉴权 401/403」还是别的.
             let codeText = gist.status.map { "HTTP \($0)" } ?? "无 HTTP 响应"
             LoginLogger.shared.log("[在线安装] gist 失败（\(codeText)），回落匿名", category: logCategory)
         } else {
@@ -129,17 +129,17 @@ enum ManifestPublisher {
 
     // MARK: - GitHub gist 托管
 
-    /// 私有 gist 托管：`POST /gists` → 取 `files["install.plist"].raw_url`。
+    /// 私有 gist 托管：`POST /gists` → 取 `files["install.plist"].raw_url`.
     ///
     /// 注意：`raw_url` 落在 `gist.githubusercontent.com`，回读的 `Content-Type` 多为
     /// `text/plain`，所以这里**以「内容一致」为准**，Content-Type **只记录、不拒绝**
-    /// （用户显式选择了 gist 这条通道）。任何上传/解析失败都返回 `url == nil`，
+    /// （用户显式选择了 gist 这条通道）.任何上传/解析失败都返回 `url == nil`，
     /// 由调用方回落匿名候选；`status` 回传本次 `POST /gists` 的 HTTP 状态码
-    /// （网络层都没连通时为 nil），供失败日志写明是鉴权问题还是别的。
+    /// （网络层都没连通时为 nil），供失败日志写明是鉴权问题还是别的.
     ///
-    /// 口径（已拍板）：`"public": false` 保持 **secret gist**。GitHub 的 gist 只有
+    /// 口径（已拍板）：`"public": false` 保持 **secret gist**.GitHub 的 gist 只有
     /// public(被列出) / secret(不被列出) 两种，**secret gist 的 `raw_url` 知道地址即可读、
-    /// 不需要 token**，所以 iOS 侧无 token 也能拉回清单。这里不改成 public。
+    /// 不需要 token**，所以 iOS 侧无 token 也能拉回清单.这里不改成 public.
     private struct GistOutcome {
         /// 成功时的 `raw_url`；失败为 nil
         var url: String?
@@ -293,9 +293,9 @@ enum ManifestPublisher {
             }
         }
 
-        // 兜底：所有候选的 Content-Type 都不是 XML 时，用第一个「内容一致」的。
+        // 兜底：所有候选的 Content-Type 都不是 XML 时，用第一个「内容一致」的.
         // 注意： **iOS 的 OTA 安装器是否接受非 XML 清单未验证** —— 这里只陈述事实：
-        //    内容校验通过、只是 Content-Type 不是 XML，比直接失败更值得一赌。
+        //    内容校验通过、只是 Content-Type 不是 XML，比直接失败更值得一赌.
         if let fallback = contentOnlyFallback {
             LoginLogger.shared.log("[在线安装] [注意] 无 XML 类型候选可用，兜底使用 \(fallback.name)"
                                    + "（Content-Type=\(fallback.contentType)，内容一致；iOS 是否接受未验证）→ \(shortURL(fallback.url))",
@@ -421,8 +421,8 @@ enum ManifestPublisher {
     /// ② `requireXML == true` 时，**`Content-Type` 必须是 XML 家族** —— 这是真机失败那次
     ///    留下的教训：只比对内容会让 `text/plain` 的候选通过，而 iOS 是把清单当 plist 解析的，
     ///    类型不对就白装（该相关性**未在真机确证**，所以只做「优先换 XML 候选」，
-    ///    全部候选都不是 XML 时见 `publishToAnonymous` 的兜底分支）。
-    ///    gist / 用户自有地址传 `false`：那是用户显式选的通道，Content-Type 只记录不拒绝。
+    ///    全部候选都不是 XML 时见 `publishToAnonymous` 的兜底分支）.
+    ///    gist / 用户自有地址传 `false`：那是用户显式选的通道，Content-Type 只记录不拒绝.
     private static func verify(url: String, expected: Data, requireXML: Bool = true) -> VerifyOutcome {
         guard let endpoint = URL(string: url) else {
             return VerifyOutcome(ok: false, contentType: "", reason: "地址无效")
@@ -458,7 +458,7 @@ enum ManifestPublisher {
 
     /// 单次 HTTP 请求的信号量等待上限（秒）—— 比 `candidateTimeout` 多留 2 秒：
     /// 正常情况下由 URLSession 自己的 `request.timeoutInterval` 先触发，这里只是**硬兜底**，
-    /// 防止完成回调因任何原因不回来时把调用线程永久挂住（照 `I4AppFixService.writeOnceWithTimeout`）。
+    /// 防止完成回调因任何原因不回来时把调用线程永久挂住（照 `I4AppFixService.writeOnceWithTimeout`）.
     private static let performTimeoutSeconds: TimeInterval = candidateTimeout + 2
 
     private static func perform(_ request: URLRequest) throws -> HTTPResult {
@@ -506,11 +506,11 @@ enum ManifestPublisher {
     }
 }
 
-/// v0.3.383：在线安装配置。
+/// 在线安装配置.
 ///
 /// · **GitHub Token**：只存 **Keychain**（`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，
-///   不做 iCloud 同步、不落 UserDefaults）；日志最多只记前 8 位。
-/// · **HTTPS 托管地址**（可选）：非机密，存 `UserDefaults`（与设置页 `@AppStorage` 同键）。
+///   不做 iCloud 同步、不落 UserDefaults）；日志最多只记前 8 位.
+/// · **HTTPS 托管地址**（可选）：非机密，存 `UserDefaults`（与设置页 `@AppStorage` 同键）.
 enum OnlineInstallConfig {
 
     static let endpointKey = "escape.onlineInstallEndpoint"
@@ -520,7 +520,7 @@ enum OnlineInstallConfig {
 
     // MARK: - 自有 HTTPS 托管地址
 
-    /// 用户自带的 HTTPS 托管地址；空/未配置时返回 `nil`。
+    /// 用户自带的 HTTPS 托管地址；空/未配置时返回 `nil`.
     static var endpoint: String? {
         guard let value = UserDefaults.standard.string(forKey: endpointKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -530,7 +530,7 @@ enum OnlineInstallConfig {
 
     // MARK: - GitHub Token（Keychain）
 
-    /// 已配置的 token；未配置返回 `nil`。
+    /// 已配置的 token；未配置返回 `nil`.
     static var githubToken: String? {
         var query = tokenQuery()
         query[kSecReturnData as String] = kCFBooleanTrue
@@ -544,7 +544,7 @@ enum OnlineInstallConfig {
         return value
     }
 
-    /// 保存 token（传 `nil`/空串 = 清除）。
+    /// 保存 token（传 `nil`/空串 = 清除）.
     static func setGitHubToken(_ raw: String?) {
         clearGitHubToken()
         let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -559,7 +559,7 @@ enum OnlineInstallConfig {
         SecItemDelete(tokenQuery() as CFDictionary)
     }
 
-    /// 日志用：**只记前 8 位**，其余一律不落日志。
+    /// 日志用：**只记前 8 位**，其余一律不落日志.
     static var tokenPrefix: String? {
         guard let token = githubToken else { return nil }
         return String(token.prefix(8))

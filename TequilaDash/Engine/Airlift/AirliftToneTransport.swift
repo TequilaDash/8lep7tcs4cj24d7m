@@ -5,7 +5,7 @@ import Foundation
 /// Airlift 传输层错误.
 ///
 /// 与 AirBeep 的 `CallRecordingToneError` **刻意解耦**：本仓 `CallRecordingToneService`
-/// 有自己的 `ToneError`，由它负责把本错误映射过去。这样传输层不依赖任何业务类型.
+/// 有自己的 `ToneError`，由它负责把本错误映射过去.这样传输层不依赖任何业务类型.
 enum AirliftTransportError: Error, LocalizedError, Sendable {
     /// 本 build 缺少 AirliftFFI 的读文件符号（补丁未生效 / 库未链接）.
     case unavailable
@@ -23,8 +23,8 @@ enum AirliftTransportError: Error, LocalizedError, Sendable {
 }
 
 /// `RTLD_DEFAULT` 是 C 宏（`((void *) -2)`），Swift 无法从 iOS SDK 导入
-/// （`dlfcn.h` 报 "structure not supported"）。其值平台稳定且有据可查，
-/// 故按需构造等价值。全局常量会被严格并发判为非 Sendable，因此改为工厂函数.
+/// （`dlfcn.h` 报 "structure not supported"）.其值平台稳定且有据可查，
+/// 故按需构造等价值.全局常量会被严格并发判为非 Sendable，因此改为工厂函数.
 private func rtlDefaultHandle() -> UnsafeMutableRawPointer? {
     UnsafeMutableRawPointer(bitPattern: -2)
 }
@@ -35,7 +35,7 @@ struct AirliftToneFile: Sendable {
     let data: Data
 }
 
-/// 串行化**阻塞式** AirLift 调用，并把文件协议细节挡在 SwiftUI 层之外。
+/// 串行化**阻塞式** AirLift 调用，并把文件协议细节挡在 SwiftUI 层之外.
 /// 沙盒逃逸仍由原生库完成；本类型只提供文件字节并跨 C 边界搬运.
 ///
 /// ## 移植说明（对齐 AirBeep 的 `AirliftToneTransport`）
@@ -48,7 +48,7 @@ struct AirliftToneFile: Sendable {
 ///
 /// ## 与 AirBeep 的一处**有意**差异（并发）
 /// AirBeep 把阻塞调用丢到 `DispatchQueue.global()`，再在 `await` 处挂起 actor ——
-/// 由于挂起期间 actor 可重入，**两次调用仍会并发跑**（actor 并未真正串行化）。
+/// 由于挂起期间 actor 可重入，**两次调用仍会并发跑**（actor 并未真正串行化）.
 /// 本仓对齐「RSD 隧道并发铁律」（同 hostname 并发建隧道会互相抢占），改用**专用串行队列**
 /// 让「串行化」名副其实；同时 `al_set_target_host` 写的是 Rust 侧进程级全局，
 /// 并发调用会互相踩，串行是正确性要求而非保守选择.
@@ -230,7 +230,7 @@ actor AirliftToneTransport {
     ///
     /// 重试**只走 `readSync` 这一个入口**，不在本函数里复制任何 FFI 调用序列：
     /// `readSync` 里的「先拷字节并 freeBytes / 先取文案并无条件 al_string_free / 再判返回码」
-    /// 这套顺序是 v0.3.673 的成果，必须原样保留. 每次尝试都是**独立一次完整调用**，
+    /// 这套顺序是 的成果，必须原样保留. 每次尝试都是**独立一次完整调用**，
     /// 它自己申请、自己释放，返回的 `Data` 是 Swift 侧拷贝 —— 上一次尝试的裸指针
     /// 在本函数里从未被持有，因此不存在「已释放的指针被第二次使用」的路径.
     ///
@@ -255,7 +255,7 @@ actor AirliftToneTransport {
                 return try readSync(path: path, pairingPath: pairingPath)
             } catch let error as AirliftTransportError {
                 // 只有 `.failed` 里判定为 AirTraffic 恢复类的才继续；`.unavailable` 是配置
-                // 问题，重试没有意义。配对缺失的真实抛出点：AirLiftExploit.swift:178 抛
+                // 问题，重试没有意义.配对缺失的真实抛出点：AirLiftExploit.swift:178 抛
                 // AirLiftError.pairingRequired（另一个枚举）.
                 guard case .failed(let rawReason) = error,
                       Self.isAirTrafficRecoveryFailure(rawReason) else {
@@ -280,7 +280,6 @@ actor AirliftToneTransport {
     /// 失败原文是否属于「设备侧 AirTraffic 没把文件搬回来」这一类.
     ///
     /// 判据取自 `Resources/Scripts/airlift-read-file.patch` 里 `exploit_read_file` 的三处
-    /// 收尾 `return Err(...)`（该补丁与上游逐字节一致，字符串不能改，故只能在这里认）：
     /// · `AirTraffic did not recover <path>; any moved copy remains in Media` —— 20 秒轮询耗尽.
     /// · `AirTraffic: ReadyForSync not observed while reading <leaf>` —— 会话没握手成功.
     /// · `AirTraffic: AssetManifest not observed while reading <leaf>` —— 清单没回.

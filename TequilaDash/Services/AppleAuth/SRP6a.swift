@@ -3,7 +3,6 @@ import Security
 
 /// Self-contained SRP-6a client implementing Apple's authentication variant.
 ///
-/// Matches the constants and formulas used by StosSign/AltStore:
 /// - Group: RFC 5054 2048-bit prime (N), generator g = 2
 /// - k = SHA256(N | g_padded)   (pad g to size of N)
 /// - x = SHA256(salt | SHA256(0x3A || PBKDF2(SHA256(password), salt, iters)))

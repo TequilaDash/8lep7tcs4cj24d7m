@@ -11,7 +11,7 @@ struct BackupResult {
     let totalBytes: Int64
     let manifestSHA256: String
     let metadata: BackupMetadata
-    /// v0.3.673: files that were listed but could not be read (locked / removed
+    /// files that were listed but could not be read (locked / removed
     /// between listing and read) and were therefore NOT written into the archive.
     ///
     /// Root cause this field exists: `walk` used to swallow
@@ -56,7 +56,7 @@ final class BackupService {
     static let backupRoots = ["Documents", "Library", "tmp"]
 
     // Safety limits live in `BackupLimits`. The previous hard-coded
-    // 5,000 files / 512 MiB gate was removed in v0.3.531: it was not a ZIP
+    // 5,000 files / 512 MiB gate was removed in : it was not a ZIP
     // limit and it silently rejected valid containers. The byte ceiling is now
     // derived from the volume's free space, and the file ceiling only guards
     // against runaway trees (ZIP64 removed the 65,535-entry format limit).
@@ -98,7 +98,7 @@ final class BackupService {
 
         var manifest: [BackupManifestEntry] = []
         var totalBytes: Int64 = 0
-        // v0.3.673: files that could not be read and were dropped from the archive.
+        // files that could not be read and were dropped from the archive.
         var skipped: [String] = []
 
         let zip = ZipWriter()
@@ -115,7 +115,7 @@ final class BackupService {
                     if isCancelled() { throw BackupError.cancelled }
                     let rootPath = (app.containerPath as NSString).appendingPathComponent(root)
                     guard files.isDirectory(at: rootPath) else {
-                        // v0.3.673: a root that exists but cannot be entered
+                        // a root that exists but cannot be entered
                         // (permission / broken symlink) is NOT the same as an
                         // absent root. Continuing silently made the archive look
                         // complete while a whole subtree was missing, so record
@@ -156,7 +156,7 @@ final class BackupService {
             throw BackupError.containerInaccessible(error.localizedDescription)
         }
 
-        // v0.3.673: manifest / metadata / finish used to sit OUTSIDE any cleanup
+        // manifest / metadata / finish used to sit OUTSIDE any cleanup
         // guard. A throw from JSONEncoder or zip.addFile (disk full, handle gone)
         // left a headerless partial zip in Documents/Backups, which the Backups
         // list scans as if it were a real archive. Everything from here on is
@@ -193,7 +193,7 @@ final class BackupService {
         }
 
         if !skipped.isEmpty {
-            // v0.3.673: make the partial nature of this archive visible instead
+            // make the partial nature of this archive visible instead
             // of reporting a clean success.
             LoginLogger.shared.log(
                 "[备份] \(app.name) 备份完成但不完整：清单 \(manifest.count) 个文件，"
@@ -257,7 +257,7 @@ final class BackupService {
                     // SHA-256 the manifest needs is computed in the same pass.
                     added = try zip.addFile(name: rel, path: entry.path, expectedSize: entry.size)
                 } catch ZipWriterError.cannotReadSource {
-                    // v0.3.673: locked or removed between listing and read.
+                    // locked or removed between listing and read.
                     // Skipping still keeps the archive structurally consistent,
                     // but it MUST be recorded: the manifest is the restore
                     // contract, so an unrecorded skip is a file the user will

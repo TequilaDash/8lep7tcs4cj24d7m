@@ -2,13 +2,13 @@
 //  GestaltModels.swift
 //  bad_query
 //
-//  从 TequilaDash/Views/GestaltView.swift 拆出（原文件 1087 行、12 个顶层声明）。
-//  拆分原因：主文件把 UI 与数据类型混在一起，按「纯模型 / 编辑器 / 小组件」三刀拆开，主文件只留 GestaltView 本体。
+//  从 TequilaDash/Views/GestaltView.swift 拆出（原文件 1087 行、12 个顶层声明）.
+//  拆分原因：主文件把 UI 与数据类型混在一起，按「纯模型 / 编辑器 / 小组件」三刀拆开，主文件只留 GestaltView 本体.
 //  本文件只装六个纯数据类型：PlistSection / PlistKey / FieldEditorRoute / AddFieldError /
-//  GestaltValueType / PlistValueInfo。内部依赖只有 PlistKey→PlistSection、
-//  FieldEditorRoute→PlistKey，六个类型全部本来就没有 private 前缀，搬出无需改修饰符。
+//  GestaltValueType / PlistValueInfo.内部依赖只有 PlistKey→PlistSection、
+//  FieldEditorRoute→PlistKey，六个类型全部本来就没有 private 前缀，搬出无需改修饰符.
 //  纯搬迁、零逻辑改动：成员逐行字节原样，未改任何函数体、注释、空行或字符串；
-//  import 与原文件一致（只有 import SwiftUI），未增删。
+//  import 与原文件一致（只有 import SwiftUI），未增删.
 //
 
 import SwiftUI

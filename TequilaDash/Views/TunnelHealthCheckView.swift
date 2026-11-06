@@ -18,7 +18,7 @@ final class TunnelHealthViewModel: ObservableObject {
     /// 探测结果快照（`Sendable`：全是值类型，可安全跨隔离域传递）.
     struct Snapshot: Sendable {
         var wifiSatisfied = false
-        /// v0.3.760：连接诊断判「蜂窝 / Wi-Fi / 无连接」（Gnoix 同职责）——
+        /// 连接诊断判「蜂窝 / Wi-Fi / 无连接」（Gnoix 同职责）——
         /// 纯蜂窝卡点排查时一眼看清当前走的是什么网.
         var networkKind = ""
         var utunAvailable = false
@@ -38,14 +38,14 @@ final class TunnelHealthViewModel: ObservableObject {
         var tunnelActive = false
         /// 是否正在建连（只读）.
         var tunnelConnecting = false
-        /// 最近一次建连失败原因（只读，v0.3.639）.
+        /// 最近一次建连失败原因（只读，）.
         ///
         /// 这是全仓唯一记录真实失败原因的地方 —— 没有它，诊断页只能显示
-        /// 「不可达 / 未建立」这类现象，用户永远拿不到「为什么」。
+        /// 「不可达 / 未建立」这类现象，用户永远拿不到「为什么」.
         var lastTunnelError: String?
-        /// 配对文件能否被 RPPairing 解析（只读，v0.3.639）.
+        /// 配对文件能否被 RPPairing 解析（只读，）.
         ///
-        /// `pairingFileExists` 只查文件存在性 —— 损坏 / 格式不对的文件也会打绿勾。
+        /// `pairingFileExists` 只查文件存在性 —— 损坏 / 格式不对的文件也会打绿勾.
         var pairingFileParsable = false
         /// 解析失败原因（`pairingFileParsable == false` 时非空）.
         var pairingFileParseError: String?
@@ -86,8 +86,7 @@ final class TunnelHealthViewModel: ObservableObject {
         var s = Snapshot()
         // 网络（NWPathMonitor 等首个回调，最多 0.5s）
         s.wifiSatisfied = CellularTunnelManager.isWiFiSatisfied(timeout: 0.5)
-        // v0.3.761：蜂窝 / Wi-Fi / VPN / 无连接判定 —— 改用 getifaddrs BSD 接口快照
-        // （Gnoix `isWiFiInterfaceActive` 同款判定源）；NWPathMonitor 的
+        // 蜂窝 / Wi-Fi / VPN / 无连接判定 —— 改用 getifaddrs BSD 接口快照
         // usesInterfaceType 在蜂窝 + utun 并存时会错判（蜂窝显示成 Wi-Fi 的根因）.
         let snap = CellularNetworkChecker.captureInterfaceSnapshot()
         if !snap.wifi && !snap.cellular && !snap.utun {
@@ -117,27 +116,26 @@ final class TunnelHealthViewModel: ObservableObject {
         // Swift 侧导入为**属性**而非方法 —— 写 `shared()` 会报
         // 「cannot call value of non-function type 'TunnelContext'」.
         s.pairingFileExists = TunnelContext.shared.hasPairingFile
-        // v0.3.639：真解析一次（纯内存，不建连）。
-        // 原实现只查 fileExistsAtPath —— 损坏文件也打绿勾，是最误导人的盲区。
+        // 真解析一次（纯内存，不建连）.
+        // 原实现只查 fileExistsAtPath —— 损坏文件也打绿勾，是最误导人的盲区.
         s.pairingFileParsable = TunnelContext.shared.isPairingFileParsable
         s.pairingFileParseError = TunnelContext.shared.pairingFileParseError
         // 接口列表
         s.interfaces = LocalDevVPN.allInterfaces()
         // 隧道句柄状态 —— **只读**，绝不在这里建连.
         //
-        // v0.3.620 修正：v0.3.619 曾在这里调 `ensureHeartbeat()`，两个后果都是回归：
+        // 修正：曾在这里调 `ensureHeartbeat()`，两个后果都是回归：
         //   1) 诊断页「正在检查…」卡死 —— 建连最多阻塞 35s（RP 预算）；
         //   2) 主界面「一直卡在刷新中」—— 建连期间 `_tunnelConnecting = YES`，
-        //      主 App 的隧道请求被 `_rejectIfConnectingWithError` 直接拒（-8）。
+        //      主 App 的隧道请求被 `_rejectIfConnectingWithError` 直接拒（-8）.
         // ⇒ 诊断只读状态；握手交给真正的业务路径.
         s.tunnelActive = TunnelContext.shared.hasActiveTunnel
         s.tunnelConnecting = TunnelContext.shared.isConnecting
-        // 只读已有 ivar，不建连（与上面两行同款）。
+        // 只读已有 ivar，不建连（与上面两行同款）.
         s.lastTunnelError = TunnelContext.shared.lastTunnelError?.localizedDescription
         return s
     }
 
-    /// 按 SideStore Health Check 语言输出的诊断行.
     var rows: [Row] {
         let s = snapshot
         var result: [Row] = []
@@ -159,8 +157,8 @@ final class TunnelHealthViewModel: ObservableObject {
             "对端来源",
             sourceText,
             (s.utunPeerCount + s.routePeerCount) > 0, optional: true))
-        // v0.3.639：把「文件在」与「能解析」分成两件事显示。
-        // 损坏 / 格式不对的文件，前者绿勾后者红叉 —— 这才是可定位的。
+        // 把「文件在」与「能解析」分成两件事显示.
+        // 损坏 / 格式不对的文件，前者绿勾后者红叉 —— 这才是可定位的.
         if s.pairingFileExists {
             if s.pairingFileParsable {
                 result.append(Row("配对文件", "已导入（可解析）", true))
@@ -180,9 +178,9 @@ final class TunnelHealthViewModel: ObservableObject {
             tunnelDetail = "未建立（回主界面刷新一次才会建）"
         }
         result.append(Row("隧道句柄", tunnelDetail, s.tunnelActive))
-        // v0.3.639：把真实失败原因显示出来。
+        // 把真实失败原因显示出来.
         // 在此之前，诊断页只能显示现象（不可达 / 未建立），用户永远拿不到「为什么」——
-        // 这是「完全连不上但说不清原因」的直接成因。
+        // 这是「完全连不上但说不清原因」的直接成因.
         if let lastError = s.lastTunnelError, !lastError.isEmpty {
             result.append(Row("最近一次失败原因", lastError, false, optional: true))
         }
@@ -191,20 +189,19 @@ final class TunnelHealthViewModel: ObservableObject {
     }
 }
 
-/// 诊断页：全宽行 + 图标判定，照 SideStore Health CheckView 结构.
 struct TunnelHealthCheckView: View {
     @StateObject private var viewModel = TunnelHealthViewModel()
 
     var body: some View {
         List {
             if !viewModel.loaded {
-                // v0.3.650：加载态**整页居中**。
+                // 加载态**整页居中**.
                 //
                 // 原实现是一个孤立 Section，转圈图标停在页面顶部、下面大片空白，
-                // 用户第一眼以为页面坏了。当时的做法是 ZStack + Color.clear 手写居中；
+                // 用户第一眼以为页面坏了.当时的做法是 ZStack + Color.clear 手写居中；
                 // 现收口到 AppLoadingRow 的 .page 档（整页居中：大圈 + 标题），
-                // Section 不带头部 / 行背景透明 / 无行内边距这三条保持不变。
-                // minHeight 320 是 v0.3.650 的产物：List 行若只按内容高度排，
+                // Section 不带头部 / 行背景透明 / 无行内边距这三条保持不变.
+                // minHeight 320 是 的产物：List 行若只按内容高度排，
                 // 转圈仍会贴在页面顶部 —— 保留同值，页面高度不变.
                 Section {
                     AppLoadingRow(title: "正在检查…", level: .page)
@@ -229,7 +226,7 @@ struct TunnelHealthCheckView: View {
 
                 Section(header: Text("候选对端")) {
                     if viewModel.snapshot.candidatePeers.isEmpty {
-                        // v0.3.679：裸 Text 空态 → 统一卡片（同上，区块自带 Section 头）。
+                        // 裸 Text 空态 → 统一卡片（同上，区块自带 Section 头）.
                         InfoActionCard(icon: "antenna.radiowaves.left.and.right.slash",
                                        title: "无候选对端",
                                        message: "既没枚举到 utun 对端，也没从路由表读到对端地址，请确认隧道已建立.")
@@ -248,8 +245,8 @@ struct TunnelHealthCheckView: View {
 
                 Section(header: Text("网络接口")) {
                     if viewModel.snapshot.interfaces.isEmpty {
-                        // v0.3.679：裸 Text 空态 → 统一卡片（本区块已有 Section 头，故直接嵌 InfoActionCard，
-                        // 不再套 AppStateSection —— 后者自带 Section，嵌进 Section 是非法的 List 结构）。
+                        // 裸 Text 空态 → 统一卡片（本区块已有 Section 头，故直接嵌 InfoActionCard，
+                        // 不再套 AppStateSection —— 后者自带 Section，嵌进 Section 是非法的 List 结构）.
                         InfoActionCard(icon: "network.slash",
                                        title: "未枚举到网络接口",
                                        message: "设备上没有可用的 utun 或 Wi-Fi 接口，通常是 VPN 描述文件未生效.")
@@ -302,7 +299,6 @@ struct TunnelHealthCheckView: View {
             if satisfied {
                 Image(systemName: "checkmark.circle.fill").foregroundColor(AppTheme.success).font(.title3)
             } else if row.optional {
-                // 可选项失败不阻塞主流程：橙色减号，与 SideStore 的呈现一致.
                 Image(systemName: "minus.circle.fill").foregroundColor(AppTheme.pending).font(.title3)
             } else {
                 Image(systemName: "xmark.circle.fill").foregroundColor(AppTheme.danger).font(.title3)

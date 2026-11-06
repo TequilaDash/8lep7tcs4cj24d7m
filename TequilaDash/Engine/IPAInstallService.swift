@@ -43,7 +43,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     private let authQueue = DispatchQueue(label: "com.tequila.dash.auth")
 
     /// 设备注册专用串行队列：register FFI 可能等回环门（真机 UDID 走 lockdown/隧道），
-    /// 绝不能占用 authQueue——v0.3.765 教训：恢复路径内联预注册把 authQueue 卡死后，
+    /// 绝不能占用 authQueue——教训：恢复路径内联预注册把 authQueue 卡死后，
     /// 「正在恢复签名会话」永不消失，切户/重登全部排队.
     private let registerQueue = DispatchQueue(label: "com.tequila.dash.devreg")
 
@@ -126,7 +126,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     ///
     /// 此方法只在 Swift 侧已有 identifier+adiPb 时写入（不主动联网 provision）；
     /// 无值则不写 —— 签名适配器对缺失身份 fail-closed，绝不允许 Rust 自己
-    /// provision 出第二台机器（v0.3.750 统一账户体系）.
+    /// provision 出第二台机器（统一账户体系）.
     func syncSharedAnisetteStateIfAvailable() {
         let provider = AnisetteProvider.shared
         let target = URL(fileURLWithPath: storageDir).appendingPathComponent("anisette_state")
@@ -162,10 +162,10 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     /// 签名/设备注册用的 UDID.
     ///
-    /// v0.3.752（8220 根因修复）：RemotePairing 配对记录的 `identifier` 在 iOS 17+
+    /// RemotePairing 配对记录的 `identifier` 在 iOS 17+
     /// 是 UUID 形**配对标识**，不是开发者门户认识的设备号 —— 用它注册设备
     /// Apple 会收下，但生成描述文件时按无效设备过滤 ⇒ 团队恒「无设备」⇒
-    /// `Developer error 8220`。真 UDID（`00008101-…` 形）从 lockdown
+    /// `Developer error 8220`.真 UDID（`00008101-…` 形）从 lockdown
     /// `UniqueDeviceID` 读取（设备不变则值不变，取到后缓存），取不到才回退
     /// 配对标识（保底老行为，至少设备列表可列）.
     private var deviceUDID: String? {
@@ -288,8 +288,8 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             LoginLogger.shared.log("[完成] IPA 侧载会话恢复成功: \(teamSummary ?? "（无团队摘要）")")
             // v0.2.119：核对 Rust 是否真的复用了 Swift 共享的机器标识.
             verifySharedAnisetteState()
-            // v0.3.749（SideStore 做法）：token 恢复会话同样预注册——签名时不再首撞 8220.
-            // v0.3.765 改异步：预注册要读设备 UDID（lockdown 走隧道，隧道未就绪时还会
+            // token 恢复会话同样预注册——签名时不再首撞 8220.
+            // 改异步：预注册要读设备 UDID（lockdown 走隧道，隧道未就绪时还会
             // 拉起回环门等用户操作），绝不能内联在恢复路径里阻塞 authQueue.
             schedulePreRegisterBestEffort()
         } else {
@@ -300,7 +300,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - 设备预注册（v0.3.749，SideStore 做法：登录/切户即注册，消 8220 传播空窗）
+    // MARK: - 设备预注册（SideStore 做法：登录/切户即注册，消 8220 传播空窗）
 
     /// 阻塞的 FFI 注册（只能在 authQueue 内调用）：成功返回本机 UDID.
     private func performRegisterDevice() throws -> String {
@@ -321,7 +321,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         return udid
     }
 
-    /// 登录/恢复成功收尾的尽力预注册（异步，v0.3.765）：隧道未就绪直接跳过——签名路径里
+    /// 登录/恢复成功收尾的尽力预注册（异步，）：隧道未就绪直接跳过——签名路径里
     /// sign_ipa 仍会 ensure 兜底，也可以在「更多 → Apple ID 账户 → 当前账户」右滑手动重试.
     /// 注册一律走独立的 registerQueue，绝不占用 authQueue.
     private func schedulePreRegisterBestEffort() {
@@ -343,7 +343,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 「Apple ID 账户」页右滑「注册设备」的手动入口：排队到 authQueue（与登录/签名串行，
     /// 不并发碰会话），成功返回 UDID 供弹窗展示；失败抛 Apple 原文.
     func registerCurrentDevice() async throws -> String {
-        // v0.3.765：注册改走 registerQueue——手动注册允许等回环门（弹卡关蜂窝），
+        // 注册改走 registerQueue——手动注册允许等回环门（弹卡关蜂窝），
         // 但绝不能占着 authQueue 等，否则等待期间的登录/恢复全部被卡死.
         try await Task.detached(priority: .userInitiated) {
             try self.registerQueue.sync {
@@ -363,7 +363,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
               let token = account.swiftAuthToken, !token.isEmpty else { return }
         let email = account.email
         isWarmingUp = true
-        // v0.3.767：按用户裁定删除 60s 看门狗——恢复完成即翻转 isWarmingUp（事件驱动、零延迟、
+        // 按用户裁定删除 60s 看门狗——恢复完成即翻转 isWarmingUp（事件驱动、零延迟、
         // 无超时机制）；765 已把预注册移出恢复路径，链路上不再有会挂死的环节.
         Task { [weak self] in
             guard let self else { return }
@@ -389,11 +389,11 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 签名 IPA，返回签名后的 .app 包路径.
     func signIPA(ipaPath: String) throws -> String {
         guard let session else { throw makeError("尚未登录 Apple ID") }
-        // v0.3.662（task-8 发现7）：**配对文件缺 UDID 时直接报错，不再静默传空串**.
+        // **配对文件缺 UDID 时直接报错，不再静默传空串**.
         //
         // 旧写法 `deviceUDID ?? ""` 把一个本地可判定的前置条件失败降级成「参数为空」，
         // 交给 Rust 侧 sign_app 处理 —— 它拿到空 udid 会**跳过设备注册**，然后在签名/校验
-        // 阶段以 Apple 的 8220（no devices 相关）报错。用户看到的是一个无法理解的
+        // 阶段以 Apple 的 8220（no devices 相关）报错.用户看到的是一个无法理解的
         // 服务端码，而不是「你的配对文件里没有 UDID」.
         //
         // createTunnel 已经有「配对文件不存在」的检查，但那是另一条路径；signIPA 自己也要拦.
@@ -429,17 +429,17 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 通过 AFC 上传签名后的 .app 到 /PublicStaging 并用 installation_proxy 安装.
     /// `progress` 在主线程回调（0~1）.
     func install(signedAppPath: String, progress: ((Double) -> Void)? = nil) throws {
-        // v0.3.662（task-8 发现6）：**安装前先校验内嵌描述文件与 App 是否匹配**.
+        // **安装前先校验内嵌描述文件与 App 是否匹配**.
         //
         // 旧实现在这里只有一句注释说"没有 PackageType 会报 0xe8008015"，但对
         // `.app/embedded.mobileprovision` 的 entitlements 与 `.app` 的 bundleId
-        // **零校验**。描述文件与 App 不匹配（换了签名证书 / 描述文件过期 / AppID 对不上）时，
+        // **零校验**.描述文件与 App 不匹配（换了签名证书 / 描述文件过期 / AppID 对不上）时，
         // 错误要等到 installd 的 VerifyingApplication 阶段才以 0xe8008015 冒出来，
         // 用户完全不知道是描述文件的问题，只会反复重试.
         //
         // 仓库里早就有解析能力：`ProvisioningProfileStore.parseProfile(_:)`（:302）能把
         // CMS 签名的 .mobileprovision 取成 plist，`ProfileInfo` 带 appId 与 entitlements
-        // （:18/:20），之前一直没接进安装链。这里做**只读校验**，不改包内容：
+        // （:18/:20），之前一直没接进安装链.这里做**只读校验**，不改包内容：
         //   · 描述文件缺失 → 提示（不阻断：某些已签名包把描述文件放在别处，
         //     Developer 类型也可能靠 installd 自己找）
         //   · 描述文件存在但 application-identifier 与 bundleId 不匹配 → **阻断并说清原因**
@@ -460,15 +460,15 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
         let name = (signedAppPath as NSString).lastPathComponent
         let remoteRoot = "/PublicStaging/\(name)"
-        // v0.3.662（task-8 发现2）：**上传前先清同名残留**.
+        // **上传前先清同名残留**.
         //
         // 本文件 installSignedIPA(:626) / installWithSINF(:698) / upgradeSignedIPA(:780) 三处
-        // 都做了「remove 再 copy」，唯独这条（签名后 .app 目录上传）没做。后果不是幂等性差而已：
+        // 都做了「remove 再 copy」，唯独这条（签名后 .app 目录上传）没做.后果不是幂等性差而已：
         // `uploadDirectory` 是**按文件逐个覆盖写**的，旧残留目录里若存在新包**没有**的文件
         // （上一次签名产物多出来的资源、旧的 _CodeSignature 条目），它们会被原样保留，
         // installd 校验时就可能报签名不匹配 —— 用一个「看起来完全一样」的新包装出旧错误.
         _ = remoteRoot.withCString { afc_remove_path_and_contents(afc, $0) }
-        // v0.3.662（task-8 发现1）：上传段也回报进度，并按 75/25 加权.
+        // 上传段也回报进度，并按 75/25 加权.
         //
         // 旧代码把上传当成完全静默的一段：`uploadDirectory` 根本不接受 progress，
         // 界面在动辄几百 MB 的上传期一直停在 0%，然后安装段一开始就跳到 75%+ ——
@@ -508,7 +508,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                 IPAInstallService.shared.installProgressHandler?(progress)
             }
         }
-        // v0.3.662（task-8 发现1）：**安装段也要加权**.
+        // **安装段也要加权**.
         // 旧写法 `installProgressHandler = progress` 把调用方闭包直接塞进槽位，
         // installd 第一次回报 1% 时进度条就显示 1%，而不是 75% + 25%×1% —— 与同文件
         // installSignedIPA(:646-648) / installWithSINF(:724-726) 的口径不一致，
@@ -589,12 +589,12 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             }
         }
 
-        // v0.3.662（task-8 发现9）：**装完（无论成败）都把上传物从设备上删掉**.
+        // **装完（无论成败）都把上传物从设备上删掉**.
         //
         // 旧实现把 .ipcc 传到 `/PublicStaging/` 之后再不清理，成功失败都不删 —— 每次
-        // 更新运营商包都在设备上留一份。同一个目录里其他安装入口（installSignedIPA /
+        // 更新运营商包都在设备上留一份.同一个目录里其他安装入口（installSignedIPA /
         // installWithSINF / upgradeSignedIPA）也都只清「下一次的同名残留」，靠下次同名
-        // 覆盖来回收，文件名一变（带版本号的 .ipcc 很常见）就永久留下。
+        // 覆盖来回收，文件名一变（带版本号的 .ipcc 很常见）就永久留下.
         //
         // 用 defer 而不是在成功路径删：失败时同样要清，否则失败重试几次会攒出多份.
         // 删除必须发生在 installd 读完包之后，所以放在 install 调用结束（defer 在本函数
@@ -673,7 +673,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// **安装 App Store 加密包（携带 `ApplicationSINF`）**（v0.3.300）.
+    /// **安装 App Store 加密包（携带 `ApplicationSINF`）**.
     ///
     /// 与 NB Signer / libimobiledevice `ideviceinstaller` 完全同一机制：
     /// ```
@@ -683,10 +683,10 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     ///     iTunesMetadata:  <Payload/X.app/iTunesMetadata.plist 字节>
     /// }
     /// ```
-    /// installd 拿到 sinf 后向 Apple 请求**本设备**的解密密钥，解密 `__TEXT` 密文段后安装。
+    /// installd 拿到 sinf 后向 Apple 请求**本设备**的解密密钥，解密 `__TEXT` 密文段后安装.
     ///
-    /// 因此 sinf 必须是**为当前设备生成**的（即用本机 Apple ID 下载得到的包）。
-    /// 用别的设备下载的包会在这里报 `ApplicationSINFCaptureFailed` / 验证失败。
+    /// 因此 sinf 必须是**为当前设备生成**的（即用本机 Apple ID 下载得到的包）.
+    /// 用别的设备下载的包会在这里报 `ApplicationSINFCaptureFailed` / 验证失败.
     func installWithSINF(_ localPath: String,
                          sinf: Data,
                          iTunesMetadata: Data? = nil,
@@ -751,10 +751,10 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
         }
         if let result {
             // 覆盖安装失败时必须说清后果：installd 的 Install 对同 bundleId 的已装应用天然覆盖
-            // （AppStoreLocalInstallService.swift:7-8 的注释自己承认这一点）。覆盖过程中途失败时，
+            // （AppStoreLocalInstallService.swift:7-8 的注释自己承认这一点）.覆盖过程中途失败时，
             // installd 可能已经移除了旧版本而新版本未通过校验 —— 用户原有的 App 就此丢失，
-            // 而本链路既没有备份也没有回滚能力（四个安装入口都没有）。
-            // 不能假装「装失败了，原来的还在」，所以这里把风险明确写进错误文案。
+            // 而本链路既没有备份也没有回滚能力（四个安装入口都没有）.
+            // 不能假装「装失败了，原来的还在」，所以这里把风险明确写进错误文案.
             let base = error(from: result, fallback: "加密包安装失败（sinf 可能与本设备不匹配）")
             throw makeError("\(base.localizedDescription) 若该应用此前已安装，系统可能已移除旧版本且无法自动恢复，请重新安装原版本.")
         }
@@ -828,25 +828,25 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     private var installProgressHandler: ((Double) -> Void)?
 
-    /// v0.3.388：**整条安装链路**的进度权重 —— AFC 上传占前 75%，installd 安装占后 25%。
+    /// **整条安装链路**的进度权重 —— AFC 上传占前 75%，installd 安装占后 25%.
     ///
     /// 为什么可以这样拼：两段各自都是**真实测量值**
-    /// · 上传段 = 已写进 AFC 的字节 / 文件总字节（`uploadFile` 逐块统计，v0.3.388 起才有）；
-    /// · 安装段 = installd 自己回报的 0~100。
+    /// · 上传段 = 已写进 AFC 的字节 / 文件总字节（`uploadFile` 逐块统计，起才有）；
+    /// · 安装段 = installd 自己回报的 0~100.
     ///
     /// 注意： 但这个 75/25 的**权重本身是声明式的估计**（与下载中心既有的「下载 75% / 安装 25%」
-    /// 同一口径），不是系统给的「整体百分比」—— 别把它当测量结果。
-    /// 在它之前，上传段**完全没有回调**，界面只能干等，所以叠了个分母让它动起来。
+    /// 同一口径），不是系统给的「整体百分比」—— 别把它当测量结果.
+    /// 在它之前，上传段**完全没有回调**，界面只能干等，所以叠了个分母让它动起来.
     private static let uploadWeight = 0.75
 
     /// 递归上传目录（映射读，避免大二进制撑爆内存）.
-    /// v0.3.662（task-8 发现6）：安装前校验 `.app/embedded.mobileprovision` 与 App 的 bundleId 是否匹配.
+    /// 安装前校验 `.app/embedded.mobileprovision` 与 App 的 bundleId 是否匹配.
     ///
-    /// 只读，不改包。返回规则：
+    /// 只读，不改包.返回规则：
     /// - 没有 Info.plist / 读不到 bundleId → 无法判断，放行（交给 installd 报真实错误）；
     /// - 没有 embedded.mobileprovision → 放行（部分已签名包不带，installd 另有路径）；
     /// - 有描述文件但解析不出 plist → 放行（解析失败不等于不匹配，不能误杀）；
-    /// - 有描述文件且 application-identifier 与 bundleId 明显不匹配 → **抛出**，并说明原因。
+    /// - 有描述文件且 application-identifier 与 bundleId 明显不匹配 → **抛出**，并说明原因.
     ///
     /// 为什么"明显不匹配"要谨慎判定：`application-identifier` 形如
     /// `TEAMID.com.example.app`，先去掉第一个点前的 TeamID，再与 bundleId 比后缀，
@@ -907,9 +907,9 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
 
     private func uploadDirectory(_ afc: OpaquePointer, localDir: String, remoteDir: String,
                                  onFileUploaded: ((String) -> Void)? = nil) throws {
-        // v0.3.662（task-8 发现2）：**afc_make_directory 的返回值不能再丢**.
+        // **afc_make_directory 的返回值不能再丢**.
         //
-        // 旧写法 `_ = ...` 把 FFI 错误吞掉。目录没建成时返回值非 nil，随后
+        // 旧写法 `_ = ...` 把 FFI 错误吞掉.目录没建成时返回值非 nil，随后
         // `uploadFile` 以 `AfcWrOnly` 打开 `remoteDir/xxx` 会报「打开 … 失败」——
         // 用户看到的是一条与真实原因（AFC 建目录失败）无关的错误，而且失败点在
         // 目录树深处，日志里也看不出是哪一层没建成.
@@ -937,14 +937,14 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
                                     onFileUploaded: onFileUploaded)
             } else {
                 try uploadFile(afc, localPath: localPath, remotePath: remotePath)
-                // v0.3.662：一个文件真正传完才报一次，避免「报进度比实际传得快」.
+                // 一个文件真正传完才报一次，避免「报进度比实际传得快」.
                 onFileUploaded?(localPath)
             }
         }
     }
 
-    /// v0.3.388：`progress` 逐块回报**上传进度**（已写字节 / 文件总字节，0~1）。
-    /// 在此之前上传段没有任何进度回调，界面只能停在 0% 干等。
+    /// `progress` 逐块回报**上传进度**（已写字节 / 文件总字节，0~1）.
+    /// 在此之前上传段没有任何进度回调，界面只能停在 0% 干等.
     private func uploadFile(_ afc: OpaquePointer, localPath: String, remotePath: String,
                             progress: ((Double) -> Void)? = nil) throws {
         let data = try Data(contentsOf: URL(fileURLWithPath: localPath), options: .mappedIfSafe)
@@ -989,7 +989,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// Rust 侧 `tunnel_create_rppairing` 的首个 `TcpStream::connect` **没有超时**
     /// （`rust/idevice-ffi/src/tunnel_provider.rs:873`）：LocalDevVPN 不通时目标地址是黑洞，
     /// `connect` 只能等操作系统的 TCP 建连超时（真机实测约 4m45s，`os error 60`），
-    /// 期间安装链全程无进展，用户看到的就是「永远转圈」。这里先用**带超时**的 socket
+    /// 期间安装链全程无进展，用户看到的就是「永远转圈」.这里先用**带超时**的 socket
     /// `connect` 预检一次，不通就快速失败，不把调用线程挂在那儿
     /// （与 `LocalDevVPN.isTunnelReachable` 同款：`SO_SNDTIMEO`/`SO_RCVTIMEO` + `connect`）.
     /// 0.5 秒：局域网内端口真开着的 connect 50ms 内必回；0.5s 已是 10 倍裕量.
@@ -1000,20 +1000,20 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
     /// 与 `LocalDevVPN.isTunnelReachable` 同款实现，地址取本函数已构造好的 `sockaddr_in`.
     /// 隧道端口可达性预检.
     ///
-    /// ⚠️ v0.3.635：**必须用非阻塞 connect + poll + SO_ERROR**，不能用 SO_SNDTIMEO。
+    /// ⚠️ ：**必须用非阻塞 connect + poll + SO_ERROR**，不能用 SO_SNDTIMEO.
     ///
     /// 原实现设了 `SO_SNDTIMEO` / `SO_RCVTIMEO` 就以为「3 秒超时」，但 Darwin 上
-    /// 这两个选项**只约束 send/recv，不约束 connect**。而这个 socket 是阻塞的，
+    /// 这两个选项**只约束 send/recv，不约束 connect**.而这个 socket 是阻塞的，
     /// 于是目标不可达时会一直等到内核 TCP 建连超时 ——
-    /// IPAInstallService.swift:891-896 的注释自己记着实测 **约 4m45s**（os error 60）。
+    /// IPAInstallService.swift:891-896 的注释自己记着实测 **约 4m45s**（os error 60）.
     ///
     /// 而本函数是建连的**硬闸门**（见下方 `guard probeTunnelReachable`）：
-    /// 返回 false 就直接 throw、连重试机会都没有。
-    /// 所以「预检卡 4 分钟 + 最终抛不可达」= 用户看到的「完全没法连接隧道」。
+    /// 返回 false 就直接 throw、连重试机会都没有.
+    /// 所以「预检卡 4 分钟 + 最终抛不可达」= 用户看到的「完全没法连接隧道」.
     ///
     /// 同一份仓库里 `LocalDevVPN.isReachable` 早就写对了（非阻塞 + poll + SO_ERROR），
-    /// 且它的注释（LocalDevVPN.swift:89-91）明确写了「SO_SNDTIMEO 不约束 connect」。
-    /// 这里直接复用它，不再维护第二份实现。
+    /// 且它的注释（LocalDevVPN.swift:89-91）明确写了「SO_SNDTIMEO 不约束 connect」.
+    /// 这里直接复用它，不再维护第二份实现.
     private func probeTunnelReachable(_ addr: inout sockaddr_in) -> Bool {
         var ipBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         let ip = withUnsafePointer(to: &addr.sin_addr) { sinAddr in
@@ -1054,7 +1054,7 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
-        // v0.3.727 可达性判定全部实时（硬规则 29：禁止任何人为等待窗口）：
+        // 可达性判定全部实时（硬规则 29：禁止任何人为等待窗口）：
         //  - 后台状态机（TunnelReadiness）持续把探测结论写进缓存，缓存说通 → 零等待放行；
         //  - 缓存未就绪（冷启动/状态翻转中）→ 就地做一次带超时探测，结论即真实：
         //    通了立刻放行，不通立刻失败 —— 绝不「等 X 秒再看」；

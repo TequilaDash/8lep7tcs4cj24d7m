@@ -2,28 +2,25 @@
 //  CellularDataToggleService.swift
 //  TequilaDash
 //
-//  v0.3.755：照 Gnoix 1.2.15 的蜂窝开关链路逆向/反编译后重写移植.
-//  v0.3.757：真机取证（盘上 tunnellog 15:51:39）—— 初始化链路全绿，但 setter 一调用
+//  照 Gnoix 1.2.15 的蜂窝开关链路逆向/反编译后重写移植.
+//  真机取证（盘上 tunnellog 15:51:39）—— 初始化链路全绿，但 setter 一调用
 //  即被系统拒绝（关/开均 CTError 2）⇒ 新增三件事：
 //    1. 调用变体探测：首个 CTError 时一次性试遍「整型参数 / 主线程调用」，首个返回 0 的
 //       变体本会话缓存胜出（排查调用方式/参数类型是否是变量；若属系统权限拒绝，全部变体
-//       同样被拒，日志按「普通自签沙盒缺少 CommCenter 特权凭证」如实留痕，Gnoix 同款）.
 //    2. 极性别名：个别系统版本 setter 的布尔语义可能与预期相反，manager 以真实断网/恢复
 //       联网实测校准后翻转并持久化（TequilaDash.CellularTogglePolarityInverted）.
 //    3. 写入权限状态 @Published：支持页「私有开关 API」行下如实展示（受理/拒绝/不可用）.
 //
-//  Gnoix 未公开源码，本文件依据对其二进制的反汇编结论实现：
 //  · dlopen("/System/Library/Frameworks/CoreTelephony.framework/CoreTelephony")
 //  · dlsym("_CTServerConnectionCreate") → 建一个 CTServerConnection
 //  · dlsym("_CTServerConnectionSetCellularDataIsEnabled") → 程序化开关蜂窝{{TERM_fsvsvmiy}}
 //  任一步失败 ⇒ `isPrivateAPIAvailable == false`，调用方（CellularTunnelManager）
-//  自动回落快捷指令路径（v0.3.650 起的引导自建快捷指令链路原样保留，作为降级面）.
+//  自动回落快捷指令路径（的引导自建快捷指令链路原样保留，作为降级面）.
 //
 
 import Foundation
 import Darwin
 
-/// 程序化开关蜂窝{{TERM_fsvsvmiy}}（私有 CoreTelephony C API，Gnoix 同款职责）.
 final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
     static let shared = CellularDataToggleService()
 
@@ -87,7 +84,7 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
     private typealias SetCellularFnInt = @convention(c) (OpaquePointer?, Int32) -> Int32
 
     private init() {
-        // v0.3.756：全链分步日志进 CellularLogStore（镜像 LoginLogger）——
+        // 全链分步日志进 CellularLogStore（镜像 LoginLogger）——
         // 「为什么没走私有 API」在日志面板里一眼可见.
         CellularLogStore.shared.log("蜂窝开关服务初始化：探测私有 CoreTelephony API…")
         let setup = Self.setupPrivateCoreTelephony()
@@ -107,7 +104,6 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - 私有 API 探测（Gnoix setupPrivateCoreTelephony 同职责）
 
     private static func setupPrivateCoreTelephony()
         -> (connection: OpaquePointer?, setterBool: SetCellularFn?, setterInt: SetCellularFnInt?) {
@@ -129,7 +125,6 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
         log.log("私有 API·两个私有符号齐全")
         let create = unsafeBitCast(createSym, to: CreateFn.self)
 
-        // Gnoix 传的是 kCFAllocatorSystemDefault（GOT 槽解引用）；公开片段常见传 NULL.
         // 两种都试，先系统分配器后 NULL.
         let allocator = Unmanaged.passUnretained(kCFAllocatorSystemDefault).toOpaque()
         var connection = create(allocator, nil, nil)
@@ -169,7 +164,7 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
 
     /// 程序化设置蜂窝{{TERM_fsvsvmiy}}开关. `true` = 开，`false` = 关.
     /// C 调用内部可能阻塞（走 XPC），放到全局队列执行，不卡 MainActor.
-    /// 返回 0 ≠ 蜂窝真的变了 —— 真实效果由 manager 以断网/恢复联网实测判定（v0.3.757）.
+    /// 返回 0 ≠ 蜂窝真的变了 —— 真实效果由 manager 以断网/恢复联网实测判定.
     func setCellularEnabled(_ enabled: Bool) async throws {
         guard let connection = ctConnection, let setter = setCellularFunc else {
             throw ToggleError.privateAPIUnavailable
@@ -196,7 +191,7 @@ final class CellularDataToggleService: ObservableObject, @unchecked Sendable {
         CellularLogStore.shared.log("私有 API·已\(enabled ? "打开" : "关闭")蜂窝{{TERM_fsvsvmiy}}")
     }
 
-    /// 走当前胜出变体（未探测前 = 标准路径，保持 v0.3.755 行为）.
+    /// 走当前胜出变体（未探测前 = 标准路径，保持 行为）.
     private func invokeBest(
         _ enabled: Bool, connection: OpaquePointer?, setter: SetCellularFn?
     ) async throws -> Int32 {

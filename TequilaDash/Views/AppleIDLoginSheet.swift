@@ -113,9 +113,9 @@ struct AppleIDLoginSheet: View {
                 }
             }
             .sheet(isPresented: $showLog) {
-                // 这里是**登录**面板里的「诊断日志」→ 只显示 AppleID 登录/认证引擎那一类。
+                // 这里是**登录**面板里的「诊断日志」→ 只显示 AppleID 登录/认证引擎那一类.
                 // 此前传 `[.appStore]`，而 `.appStore` 被商店业务与登录引擎共用，
-                // 于是商店的商品页/下载日志也会混进来（用户实测指正）。
+                // 于是商店的商品页/下载日志也会混进来（用户实测指正）.
                 LoginLogView(categories: [.appleID])
             }
             .documentPicker(isPresented: $showImporter, allowedTypes: [.json]) { urls in
@@ -201,8 +201,8 @@ struct AppleIDLoginSheet: View {
                 dismiss()
             }
         } catch {
-            // v0.3.613：弹窗与日志都用结构化描述（类型 / Domain / Code / 描述 / 底层），
-            // 用户截图即含全部判据，不必再问「报的什么错」。
+            // 弹窗与日志都用结构化描述（类型 / Domain / Code / 描述 / 底层），
+            // 用户截图即含全部判据，不必再问「报的什么错」.
             let message = ErrorDetail.describe(error)
             LoginLogger.shared.log("[失败] 登录失败: \(message.replacingOccurrences(of: "\n", with: " | "))")
             await MainActor.run {
@@ -250,22 +250,22 @@ final class AppleLoginController: ObservableObject {
 /// 登录诊断日志（查看 / 复制 / 分享 / 清空）.
 ///
 /// 排版走共享的 `LogConsoleView`（逐行 `Text` + 行间 `Divider` + 自动滚底 + 复制带元信息头）——
-/// 此前是**一整块 `Text`**，长日志糊成一坨。
+/// 此前是**一整块 `Text`**，长日志糊成一坨.
 struct LoginLogView: View {
-    /// 只显示这些分类的日志（板块隔离）。
+    /// 只显示这些分类的日志（板块隔离）.
     ///
-    /// `nil` = 全量（不按分类过滤）——**只保留给将来的「导出全部日志」**。
+    /// `nil` = 全量（不按分类过滤）——**只保留给将来的「导出全部日志」**.
     /// 注意： **任何 UI 入口都不许再传 nil**：`RootView` 曾经用无参 `LoginLogView()` 进来，
-    /// `nil` 会走不过滤的全量读取，于是商店 / 证书 / 侧载各板块的日志全串到这一页（用户实测指正）。
+    /// `nil` 会走不过滤的全量读取，于是商店 / 证书 / 侧载各板块的日志全串到这一页（用户实测指正）.
     var categories: [LoginLogger.Category]? = nil
 
-    /// 导航标题（同时作为复制 / 分享文本的抬头）。默认沿用「登录诊断日志」；
-    /// 复用方（如软件源页）传自己的板块名（「软件源日志」），避免页头张冠李戴。
+    /// 导航标题（同时作为复制 / 分享文本的抬头）.默认沿用「登录诊断日志」；
+    /// 复用方（如软件源页）传自己的板块名（「软件源日志」），避免页头张冠李戴.
     var title: String = "登录诊断日志"
 
-    /// 「清除」要清哪些分类。`nil`（默认）= 沿用旧行为，**全局清空**（`clear()`）。
+    /// 「清除」要清哪些分类.`nil`（默认）= 沿用旧行为，**全局清空**（`clear()`）.
     /// 非 `nil` = 只清这些分类（`clear(categories:)`）—— 供复用方做到「清空只清本板块」，
-    /// 不穿透 AppStore / AppleID 等其它板块的历史日志（与「不混在一起」的初衷一致）。
+    /// 不穿透 AppStore / AppleID 等其它板块的历史日志（与「不混在一起」的初衷一致）.
     var clearCategories: Set<LoginLogger.Category>? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -273,13 +273,13 @@ struct LoginLogView: View {
 
     var body: some View {
         // 本页由 `.sheet` 弹出，**必须自带导航容器** —— 否则 `LogConsoleView` 的
-        // `navigationTitle` 与工具栏（清除/复制/分享/完成）没有导航栏可挂，整条工具栏都不会出现。
+        // `navigationTitle` 与工具栏（清除/复制/分享/完成）没有导航栏可挂，整条工具栏都不会出现.
         NavigationStack {
             LogConsoleView(
                 lines: lines,
                 title: title,
                 onClear: {
-                    // 传了 clearCategories ⇒ 只清本板块；未传 ⇒ 沿用旧行为（全局清空）。
+                    // 传了 clearCategories ⇒ 只清本板块；未传 ⇒ 沿用旧行为（全局清空）.
                     if let clearCategories {
                         LoginLogger.shared.clear(categories: clearCategories)
                     } else {
@@ -303,11 +303,11 @@ struct LoginLogView: View {
         }
     }
 
-    /// 取日志行。
+    /// 取日志行.
     /// - `categories != nil` → 只取该板块（`recentLines(_:categories:)`，逐行数组）；
     /// - `categories == nil` → 全量内存行（`recentLines(_:)`）—— 注意**不读日志文件**，
     ///   所以这里和旧的 `logText(categories: nil)`（走 `fullLog()` 会读文件）语义不同，
-    ///   但 `nil` 现在没有 UI 入口，只影响将来的导出功能。
+    ///   但 `nil` 现在没有 UI 入口，只影响将来的导出功能.
     private func refresh() {
         let fresh: [String]
         if let categories {

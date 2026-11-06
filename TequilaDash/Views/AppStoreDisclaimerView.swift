@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// v0.3.297：AppStore 商店 —— 首次使用声明
+/// AppStore 商店 —— 首次使用声明
 ///
 /// 本模块仅用于技术学习、研究与自用测试：分析第三方客户端的公开通信机制，
-/// 实现同构的系统级分发通道（itms-services）与分发包解析。不提供任何分发内容，
-/// 也不内置任何第三方分发地址；使用者需自行承担相应责任。
+/// 实现同构的系统级分发通道（itms-services）与分发包解析.不提供任何分发内容，
+/// 也不内置任何第三方分发地址；使用者需自行承担相应责任.
 enum AppStoreDisclaimer {
     private static let key = "AppStoreDisclaimerAccepted_v1"
 

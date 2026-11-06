@@ -138,14 +138,14 @@ struct AppDetailView: View {
                 if appBackups.isLoading && appBackups.records.isEmpty && appBackups.errorMessage == nil {
                     AppLoadingRow(title: "正在加载备份…")
                 } else if let error = appBackups.errorMessage {
-                    // 列举失败**明确报错**，不落成空数组（回空 = 假空，用户会以为备份丢了）。
-                    // v0.3.682：硬规则 1（不用红色八角叉）—— 错误行统一到 AppErrorRow，
+                    // 列举失败**明确报错**，不落成空数组（回空 = 假空，用户会以为备份丢了）.
+                    // 硬规则 1（不用红色八角叉）—— 错误行统一到 AppErrorRow，
                     // 取 pending 橙而非 danger 红（读不出来通常是隧道/配对这类可恢复问题）.
                     AppErrorRow(message: "无法读取备份列表：\(error)")
                 } else if appBackups.records.isEmpty {
-                    // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
+                    // 空态改用统一组件 AppStateSection（原为裸 Text）.
                     // 空列表本来就是一个「区块的空态」，正好是该组件描述的场景；
-                    // 有不可读归档时把数量放进 message，不另起一行裸 Text。
+                    // 有不可读归档时把数量放进 message，不另起一行裸 Text.
                     if appBackups.unreadableCount > 0 {
                         AppStateSection(state: .empty("暂无 \(app.name) 的备份",
                                                       message: "另有 \(appBackups.unreadableCount) 个归档无法读取.",
@@ -162,7 +162,7 @@ struct AppDetailView: View {
                         }
                     }
                     if appBackups.unreadableCount > 0 {
-                        // 硬规则 1：不用黄色感叹号。改用 info.circle（语义一致）。
+                        // 硬规则 1：不用黄色感叹号.改用 info.circle（语义一致）.
                         Label("另有 \(appBackups.unreadableCount) 个归档无法读取", systemImage: "info.circle")
                             .font(.caption2)
                             .foregroundColor(AppTheme.pending)
@@ -170,8 +170,8 @@ struct AppDetailView: View {
                 }
             }
         }
-        // v0.3.626：补上 listStyle（全仓 65 处 listStyle 无一例外都是 .insetGrouped，
-        // 只有本文件与 AppListView 漏写，导致这两页与其余 59 个页面观感不一致）。
+        // 补上 listStyle（全仓 65 处 listStyle 无一例外都是 .insetGrouped，
+        // 只有本文件与 AppListView 漏写，导致这两页与其余 59 个页面观感不一致）.
         .listStyle(.insetGrouped)
         .navigationTitle(app.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -289,7 +289,7 @@ struct AppDetailView: View {
                 Text("已保存到 TequilaDash → Backups")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                // v0.3.705：这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
+                // 这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
                 if !result.skippedFiles.isEmpty {
                     Label("\(result.skippedFiles.count) 个文件未能写入归档.", systemImage: "info.circle")
                         .font(.footnote)
@@ -358,14 +358,14 @@ private struct AppBackupRow: View {
 
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是**语义正确的隔离**，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 @MainActor
 final class AppBackupsModel: ObservableObject {
     @Published var records: [BackupRecord] = []
-    /// 全局读取失败的归档数（无法判断是否属于本应用，仅作提示）。
+    /// 全局读取失败的归档数（无法判断是否属于本应用，仅作提示）.
     @Published var unreadableCount = 0
     @Published var isLoading = false
-    /// 列举失败原因（`nil` = 成功）。**不得**把失败落成空数组 —— 回空 = 假空。
+    /// 列举失败原因（`nil` = 成功）.**不得**把失败落成空数组 —— 回空 = 假空.
     @Published var errorMessage: String?
 
     private let catalog = BackupCatalog()
@@ -407,7 +407,7 @@ struct ContainerRootStat: Identifiable {
     }
 }
 
-/// Swift 6：同 AppBackupsModel —— UI 模型，主线程读写，标 @MainActor。
+/// Swift 6：同 AppBackupsModel —— UI 模型，主线程读写，标 @MainActor.
 @MainActor
 final class ContainerInventoryModel: ObservableObject {
     @Published var roots: [ContainerRootStat] = []
@@ -450,7 +450,7 @@ final class ContainerInventoryModel: ObservableObject {
 }
 
 /// Tracks whether we can currently consume a sandbox extension for the app's container.
-/// Swift 6：同 AppBackupsModel —— UI 模型，主线程读写，标 @MainActor。
+/// Swift 6：同 AppBackupsModel —— UI 模型，主线程读写，标 @MainActor.
 @MainActor
 final class ContainerAccessModel: ObservableObject {
     enum State {

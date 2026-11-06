@@ -3,10 +3,10 @@ import SwiftUI
 /// 顽固图标清理 —— 移植自爱思 9.0「删除顽固图标」.
 ///
 /// 版式（对齐爱思的两步式）：**扫描** → 列出发现的残留 → **确认后删除**，
-/// 另给一个「恢复图标位置」回滚入口。
+/// 另给一个「恢复图标位置」回滚入口.
 ///
-/// 视图只做渲染与状态机；判定与读写全在 `IconCleanupService`。
-/// 界面只留必要信息（项目铁律 4）：不放原理解释、不放 footnote 长句。
+/// 视图只做渲染与状态机；判定与读写全在 `IconCleanupService`.
+/// 界面只留必要信息（项目铁律 4）：不放原理解释、不放 footnote 长句.
 struct IconCleanupView: View {
 
     private enum Phase: Equatable {
@@ -80,7 +80,7 @@ struct IconCleanupView: View {
                 TunnelPendingRow(detail: pendingNote)
             }
             if let errorText {
-                // v0.3.683：区块级错误行统一到 AppErrorRow.
+                // 区块级错误行统一到 AppErrorRow.
                 AppErrorRow(message: errorText)
             }
             if let resultText {
@@ -93,10 +93,10 @@ struct IconCleanupView: View {
 
     // MARK: - 结果
 
-    /// 注意： **必须标 `@ViewBuilder`**：本函数体里有**两个** `Section`。
+    /// 注意： **必须标 `@ViewBuilder`**：本函数体里有**两个** `Section`.
     /// 只有 `body` 有隐式 `@ViewBuilder`，普通函数/计算属性没有 ——
     /// 多语句时会报 `function declares an opaque return type, but has no return
-    /// statements in its body from which to infer an underlying type`（v0.3.528 CI 实测）。
+    /// statements in its body from which to infer an underlying type`（CI 实测）.
     @ViewBuilder
     private func ghostSection(_ result: IconCleanupService.ScanResult) -> some View {
         Section {

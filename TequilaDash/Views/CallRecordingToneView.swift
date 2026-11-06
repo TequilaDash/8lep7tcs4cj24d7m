@@ -1,23 +1,23 @@
 import SwiftUI
 import UIKit
 
-/// 「禁用通话录音」控制台 —— 「更多 → 禁用通话录音」的二级页。
+/// 「禁用通话录音」控制台 —— 「更多 → 禁用通话录音」的二级页.
 ///
 /// 参考项目 AirBeep（原名 Placard，仓库 LinkPass888/AirBeep）：把通话录音的开始 /
-/// 结束**披露提示音**替换成等长静音，录音本身不受影响。替换写入经 AirLiftService
+/// 结束**披露提示音**替换成等长静音，录音本身不受影响.替换写入经 AirLiftService
 /// —— 真 airlift：配对文件 + LocalDevVPN 隧道在设备上直接驱动 AirTraffic
-/// （Rust libairlift_ffi.a，见 Engine/Airlift/）。
+/// （Rust libairlift_ffi.a，见 Engine/Airlift/）.
 ///
-/// 界面只保留必要信息：原理说明卡片 + 当前状态 + 两个动作（禁用 / 恢复）。
+/// 界面只保留必要信息：原理说明卡片 + 当前状态 + 两个动作（禁用 / 恢复）.
 struct CallRecordingToneView: View {
     @State private var state: CallRecordingToneService.ToneState = .original
     @State private var busy = false
     @State private var alert: ToneAlert?
-    /// v0.3.652：当前进行到哪一步（airlift 每次操作都要重建隧道，全程可能数十秒）。
+    /// 当前进行到哪一步（airlift 每次操作都要重建隧道，全程可能数十秒）.
     @State private var phase: String?
-    /// v0.3.661：读不到原始提示音时的「继续即不可恢复」确认。
+    /// 读不到原始提示音时的「继续即不可恢复」确认.
     @State private var risk: RiskPrompt?
-    /// v0.3.672：正在做「检查读取通道」的探测。
+    /// 正在做「检查读取通道」的探测.
     @State private var checking = false
     /// perform 的后台任务句柄：页面退出（onDisappear）时取消，避免离开后任务继续跑.
     @State private var runningTask: Task<Void, Never>?
@@ -56,11 +56,11 @@ struct CallRecordingToneView: View {
                 }
                 .disabled(busy || state == .silenced)
 
-                // v0.3.652：把「正在做什么」显示出来。
+                // 把「正在做什么」显示出来.
                 //
                 // airlift 每次操作都要重新建隧道（无连接复用），全流程有 5 次操作，
-                // 加起来可能几十秒。原来界面什么都不显示，用户看到的就是
-                // 「点了没反应 / 一直转圈」，以为卡死了。
+                // 加起来可能几十秒.原来界面什么都不显示，用户看到的就是
+                // 「点了没反应 / 一直转圈」，以为卡死了.
                 if let phase {
                     AppLoadingRow(title: phase, level: .block)
                 }
@@ -70,13 +70,13 @@ struct CallRecordingToneView: View {
                 } label: {
                     Label("恢复原始提示音", systemImage: "arrow.uturn.backward")
                 }
-                // v0.3.650：.disabled(busy || state != .silenced) 会把「读不到」也一起禁掉，
+                // .disabled(busy || state != .silenced) 会把「读不到」也一起禁掉，
                 // 而读不到恰恰是最该允许用户尝试恢复的时候（AirBeep 的探测在某些 iOS 版本上
-                // 必然失败，会常年卡在这个状态）。v0.3.689 起已删除该状态，本行保留说明为什么只禁 original。
-                // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试。
+                // 必然失败，会常年卡在这个状态）.起已删除该状态，本行保留说明为什么只禁 original.
+                // 现在只禁「已经是原始音」的情况，其余一律放行，让用户自己试.
                 .disabled(busy || state == .original)
 
-                // v0.3.672：动手之前先能确认「配对文件 + LocalDevVPN + 系统版本」这一串前置真的通.
+                // 动手之前先能确认「配对文件 + LocalDevVPN + 系统版本」这一串前置真的通.
                 // 它接到 Service.probeReachable() 与 lastReadFailureReason() —— 这两个原来是死符号.
                 Button {
                     checkChannel()
@@ -111,8 +111,8 @@ struct CallRecordingToneView: View {
                 dismissButton: .default(Text("好"))
             )
         }
-        // 读不到原始音 ⇒ 无法备份。这种情况下「禁用」依然可做（写入通道是好的），
-        // 但原始提示音会永久丢失，所以必须让用户明确确认，不能替他决定。
+        // 读不到原始音 ⇒ 无法备份.这种情况下「禁用」依然可做（写入通道是好的），
+        // 但原始提示音会永久丢失，所以必须让用户明确确认，不能替他决定.
         .confirmationDialog(
             "无法备份原始提示音",
             isPresented: Binding(
@@ -169,10 +169,10 @@ struct CallRecordingToneView: View {
 
     /// 在后台线程执行 airlift 传输（含建隧道与文件 IO，会阻塞），完成后回主线程刷新状态.
     ///
-    /// v0.3.652：加阶段提示。airlift 全程要多次独立操作（每次重建隧道），
-    /// 不告诉用户「在等什么」，界面就像死了一样。
-    /// v0.3.661：读通道失败不再让整个动作失败（见 CallRecordingToneService 文件头），
-    /// 但「无法备份」必须先经用户确认。
+    /// 加阶段提示.airlift 全程要多次独立操作（每次重建隧道），
+    /// 不告诉用户「在等什么」，界面就像死了一样.
+    /// 读通道失败不再让整个动作失败（见 CallRecordingToneService 文件头），
+    /// 但「无法备份」必须先经用户确认.
     private func run(_ action: ToneAction) {
         perform(action, acknowledgingRisk: false, unreadable: [])
     }
@@ -183,7 +183,7 @@ struct CallRecordingToneView: View {
         phase = action.startPhase
         AppHaptics.tap()
         runningTask = Task {
-            // v0.3.672：全程可能数十秒，默认锁屏时间（最短 30 秒）足够在中途锁屏.
+            // 全程可能数十秒，默认锁屏时间（最短 30 秒）足够在中途锁屏.
             // 锁屏会让写到一半的提示音停在中间态，而持久化标记要到写完才置位 ⇒
             // 界面显示「原始提示音」、设备上却是半新半旧. 所以操作期间不自动锁屏.
             // defer 覆盖成功 / 失败 / 等用户确认三条出口：这三条之后都没有写入在飞.
@@ -211,7 +211,7 @@ struct CallRecordingToneView: View {
                 busy = false
                 phase = nil
                 if case .backupIncomplete(let names) = error {
-                    // 不是失败，是需要用户决定：写入本身没问题，丢的是「能恢复」这个后路。
+                    // 不是失败，是需要用户决定：写入本身没问题，丢的是「能恢复」这个后路.
                     risk = RiskPrompt(unreadable: names)
                     return
                 }
@@ -224,9 +224,9 @@ struct CallRecordingToneView: View {
         }
     }
 
-    /// v0.3.672：把 probeReachable 接到界面上.
+    /// 把 probeReachable 接到界面上.
     ///
-    /// 它原来是死符号（定义在 Service、全仓零调用），v0.3.672 起接到这里。
+    /// 它原来是死符号（定义在 Service、全仓零调用），起接到这里.
     /// 现在用户可以在动手之前先确认前置是否真的通，失败时把 lastReadFailureReason()
     /// 一并显示出来 —— 那个诊断字段同样曾是死符号.
     private func checkChannel() {
@@ -239,8 +239,8 @@ struct CallRecordingToneView: View {
             if ok {
                 alert = ToneAlert(
                     title: "读取通道正常",
-                    // v0.3.689：这条探针**只读**（AirLiftService.readFile），读得到不等于写得上。
-                    // 原文案说「检查写入通道」并断言「可以执行禁用或恢复」，是把读通道的结论当成了写通道的结论。
+                    // 这条探针**只读**（AirLiftService.readFile），读得到不等于写得上.
+                    // 原文案说「检查写入通道」并断言「可以执行禁用或恢复」，是把读通道的结论当成了写通道的结论.
                     message: "已成功读到系统提示音文件.这只证明读取通道可用，"
                         + "写入是否生效仍需实际执行一次禁用或恢复来验证."
                 )
@@ -256,7 +256,7 @@ struct CallRecordingToneView: View {
         }
     }
 
-    /// 读状态。v0.3.650 起**不做 airlift 探测**（照 AirBeep），同步即可。
+    /// 读状态.起**不做 airlift 探测**（照 AirBeep），同步即可.
     private func loadState() -> CallRecordingToneService.ToneState {
         CallRecordingToneService.currentState()
     }

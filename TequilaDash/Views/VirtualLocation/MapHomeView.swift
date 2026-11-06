@@ -454,10 +454,10 @@ private extension UIWindowScene {
 }
 
 @MainActor
-/// Swift 6：`MKLocalSearchCompleterDelegate` 是非隔离协议，而本类是 @MainActor。
+/// Swift 6：`MKLocalSearchCompleterDelegate` 是非隔离协议，而本类是 @MainActor.
 /// 用 `@preconcurrency` 遵循它是 Swift 6 迁移的标准做法 —— MapKit 的 delegate
 /// 回调本来就在主线程，把方法留在主 actor 上既符合事实，也让非 Sendable 的
-/// `MKLocalSearchCompleter` 不必跨隔离域（消掉 `sending 'completer'`）。
+/// `MKLocalSearchCompleter` 不必跨隔离域（消掉 `sending 'completer'`）.
 final class PlaceSearchCompleter: NSObject, ObservableObject, @preconcurrency MKLocalSearchCompleterDelegate {
     @Published var results: [MKLocalSearchCompletion] = []
     private let completer = MKLocalSearchCompleter()
@@ -477,7 +477,7 @@ final class PlaceSearchCompleter: NSObject, ObservableObject, @preconcurrency MK
         completer.resultTypes = [.address, .pointOfInterest]
     }
 
-    /// 主 actor 隔离（配合类上的 @preconcurrency 遵循）：completer 不再跨隔离域。
+    /// 主 actor 隔离（配合类上的 @preconcurrency 遵循）：completer 不再跨隔离域.
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
         self.results = completer.results
     }

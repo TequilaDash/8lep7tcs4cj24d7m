@@ -2,22 +2,22 @@ import SwiftUI
 import UIKit
 
 /// Swift 6：AFC 客户端句柄是 `OpaquePointer`（FFI 句柄，非 Sendable），
-/// 不能直接作为 `Task.detached` 的返回类型跨 actor 边界传回。
+/// 不能直接作为 `Task.detached` 的返回类型跨 actor 边界传回.
 ///
 /// 线程安全论证：`idevice.h` 明写这些句柄 **NOT thread safe**，必须与创建它的
 /// adapter 在同一线程使用（`idevice.h:905`「must be used in the same thread as the
-/// adapter」；`idevice.h:1222`「The file handle MAY NOT be used from another thread」）。
+/// adapter」；`idevice.h:1222`「The file handle MAY NOT be used from another thread」）.
 /// 本包装**只是类型层面的标注**：它沿用本文件原有的「创建 → 传回 → 在串行流程里使用」
-/// 路径，不新增任何共享或并发访问，句柄的线程归属与本次迁移前完全一致（纯编译期改动）。
+/// 路径，不新增任何共享或并发访问，句柄的线程归属与本次迁移前完全一致（纯编译期改动）.
 private struct AFCClientBox: @unchecked Sendable { let raw: OpaquePointer }
 
-/// v0.3.214：App 文档浏览（重做版）——
+/// App 文档浏览（重做版）——
 /// - 顶部目录分段：Documents（默认）/ Library / tmp
 /// - Documents 走 vend_documents（文件共享 App 必可开）；Library/tmp 需要完整容器
 ///   （vend_container），多数第三方 App 无权限 → 显示「无权限」
 /// - 文件操作移植 FileBrowserView 能力：新建文件夹 / 重命名 / 删除 / 属性 / 下载到本地
 struct AppFileBrowserView: View {
-    /// v0.3.288：文件行时间格式（与 FileRow 同款紧凑格式）
+    /// 文件行时间格式（与 FileRow 同款紧凑格式）
     static let rowStamp: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
@@ -45,12 +45,12 @@ struct AppFileBrowserView: View {
     @State private var afcClient: OpaquePointer?
     /// 完整容器会话（vend_container 成功才有；Documents 会话不足够时补）
     @State private var containerAfc: OpaquePointer?
-    /// 会话代次（U-1）：closeClient()/closeAll() 释放 AFC 句柄时 +1。异步路径据此判定句柄已失效：
-    /// 代次变了或 activeClient() 已为空 ⇒ 立刻 return，不再解引用旧指针。
+    /// 会话代次（U-1）：closeClient()/closeAll() 释放 AFC 句柄时 +1.异步路径据此判定句柄已失效：
+    /// 代次变了或 activeClient() 已为空 ⇒ 立刻 return，不再解引用旧指针.
     @State private var sessionEpoch: Int = 0
-    /// U-1 延后释放：跨 await 使用会话句柄的在飞任务计数（进入 +1、退出 -1，均在 MainActor）。
+    /// U-1 延后释放：跨 await 使用会话句柄的在飞任务计数（进入 +1、退出 -1，均在 MainActor）.
     @State private var inFlight: Int = 0
-    /// U-1 延后释放：closeAll() 在 inFlight > 0 时置位；最后一个在飞任务收尾时执行真正的释放。
+    /// U-1 延后释放：closeAll() 在 inFlight > 0 时置位；最后一个在飞任务收尾时执行真正的释放.
     @State private var pendingClose = false
     /// 本 scope 是否无权限（vend_container 失败）
     @State private var noPermission = false
@@ -59,7 +59,7 @@ struct AppFileBrowserView: View {
     @State private var renameTarget: AfcEntry?
     @State private var renameText = ""
     @State private var deleteTarget: AfcEntry?
-    // v0.3.221：新建（文件夹 / 文件.txt 可改后缀）——sheet 替代失效的 alert TextField
+    // 新建（文件夹 / 文件.txt 可改后缀）——sheet 替代失效的 alert TextField
     @State private var showCreateSheet = false
     @State private var createIsFolder = true
     @State private var createName = ""
@@ -67,16 +67,16 @@ struct AppFileBrowserView: View {
     @State private var fileInfoTarget: AfcEntry?
     @State private var fileInfoDetail: String?
     @State private var toast: String?
-    // v0.3.217：选择模式 + 查看/编辑 + 导入
+    // 选择模式 + 查看/编辑 + 导入
     @State private var selectionMode = false
     @State private var selectedPaths = Set<String>()
-    // v0.3.219：文件搜索（过滤当前目录）
+    // 文件搜索（过滤当前目录）
     @State private var searchText: String = ""
     @State private var editingEntry: AfcEntry?
-    /// v0.3.219：分享临时文件 URL（下载到 tmp 后弹 ShareSheet）.URL 不符合 Identifiable，
+    /// 分享临时文件 URL（下载到 tmp 后弹 ShareSheet）.URL 不符合 Identifiable，
     /// 用 wrapper 让 sheet(item:) 可用.
     @State private var shareItems: ShareItems?
-    /// v0.3.227：导出进度（当前文件名 + 字节 + 项序号）
+    /// 导出进度（当前文件名 + 字节 + 项序号）
     @State private var exportProgress: ExportProgress?
 
     struct ExportProgress: Identifiable {
@@ -108,7 +108,7 @@ struct AppFileBrowserView: View {
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索当前目录")
         .avoidSearchZoom()
         .toolbar {
-            // v0.3.223：对齐空间回收板块——独立 ToolbarItem + HStack，
+            // 对齐空间回收板块——独立 ToolbarItem + HStack，
             // 禁用 ToolbarItemGroup 多按钮玻璃胶囊组（用户永久雷点：割裂/遮挡视线）
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 14) {
@@ -132,7 +132,7 @@ struct AppFileBrowserView: View {
         .sheet(item: $editingEntry) { entry in editorView(entry) }
         .task { await connectForScope() }
         .onDisappear { closeAll() }
-        // v0.3.221：新建（文件夹 / 文件）sheet——alert TextField 在部分 iOS 版本取值失效
+        // 新建（文件夹 / 文件）sheet——alert TextField 在部分 iOS 版本取值失效
         .sheet(isPresented: $showCreateSheet) { createSheet }
         .alert("重命名", isPresented: renameAlertBinding) {
             TextField("新名称", text: $renameText)
@@ -148,9 +148,8 @@ struct AppFileBrowserView: View {
         } message: { Text(fileInfoDetail ?? "") }
     }
 
-    // MARK: body 拆分属性（v0.3.219c：规避 type-check 超时）
+    // MARK: body 拆分属性（c：规避 type-check 超时）
 
-    /// v0.3.227：导出进度卡
     private func exportProgressView(_ ep: ExportProgress) -> some View {
         VStack(spacing: 6) {
             ProgressView(value: ep.total > 0 ? Double(ep.done) : 0, total: Double(max(ep.total, 1)))
@@ -175,7 +174,7 @@ struct AppFileBrowserView: View {
     @ViewBuilder
     private var toastOverlay: some View {
         if let toast {
-            // v0.3.225：回退白色胶囊（v0.3.224 深色是误解用户意思的乱改）
+            // 回退白色胶囊（深色是误解用户意思的乱改）
             Text(toast)
                 .font(.caption)
                 .padding(.horizontal, 18).padding(.vertical, 9)
@@ -193,7 +192,7 @@ struct AppFileBrowserView: View {
             HStack(spacing: 18) {
                 Text("已选 \(selectedPaths.count)").font(.footnote).foregroundStyle(.secondary)
                 Spacer()
-                // v0.3.223：批量分享已删（用户评估不行）；仅保留导出+删除
+                // 批量分享已删（用户评估不行）；仅保留导出+删除
                 Button { exportSelected() } label: { Label("导出", systemImage: "tray.and.arrow.down") }
                     .disabled(selectedPaths.isEmpty)
                 Button(role: .destructive) { deleteSelected() } label: {
@@ -259,7 +258,7 @@ struct AppFileBrowserView: View {
                         let boxed = try await Task.detached(priority: .userInitiated) {
                             AFCClientBox(raw: try FileSharingService.openAppContainer(bundleId: bundleId))
                         }.value
-                        // U-1：代次变了说明期间 closeAll 已释放会话——本次新开的会话当场释放。
+                        // U-1：代次变了说明期间 closeAll 已释放会话——本次新开的会话当场释放.
                         guard sessionIsCurrent(epoch) else { afc_client_free(boxed.raw); return }
                         containerAfc = boxed.raw
                     } catch {
@@ -272,7 +271,7 @@ struct AppFileBrowserView: View {
                 }
                 // 不再把 afcClient 指向 containerAfc：同一句柄两处持有会让 closeClient
                 // 释放后 containerAfc 变悬垂（再切回 Library 用已释放句柄），closeAll 又
-                // 二次释放成 double free。activeClient() 已优先返回 containerAfc，此处无需别名。
+                // 二次释放成 double free.activeClient() 已优先返回 containerAfc，此处无需别名.
                 currentPath = scope.path
                 await loadDir(path: scope.path)
             } else {
@@ -282,7 +281,7 @@ struct AppFileBrowserView: View {
                     let boxed = try await Task.detached(priority: .userInitiated) {
                         AFCClientBox(raw: try FileSharingService.openAppDocuments(bundleId: bundleId))
                     }.value
-                    // U-1：同 container 分支——代次变了则释放本次新开的会话，不写入状态。
+                    // U-1：同 container 分支——代次变了则释放本次新开的会话，不写入状态.
                     guard sessionIsCurrent(epoch) else { afc_client_free(boxed.raw); return }
                     afcClient = boxed.raw
                 }
@@ -329,21 +328,21 @@ struct AppFileBrowserView: View {
         scope.needsContainer ? (containerAfc ?? afcClient) : afcClient
     }
 
-    /// U-1：需要句柄时现取，不跨 await 保存。代次已变（句柄已被释放）⇒ nil，调用方须立刻 return。
+    /// U-1：需要句柄时现取，不跨 await 保存.代次已变（句柄已被释放）⇒ nil，调用方须立刻 return.
     private func currentClient(_ epoch: Int) -> OpaquePointer? {
         guard epoch == sessionEpoch else { return nil }
         return activeClient()
     }
 
-    /// U-1：await 之后重新校验代次；变了即放弃，不再触碰旧句柄。
+    /// U-1：await 之后重新校验代次；变了即放弃，不再触碰旧句柄.
     private func sessionIsCurrent(_ epoch: Int) -> Bool {
         epoch == sessionEpoch
     }
 
-    /// U-1 延后释放：进入跨 await 的会话使用段（+1）。
+    /// U-1 延后释放：进入跨 await 的会话使用段（+1）.
     private func beginInFlight() { inFlight += 1 }
 
-    /// U-1 延后释放：退出跨 await 的会话使用段（-1）。归零且存在待释放请求时，在此执行真正的释放。
+    /// U-1 延后释放：退出跨 await 的会话使用段（-1）.归零且存在待释放请求时，在此执行真正的释放.
     private func endInFlight() {
         inFlight -= 1
         if inFlight <= 0 {
@@ -365,7 +364,7 @@ struct AppFileBrowserView: View {
         }
     }
 
-    // v0.3.226：完整复刻空间回收板块结构——一个 List，分段作首项随滚动，
+    // 完整复刻空间回收板块结构——一个 List，分段作首项随滚动，
     // listRowBackground 设为页面底色（无白板），loading/无权限/空目录全部列表内呈现
     @ViewBuilder
     private var content: some View {
@@ -398,7 +397,7 @@ struct AppFileBrowserView: View {
                 }
             } else if let err = errorText {
                 Section {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)
                 }
             } else if filteredEntries.isEmpty {
@@ -421,7 +420,7 @@ struct AppFileBrowserView: View {
         .listStyle(.insetGrouped)
     }
 
-    /// v0.3.221：状态卡片 banner（IMG_4630 滚动截屏样式——白圆角卡片，不再空旷）
+    /// 状态卡片 banner（IMG_4630 滚动截屏样式——白圆角卡片，不再空旷）
     private func stateCard(icon: String, title: String, desc: String) -> some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
@@ -447,12 +446,12 @@ struct AppFileBrowserView: View {
         List {
             if let err = errorText {
                 Section {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)
                 }
             } else if filteredEntries.isEmpty {
                 Section {
-                    // v0.3.221：空目录用卡片 banner（不再裸 ContentUnavailableView）
+                    // 空目录用卡片 banner（不再裸 ContentUnavailableView）
                     stateCard(icon: "folder", title: "空目录",
                               desc: "\(displayCurrentPath) 下没有文件")
                     .listRowInsets(EdgeInsets())
@@ -491,7 +490,7 @@ struct AppFileBrowserView: View {
         }
     }
 
-    /// v0.3.219：打开条目——目录优先（isDirectory 可能误判，失败回退当文件），
+    /// 打开条目——目录优先（isDirectory 可能误判，失败回退当文件），
     /// 修"文件夹点击进不去".
     private func openEntry(_ entry: AfcEntry) async {
         let epoch = sessionEpoch
@@ -536,7 +535,7 @@ struct AppFileBrowserView: View {
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name).font(.subheadline)
-                // v0.3.288：详细展示——真实大小 + 修改时间（原先恒 0 字节，sizes 字典从未填充）
+                // 详细展示——真实大小 + 修改时间（原先恒 0 字节，sizes 字典从未填充）
                 HStack(spacing: 6) {
                     if !entry.isDirectory {
                         Text(formatSize(entry.size))
@@ -574,7 +573,7 @@ struct AppFileBrowserView: View {
         Button("分享") {
             Task { await shareEntry(entry) }
         }
-        // v0.3.223：任意文件均可强制以文本编辑（保存按 UTF-8 写回）
+        // 任意文件均可强制以文本编辑（保存按 UTF-8 写回）
         if !entry.isDirectory {
             Button("以文本进行编辑") {
                 editingEntry = entry
@@ -595,7 +594,7 @@ struct AppFileBrowserView: View {
     }
 
     // MARK: 操作
-    // v0.3.221：新建 sheet（文件夹 / 文件.txt 可改后缀）
+    // 新建 sheet（文件夹 / 文件.txt 可改后缀）
     private var createSheet: some View {
         NavigationStack {
             Form {
@@ -714,7 +713,7 @@ struct AppFileBrowserView: View {
         }
     }
 
-    /// v0.3.219：分享（文件下载到 tmp；文件夹递归下载成目录 → ShareSheet 分享）
+    /// 分享（文件下载到 tmp；文件夹递归下载成目录 → ShareSheet 分享）
     private func shareEntry(_ entry: AfcEntry) async {
         let epoch = sessionEpoch
         guard let client = currentClient(epoch) else { return }
@@ -723,12 +722,12 @@ struct AppFileBrowserView: View {
         showToast("准备分享…")
         do {
             // Swift 6：OpaquePointer 非 Sendable → 经 AFCClientBox（@unchecked Sendable）传入
-            // Task.detached（同一指针，沿用本文件既有模式，句柄线程归属不变）。
+            // Task.detached（同一指针，沿用本文件既有模式，句柄线程归属不变）.
             let clientBox = AFCClientBox(raw: client)
             let tmp = FileManager.default.temporaryDirectory
             let safeName = (entry.name as NSString).lastPathComponent
             let dest = tmp.appendingPathComponent("share-\(UUID().uuidString.prefix(6))-\(safeName)")
-            // R14：detached 闭包只回传截断计数（Int，Sendable）；路径在主线程先算好。
+            // R14：detached 闭包只回传截断计数（Int，Sendable）；路径在主线程先算好.
             let truncated = try await Task.detached(priority: .userInitiated) { () -> Int in
                 var count = 0
                 try Self.downloadEntry(client: clientBox.raw, entry: entry, to: dest, truncated: &count)
@@ -742,12 +741,12 @@ struct AppFileBrowserView: View {
             showToast(error.localizedDescription)
         }
     }
-    /// v0.3.227：下载单个条目（文件流式不限大小；文件夹建目录递归）到指定目标路径
+    /// 下载单个条目（文件流式不限大小；文件夹建目录递归）到指定目标路径
     ///
     /// Swift 6：本方法只做 FFI + FileManager，不碰任何 UI 状态，且只在 `shareEntry` 的
-    /// `Task.detached` 里调用 → 显式 `nonisolated`，不被 View 的 MainActor 推断隔离。
+    /// `Task.detached` 里调用 → 显式 `nonisolated`，不被 View 的 MainActor 推断隔离.
     ///
-    /// R14：`truncated` 回传触顶（层级 > 64）未导出的子树个数，调用方据此提示，不再静默计成功。
+    /// R14：`truncated` 回传触顶（层级 > 64）未导出的子树个数，调用方据此提示，不再静默计成功.
     private nonisolated static func downloadEntry(client: OpaquePointer, entry: AfcEntry, to dest: URL,
                                                   truncated: inout Int) throws {
         if entry.isDirectory {
@@ -758,7 +757,7 @@ struct AppFileBrowserView: View {
         }
     }
 
-    /// v0.3.227：批量导出（流式下载不限大小 + 实时进度）→ TequilaDash Documents/文件导出浏览/
+    /// 批量导出（流式下载不限大小 + 实时进度）→ TequilaDash Documents/文件导出浏览/
     private func exportSelected() {
         let epoch = sessionEpoch
         guard currentClient(epoch) != nil else { return }
@@ -778,12 +777,12 @@ struct AppFileBrowserView: View {
                     exportProgress = ExportProgress(name: entry.name, done: 0, total: 0,
                                                     index: idx + 1, count: count)
                 }
-                // U-1：句柄现取——上一轮 await 之后会话可能已被 closeAll 释放。
+                // U-1：句柄现取——上一轮 await 之后会话可能已被 closeAll 释放.
                 guard let client = currentClient(epoch) else { break }
                 do {
-                    // P0-1：设备返回的文件名不可信。未净化的名字若含路径分隔符，
-                    // appendingPathComponent 会把写入点搬到导出目录之外（App 容器任意位置）。
-                    // 净化失败不抛错 —— 一个坏名字不该让整次导出失败，跳过并计入 truncated。
+                    // P0-1：设备返回的文件名不可信.未净化的名字若含路径分隔符，
+                    // appendingPathComponent 会把写入点搬到导出目录之外（App 容器任意位置）.
+                    // 净化失败不抛错 —— 一个坏名字不该让整次导出失败，跳过并计入 truncated.
                     guard let safeName = FileNameRules.sanitize(entry.name) else {
                         truncated += 1
                         continue
@@ -837,8 +836,8 @@ struct AppFileBrowserView: View {
                             depth: 0, truncated: &truncated, progress: progress)
     }
 
-    /// U-6：同签名重载带深度上限（上限 64，与 FileService.countTree 的 maxNodes 同为遍历保护）。
-    /// R14：触顶不再静默丢弃 —— 计一个 truncated（按被跳过的子树计），由调用方汇总进提示。
+    /// U-6：同签名重载带深度上限（上限 64，与 FileService.countTree 的 maxNodes 同为遍历保护）.
+    /// R14：触顶不再静默丢弃 —— 计一个 truncated（按被跳过的子树计），由调用方汇总进提示.
     private static func recursiveExport(client: OpaquePointer, srcDir: String, toDir: URL, prefix: String,
                                         depth: Int,
                                         truncated: inout Int,
@@ -846,7 +845,7 @@ struct AppFileBrowserView: View {
         guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
-            // P0-1：设备端文件名同样不可信，净化失败跳过该条目（计入 truncated）。
+            // P0-1：设备端文件名同样不可信，净化失败跳过该条目（计入 truncated）.
             guard let safeName = FileNameRules.sanitize(item.name) else {
                 truncated += 1
                 continue
@@ -866,21 +865,21 @@ struct AppFileBrowserView: View {
     }
 
     /// 递归下载目录（保结构）
-    /// Swift 6：只被 `downloadEntry`（已 nonisolated）调用 → 同步 nonisolated。
+    /// Swift 6：只被 `downloadEntry`（已 nonisolated）调用 → 同步 nonisolated.
     private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL,
                                                       truncated: inout Int) throws {
         try recursiveDownload(client: client, srcDir: srcDir, toDir: toDir, depth: 0, truncated: &truncated)
     }
 
-    /// U-6：同签名重载带深度上限（上限 64）。
-    /// R14：触顶计一个 truncated 并回传，调用方据此提示（不再静默丢弃整棵子树）。
+    /// U-6：同签名重载带深度上限（上限 64）.
+    /// R14：触顶计一个 truncated 并回传，调用方据此提示（不再静默丢弃整棵子树）.
     private nonisolated static func recursiveDownload(client: OpaquePointer, srcDir: String, toDir: URL,
                                                       depth: Int,
                                                       truncated: inout Int) throws {
         guard depth < 64 else { truncated += 1; return }
         let items = try FileSharingService.listDirectory(afc: client, path: srcDir)
         for item in items {
-            // P0-1：设备端文件名不可信，净化失败跳过该条目（计入 truncated）。
+            // P0-1：设备端文件名不可信，净化失败跳过该条目（计入 truncated）.
             guard let safeName = FileNameRules.sanitize(item.name) else {
                 truncated += 1
                 continue
@@ -904,7 +903,7 @@ struct AppFileBrowserView: View {
         defer { endInFlight() }
         showToast("正在下载…")
         do {
-            // Swift 6：同 shareEntry —— client 经 AFCClientBox 传入 Task.detached。
+            // Swift 6：同 shareEntry —— client 经 AFCClientBox 传入 Task.detached.
             let clientBox = AFCClientBox(raw: client)
             let data = try await Task.detached(priority: .userInitiated) {
                 try FileSharingService.downloadFile(afc: clientBox.raw, path: entry.path)
@@ -942,10 +941,10 @@ struct AppFileBrowserView: View {
     }
 
     private func closeClient() {
-        // U-1：释放句柄前先让代次失效，在飞的异步路径据此立刻放弃，不再解引用旧指针。
+        // U-1：释放句柄前先让代次失效，在飞的异步路径据此立刻放弃，不再解引用旧指针.
         sessionEpoch += 1
         // 别名防御：containerAfc 与 afcClient 曾可能指向同一会话，这种状态下这里只解绑、
-        // 不释放，交给 closeAll 统一释放，避免 double free。
+        // 不释放，交给 closeAll 统一释放，避免 double free.
         if let c = afcClient {
             if containerAfc != c { afc_client_free(c) }
             afcClient = nil
@@ -954,19 +953,19 @@ struct AppFileBrowserView: View {
     }
     private func closeAll() {
         // U-1 延后释放：仍有跨 await 的任务在解引用会话句柄时不 free，只置待释放标志，
-        // 交给最后一个在飞任务（endInFlight）执行真正的释放，避免释放后指针仍被 detached 使用。
+        // 交给最后一个在飞任务（endInFlight）执行真正的释放，避免释放后指针仍被 detached 使用.
         guard inFlight == 0 else { pendingClose = true; return }
         performCloseAll()
     }
-    /// U-1 延后释放：真正的释放（代次失效 + 释放两个会话），仅由 closeAll() 与 endInFlight() 调用。
+    /// U-1 延后释放：真正的释放（代次失效 + 释放两个会话），仅由 closeAll() 与 endInFlight() 调用.
     private func performCloseAll() {
         closeClient()
-        // containerAfc 的释放同样以代次失效为前置（closeClient 已 +1，此处再 +1 幂等）。
+        // containerAfc 的释放同样以代次失效为前置（closeClient 已 +1，此处再 +1 幂等）.
         sessionEpoch += 1
         if let c = containerAfc { afc_client_free(c); containerAfc = nil }
     }
 
-    // MARK: v0.3.217 选择模式
+    // MARK: 选择模式
     private func enterSelection() {
         selectionMode = true
         selectedPaths.removeAll()
@@ -984,7 +983,7 @@ struct AppFileBrowserView: View {
             defer { endInFlight() }
             var failed = 0
             for p in paths {
-                // U-1：句柄现取——本 Task 启动后才取，不跨 await 保存外层旧指针。
+                // U-1：句柄现取——本 Task 启动后才取，不跨 await 保存外层旧指针.
                 guard let client = currentClient(epoch) else { break }
                 do {
                     try FileSharingService.remove(afc: client, path: p, recursive: true)
@@ -1004,8 +1003,8 @@ struct AppFileBrowserView: View {
         let epoch = sessionEpoch
         guard currentClient(epoch) != nil, let url = urls.first else { return }
         // 大文件不许整读进内存：Data(contentsOf:) 会在读取时把整个文件摊到内存，导入几百 MB
-        // 的视频 / ipa 时真机直接被 jetsam 杀掉（观感就是闪退）。与 downloadFile 同口径，
-        // 上限 200MB；超限只提示、不读。
+        // 的视频 / ipa 时真机直接被 jetsam 杀掉（观感就是闪退）.与 downloadFile 同口径，
+        // 上限 200MB；超限只提示、不读.
         let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         guard bytes <= 200 * 1024 * 1024 else {
             showToast("文件超过 200MB，无法导入")
@@ -1018,7 +1017,7 @@ struct AppFileBrowserView: View {
         Task {
             beginInFlight()
             defer { endInFlight() }
-            // U-1：句柄现取——本 Task 启动时会话可能已被 closeAll 释放。
+            // U-1：句柄现取——本 Task 启动时会话可能已被 closeAll 释放.
             guard let client = currentClient(epoch) else { return }
             do {
                 try FileSharingService.uploadFile(afc: client, data: data, to: dest)

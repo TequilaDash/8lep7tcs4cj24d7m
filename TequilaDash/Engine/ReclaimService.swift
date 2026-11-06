@@ -48,7 +48,7 @@ enum ReclaimError: Error, LocalizedError {
 
 /// Safe-folder measurements from the Reclaim tab, reused when opening an app.
 /// `@unchecked Sendable`：唯一可变状态 `map` 的所有访问（`buckets` / `merge` /
-/// `remove`）都在 `lock`（`NSLock`）保护下，复用类内已有的锁，跨线程共享引用安全。
+/// `remove`）都在 `lock`（`NSLock`）保护下，复用类内已有的锁，跨线程共享引用安全.
 final class ReclaimScanCache: @unchecked Sendable {
     static let shared = ReclaimScanCache()
     private let lock = NSLock()

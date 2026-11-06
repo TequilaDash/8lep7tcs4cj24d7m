@@ -2,9 +2,9 @@ import Foundation
 import CommonCrypto
 import Compression
 
-/// 免登录下载商店的**第三来源** —— NB（NB Pro，bundle id `com.nbmaster.app`，主二进制 `XNZS`）。
+/// 免登录下载商店的**第三来源** —— NB（NB Pro，bundle id `com.nbmaster.app`，主二进制 `XNZS`）.
 ///
-/// **NB 与「牛蛙」是两个不同的源，不要混淆**（用户 2026-10-01 纠正）。
+/// **NB 与「牛蛙」是两个不同的源，不要混淆**（用户 2026-10-01 纠正）.
 /// 与接口一（爱思，见 `I4PCStoreClient`）、接口二（牛蛙 NiuWaCore，见 `NiuwaStoreClient`）并列，
 /// 但 NB 是**独立第三方**：服务器、协议、加密全不一样：
 ///
@@ -16,7 +16,7 @@ import Compression
 /// | 报文 | base64(密文‖tag)+base64(N) | 请求 hex（E→-，FF→.）/ 响应标准 base64 |
 ///
 /// 注意：NB 服务端的错误文案里自称「牛蛙助手」（见下方 `请将牛蛙助手更新到最新版`），
-/// 但那只是它的文案，**不改变两者是独立源**的事实。
+/// 但那只是它的文案，**不改变两者是独立源**的事实.
 ///
 /// ## 协议来源（全部 IDA 反编译确证，非推测）
 ///
@@ -35,9 +35,9 @@ import Compression
 /// ```
 ///
 /// ## 版本闸门（不移植）
-/// 服务端在公共参数不全时会回 `请将牛蛙助手更新到最新版再试`。
-/// 这不是"必须升级客户端"，**只是公共参数没带齐** —— 补齐 `pub` 那一组即放行。
-/// 本实现**不搬**任何版本检测逻辑。
+/// 服务端在公共参数不全时会回 `请将牛蛙助手更新到最新版再试`.
+/// 这不是"必须升级客户端"，**只是公共参数没带齐** —— 补齐 `pub` 那一组即放行.
+/// 本实现**不搬**任何版本检测逻辑.
 enum NBStoreClient {
 
     // MARK: - 常量
@@ -50,30 +50,30 @@ enum NBStoreClient {
         "http://nbtool8.com:9666",
     ]
 
-    /// 当前使用的基址。
+    /// 当前使用的基址.
     ///
     /// 原先是写死的 `hosts[0]`，注释却写「首个可用的」—— 但**没有任何探测逻辑**：
-    /// 首条不通时整个 NB 源不可用，且日志里看不出换过 host。
+    /// 首条不通时整个 NB 源不可用，且日志里看不出换过 host.
     /// 现在改成「当前命中下标」，由 `noteHostFailure()` 在请求失败时推进
     /// （F-12：该函数原先只写在这段注释里、从未实现 —— 坏 host 每次仍被优先），
-    /// `noteHostSuccess()` 在成功时锁定 —— 一次进程内不会反复在坏 host 上重试。
+    /// `noteHostSuccess()` 在成功时锁定 —— 一次进程内不会反复在坏 host 上重试.
     private static let hostLock = NSLock()
-    /// 上次成功的 host 下标 —— 下一次请求从它开始试。
+    /// 上次成功的 host 下标 —— 下一次请求从它开始试.
     ///
     /// 必须标 `nonisolated(unsafe)`：Swift 6 严格并发把「非隔离的全局可变状态」判为错误
-    /// （CI 39037982862 实测报 `static property 'hostIndex' is not concurrency-safe`）。
+    /// （CI 39037982862 实测报 `static property 'hostIndex' is not concurrency-safe`）.
     /// 这里的安全性由 `hostLock` 保证 —— 所有读写都在 `hostLock.withLock { }` 内，
-    /// 这正是编译器提示里说的「accesses are protected by an external synchronization mechanism」。
+    /// 这正是编译器提示里说的「accesses are protected by an external synchronization mechanism」.
     private nonisolated(unsafe) static var hostIndex = 0
     static var host: String {
         hostLock.withLock { hosts[min(hostIndex, hosts.count - 1)] }
     }
 
-    /// 本次请求要依次尝试的 host 顺序：从上次成功的那个开始，绕一圈。
+    /// 本次请求要依次尝试的 host 顺序：从上次成功的那个开始，绕一圈.
     ///
     /// 为什么用「顺序列表」而不是「失败就推进下标」：
-    /// 后者要靠下标回绕判断「试完了」，一旦成功又失败会重新绕，容易写成无限重试。
-    /// 顺序列表天然有限（长度 = hosts.count），调用方 for 循环走完即止。
+    /// 后者要靠下标回绕判断「试完了」，一旦成功又失败会重新绕，容易写成无限重试.
+    /// 顺序列表天然有限（长度 = hosts.count），调用方 for 循环走完即止.
     private static func hostOrder() -> [String] {
         hostLock.withLock {
             let start = min(hostIndex, hosts.count - 1)
@@ -81,7 +81,7 @@ enum NBStoreClient {
         }
     }
 
-    /// 请求成功：把该 host 记为「上次成功」，后续请求优先用它。
+    /// 请求成功：把该 host 记为「上次成功」，后续请求优先用它.
     private static func noteHostSuccess(_ ok: String) {
         hostLock.withLock {
             if let idx = hosts.firstIndex(of: ok) { hostIndex = idx }
@@ -91,7 +91,7 @@ enum NBStoreClient {
     /// 请求失败：把起点推进到下一个 host（F-12）—— 失败过的 host 不再被下一次请求优先.
     ///
     /// 只在「当前起点就是它」时推进一格：并发请求各自推进会把下标来回拨；起点之后
-    /// 依序失败时逐格跟进，4 条全挂时绕回原点（全坏时无从优选）。安全性同
+    /// 依序失败时逐格跟进，4 条全挂时绕回原点（全坏时无从优选）.安全性同
     /// `noteHostSuccess`，全部读写都在 `hostLock.withLock { }` 内.
     private static func noteHostFailure(_ bad: String) {
         hostLock.withLock {
@@ -107,7 +107,7 @@ enum NBStoreClient {
 
     // MARK: - 加解密
 
-    /// NB 的报文加解密。
+    /// NB 的报文加解密.
     ///
     /// ## 密钥派生（`sub_1000042AC`，逐行还原）
     /// ```c
@@ -122,15 +122,15 @@ enum NBStoreClient {
     /// ```
     ///
     /// **易错点**：`CCCrypt` 的 key 参数传的是 `md` 缓冲区 —— 而该缓冲区此前被
-    /// `getCString` 写入了 `v12`（hex 前 16 字符）。所以
-    /// **key 是 hex 字符串本身（16 字节 ASCII），不是 MD5 的原始 16 字节**。
-    /// 两者只差一次 hex 编码，写错会得到完全不同的密文。
+    /// `getCString` 写入了 `v12`（hex 前 16 字符）.所以
+    /// **key 是 hex 字符串本身（16 字节 ASCII），不是 MD5 的原始 16 字节**.
+    /// 两者只差一次 hex 编码，写错会得到完全不同的密文.
     enum Crypto {
 
         /// 明文种子（base64 常量，来自二进制）
         private static let seedB64 = "UmZnOVRHVXNVcld5M01QVA=="
 
-        /// 派生 (key, iv)。两者都是 16 字节 UTF8（AES-128）。
+        /// 派生 (key, iv).两者都是 16 字节 UTF8（AES-128）.
         static func deriveKeyIV() -> (key: Data, iv: Data) {
             let seed = String(data: Data(base64Encoded: seedB64) ?? Data(), encoding: .utf8) ?? ""
             let seed2 = seed.replacingOccurrences(of: "T", with: "i")
@@ -148,10 +148,10 @@ enum NBStoreClient {
             return digest.map { String(format: "%02x", $0) }.joined()
         }
 
-        /// 明文 → 可发送的报文串。
+        /// 明文 → 可发送的报文串.
         ///
         /// 请求侧的两次替换由 `sub_100005094` 完成，常量已从汇编确认：
-        /// `aE`="E"→"-"、`aFf`="FF"→"."（顺序不可颠倒）。
+        /// `aE`="E"→"-"、`aFf`="FF"→"."（顺序不可颠倒）.
         static func encrypt(_ plain: Data) -> String? {
             let (key, iv) = deriveKeyIV()
             let (maybeCT, status) = aesCBC(plain, key: key, iv: iv, encrypt: true)
@@ -166,12 +166,12 @@ enum NBStoreClient {
                 .replacingOccurrences(of: "FF", with: ".")
         }
 
-        /// 报文串 → 明文。
+        /// 报文串 → 明文.
         ///
         /// **响应侧是 `gzip( base64( AES密文 ) )`** —— 服务端响应头带
-        /// `Content-Encoding: gzip`。若 URLSession 已自动解压（默认会），
-        /// 进来的就是纯 base64；若拿到的是原始字节，则需先 gunzip。
-        /// 两种都兼容。
+        /// `Content-Encoding: gzip`.若 URLSession 已自动解压（默认会），
+        /// 进来的就是纯 base64；若拿到的是原始字节，则需先 gunzip.
+        /// 两种都兼容.
         static func decrypt(_ s: String) -> Data? {
             let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let raw = Data(base64Encoded: trimmed,
@@ -179,7 +179,7 @@ enum NBStoreClient {
             let (key, iv) = deriveKeyIV()
             let (plain, status) = aesCBC(raw, key: key, iv: iv, encrypt: false)
             if plain == nil {
-                // 密文长度与状态码一起打 —— 只看「解密失败」根本分不清是数据坏了还是我们算错了。
+                // 密文长度与状态码一起打 —— 只看「解密失败」根本分不清是数据坏了还是我们算错了.
                 LoginLogger.shared.log("\(logTag) [失败] 响应解密失败：\(describe(status, cipherLength: raw.count))"
                                        + "（base64 解出 \(raw.count) 字节）",
                                        category: .appStore)
@@ -187,7 +187,7 @@ enum NBStoreClient {
             return plain
         }
 
-        /// 原始响应字节 → 明文。自行处理 gzip 外壳（不依赖 URLSession 的自动解压）。
+        /// 原始响应字节 → 明文.自行处理 gzip 外壳（不依赖 URLSession 的自动解压）.
         static func decrypt(responseBody data: Data) -> Data? {
             var body = data
             if body.count > 2, body[body.startIndex] == 0x1f,
@@ -199,13 +199,13 @@ enum NBStoreClient {
             return decrypt(s)
         }
 
-        /// gzip 解压（只取 deflate 段交给 Compression，跳过 gzip 头尾）。
+        /// gzip 解压（只取 deflate 段交给 Compression，跳过 gzip 头尾）.
         static func gunzip(_ data: Data) -> Data? {
             guard let deflate = gzipPayload(data) else { return nil }
             return inflate(deflate)
         }
 
-        /// 定位 gzip 里的 deflate 数据段（跳过 10 字节固定头 + 可选扩展字段）。
+        /// 定位 gzip 里的 deflate 数据段（跳过 10 字节固定头 + 可选扩展字段）.
         private static func gzipPayload(_ d: Data) -> Data? {
             guard d.count > 18 else { return nil }
             let b = [UInt8](d)
@@ -251,11 +251,11 @@ enum NBStoreClient {
         /// 把 `CCCryptorStatus` + 密文长度翻成一行可排查的人话（ND-03）.
         ///
         /// `CommonCrypto` 的状态码是**负数**（`kCCDecodeError = -4304`），日志里带原始值，
-        /// 便于与 Apple 官方头文件的定义逐一对照；`长度 % 16` 用来一眼看出「不是整块」。
+        /// 便于与 Apple 官方头文件的定义逐一对照；`长度 % 16` 用来一眼看出「不是整块」.
         static func describe(_ status: CCCryptorStatus, cipherLength: Int) -> String {
-            // v0.3.664（CI run 39128137548）：`kCCSuccess` 等 CommonCrypto 常量在 Swift 里
+            // `kCCSuccess` 等 CommonCrypto 常量在 Swift 里
             // 导入成 `Int`，不是 `CCCryptorStatus`（Int32）—— 直接写 `case kCCSuccess:` 会报
-            // "expression pattern of type 'Int' cannot match values of type 'CCCryptorStatus'"。
+            // "expression pattern of type 'Int' cannot match values of type 'CCCryptorStatus'".
             // 统一转成 Int 再比较，状态码原值照旧打印（status 本身仍是 Int32，日志无变化）.
             let code = Int(status)
             let name: String
@@ -283,19 +283,19 @@ enum NBStoreClient {
             return text
         }
 
-        /// AES-128-CBC + PKCS7（走 CommonCrypto，与客户端同款）。
+        /// AES-128-CBC + PKCS7（走 CommonCrypto，与客户端同款）.
         ///
-        /// ## v0.3.663（ND-03）：失败时**必须把 `CCCryptorStatus` 带出去**
+        /// ## ：失败时**必须把 `CCCryptorStatus` 带出去**
         ///
         /// 原实现 `guard status == kCCSuccess else { return nil }` 把状态码吞掉，
-        /// 上层只剩一个「解密失败」。真机上最常见的两种失败恰恰**原因相反**：
+        /// 上层只剩一个「解密失败」.真机上最常见的两种失败恰恰**原因相反**：
         /// · `kCCDecodeError` = 密文没解出来（PKCS7 填充非法 / base64 解成了别的东西）；
-        /// · `kCCBufferTooSmall` = 我们自己的缓冲区算小了（是代码 bug，不是数据问题）。
+        /// · `kCCBufferTooSmall` = 我们自己的缓冲区算小了（是代码 bug，不是数据问题）.
         /// 只有一个「解密失败」时，排查方向会被带到数据上 —— 与「data 打出来是正常 base64」
-        /// 自相矛盾。现在把 status 原样返回，由 `describe` 翻成人话并写进日志。
+        /// 自相矛盾.现在把 status 原样返回，由 `describe` 翻成人话并写进日志.
         ///
         /// 另：CBC 解密的输入长度必须是**块大小的整数倍**，不是 16 的倍数的密文
-        /// CCCrypt 无论如何都解不出明文 —— 单独报这个，比笼统的 `kCCAlignmentError` 有用。
+        /// CCCrypt 无论如何都解不出明文 —— 单独报这个，比笼统的 `kCCAlignmentError` 有用.
         private static func aesCBC(_ data: Data, key: Data, iv: Data,
                                    encrypt: Bool) -> (Data?, CCCryptorStatus) {
             let outCap = data.count + kCCBlockSizeAES128
@@ -325,7 +325,7 @@ enum NBStoreClient {
 
     // MARK: - 公共参数
 
-    /// 冷缓存时的**占位 UDID**（不阻塞、发出去也算合法请求）。
+    /// 冷缓存时的**占位 UDID**（不阻塞、发出去也算合法请求）.
     ///
     /// ## 为什么可以有占位（本会话受控实验复现）
     /// NB 服务端对 `searchOffSaleApp`（下架搜索）与 `getAppHistoryList`（取包）
@@ -333,80 +333,80 @@ enum NBStoreClient {
     /// - 搜索：真 / 假A / 假B / 空 / 畸形 五种输入 **5/5 均 `code=0`**，结果**逐字段相同**；
     /// - 取包：五种输入 **5/5 均 `code=0`**；url/sinf 的差异经「同一真 udid 连发 3 次」
     ///   验证为**每次请求的随机量**（3 次 url/sinf 各不相同），与 udid 无关；
-    ///   偶发的 `code=7` 在真 udid 上也会出现 ⇒ 服务端偶发，非 udid 所致。
+    ///   偶发的 `code=7` 在真 udid 上也会出现 ⇒ 服务端偶发，非 udid 所致.
     /// （脚本：`P4_全能签逆向/_工作区/验证脚本/nb_search_udid_probe.py`）
     ///
-    /// ⇒ **搜索、取包都不需要真设备身份**。占位值只需「非空」，用全 0 便于日志一眼识别。
+    /// ⇒ **搜索、取包都不需要真设备身份**.占位值只需「非空」，用全 0 便于日志一眼识别.
     private static let placeholderUDID = "00000000-0000000000000000"
 
-    /// 请求体里的 `udid` —— 有本机真值就用真值，取不到就由调用方回落到 `placeholderUDID`。
+    /// 请求体里的 `udid` —— 有本机真值就用真值，取不到就由调用方回落到 `placeholderUDID`.
     ///
     /// ## 取值链路（与全项目其它地方一致，都走 `LocalDeviceIdentity`）
     /// ① 缓存已热 → 本函数返回真 UDID；
     /// ② 缓存冷 → 本函数返回 nil，调用方（`perform`）**用 `placeholderUDID` 直接发出**，
-    ///    **不 await、不等隧道**（这是本会话的核心修复，见下）。
+    ///    **不 await、不等隧道**（这是本会话的核心修复，见下）.
     ///
     /// ## 修 P0（三轮）
     ///
-    /// - **第一轮（不完整）**：这里原来同步调 `LocalDeviceIdentity.load()` 建 RSD 隧道。
+    /// - **第一轮（不完整）**：这里原来同步调 `LocalDeviceIdentity.load()` 建 RSD 隧道.
     ///   本工程开了 `SWIFT_APPROACHABLE_CONCURRENCY`（SE-0461 `NonisolatedNonsendingByDefault`，
     ///   `project.yml:172`）⇒ `nonisolated async` 的 `perform` 跑在调用者 MainActor 上
-    ///   ⇒ 建隧道落在主线程 ⇒ UI 全局卡死（真机实测单次阻塞 150,311ms / 225,070ms，进程未崩）。
-    ///   照牛蛙源 `NiuwaStoreClient.swift:433-441` 的先例改成「只吃缓存」，冷缓存直接返回 nil。
+    ///   ⇒ 建隧道落在主线程 ⇒ UI 全局卡死（真机实测单次阻塞 150,311ms / 225,070ms，进程未崩）.
+    ///   照牛蛙源 `NiuwaStoreClient.swift:433-441` 的先例改成「只吃缓存」，冷缓存直接返回 nil.
     /// - **第二轮（过度）**：只吃缓存 ⇒ 冷缓存首次搜索必失败，用户不接受；遂改为
-    ///   **异步等待就绪**（`awaitRealUDID()` 最多 12s，超时抛 `.deviceNotReady`）。
+    ///   **异步等待就绪**（`awaitRealUDID()` 最多 12s，超时抛 `.deviceNotReady`）.
     /// - **第三轮（本会话，正解）**：等待把「搜个下架应用」这种**不需要身份**的操作
     ///   绑死在「隧道是否就绪」上 —— 隧道起不来时搜索被一起拖死（用户原话：
-    ///   「之前只是下架应用无法下载，你改了之后越改越差」）。**既然服务端忽略 udid，
+    ///   「之前只是下架应用无法下载，你改了之后越改越差」）.**既然服务端忽略 udid，
     ///   搜索就不该等隧道** ⇒ 删掉 `awaitRealUDID()` 与 `.deviceNotReady`，
     ///   冷缓存直接用占位发出；后台仍挂一次 `warmUpInBackground()`（幂等、不 await），
-    ///   让下一次请求自然用上真 udid。
+    ///   让下一次请求自然用上真 udid.
     ///
     /// ## 旧归因的更正（保留以免重犯）
-    /// v0.3.545 曾把「NB 源下的包装上闪退」归因为「伪 UDID → sinf 与本机不匹配」，
+    /// 曾把「NB 源下的包装上闪退」归因为「伪 UDID → sinf 与本机不匹配」，
     /// **已被实验推翻**：服务端忽略 udid，真因是 **hex 被当 base64** 的编码损坏
-    /// （sinf 被写成 1.5 倍垃圾字节，v0.3.563 修复）。**与 udid / 本机硬件无关。**
-    /// v0.3.554 另修了一个上游 bug：`LocalDeviceIdentity` 曾把 lockdown 键名写成
-    /// `UniqueDeviceIdentifier`（真实键 `UniqueDeviceID`），两条路都取不到 —— 已修正。
+    /// （sinf 被写成 1.5 倍垃圾字节，修复）.**与 udid / 本机硬件无关.**
+    /// 另修了一个上游 bug：`LocalDeviceIdentity` 曾把 lockdown 键名写成
+    /// `UniqueDeviceIdentifier`（真实键 `UniqueDeviceID`），两条路都取不到 —— 已修正.
     private static func cachedRealUDID() -> String? {
         guard let udid = LocalDeviceIdentity.cachedSnapshot()?.udid,
               !udid.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return udid
     }
 
-    /// 公共参数 —— 就是 NB 的"免登录"身份，没有 token / Authorization / uid。
+    /// 公共参数 —— 就是 NB 的"免登录"身份，没有 token / Authorization / uid.
     ///
-    /// 这一组**必须齐**，否则服务端回「请更新到最新版」（那是闸门，不是真要求升级）。
-    /// 字段与取值来自 `sub_1000046F4` 反编译。
+    /// 这一组**必须齐**，否则服务端回「请更新到最新版」（那是闸门，不是真要求升级）.
+    /// 字段与取值来自 `sub_1000046F4` 反编译.
     ///
-    /// ## v0.3.540 修复：**字典字面量里的重复键会让 App 直接崩**
+    /// ## 修复：**字典字面量里的重复键会让 App 直接崩**
     ///
-    /// 原实现把 `phoneName` / `deviceType` / `productType` 各写了**两遍**。
+    /// 原实现把 `phoneName` / `deviceType` / `productType` 各写了**两遍**.
     /// Swift 的字典字面量遇到重复键不是"后者覆盖前者"，而是编译期插入
     /// `_preconditionFailure` —— 运行到这里就是
-    /// `Fatal error: Dictionary literal contains duplicate keys`，**进程当场死**。
+    /// `Fatal error: Dictionary literal contains duplicate keys`，**进程当场死**.
     ///
     /// 这正是「点 NB 源获取就闪退」的真因：任何 NB 请求的第一步都是构造这一组参数，
     /// 所以还没轮到发 HTTP 就崩了 —— 也解释了为什么日志里 `[NB源]` 一行都没有
-    /// （崩溃发生在 `LoginLogger.log("→ POST …")` 之前）。
+    /// （崩溃发生在 `LoginLogger.log("→ POST …")` 之前）.
     ///
     /// 改为在**构造后再赋值**：先建好不发重复键的基底，缺省值用下标写回，
-    /// 这样即使将来再加字段也不会重复触发这个坑。
+    /// 这样即使将来再加字段也不会重复触发这个坑.
     /// - Parameter realUDID: 调用方（`perform`）传入的 `udid` —— 有本机真值就是真值，
-    ///   冷缓存则是 `placeholderUDID`；本函数只负责塞进参数，不判空、不阻塞。
+    ///   冷缓存则是 `placeholderUDID`；本函数只负责塞进参数，不判空、不阻塞.
     private static func pubParams(iPad: Bool, udid realUDID: String) -> [String: Any] {
-        // v0.3.590：`udid` 由 `perform` 决定 —— 有缓存用真值，否则用 `placeholderUDID`。
+        // `udid` 由 `perform` 决定 —— 有缓存用真值，否则用 `placeholderUDID`.
         // 服务端**完全忽略 udid**（搜索/取包 5/5 code=0，见 `placeholderUDID` 注释），
-        // 所以这里不再要求非空、更不在这里等隧道。
+        // 所以这里不再要求非空、更不在这里等隧道.
         //
         // 旧归因更正：曾担心「伪 UDID 换回的 sinf 与本机不匹配」，该因果已被受控实验证伪
-        // （NB 服务端忽略 udid）。真机闪退的真因是 hex 被当 base64 的编码损坏（v0.3.563 修复）。
-        // 实测抓包值（2026-10-01 / 10-02）：客户端 3.9.1 / build 1。
-        // 与请求体里的 appVersion 是同一个值，服务端会校验，勿随意改小。
+        // （NB 服务端忽略 udid）.真机闪退的真因是 hex 被当 base64 的编码损坏（修复）.
+        // 实测抓包值（2026-10-01 / 10-02）：客户端 3.9.1 / build 1.
+        // 与请求体里的 appVersion 是同一个值，服务端会校验，勿随意改小.
         var p: [String: Any] = [
             "mainBundleID": "com.nbmaster.app",
-            // v0.3.554：真机发的是**布尔** `false`，原来写的是整数 `0`。
-            // 逐字段对齐真机抓包，别让类型差异成为服务端判参数不合法的理由。
+            // 真机发的是**布尔** `false`，原来写的是整数 `0`.
+            // 逐字段对齐真机抓包，别让类型差异成为服务端判参数不合法的理由.
             "mainEmbedded": false,
             "apiVersion": "1.0",
             "version": "3.9.1",
@@ -415,28 +415,28 @@ enum NBStoreClient {
             "osVersion": UIDevice.current.systemVersion,
             "udid": realUDID,
             "lang": "zh-cn",
-            // v0.3.554：真机两次抓包都是字面量 `"iPhone"`（不是设备名「XX的 iPhone」）。
+            // 真机两次抓包都是字面量 `"iPhone"`（不是设备名「XX的 iPhone」）.
             // 我们原来发 `UIDevice.current.name`，取值随用户改设备名而变 ——
-            // 这属于**身份字段**，客户端自己发的是固定字面量，跟着对齐。
+            // 这属于**身份字段**，客户端自己发的是固定字面量，跟着对齐.
             "phoneName": "iPhone",
-            // 机型标识读真机 `hw.machine`（如 `iPhone12,1`）；读不到才兜底。
+            // 机型标识读真机 `hw.machine`（如 `iPhone12,1`）；读不到才兜底.
             "productType": deviceModelIdentifier(),
             "deviceType": iPad ? "iPad" : "iPhone",
         ]
         // 机型标识兜底：`hw.machine` 拿不到时用 `UIDevice` 的机型族，**不再写死 `iPhone12,1`**
-        // —— 那是抓包那台设备的值，当常量会让 iPad 请求也报 iPhone 机型。
+        // —— 那是抓包那台设备的值，当常量会让 iPad 请求也报 iPhone 机型.
         if (p["productType"] as? String)?.isEmpty != false {
             p["productType"] = iPad ? "iPad" : "iPhone"
         }
         return p
     }
 
-    /// 机型标识（`hw.machine`，如 `iPhone15,4`）。
+    /// 机型标识（`hw.machine`，如 `iPhone15,4`）.
     ///
     /// 反编译样本里是 `iPhone12,1`，但那是**抓包那台机器**的值，不是协议常量 ——
-    /// 服务端只把它当"这个客户端跑在什么设备上"的信息字段。
-    /// 直接读本机 `hw.machine`，取不到才回落到样本值。
-    /// 用 `sysctlbyname` 而不是 `uname`，避免 `utsname.machine` 那串 C 数组转字符串的噪音。
+    /// 服务端只把它当"这个客户端跑在什么设备上"的信息字段.
+    /// 直接读本机 `hw.machine`，取不到才回落到样本值.
+    /// 用 `sysctlbyname` 而不是 `uname`，避免 `utsname.machine` 那串 C 数组转字符串的噪音.
     private static func deviceModelIdentifier() -> String {
         var size = 0
         guard sysctlbyname("hw.machine", nil, &size, nil, 0) == 0, size > 0 else { return "" }
@@ -447,7 +447,7 @@ enum NBStoreClient {
 
     // MARK: - 模型
 
-    /// 历史版本列表里的一项（`getAppHistoryList` 响应）。
+    /// 历史版本列表里的一项（`getAppHistoryList` 响应）.
     struct NBVersion: Identifiable, Hashable {
         /// App Store 的 `softwareVersionExternalIdentifier`（= NB 的 `appExtId`）
         var externalIdentifier: String
@@ -464,11 +464,11 @@ enum NBStoreClient {
         /// base64 的 `.sinf`（安装加密包时必须写回包内 `SC_Info/`）
         var sinfBase64: String?
         var version: String?
-        /// v0.3.592：服务端回的真实版本号（`data.metadata.bundleShortVersionString`）。
-        /// 供「已回退到 vX.Y.Z」这类提示用；取不到就 nil（界面回落 `version`）。
+        /// 服务端回的真实版本号（`data.metadata.bundleShortVersionString`）.
+        /// 供「已回退到 vX.Y.Z」这类提示用；取不到就 nil（界面回落 `version`）.
         var displayVersion: String? = nil
-        /// v0.3.592：本包是否**经版本回退**取得（最新版 `code=7` → 换了旧版本命中）。
-        /// 界面据此决定要不要给一次「已回退」轻提示（false 时静默，不刷屏）。
+        /// 本包是否**经版本回退**取得（最新版 `code=7` → 换了旧版本命中）.
+        /// 界面据此决定要不要给一次「已回退」轻提示（false 时静默，不刷屏）.
         var fellBack: Bool = false
     }
 
@@ -493,34 +493,27 @@ enum NBStoreClient {
         }
     }
 
-    /// 取包失败时，把 NB 的 `code=7` 翻成**用户可读**的结论 —— 界面绝不出现 `code=7` 这类内部码。
+    /// 取包失败时，把 NB 的 `code=7` 翻成**用户可读**的结论 —— 界面绝不出现 `code=7` 这类内部码.
     ///
-    /// ## 两类成因（2026-10-11 定点实测，StikDebug / appID=6744045754）
     ///
     /// 脚本 `P4_全能签逆向/_工作区/验证脚本/nb_stikdebug_retry.py`：对 `getAppHistoryList`
     /// 的各参数组合各连打 6 次，结果**全部 `code=7`**，msg 只有两种：
-    /// - **`未获取到数据`（稳定，主因）** —— NB 库里没有这条 App 的可用 iOS 包。
-    ///   StikDebug 的内嵌快照直链（`appStoreData.url`）accessKey 到期 **2025-12-13**、
-    ///   实下 `HTTP 403`；现取也回空。⇒ **真的拿不到**，不是 bug、重试无用。
+    /// - **`未获取到数据`（稳定，主因）** —— NB 库里没有这条 App 的可用 iOS 包.
+    ///   实下 `HTTP 403`；现取也回空.⇒ **真的拿不到**，不是 bug、重试无用.
     /// - **`请求异常，参数：，错误：dialing to the given TCP address timed out`（偶发）**
-    ///   —— NB 服务端去上游取包时 TCP 超时，属临时故障 ⇒ 稍后重试可能成功。
     ///
-    /// ## 更正 v0.3.587 的窄化归因
+    /// ## 更正 的窄化归因
     ///
-    /// v0.3.587 把稳定 `code=7` 归成「都是 Mac App Store 应用（无 iOS 包）」。
-    /// **StikDebug 是 iOS 应用**（bundleID `com.stik.sj`、iOS 安装包），同样稳定 `code=7`
+    /// 把稳定 `code=7` 归成「都是 Mac App Store 应用（无 iOS 包）」.
     /// ⇒ 稳定 `code=7` 的真实含义是「**NB 库里这条 App 没有可取的包**」，
-    /// 与平台无关（快照过期 / 上游无货都会落到这一支）。
     ///
     /// ## 对照组（同一时刻，证「按 App 区分」而非全局故障）
     ///
     /// `appID=6451407032`（官方抓包那条）与 `appID=1517062289` 均 `code=0` 且带**新鲜**直链
     /// （accessKey 到期在未来）；换 `udid` / `osVersion` / `productType` / `country` /
-    /// `User-Agent` / 官方抓包身份 / 4 台 host **没有一种**能把 StikDebug 的 7 变成 0。
     enum PackageFailure: Equatable {
-        /// NB 库里没有这条 App 的可用安装包（含快照直链已过期）—— 重试无用。
+        /// NB 库里没有这条 App 的可用安装包（含快照直链已过期）—— 重试无用.
         case notInLibrary
-        /// 服务端上游临时故障 —— 稍后重试可能成功。
         case upstreamBusy
 
         /// 面向用户的文案（英文句点结尾；不含任何内部码）.
@@ -537,47 +530,44 @@ enum NBStoreClient {
         }
     }
 
-    /// 把取包抛出的错误归类成 `PackageFailure`；`code=7` 与总超时归类，其余回 nil（交调用方原样处理）。
+    /// 把取包抛出的错误归类成 `PackageFailure`；`code=7` 与总超时归类，其余回 nil（交调用方原样处理）.
     ///
     /// 界面侧统一走这里，避免每个页面各自判 `code=7` 时漏判（详情页就曾漏判、把
-    /// `未获取到数据（7）` 原样弹给用户）。
+    /// `未获取到数据（7）` 原样弹给用户）.
     static func packageFailure(from error: Error) -> PackageFailure? {
         guard case StoreError.server(let code, let message) = error else { return nil }
         // F-04：`withTotalTimeout` 抛的是 `code=timeout`，不是 7 —— 原判据直接回 nil，
-        // 调用方回落成「…：总超时 25s（timeout）」把内部码弹给用户；超时与「上游忙」
         // 同为可重试故障，归 `.upstreamBusy`.
         if code == "timeout" { return .upstreamBusy }
         guard code == "7" else { return nil }
         return isUpstreamBusy(message) ? .upstreamBusy : .notInLibrary
     }
 
-    /// `code=7` 是否属「上游临时故障」——**唯一判据是 msg 里的特征串**。
-    /// 其余 `code=7`（含 `未获取到数据`）一律按「库里没包」处理。
+    /// 其余 `code=7`（含 `未获取到数据`）一律按「库里没包」处理.
     private static func isUpstreamBusy(_ message: String) -> Bool {
         message.contains("dialing") || message.contains("请求异常")
     }
 
-    /// 内嵌快照直链的存活判定（HEAD 探一次）—— v0.3.596.
+    /// 内嵌快照直链的存活判定（HEAD 探一次）—— .
     ///
     /// 三态**缺一不可**：`.unknown` 存在的意义就是「**判不出绝不判死**」——
-    /// 防「判不出 ⇒ 当失败」这类回归（v0.3.588 就是拿 accessKey 时间戳判不出即弃用，
-    /// 结果把还能用的链接也丢了，用户「获取不到下载任务」）。
+    /// 防「判不出 ⇒ 当失败」这类回归（就是拿 accessKey 时间戳判不出即弃用，
+    /// 结果把还能用的链接也丢了，用户「获取不到下载任务」）.
     enum SnapshotLiveness {
-        /// 直链还能下（HEAD 200/206）—— 可以用。
+        /// 直链还能下（HEAD 200/206）—— 可以用.
         case live
-        /// 直链已失效（HEAD 403/404）—— 不能发（发了就是「任务建了、包下不动」）。
+        /// 直链已失效（HEAD 403/404）—— 不能发（发了就是「任务建了、包下不动」）.
         case dead
-        /// 判不出（超时 / 网络错 / 其它状态码）—— **保留**，不因判不出而丢弃。
+        /// 判不出（超时 / 网络错 / 其它状态码）—— **保留**，不因判不出而丢弃.
         case unknown
     }
 
-    /// 用 HEAD 探 Apple CDN 直链是否还能下 —— v0.3.596.
+    /// 用 HEAD 探 Apple CDN 直链是否还能下 —— .
     ///
     /// ## 为什么（2026-10-12 实测定案）
     /// `offSalePackage` 现取失败时回落的那条内嵌快照直链，其 `accessKey` **全部已过期**：
-    /// 实测（`nb_offsale_url_compare.py`）StikDebug / com.bilibili.inter / live.bilibili.com
-    /// 三条 `Range: bytes=0-1048575` **一律 HTTP 403**。而 v0.3.593 无条件 `return embedded`
-    /// ⇒ 界面照样建下载任务、URL 是这条死链 ⇒ 进度条出来、包下不动 ⇒ 用户看到「无法下载」。
+    /// 三条 `Range: bytes=0-1048575` **一律 HTTP 403**.而 无条件 `return embedded`
+    /// ⇒ 界面照样建下载任务、URL 是这条死链 ⇒ 进度条出来、包下不动 ⇒ 用户看到「无法下载」.
     ///
     /// ## 探法
     /// 只发 **HEAD**（不拉 body，代价极小）；判据（`t12_probe_head.py` 实测）：
@@ -600,14 +590,14 @@ enum NBStoreClient {
         }
     }
 
-    /// 把「内嵌快照」当**兜底链接**返回 —— **先 HEAD 探活**，死链不发给用户 —— v0.3.596.
+    /// 把「内嵌快照」当**兜底链接**返回 —— **先 HEAD 探活**，死链不发给用户 —— .
     ///
-    /// 这是 v0.3.593「现取失败回落内嵌快照」的**收紧版**：保留「有链接优先」的初衷
-    /// （探不出就仍给），但**死链（403/404）不再发**（发了 = 有任务下不动 = 用户眼里的「无法下载」）。
+    /// 这是 「现取失败回落内嵌快照」的**收紧版**：保留「有链接优先」的初衷
+    /// （探不出就仍给），但**死链（403/404）不再发**（发了 = 有任务下不动 = 用户眼里的「无法下载」）.
     /// 死链返回 `nil`，由调用方按「库里没包」如实处理（与 `PackageFailure.notInLibrary`
-    /// 自己的定义「含快照直链已过期」一致 —— v0.3.593 把过期快照当链接发出去，与定义自相矛盾）。
+    /// 自己的定义「含快照直链已过期」一致 —— 把过期快照当链接发出去，与定义自相矛盾）.
     ///
-    /// - Returns: 活链或判不出的快照；**死链返回 `nil`**。
+    /// - Returns: 活链或判不出的快照；**死链返回 `nil`**.
     private static func snapshotFallback(_ embedded: NBPackage?,
                                          app: OffSaleApp,
                                          reason: String) async -> NBPackage? {
@@ -637,46 +627,46 @@ enum NBStoreClient {
         return URLSession(configuration: cfg)
     }()
 
-    /// 发一次请求：加密请求体 → POST → 解密响应。
+    /// 发一次请求：加密请求体 → POST → 解密响应.
     ///
-    /// `path` 是 `pav`（如 `/nb/appstore-plus`）；为空时服务端回落 `/nb/app`。
+    /// `path` 是 `pav`（如 `/nb/appstore-plus`）；为空时服务端回落 `/nb/app`.
     ///
-    /// ## v0.3.554 修：`iPad` 默认值从 `true` 改成**自动判定**
+    /// ## 修：`iPad` 默认值从 `true` 改成**自动判定**
     ///
     /// 原来 `iPad: Bool = true`，而四个调用点**没有一个传这个参数** ——
-    /// 于是所有 NB 请求都发 `"deviceType":"iPad"`。
+    /// 于是所有 NB 请求都发 `"deviceType":"iPad"`.
     /// 真机抓包（iPhone 11 / iOS 26.0.1）显示 NB 官方客户端发的是
-    /// `"deviceType":"iPhone"` + `"productType":"iPhone12,1"`。
+    /// `"deviceType":"iPhone"` + `"productType":"iPhone12,1"`.
     ///
     /// 后果：**下架库是按设备类型分的**，服务端拿 iPad 身份去 iPhone 的下架库里查，
-    /// 命中数为 0 —— 表现就是「下架应用怎么搜都搜不到」。
+    /// 命中数为 0 —— 表现就是「下架应用怎么搜都搜不到」.
     ///
-    /// 现在默认走 `UIDevice` 判定（iPad 才发 iPad），调用方无需再传。
+    /// 现在默认走 `UIDevice` 判定（iPad 才发 iPad），调用方无需再传.
     ///
-    /// ## v0.3.590 修：`udid` **不再等待隧道**
+    /// ## 修：`udid` **不再等待隧道**
     ///
     /// 服务端忽略 `udid`（实验见 `placeholderUDID` 注释）⇒ 本方法**绝不**为取 `udid`
-    /// 而 `await` 隧道：缓存热就用真值，冷就用 `placeholderUDID` 直接发。
-    /// 这样「搜个下架应用」不再被「隧道是否就绪」拖死（详见下方内联注释）。
+    /// 而 `await` 隧道：缓存热就用真值，冷就用 `placeholderUDID` 直接发.
+    /// 这样「搜个下架应用」不再被「隧道是否就绪」拖死（详见下方内联注释）.
     private static func perform(path: String,
                                 method: String,
                                 params: [String: Any],
                                 iPad: Bool? = nil) async throws -> [String: Any] {
         let isPad = iPad ?? (UIDevice.current.userInterfaceIdiom == .pad)
-        // URL 在下面的 failover 循环里逐条构造（每个 host 一条），此处不再预先建。
-        // v0.3.590：**不再等隧道**。udid 有缓存就用真值，没有就用占位，**永不阻塞这一发**。
+        // URL 在下面的 failover 循环里逐条构造（每个 host 一条），此处不再预先建.
+        // **不再等隧道**.udid 有缓存就用真值，没有就用占位，**永不阻塞这一发**.
         //
         // 依据（受控实验，本会话复现，见 `nb_search_udid_probe.py`）：
         // NB 服务端对 `searchOffSaleApp`（下架搜索）与 `getAppHistoryList`（取包）
         // **完全忽略 `udid`** —— 真 / 假 / 空 / 畸形五种输入，搜索 5/5 均 `code=0`
         // 且结果逐字段相同；取包 5/5 均 `code=0`（url/sinf 的差异经同 udid 连发验证
-        // 来自每次请求的随机量，与 udid 无关）。
+        // 来自每次请求的随机量，与 udid 无关）.
         //
         // ⇒ **搜索、取包都不需要真设备身份**，也就**不该把「隧道是否就绪」放在关键路径上**：
         //   原来冷缓存时 `await awaitRealUDID()` 最多等 12s，隧道起不来就抛
-        //   `.deviceNotReady`，把「搜个下架应用」这种不需要身份的操作也一起弄挂了。
+        //   `.deviceNotReady`，把「搜个下架应用」这种不需要身份的操作也一起弄挂了.
         //   现在改成「有缓存用真值、没有用占位」，后台仍挂 `warmUpInBackground()`（幂等、
-        //   不 await），让**下一次**请求能自然用上真 udid。
+        //   不 await），让**下一次**请求能自然用上真 udid.
         let realUDID: String
         if let cached = cachedRealUDID() {
             realUDID = cached
@@ -696,8 +686,8 @@ enum NBStoreClient {
         }
 
         // host failover：`hosts` 里有 4 条备选，原实现固定用 hosts[0] ——
-        // 首条不通时整个 NB 源不可用，而注释写的是「首个可用的」，名不副实。
-        // 这里按 `hosts` 顺序逐条试：失败就换下一条，全部失败才抛最后一个错误。
+        // 首条不通时整个 NB 源不可用，而注释写的是「首个可用的」，名不副实.
+        // 这里按 `hosts` 顺序逐条试：失败就换下一条，全部失败才抛最后一个错误.
         var data: Data?
         var lastError: Error?
         var hitHost: String?
@@ -734,7 +724,7 @@ enum NBStoreClient {
         }
 
         // 响应体是 gzip(base64(AES))；decrypt(responseBody:) 自行处理 gzip 外壳，
-        // 也兼容 URLSession 已自动解压（拿到裸 base64）的情况。
+        // 也兼容 URLSession 已自动解压（拿到裸 base64）的情况.
         guard let dec = Crypto.decrypt(responseBody: data),
               let obj = (try? JSONSerialization.jsonObject(with: dec)) as? [String: Any] else {
             let preview = String(data: data.prefix(200), encoding: .utf8)
@@ -747,17 +737,17 @@ enum NBStoreClient {
         let code = String(describing: obj["code"] ?? "-")
         let msg = (obj["msg"] as? String) ?? ""
         // ND-13：把**实际命中的 host** 打在响应行上 —— 只打请求行看不出中途换过 host，
-        // 排查「这条响应到底来自哪台服务器」时全靠它。
+        // 排查「这条响应到底来自哪台服务器」时全靠它.
         LoginLogger.shared.log("\(logTag) ← code=\(code) msg=\(truncate(msg))"
                                + "（实际命中 \(hitHost ?? "?")，本轮共试 \(order.count) 条）",
                                category: .appStore)
 
         // code=0 才是成功；其余把服务端原话带出去（用户截图一次即可定案）
         //
-        // v0.3.663（ND-16）：原来只有 `as? NSNumber` 命中**且非 0** 才抛错 ——
+        // 原来只有 `as? NSNumber` 命中**且非 0** 才抛错 ——
         // 服务端要是把 `code` 回成字符串 `"7"`，`as? NSNumber` 失败、判定直接跳过，
-        // 一个**失败响应**会被当成成功返回给上层（随后表现为「取到了包但没有 url」）。
-        // 现在反过来判：只要「不是 0」就失败，不管它是数字还是字符串。
+        // 一个**失败响应**会被当成成功返回给上层（随后表现为「取到了包但没有 url」）.
+        // 现在反过来判：只要「不是 0」就失败，不管它是数字还是字符串.
         let numericCode = (obj["code"] as? NSNumber)?.intValue
         if let numericCode {
             if numericCode != 0 { throw StoreError.server(code: code, message: msg) }
@@ -773,21 +763,21 @@ enum NBStoreClient {
 
     // MARK: - 业务
 
-    /// 取指定 App、指定历史版本的安装包信息（IPA 直链 + sinf）。
+    /// 取指定 App、指定历史版本的安装包信息（IPA 直链 + sinf）.
     ///
     /// ## 这就是「按 `appVerId` 取指定版本」的入口
-    /// - 只传 `appID`：回**最新版**的包（实测 2026-10-09 直连：`code=0` + 完整 `url`/`sinf`）。
-    /// - 传 `appID` + `appVerId`：回**那个指定版本**的包。
+    /// - 只传 `appID`：回**最新版**的包（实测 2026-10-09 直连：`code=0` + 完整 `url`/`sinf`）.
+    /// - 传 `appID` + `appVerId`：回**那个指定版本**的包.
     ///
     /// **对下架 App 一样可用**（此前注释里「那条路是错的」指的是另一个名字相近的
-    /// `getOffSaleAppHistoryList`，不是本方法；本方法就是上架通道在用的 `getAppHistoryList`）。
+    /// `getOffSaleAppHistoryList`，不是本方法；本方法就是上架通道在用的 `getAppHistoryList`）.
     /// 实测（2026-10-09）：`appID=1517062289` + `appVerId=891589210` → 版本 6.6.0，
-    /// 直链 HEAD → HTTP 200。
+    /// 直链 HEAD → HTTP 200.
     ///
     /// ## 典型用法：导入一个 IPA → 用它的 `externalVersionId` 取同版本
     /// 包内 `iTunesMetadata.plist` 的 `softwareVersionExternalIdentifier` 就是 `appVerId`，
     /// `itemId` 就是 `appID` —— 拿这两个值调本方法即可取回**同版本**的包 + sinf，
-    /// **不需要任何版本列表**。语义化入口见 `packageByVersion(appID:appVerId:...)`。
+    /// **不需要任何版本列表**.语义化入口见 `packageByVersion(appID:appVerId:...)`.
     ///
     /// ## 实测报文（2026-10-01 抓包，非推测）
     /// ```
@@ -798,7 +788,7 @@ enum NBStoreClient {
     /// ```
     /// 响应 `data` = `{ hashMD5, url, sinfs[{id,data,dataHex}] }`，
     /// `url` 直接就是 Apple CDN 的 IPA 直链（`iosapps.itunes.apple.com/itunes-assets/…`），
-    /// `sinfs[0].dataHex` 是完整 sinf 授权块。**无需账号、无需 Anisette。**
+    /// `sinfs[0].dataHex` 是完整 sinf 授权块.**无需账号、无需 Anisette.**
     ///
     /// ## 关键修正（此前推断有误）
     /// - 路径是 **`/nb/app-downgrade`**，不是 `/nb/appstore-plus`
@@ -808,16 +798,16 @@ enum NBStoreClient {
     ///
     /// 参数键名由 Swift 表单的小端立即数确认：
     /// `0x444973756C70`="plusID"、`0x4449707061`="appID"、`0x4449656C646E7562`="bundleID"、
-    /// `0x7972746E756F63`="country"、`0x6449726556707061`="appVerId"。
+    /// `0x7972746E756F63`="country"、`0x6449726556707061`="appVerId".
     ///
-    /// **实测类型**：`plusID` 传 Int 会被判「参数不合法」，传 String 才进入查询 —— 故按字符串发。
+    /// **实测类型**：`plusID` 传 Int 会被判「参数不合法」，传 String 才进入查询 —— 故按字符串发.
     static func package(appID: String,
                         appVerId: String = "",
                         bundleID: String = "",
                         plusID: String = "0",
                         country: String = "cn") async throws -> NBPackage? {
-        // 实测（2026-10-01）：**只传 appID 就能取到包**，bundleID 可省。
-        // 空串会参与进请求体，所以干脆不塞 —— 少一个字段少一处踩雷。
+        // 实测（2026-10-01）：**只传 appID 就能取到包**，bundleID 可省.
+        // 空串会参与进请求体，所以干脆不塞 —— 少一个字段少一处踩雷.
         var p: [String: Any] = ["plusID": plusID, "appID": appID, "country": country]
         if !appVerId.isEmpty { p["appVerId"] = appVerId }
         if !bundleID.isEmpty { p["bundleID"] = bundleID }
@@ -828,41 +818,41 @@ enum NBStoreClient {
         let d = (obj["data"] as? [String: Any]) ?? obj
         guard let url = string(d["url"]), !url.isEmpty else { return nil }
 
-        // sinfs 优先取 dataHex（实测字段名），退回 data。
+        // sinfs 优先取 dataHex（实测字段名），退回 data.
         //
-        // 注意： 2026-10-05 真机定案：**这两个字段的编码不同，必须分别处理，不能混在一句 `??` 里。**
+        // 注意： 2026-10-05 真机定案：**这两个字段的编码不同，必须分别处理，不能混在一句 `??` 里.**
         //   · `dataHex` 是 **hex**（2144 字符 = 1072 字节）→ 必须 hex→base64
         //   · `data`    是 **base64**（原样透传）
         //
-        // 以前写成 `string(first["dataHex"]) ?? string(first["data"])`，hex 被当 base64 解。
+        // 以前写成 `string(first["dataHex"]) ?? string(first["data"])`，hex 被当 base64 解.
         // 而 **hex 字符集 [0-9a-f] 恰好全在 base64 字母表内**、2144 又是 4 的倍数 ⇒
         // `Data(base64Encoded:)` **静默成功**，产出 1.5 倍长度的垃圾（1056 字节 → 1584 字节），
-        // 全程没有一行报错。
+        // 全程没有一行报错.
         //
         // 真机实证（2026-10-05，设备 iPhone15,4 / iOS 27）：
         //   设备上 NB 源下的 `Via 浏览器-x.ipa`，其 `SC_Info/Via.sinf` 是 **1584 字节垃圾**
-        //   （头声明 3545052371、无 sinf 魔数）；而 NB 原版工具下的同一 App 是 **1056 字节正确件**。
-        //   同一天走 AppleID 通道下的同一 App 是 1032 字节且结构自洽 ⇒ 只有 NB 这条路径中招。
+        //   （头声明 3545052371、无 sinf 魔数）；而 NB 原版工具下的同一 App 是 **1056 字节正确件**.
+        //   同一天走 AppleID 通道下的同一 App 是 1032 字节且结构自洽 ⇒ 只有 NB 这条路径中招.
         //
         // 同一份 hex 在**下架路径** `offSalePackage()` 里早就转了（见本文件 `hexToBase64`），
-        // 主路径漏了 —— `hexToBase64` 由 v0.3.557 引入时只补了下架路径。
+        // 主路径漏了 —— `hexToBase64` 由 引入时只补了下架路径.
         var sinf: String?
         if let arr = d["sinfs"] as? [[String: Any]], let first = arr.first {
             if let hex = string(first["dataHex"]) {
-                // v0.3.664：转完必须做**形态校验**，不能只看「hexToBase64 有没有返回 nil」。
-                // 见 `validatedSinf` 的注释 —— 编码对 ≠ 内容是 sinf。
+                // 转完必须做**形态校验**，不能只看「hexToBase64 有没有返回 nil」.
+                // 见 `validatedSinf` 的注释 —— 编码对 ≠ 内容是 sinf.
                 sinf = validatedSinf(hex: hex, where: "getAppHistoryList.dataHex", appID: appID)
             } else if let b64 = string(first["data"]) {
                 // 该字段本来就是 base64，**不要**再跑 hexToBase64（会二次解坏）；
-                // 但同样要校验形态（服务端回了别的 base64 也会堂而皇之进 ^）。
+                // 但同样要校验形态（服务端回了别的 base64 也会堂而皇之进 ^）.
                 sinf = validatedSinf(base64: b64, where: "getAppHistoryList.data", appID: appID)
             }
         }
-        // v0.3.545：拿不到 sinf 不许静默 —— 加密包缺 sinf 装不上，这条日志是唯一的线索
+        // 拿不到 sinf 不许静默 —— 加密包缺 sinf 装不上，这条日志是唯一的线索
         //
-        // v0.3.664：这里的措辞原来是「服务端没回 sinf」，但 `sinf == nil` 也可能是
-        // **回了、但内容不是 sinf**（被 `validatedSinf` 挡下）。两种情况要分开说 ——
-        // 前者该找服务端，后者该查我们的解析/编码，把方向弄反等于白排查。
+        // 这里的措辞原来是「服务端没回 sinf」，但 `sinf == nil` 也可能是
+        // **回了、但内容不是 sinf**（被 `validatedSinf` 挡下）.两种情况要分开说 ——
+        // 前者该找服务端，后者该查我们的解析/编码，把方向弄反等于白排查.
         if sinf == nil, hasSinfField(d) == false {
             LoginLogger.shared.log("\(logTag) [提示] 直链已取到，但服务端没回 sinf（udid=\(cachedRealUDID() ?? "?")）"
                                    + " —— 若包是加密的，安装会报「缺少 SC_Info/*.sinf」",
@@ -872,8 +862,8 @@ enum NBStoreClient {
                                    + "（详见上一行的形态校验日志）—— 直链可用，这份 sinf 不会写进包内",
                                    category: .appStore)
         }
-        // v0.3.592：把服务端回的真实版本号也带出去（`data.metadata.bundleShortVersionString`），
-        // 供「回退到旧版本」时界面提示「已回退到 vX.Y.Z」用。取不到就不带，界面回落 `version`。
+        // 把服务端回的真实版本号也带出去（`data.metadata.bundleShortVersionString`），
+        // 供「回退到旧版本」时界面提示「已回退到 vX.Y.Z」用.取不到就不带，界面回落 `version`.
         let displayVersion = string((d["metadata"] as? [String: Any])?["bundleShortVersionString"])
         return NBPackage(ipaURL: normalizeAsset(url),
                          sinfBase64: sinf,
@@ -881,45 +871,43 @@ enum NBStoreClient {
                          displayVersion: displayVersion)
     }
 
-    /// 按「主版本 + 候选版本（新→旧）」逐个取包；遇**稳定** `code=7` 自动回退到下一个版本。
+    /// 按「主版本 + 候选版本（新→旧）」逐个取包；遇**稳定** `code=7` 自动回退到下一个版本.
     ///
     /// ## 为什么需要（2026-10-11 实测定案）
     ///
-    /// App 侧此前只发**一个** `appVerId`（= 搜索结果的 `appExtID` = 最新版）。服务端把最新版
+    /// App 侧此前只发**一个** `appVerId`（= 搜索结果的 `appExtID` = 最新版）.服务端把最新版
     /// 清出库存时稳定回 `code=7 未获取到数据` —— 界面直接报「库里没包」，但**同 App 的旧版本
-    /// 可能仍在库**。脚本遍历版本数组时：bilibili 退 3 步（`891589210`→…→`889351059`）即
-    /// `code=0` + 新鲜直链（已实下 547MB 整包、MD5 与 API 一致）。⇒ 加版本回退即可修。
-    /// （StikDebug 整条 21 个版本链全 `code=7` ⇒ 库里确无包，回退也救不了 —— 如实报「没有」。）
+    /// 可能仍在库**.脚本遍历版本数组时：bilibili 退 3 步（`891589210`→…→`889351059`）即
+    /// `code=0` + 新鲜直链（已实下 547MB 整包、MD5 与 API 一致）.⇒ 加版本回退即可修.
     ///
     /// ## 判据（与 `PackageFailure` 同源）
-    /// - 成功（`code=0` 且带 url）→ 立即返回；`i > 0` 时把 `fellBack` 标上（界面提示一次）。
+    /// - 成功（`code=0` 且带 url）→ 立即返回；`i > 0` 时把 `fellBack` 标上（界面提示一次）.
     /// - **稳定** `code=7`（`未获取到数据` 之类）→ 记一行
-    ///   `[NB源] appVerId=… 回 code=7，回退到下一个`，继续试下一个候选。
-    /// - **上游临时故障**（`code=7` 且 msg 含 `dialing`/`请求异常`）→ **不中断**，记下继续试
+    ///   `[NB源] appVerId=… 回 code=7，回退到下一个`，继续试下一个候选.
     ///   —— 实测这类超时是**随机落在某一步**的（`nb_fallback_chain_probe.py`），换版本可能就躲开；
-    ///   全链都没命中且没遇到过稳定 7 时，才把它抛出（界面提示重试）。
-    /// - 非 `code=7`（网络 / HTTP / 解码）→ 记下、继续试；全失败且**一次稳定 7 都没遇到**才抛出（提示重试）。
+    ///   全链都没命中且没遇到过稳定 7 时，才把它抛出（界面提示重试）.
+    /// - 非 `code=7`（网络 / HTTP / 解码）→ 记下、继续试；全失败且**一次稳定 7 都没遇到**才抛出（提示重试）.
     ///
-    /// - Parameter primaryVerID: 首选版本号；空串 = 不传 `appVerId`（服务端回最新版）。
-    /// - Parameter embeddedCandidates: **内嵌**候选版本号（**新→旧**）。空数组 = 先只发主版本。
-    /// - Parameter fallbackProvider: **惰性**补候选（v0.3.597）—— 主版本/内嵌候选都未命中时才调
-    ///   一次（下架路径传 bilin 目录补；上架/详情路径传 `nil` 表示不补）。命中路径因此 0 次外呼。
-    /// - Parameter maxAttempts: 尝试的**版本**上限（主版本 + 回退合计），防无限试。
-    /// - Parameter sameVersionRetries: 同一版本遇**稳定** `code=7` 时的重试次数（v0.3.596 补）。
-    /// - Parameter maxRequests: **总请求**上限（含同版本重试），防「库里全没包」时把用户晾太久。
-    /// - Returns: 取到包；`nil` = 所有候选都取不到（库里没包）。
-    /// 给一段异步工作套「总超时」——超时即抛 `StoreError.server("timeout", …)`。
+    /// - Parameter primaryVerID: 首选版本号；空串 = 不传 `appVerId`（服务端回最新版）.
+    /// - Parameter embeddedCandidates: **内嵌**候选版本号（**新→旧**）.空数组 = 先只发主版本.
+    /// - Parameter fallbackProvider: **惰性**补候选—— 主版本/内嵌候选都未命中时才调
+    ///   一次（下架路径传 bilin 目录补；上架/详情路径传 `nil` 表示不补）.命中路径因此 0 次外呼.
+    /// - Parameter maxAttempts: 尝试的**版本**上限（主版本 + 回退合计），防无限试.
+    /// - Parameter sameVersionRetries: 同一版本遇**稳定** `code=7` 时的重试次数（补）.
+    /// - Parameter maxRequests: **总请求**上限（含同版本重试），防「库里全没包」时把用户晾太久.
+    /// - Returns: 取到包；`nil` = 所有候选都取不到（库里没包）.
+    /// 给一段异步工作套「总超时」——超时即抛 `StoreError.server("timeout", …)`.
     ///
-    /// ## 为什么需要它（v0.3.601，用户报「NB 卡在获取中」）
+    /// ## 为什么需要它（用户报「NB 卡在获取中」）
     ///
     /// `packageWithFallback` 的最坏路径是：主版本 1 次 + 同版本重试 1 次 + bilin 补候选 1 次
     /// + 候选回退最多 5 次 + 快照 HEAD 1 次，而 `session.timeoutIntervalForRequest = 15` ⇒
-    /// **最坏 ≈113 秒**。用户看到的就是「获取中…」一直转。
+    /// **最坏 ≈113 秒**.用户看到的就是「获取中…」一直转.
     ///
     /// **不改成「缩短单项超时」的原因**：单项超时缩短会把「本来就慢但能成功」的请求误杀
-    /// （实测 bilin 在限流下会跑到 10s+，但最终能返回版本列表）——那会退回到「调不出链接」。
+    /// （实测 bilin 在限流下会跑到 10s+，但最终能返回版本列表）——那会退回到「调不出链接」.
     /// **总超时只封顶「用户等待时长」**，不改任何单次请求的行为 ⇒ 快路径不受影响，
-    /// 只有「真的取不到」时提前收尾并如实报「暂时取不到」。
+    /// 只有「真的取不到」时提前收尾并如实报「暂时取不到」.
     private static func withTotalTimeout<T: Sendable>(
         seconds: Double,
         _ work: @escaping @Sendable () async throws -> T
@@ -947,7 +935,7 @@ enum NBStoreClient {
                                             maxAttempts: Int = 6,
                                             sameVersionRetries: Int = 1,
                                             maxRequests: Int = 8) async throws -> NBPackage? {
-        // 主版本在前（空串 = 不传 appVerId，服务端回最新版），内嵌候选按新→旧补齐并去重。
+        // 主版本在前（空串 = 不传 appVerId，服务端回最新版），内嵌候选按新→旧补齐并去重.
         var ordered: [String] = [primaryVerID]
         for c in embeddedCandidates where !c.isEmpty && !ordered.contains(c) { ordered.append(c) }
         var tries = Array(ordered.prefix(max(1, maxAttempts)))
@@ -955,17 +943,17 @@ enum NBStoreClient {
         var sawStable7 = false
         var lastOtherError: StoreError?
         // F-01：`lastOtherError` 一份承载两种语义 —— 「稳定 code=7（库里没包）」与「瞬时错误」，
-        // 而函数尾只看 `sawStable7` ⇒ 链上任意一次瞬时错误都被 code=7 掩盖成 nil（= 库里没包）。
-        // 瞬时错误单独记一份，尾部先分流上抛（返回值类型不变，仍 `NBPackage?`）。
+        // 而函数尾只看 `sawStable7` ⇒ 链上任意一次瞬时错误都被 code=7 掩盖成 nil（= 库里没包）.
+        // 瞬时错误单独记一份，尾部先分流上抛（返回值类型不变，仍 `NBPackage?`）.
         var lastTransientError: StoreError?
         var requests = 0
-        // v0.3.597：候选**惰性补** —— 主版本/内嵌候选都试完仍未命中时，才调 `fallbackProvider`
-        // 去 bilin 补（见 `offSalePackage`）。主版本能命中 ⇒ 整次 bilin（实测 ~1.4s、限流紧）全省。
+        // 候选**惰性补** —— 主版本/内嵌候选都试完仍未命中时，才调 `fallbackProvider`
+        // 去 bilin 补（见 `offSalePackage`）.主版本能命中 ⇒ 整次 bilin（实测 ~1.4s、限流紧）全省.
         var providerUsed = false
         var idx = 0
         scan: while idx < tries.count {
             if requests >= maxRequests {
-                // 请求预算用尽 —— 不再试（防「库里全没包」时把用户晾太久）。已得出的结论仍有效。
+                // 请求预算用尽 —— 不再试（防「库里全没包」时把用户晾太久）.已得出的结论仍有效.
                 break scan
             }
             let vid = tries[idx]
@@ -993,16 +981,15 @@ enum NBStoreClient {
                 } catch let e as StoreError {
                     guard case .server(let code, let message) = e, code == "7" else {
                         // F-01：非 code=7（HTTP / 解码 / 加解密 / 其它服务端码 / 总超时）＝ 瞬时错误，
-                        // 单独记一份，尾部优先上抛。
+                        // 单独记一份，尾部优先上抛.
                         lastOtherError = e
                         lastTransientError = e
                         break attempt
                     }
                     if isUpstreamBusy(message) {
-                        // 上游临时故障：**不中断整条链**。实测（`nb_fallback_chain_probe.py`）
-                        // 这类 `dialing … timed out` 是**随机落在某一步**的 —— 换一个版本就可能躲开。
+                        // 这类 `dialing … timed out` 是**随机落在某一步**的 —— 换一个版本就可能躲开.
                         // 原来在此直接 `throw`，一次抽风就废掉整条回退链（本该走到后面某步命中，
-                        // 却当场把「请稍后重试」甩给用户）。记下来继续试，全链都没命中再抛（见函数尾）。
+                        // 却当场把「请稍后重试」甩给用户）.记下来继续试，全链都没命中再抛（见函数尾）.
                         lastOtherError = e
                         lastTransientError = e
                         if i + 1 < tries.count {
@@ -1015,9 +1002,9 @@ enum NBStoreClient {
                     }
                     // **稳定** `code=7`（`未获取到数据` 之类）—— 实测（2026-10-12，`nb_offsale_query.py`）
                     // **同一发请求会 `code=7 → code=0`**：首测 `code=7`，随后连打 8/8、15/15 全 `code=0`
-                    // ⇒ 这类 7 是**瞬时抖动**。对齐牛蛙源「空直链重试」（`fetchNiuwaPackage` 对空直链
+                    // ⇒ 这类 7 是**瞬时抖动**.对齐牛蛙源「空直链重试」（`fetchNiuwaPackage` 对空直链
                     // 重试同一发最多 2 次），先**重试同一版本**一次，仍 7 才换下一个版本 ——
-                    // 一次抖动不再白烧一个候选名额（原来遇 7 只换版本、绝不重试同一版本）。
+                    // 一次抖动不再白烧一个候选名额（原来遇 7 只换版本、绝不重试同一版本）.
                     if retried < sameVersionRetries {
                         retried += 1
                         LoginLogger.shared.log("\(logTag) appVerId=\(vid) 回 code=7，同版本重试"
@@ -1041,7 +1028,7 @@ enum NBStoreClient {
                                        category: .appStore)
             }
             idx += 1
-            // 内嵌候选试完、仍未命中、且还没补过 ⇒ 惰性调 provider（bilin）补候选，追加进 tries 继续回退。
+            // 内嵌候选试完、仍未命中、且还没补过 ⇒ 惰性调 provider（bilin）补候选，追加进 tries 继续回退.
             if idx >= tries.count, !providerUsed, let provider = fallbackProvider {
                 providerUsed = true
                 let extra = await provider()
@@ -1057,32 +1044,31 @@ enum NBStoreClient {
                 }
             }
         }
-        // 全试完：先分流 —— 链上出现过瞬时错误（HTTP / 解码 / 网络 / 总超时 / code=7 上游忙）就上抛，
-        // 提示重试；`nil` 只保留「全程只遇到稳定 code=7」一种语义（库里没包）。
+        // 提示重试；`nil` 只保留「全程只遇到稳定 code=7」一种语义（库里没包）.
         if let transient = lastTransientError { throw transient }
         if sawStable7 || lastOtherError == nil { return nil }
         // ND-04：原来是 `throw lastOtherError!` —— 靠上一行的 `lastOtherError == nil` 兜住，
-        // 当前不可达；但这是**状态耦合**（改一下上面的 return 条件就变成崩溃面），换成显式解包零成本。
+        // 当前不可达；但这是**状态耦合**（改一下上面的 return 条件就变成崩溃面），换成显式解包零成本.
         guard let error = lastOtherError else { return nil }
         throw error
     }
 
-    /// **按 `appID` + `appVerId` 取指定版本的包**（语义化入口，v0.3.586）。
+    /// **按 `appID` + `appVerId` 取指定版本的包**（语义化入口，）.
     ///
     /// 与 `package(appID:appVerId:bundleID:country:)` 是**同一发请求**
     /// （`nb9527_getAppHistoryList`，见 `/nb/app-downgrade`）—— 这里只是给它一个
     /// 语义明确的入口名，供「导入一个 IPA → 用它的 `softwareVersionExternalIdentifier`
-    /// 去 NB 取同版本的包 + sinf」这类场景调用。
+    /// 去 NB 取同版本的包 + sinf」这类场景调用.
     ///
-    /// **实测（2026-10-09 直连）：对下架 App 也完全可用**，`code=0` 且回完整 `url`/`sinf`。
+    /// **实测（2026-10-09 直连）：对下架 App 也完全可用**，`code=0` 且回完整 `url`/`sinf`.
     ///
     /// - Parameters:
-    ///   - appID: App Store `trackId`（包内 `iTunesMetadata.itemId`）。
-    ///   - appVerId: 版本的 `externalVersionId`（包内 `softwareVersionExternalIdentifier`）。
-    ///   - bundleID: 可省；服务端不强制。
-    ///   - country: 区域（`cn` / `us` / `hk`）。
-    ///   - fallbackCandidates: 可选回退版本号（**新→旧**）。**默认空 = 不回退** ——
-    ///     详情页是「用户明确点了某个版本」，按他点的那个取，不擅自换版本。
+    ///   - appID: App Store `trackId`（包内 `iTunesMetadata.itemId`）.
+    ///   - appVerId: 版本的 `externalVersionId`（包内 `softwareVersionExternalIdentifier`）.
+    ///   - bundleID: 可省；服务端不强制.
+    ///   - country: 区域（`cn` / `us` / `hk`）.
+    ///   - fallbackCandidates: 可选回退版本号（**新→旧**）.**默认空 = 不回退** ——
+    ///     详情页是「用户明确点了某个版本」，按他点的那个取，不擅自换版本.
     ///   - 总超时：25s（F-08，与 `offSalePackage` 同口径）——超时抛 `code=timeout`，
     ///     由 `packageFailure(from:)` 归类成 `.upstreamBusy`.
     static func packageByVersion(appID: String,
@@ -1101,11 +1087,11 @@ enum NBStoreClient {
         }
     }
 
-    /// 上报下载（NB 客户端在下载时调，用于它自己的统计；移植时可省）。
+    /// 上报下载（NB 客户端在下载时调，用于它自己的统计；移植时可省）.
     ///
     /// 实测：`POST /nb/app-downgrade`，`method=nb9527_recordDownload`，
-    /// 参数含 `appID`/`appExtID`/`bundleId`/`name`/`version`/`cacheKey`/`cacheOriginalKey`。
-    /// 响应 `{"code":0,"data":null,"msg":""}`。
+    /// 参数含 `appID`/`appExtID`/`bundleId`/`name`/`version`/`cacheKey`/`cacheOriginalKey`.
+    /// 响应 `{"code":0,"data":null,"msg":""}`.
     @discardableResult
     static func recordDownload(appID: String,
                                appExtID: String,
@@ -1116,30 +1102,30 @@ enum NBStoreClient {
                           method: "recordDownload",
                           params: ["appID": appID, "appExtID": appExtID,
                                    "bundleId": bundleId, "name": name, "version": version,
-                                   // v0.3.554：原来是写死的 `false`，改成按设备判定 ——
-                                   // 与 `deviceType` 同源，别让同一发请求里两个字段互相矛盾。
+                                   // 原来是写死的 `false`，改成按设备判定 ——
+                                   // 与 `deviceType` 同源，别让同一发请求里两个字段互相矛盾.
                                    "isPad": UIDevice.current.userInterfaceIdiom == .pad,
                                    "cacheKey": "appHistoryVersion_\(appID)_\(appExtID)",
                                    "cacheOriginalKey": "appHistoryVersionOriginal_\(appID)_\(appExtID)"])
     }
 
-    /// 历史版本列表。
+    /// 历史版本列表.
     ///
     /// ## 为什么不用 NB 自己出列表
     /// NB 的 `getAppHistoryList` 名字像「列表」，**实测是取单个版本的包**
-    /// （抓包见报告第十节：传 `appVerId` 回 `data.url`，不传则回当前版本）。
-    /// 它没有「一次给全量版本」的接口 —— 硬要的话只能逐版本试错，代价太高。
+    /// （抓包见报告第十节：传 `appVerId` 回 `data.url`，不传则回当前版本）.
+    /// 它没有「一次给全量版本」的接口 —— 硬要的话只能逐版本试错，代价太高.
     ///
     /// ## 用 bilin 目录补上
     /// `apis.bilin.eu.org/history/{trackId}` 一次回**全量版本**，每项带
-    /// `external_identifier`（= NB 要的 `appVerId`）。这条目录路径本项目
+    /// `external_identifier`（= NB 要的 `appVerId`）.这条目录路径本项目
     /// **已经在用**（`AppStoreService.versionHistoryFromCatalog`，AppleID 商店的历史版本走它），
-    /// 这里只是把它的结果**转给 NB 的取包链路**，不新增任何外部依赖。
+    /// 这里只是把它的结果**转给 NB 的取包链路**，不新增任何外部依赖.
     ///
     /// ⇒ 落到 UI 上就是：列出版本 → 点某个版本 → 用它的 `externalVersionID`
-    /// 打 `/nb/app-downgrade` 取该版本的直链 + sinf。与 NB 客户端的形态一致。
+    /// 打 `/nb/app-downgrade` 取该版本的直链 + sinf.与 NB 客户端的形态一致.
     ///
-    /// `trackID` 必须是 App Store 数字 ID（NB 的 `appID` 字段与 bilin 的路径参数同源）。
+    /// `trackID` 必须是 App Store 数字 ID（NB 的 `appID` 字段与 bilin 的路径参数同源）.
     static func versionList(trackID: String) async throws -> [NBVersion] {
         let versions = try await AppStoreService.versionHistoryFromCatalog(appId: trackID)
         return versions.map { v in
@@ -1150,7 +1136,7 @@ enum NBStoreClient {
         }
     }
 
-    // MARK: - v0.3.545 下架应用（对应 NB 助手的 DXSTOffSaleController）
+    // MARK: - 下架应用（对应 NB 助手的 DXSTOffSaleController）
 
     /// **下架应用**列表里的一项（`searchOffSaleApp` 响应）.
     ///
@@ -1166,8 +1152,7 @@ enum NBStoreClient {
     /// ## 两个「应用 ID」都要留
     /// `appStoreID` 与 `lookupData.trackId` 都是 App Store 数字 ID，
     /// 但**实测只有其中一边有值**：
-    /// - `"StikDebug"` 那条：`appStoreID` 空、`lookupData` 里是完整 JSON（含 trackId）；
-    /// - `"微信"` 那条：反过来，`appStoreID` 有值、`lookupData` 是空串。
+    /// - `"微信"` 那条：反过来，`appStoreID` 有值、`lookupData` 是空串.
     /// ⇒ 所以取包时要按「哪个有值用哪个」兜底，不能只认一个.
     struct OffSaleApp: Identifiable, Hashable {
         /// NB 自己的行号（`id`），不是 App Store ID —— 只用于 `Identifiable`.
@@ -1188,11 +1173,11 @@ enum NBStoreClient {
         var lookupVersion: String?
         var lookupArtwork: String?
 
-        /// v0.3.559：`lookupData` 里**本来就带完整详情**（43 个键），原样承载.
+        /// `lookupData` 里**本来就带完整详情**（43 个键），原样承载.
         ///
         /// 下架应用在 Apple 的 `/lookup` 里查不到 —— 它就是因为下架才搜不到，
         /// 但 NB 在收录时把当初那份 lookup 响应**整段存了下来**，字段与 Apple 官方
-        /// 逐字一致（`description` / `screenshotUrls` / `genres` / `releaseNotes` …）。
+        /// 逐字一致（`description` / `screenshotUrls` / `genres` / `releaseNotes` …）.
         /// 所以详情页不再需要打 Apple，直接吃这一份.
         var lookupDetail: NBStoreRankClient.AppDetail?
 
@@ -1203,7 +1188,7 @@ enum NBStoreClient {
         /// Apple 的 external version identifier（下架取包要当 `appExtID` 发出去）.
         var appExtID: String?
 
-        /// v0.3.556：**下架包的直链与 sinf 就在搜索响应里**，不用再调第二个接口.
+        /// **下架包的直链与 sinf 就在搜索响应里**，不用再调第二个接口.
         ///
         /// 搜索响应的每条记录带一个 `appStoreData`（**JSON 字符串**），里面是完整的包信息：
         /// ```json
@@ -1212,40 +1197,39 @@ enum NBStoreClient {
         ///  "hashMD5":"4b634d7e…","metadata":{"bundleShortVersionString":"2.3.4", …}}
         /// ```
         /// 实测（2026-10-02 直连）：`url` 499 字符、`dataHex` 2144 字符（1072 字节，
-        /// magic 头 `\x00\x00\x040sinf\x00\x00\x00\x0cfrma`，与上架取包同格式）。
+        /// magic 头 `\x00\x00\x040sinf\x00\x00\x00\x0cfrma`，与上架取包同格式）.
         ///
-        /// ⇒ **注意区分两个名字相近的 action**（v0.3.586 实测澄清）：
+        /// ⇒ **注意区分两个名字相近的 action**（实测澄清）：
         /// · `getOffSaleAppHistoryList`（NB 助手下架页用的那个）**取不到包**：
         ///   实测它对任何参数组合都只回 `code=7 未获取到数据 / 参数不合法`，
-        ///   NB 官方客户端点「获取」也一样失败。**别再走那条路**。
+        ///   NB 官方客户端点「获取」也一样失败.**别再走那条路**.
         /// · `getAppHistoryList`（上架通道用的同一个 action）**对下架 App 完全可用**：
         ///   实测（2026-10-09 直连）传 `appID`（或再加 `appVerId`）回 `code=0` 且
-        ///   `data` 完整（含 `url` + `sinfs[0].dataHex`），直链 HEAD → HTTP 200。
-        ///   见 `package(appID:appVerId:...)` 与 `offSalePackage(from:country:)`。
+        ///   `data` 完整（含 `url` + `sinfs[0].dataHex`），直链 HEAD → HTTP 200.
+        ///   见 `package(appID:appVerId:...)` 与 `offSalePackage(from:country:)`.
         ///
         /// ⚠️ 但 `appStoreData` **并非每条都有**：实测搜「哔哩哔哩」10 条里只有 4 条带它，
-        /// 另外 6 条既没有 `appStoreData`、`appExtID` 也为空 —— 在搜索响应里就是**没有包**。
+        /// 另外 6 条既没有 `appStoreData`、`appExtID` 也为空 —— 在搜索响应里就是**没有包**.
         /// ⇒ 那些条目必须回退到 `getAppHistoryList` 取包（见 `offSalePackage(from:country:)`），
-        /// 否则界面只能报「这个版本暂时取不到安装包」。
+        /// 否则界面只能报「这个版本暂时取不到安装包」.
         var packageURL: String?
         /// 服务端算好的包 MD5（`appStoreData.hashMD5`）.
         var packageMD5: String?
         /// 包对应的 sinf（`appStoreData.sinfs[0].dataHex` 或 `.data`，**两种编码**）.
         ///
-        /// v0.3.664：原先注释只写「十六进制字符串」，而取值处却用了 `dataHex ?? data` ——
-        /// 注释与代码自相矛盾，正是 hex 被当 base64 解的那类事故的温床。
-        /// 现在连同 `packageSinfIsHex` 一起保存**编码来源**，由 `validatedSinf` 按来源解码。
+        /// 原先注释只写「十六进制字符串」，而取值处却用了 `dataHex ?? data` ——
+        /// 注释与代码自相矛盾，正是 hex 被当 base64 解的那类事故的温床.
+        /// 现在连同 `packageSinfIsHex` 一起保存**编码来源**，由 `validatedSinf` 按来源解码.
         var packageSinf: String?
         /// `packageSinf` 的编码：`true` = hex（`dataHex` 字段），`false` = base64（`data` 字段）.
         var packageSinfIsHex: Bool = true
         /// 内嵌包信息的原始 JSON 字符串，原样留着备查.
         var appStoreDataRaw: String?
 
-        /// v0.3.592：`appStoreData.metadata.softwareVersionExternalIdentifiers` ——
-        /// 该 App 的**全量版本号**（外部标识，**旧→新**排列）。用于「最新版取不到时按新→旧回退」
-        /// （见 `packageWithFallback`）。实测（2026-10-11）：bilibili 34 个、StikDebug 21 个；
-        /// bilibili 退到第 4 个（`889351059`）即 `code=0` + 新鲜直链。
-        /// **没有 `appStoreData` 的记录此数组为空**，那时只能单发（无版本可退）。
+        /// `appStoreData.metadata.softwareVersionExternalIdentifiers` ——
+        /// 该 App 的**全量版本号**（外部标识，**旧→新**排列）.用于「最新版取不到时按新→旧回退」
+        /// bilibili 退到第 4 个（`889351059`）即 `code=0` + 新鲜直链.
+        /// **没有 `appStoreData` 的记录此数组为空**，那时只能单发（无版本可退）.
         var versionIDs: [String]
 
         /// 给取包/详情用的 App Store ID —— 先 `appStoreID`，退回 `lookupData.trackId`.
@@ -1258,7 +1242,7 @@ enum NBStoreClient {
 
         /// 界面显示用的名字.
         // ND-05：原来是 `(lookupName?.isEmpty == false) ? lookupName! : name`，当前受条件保护；
-        // 换成 `??` 后语义完全相同且没有裸 `!`。
+        // 换成 `??` 后语义完全相同且没有裸 `!`.
         var displayName: String { (lookupName?.isEmpty == false) ? (lookupName ?? name) : name }
         /// 界面显示用的版本.
         var displayVersion: String? { (version?.isEmpty == false) ? version : lookupVersion }
@@ -1295,7 +1279,6 @@ enum NBStoreClient {
     /// ```
     /// POST http://47.243.71.210:9527/nb/app-downgrade
     /// {"method":"nb9527_searchOffSaleApp","params":{"kw":"stikdebug", …公共参数}}
-    /// → {"code":0,"data":[{"id":15993,"name":"StikDebug","bundleID":"com.stik.sj",
     ///                      "iconPath":"https://is1-ssl.mzstatic.com/…",
     ///                      "size":11688960,"version":"2.3.5",
     ///                      "lookupData":"{\"trackId\":6744045754,…}"}]}
@@ -1305,9 +1288,9 @@ enum NBStoreClient {
     /// ## 为什么界面上必须走这一条
     /// 「下架」在 App Store 里**就是搜不到的**（Apple 的 search/RSS 只回在架应用）——
     /// 实测 `term=stikdebug&country=us` 回的是 TestFlight / GitHub / Debug Anywhere 那批
-    /// **在架**应用，恰好是用户截图里看到的错误结果。下架库只有 NB 服务端有.
+    /// **在架**应用，恰好是用户截图里看到的错误结果.下架库只有 NB 服务端有.
     /// F-06：入口套 25s 总超时 —— 4 条 host 各 15s，最坏 60s；详情页首屏要先等它
-    /// 解析 ID 才能查版本。与 `offSalePackage` 的 25s 同口径；超时抛
+    /// 解析 ID 才能查版本.与 `offSalePackage` 的 25s 同口径；超时抛
     /// `StoreError.server(code: "timeout", …)`，由 `packageFailure(from:)` 归类.
     static func searchOffSaleApp(keyword: String) async throws -> [OffSaleApp] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1341,18 +1324,18 @@ enum NBStoreClient {
                 lookupVersion = string(o["version"])
                 lookupArtwork = string(o["artworkUrl512"]) ?? string(o["artworkUrl100"])
                     ?? string(o["artworkUrl60"])
-                // v0.3.559：整段映射成详情模型，详情页直接用它渲染.
+                // 整段映射成详情模型，详情页直接用它渲染.
                 lookupDetail = NBStoreRankClient.detail(fromLookup: o,
                                                         fallbackTrackID: lookupTrackID ?? "")
             }
 
-            // v0.3.556：从 `appStoreData`（内嵌 JSON 字符串）里直接取**包直链与 sinf**。
-            // 这是「下架取包」的正确来源 —— 不用再调 `getOffSaleAppHistoryList`。
+            // 从 `appStoreData`（内嵌 JSON 字符串）里直接取**包直链与 sinf**.
+            // 这是「下架取包」的正确来源 —— 不用再调 `getOffSaleAppHistoryList`.
             var pkgURL: String?
             var pkgMD5: String?
             var rawStoreData: String?
             var pkgSinf: String?
-            /// v0.3.664：`pkgSinf` 是 hex 还是 base64 —— 决定交给校验器哪一条分支。
+            /// `pkgSinf` 是 hex 还是 base64 —— 决定交给校验器哪一条分支.
             var pkgSinfIsHex = true
             var versionIDs: [String] = []
             if let raw = item["appStoreData"] as? String, !raw.isEmpty {
@@ -1362,10 +1345,10 @@ enum NBStoreClient {
                     pkgURL = string(o["url"])
                     pkgMD5 = string(o["hashMD5"])
                     if let arr2 = o["sinfs"] as? [[String: Any]], let first = arr2.first {
-                        // v0.3.664：**不能**写成 `dataHex ?? data` —— 两个字段编码不同
+                        // **不能**写成 `dataHex ?? data` —— 两个字段编码不同
                         // （dataHex 是 hex、data 是 base64），混在一句 `??` 里正是历史那个
-                        // 「hex 被当 base64 解出 1.5 倍垃圾」的写法。这里保留来源标记，
-                        // 解码与校验都交给 `validatedSinf`（`embeddedOffSalePackage` 里调用）。
+                        // 「hex 被当 base64 解出 1.5 倍垃圾」的写法.这里保留来源标记，
+                        // 解码与校验都交给 `validatedSinf`（`embeddedOffSalePackage` 里调用）.
                         if let hex = string(first["dataHex"]) {
                             pkgSinf = hex
                             pkgSinfIsHex = true
@@ -1379,7 +1362,7 @@ enum NBStoreClient {
                         if let v = string(md["bundleShortVersionString"]), !v.isEmpty {
                             lookupVersion = v
                         }
-                        // v0.3.592：全量版本号数组（旧→新），供「最新版 code=7 时按新→旧回退」
+                        // 全量版本号数组（旧→新），供「最新版 code=7 时按新→旧回退」
                         versionIDs = stringArray(md["softwareVersionExternalIdentifiers"])
                     }
                 }
@@ -1388,7 +1371,7 @@ enum NBStoreClient {
                 pkgURL = string(inline["url"])
                 pkgMD5 = string(inline["hashMD5"])
                 if let arr2 = inline["sinfs"] as? [[String: Any]], let first = arr2.first {
-                    // 同上：分开取，保留编码来源。
+                    // 同上：分开取，保留编码来源.
                     if let hex = string(first["dataHex"]) {
                         pkgSinf = hex
                         pkgSinfIsHex = true
@@ -1431,13 +1414,13 @@ enum NBStoreClient {
         return apps
     }
 
-    /// **下架应用**的取包（v0.3.586：补上 `getAppHistoryList` 回退）。
+    /// **下架应用**的取包（补上 `getAppHistoryList` 回退）.
     ///
     /// ## 怎么找到这条路的（反编译 NB 助手，不是猜的）
     ///
     /// NB 助手有一整套下架应用页面：
     /// `DXSTOffSaleController`（列表）/ `DXSTOffSaleDetailController`（详情）/
-    /// `DXSTOffSaleHistoryListController`（历史版本），配套模型 `DXSTOffSaleAppModel`。
+    /// `DXSTOffSaleHistoryListController`（历史版本），配套模型 `DXSTOffSaleAppModel`.
     ///
     /// 反编译 `sub_10031D260`（`getOffSaleAppHistoryList` 的唯一调用点）得到
     /// 真实的请求构造 —— 键名由小端立即数逐字还原：
@@ -1451,10 +1434,10 @@ enum NBStoreClient {
     /// ```
     ///
     /// 注意： **别去找 `nb9527_search_offsale_app`** —— 那个字符串确实存在，
-    /// 但它是本地弹窗菜单项的标识符，**服务端没有这个 action**（报告第十二/十三节）。
-    /// 「下架列表」在 NB 那边是本地 SQLite 表 `load_list` 缓存的。
+    /// 但它是本地弹窗菜单项的标识符，**服务端没有这个 action**（报告第十二/十三节）.
+    /// 「下架列表」在 NB 那边是本地 SQLite 表 `load_list` 缓存的.
     ///
-    /// ## v0.3.556：优先用**搜索结果里自带的包**，不走第二个接口
+    /// ## ：优先用**搜索结果里自带的包**，不走第二个接口
     ///
     /// 真机抓包 + 直连实测发现：`searchOffSaleApp` 的每条记录里带一个
     /// `appStoreData`（内嵌 JSON 字符串），**包直链和 sinf 就在里面**：
@@ -1466,85 +1449,83 @@ enum NBStoreClient {
     /// appStoreData.hashMD5          → 服务端算好的包 MD5
     /// ```
     ///
-    /// ## ⚠️ 两个名字相近的 action，别搞混（v0.3.586 实测澄清）
+    /// ## ⚠️ 两个名字相近的 action，别搞混（实测澄清）
     ///
     /// - `getOffSaleAppHistoryList`（NB 助手下架页用的那个）**取不到包**：实测无论怎么传
     ///   都取不到 —— `ipaID` 传 NB 行号回 `未获取到数据`、传 `"0"` 回 `参数不合法`；
     ///   真机抓包显示 NB 官方客户端点「获取」发出的参数与我们**一字不差**，服务端同样只回
-    ///   `code=7`。⇒ **这个 action 不是取包用的**（语义是查版本历史），别再走。
+    ///   `code=7`.⇒ **这个 action 不是取包用的**（语义是查版本历史），别再走.
     /// - `getAppHistoryList`（上架通道用的同一个 action）**对下架 App 完全可用**：
     ///   实测（2026-10-09 直连）传 `appID`（或再加 `appVerId`）回 `code=0` 且 `data` 完整
-    ///   （含 `url` + `sinfs[0].dataHex`），直链 HEAD → HTTP 200。
-    ///   **这才是内嵌包缺失时该走的那条路**（见 `package(appID:appVerId:...)`）。
+    ///   （含 `url` + `sinfs[0].dataHex`），直链 HEAD → HTTP 200.
+    ///   **这才是内嵌包缺失时该走的那条路**（见 `package(appID:appVerId:...)`）.
     ///
-    /// ## v0.3.586：修「NB 源无论什么下架 App 都下载获取不了」
+    /// ## ：修「NB 源无论什么下架 App 都下载获取不了」
     ///
-    /// v0.3.556 起本函数**只吃搜索结果内嵌的 `appStoreData`**。但实测（2026-10-09 直连）
+    /// 起本函数**只吃搜索结果内嵌的 `appStoreData`**.但实测（2026-10-09 直连）
     /// 那个字段**不是每条都有**：搜「哔哩哔哩」10 条里只有 4 条带它，另外 6 条既没有
     /// `appStoreData`、`appExtID` 也为空 —— 旧代码对它们直接 `return nil`，界面只报
-    /// 「这个版本暂时取不到安装包」。**大多数下架条目都落在这一支**，这就是那个 bug 的根因。
+    /// 「这个版本暂时取不到安装包」.**大多数下架条目都落在这一支**，这就是那个 bug 的根因.
     ///
     /// 现在改成两段：
     /// ① 内嵌包在 → 直接用（`embeddedOffSalePackage`，零额外请求）；
-    /// ② 内嵌包不在 → 用 `appStoreID`（+ `appExtID`）打 `getAppHistoryList` 取包。
+    /// ② 内嵌包不在 → 用 `appStoreID`（+ `appExtID`）打 `getAppHistoryList` 取包.
     ///
-    /// ## v0.3.588：内嵌直链的 `accessKey` 会过期 —— 过期就现取（2026-10-10 实测定案）
+    /// ## ：内嵌直链的 `accessKey` 会过期 —— 过期就现取（2026-10-10 实测定案）
     ///
-    /// v0.3.586 的「内嵌包优先」是一处硬伤：`searchOffSaleApp` 每条记录里内嵌的
+    /// 的「内嵌包优先」是一处硬伤：`searchOffSaleApp` 每条记录里内嵌的
     /// `appStoreData.url` 是 NB **收录那一刻**的快照，而 Apple CDN 的 `accessKey` 带
-    /// **过期时间**（`accessKey=<过期unix秒>_<num>_<签名>`）。快照一过那点就必然 403。
+    /// **过期时间**（`accessKey=<过期unix秒>_<num>_<签名>`）.快照一过那点就必然 403.
     ///
     /// **实测（2026-10-10 直连，脚本 `nb_offsale_freshness.py` / `nb_offsale_url_compare.py`）**：
     /// · 搜索内嵌 URL：accessKey 过期时间戳跨 2023-09-29 … 2026-10-09（**全部已过期**），
     ///   逐条 Range 前 1MB 一律 `HTTP 403 Forbidden` —— 搜「哔哩哔哩」/「抖音」/「微信」
-    ///   共 8 条内嵌包，**8/8 全 403**。
+    ///   共 8 条内嵌包，**8/8 全 403**.
     /// · 同一 App 走 `getAppHistoryList`：accessKey 是**未来**时间（如 2026-10-12），
-    ///   Range 前 1MB 一律 `206 Partial Content` + 头部 `PK\x03\x04`（真 IPA）。
+    ///   Range 前 1MB 一律 `206 Partial Content` + 头部 `PK\x03\x04`（真 IPA）.
     /// ⇒ **内嵌包不再无条件优先**：先看它的 `accessKey` 过没过期，没过期才用（省一次请求）；
-    ///   过期（或拿不到过期时间）就现取新鲜直链。旧行为正是「无条件用内嵌包」⇒ 403 ⇒ 下载必失败。
+    ///   过期（或拿不到过期时间）就现取新鲜直链.旧行为正是「无条件用内嵌包」⇒ 403 ⇒ 下载必失败.
     ///
-    /// ## v0.3.593：现取失败回落内嵌快照 —— 恢复「能获取到下载任务」（2026-10-11）
+    /// ## ：现取失败回落内嵌快照 —— 恢复「能获取到下载任务」（2026-10-11）
     ///
-    /// v0.3.588 引入了一处**回归**：把内嵌快照降成「过期/判不出即弃用」，且现取失败
-    /// （`code=7` → nil、或上游故障 → throw）后**不再回落内嵌快照** ⇒ 有快照的 App 也
-    /// 拿不到任何链接，用户看到「**获取不到下载任务**」（原来是「有链接、只是下载 403」）。
+    /// 引入了一处**回归**：把内嵌快照降成「过期/判不出即弃用」，且现取失败
+    /// 拿不到任何链接，用户看到「**获取不到下载任务**」（原来是「有链接、只是下载 403」）.
     ///
     /// 修法（**现取优先 + 内嵌快照最后兜底**，保证「有 url」优先）：
     /// ① 内嵌快照 `accessKey` 未过期 ⇒ 直接用它（新鲜、省一次请求）；
     /// ② 否则现取 `getAppHistoryList`（含版本回退）——**现取成功用它**（新鲜直链）；
     /// ③ 现取回 nil / 抛错 / 连 storeID 都没有 ⇒ **回落到内嵌快照**（哪怕它可能 403，
-    ///   也先把「下载任务」给出来，让下载阶段再决定），只有连快照都没有才回 nil。
+    ///   也先把「下载任务」给出来，让下载阶段再决定），只有连快照都没有才回 nil.
     /// `accessKeyExpired` 判不出时间戳时仍返回 `true`（触发**优先现取**），但语义已从
-    /// 「这条链接不能用」改成「优先去现取」——现取失败会兜底，不会再丢链接。
+    /// 「这条链接不能用」改成「优先去现取」——现取失败会兜底，不会再丢链接.
     ///
-    /// ## v0.3.596：兜底快照**先探活**、候选版本**用 bilin 补**（2026-10-12，治「无法下载」）
+    /// ## ：兜底快照**先探活**、候选版本**用 bilin 补**（2026-10-12，治「无法下载」）
     ///
     /// 用户报「最新构建下**无法下载**」—— 上一版的两处修复盖不住真实场景：
     /// 1. **版本回退空转**：`candidates` 只来自内嵌 `appStoreData`，而 7/10 下架条目没有它
-    ///    ⇒ `candidates=[]` ⇒ 回退链只有 1 步。**现在** `bilinCandidates` 在内嵌没有时
-    ///    用 bilin 目录的 `external_identifier` 补（带缓存、失败不阻塞）。
+    ///    ⇒ `candidates=[]` ⇒ 回退链只有 1 步.**现在** `bilinCandidates` 在内嵌没有时
+    ///    用 bilin 目录的 `external_identifier` 补（带缓存、失败不阻塞）.
     /// 2. **兜底发的是 403 死链**：现取失败无条件 `return embedded`，而这些快照 accessKey 全部
-    ///    已过期、HEAD/Range 一律 403 ⇒ 任务建了、包下不动。**现在** `snapshotFallback` 先
-    ///    HEAD 探活：死链（403/404）返回 `nil`（如实报「库里没包」），活链/判不出才给。
+    ///    已过期、HEAD/Range 一律 403 ⇒ 任务建了、包下不动.**现在** `snapshotFallback` 先
+    ///    HEAD 探活：死链（403/404）返回 `nil`（如实报「库里没包」），活链/判不出才给.
     ///
-    /// ## v0.3.597：bilin 补候选从**前置**改**惰性**（2026-10-13，治「获取变慢」）
+    /// ## ：bilin 补候选从**前置**改**惰性**（2026-10-13，治「获取变慢」）
     ///
-    /// 用户报「NB 源获取下架应用**变慢**」—— 实测定案（`nb_perf_probe.py`）：v0.3.596 在取包**前**
+    /// 用户报「NB 源获取下架应用**变慢**」—— 实测定案（`nb_perf_probe.py`）：在取包**前**
     /// 无条件 `await offSaleCandidates(...)`，而 bilin median ~1.4s、3 连打即 429 ⇒ 主版本本来能
-    /// 命中的条目也白等一整次 bilin。**现在**改由 `packageWithFallback` 在**主版本/内嵌候选都未命中
-    /// 时**才调 `bilinCandidates` ⇒ 命中路径 0 次 bilin（回到改前速度），失败路径仍补候选（能力不丢）。
+    /// 命中的条目也白等一整次 bilin.**现在**改由 `packageWithFallback` 在**主版本/内嵌候选都未命中
+    /// 时**才调 `bilinCandidates` ⇒ 命中路径 0 次 bilin（回到改前速度），失败路径仍补候选（能力不丢）.
     ///
-    /// ## v0.3.587：`code=7` 如实处理（不再把内部码甩给用户）
+    /// ## ：`code=7` 如实处理（不再把内部码甩给用户）
     ///
     /// 回退仍会回 `code=7`，实测（2026-10-10）**不是参数问题** —— 换 `appVerId` / `plusID` /
-    /// `bundleID` / `country` 的任意组合都不能把 7 变成 0，同一 `appID` 反复打还是 7。
+    /// `bundleID` / `country` 的任意组合都不能把 7 变成 0，同一 `appID` 反复打还是 7.
     /// `code=7` 的两种成因见 catch 内注释：一条「NB 库里没 iOS 包」（回 nil），一条「服务端
-    /// 上游临时超时」（抛出、提示重试）。**原始码与 msg 只进日志，界面文案由调用方给**。
     static func offSalePackage(from app: OffSaleApp, country: String) async throws -> NBPackage? {
-        // ① 先把内嵌快照备好 —— 它现在是**最后兜底**（v0.3.593 恢复；v0.3.596 收紧为「探活后才发」）。
+        // ① 先把内嵌快照备好 —— 它现在是**最后兜底**（恢复；收紧为「探活后才发」）.
         let embedded = embeddedOffSalePackage(from: app)
 
-        // ② 内嵌快照 accessKey 未过期 ⇒ 直接用它（新鲜，省一次请求）。
+        // ② 内嵌快照 accessKey 未过期 ⇒ 直接用它（新鲜，省一次请求）.
         if let embedded = embedded, !accessKeyExpired(embedded.ipaURL) {
             return embedded
         }
@@ -1554,9 +1535,9 @@ enum NBStoreClient {
                                    category: .appStore)
         }
 
-        // ③ 现取：按 appID(+appVerId) 打 getAppHistoryList，拿**新鲜**直链。
+        // ③ 现取：按 appID(+appVerId) 打 getAppHistoryList，拿**新鲜**直链.
         guard let storeID = app.storeID, !storeID.isEmpty else {
-            // v0.3.596：兜底快照**先 HEAD 探活** —— 死链不发给用户（死链 = 任务建了、包下不动）。
+            // 兜底快照**先 HEAD 探活** —— 死链不发给用户（死链 = 任务建了、包下不动）.
             let fb = await snapshotFallback(embedded, app: app,
                                             reason: "拿不到 App Store ID、无法现取")
             if fb == nil {
@@ -1567,16 +1548,16 @@ enum NBStoreClient {
             return fb
         }
 
-        // v0.3.597：候选**惰性补** —— 内嵌 `metadata` 有就直接当候选；没有（多数条目）**不预打 bilin**，
+        // 候选**惰性补** —— 内嵌 `metadata` 有就直接当候选；没有（多数条目）**不预打 bilin**，
         // 改成把 bilin 补候选包成 provider，只有主版本/内嵌候选都 `code=7` 时 `packageWithFallback`
-        // 才去调（见 `bilinCandidates`）。这样主版本能命中时省掉整次 bilin（实测 ~1.4s，且限流紧易 429），
-        // 而主版本 7 时仍能靠 bilin 补候选退到旧版本（**不丢「调出链接」的能力**）。
+        // 才去调（见 `bilinCandidates`）.这样主版本能命中时省掉整次 bilin（实测 ~1.4s，且限流紧易 429），
+        // 而主版本 7 时仍能靠 bilin 补候选退到旧版本（**不丢「调出链接」的能力**）.
         let embeddedCandidates: [String] = app.versionIDs.isEmpty ? [] : Array(app.versionIDs.reversed())
-        // v0.3.600：闭包**显式标 `@Sendable`** —— 三元表达式 `cond ? { … } : nil` 不会把
+        // 闭包**显式标 `@Sendable`** —— 三元表达式 `cond ? { … } : nil` 不会把
         // 上下文类型 `(@Sendable () async -> [String])?` 传进闭包分支，闭包被推断成 non-Sendable
         // ⇒ CI（Xcode 27 / Swift 6.2）报 "converting non-Sendable function value … may introduce
-        // data races"（本地 Swift 6.1.3 同根因，措辞为 "cannot convert … to (@Sendable () async …)?"）。
-        // 直接赋值（无三元）或 if/else 都能让上下文类型传导，这里保持三元、给闭包自己标 Sendable。
+        // data races"（本地 Swift 6.1.3 同根因，措辞为 "cannot convert … to (@Sendable () async …)?"）.
+        // 直接赋值（无三元）或 if/else 都能让上下文类型传导，这里保持三元、给闭包自己标 Sendable.
         let fallbackProvider: (@Sendable () async -> [String])? = app.versionIDs.isEmpty
             ? { @Sendable in await bilinCandidates(storeID: storeID, appName: app.name) }
             : nil
@@ -1586,11 +1567,10 @@ enum NBStoreClient {
                                category: .appStore)
         let pkg: NBPackage?
         do {
-            // v0.3.592：主版本（最新版）回 `code=7` 时按候选**新→旧**自动回退 —— 最新版可能已被
-            // 服务端清出，但旧版本仍在库（bilibili 退 3 步即命中）。v0.3.596 起同一版本遇稳定 7
-            // 还会**重试一次**（瞬时抖动，见 `packageWithFallback`）。稳定 `code=7` 在
-            // `packageWithFallback` 里被吞掉、全试完回 nil；这里只会收到「上游临时故障 / 网络错误」
-            // 两类**值得重试**的抛出。
+            // 主版本（最新版）回 `code=7` 时按候选**新→旧**自动回退 —— 最新版可能已被
+            // 服务端清出，但旧版本仍在库（bilibili 退 3 步即命中）.起同一版本遇稳定 7
+            // 还会**重试一次**（瞬时抖动，见 `packageWithFallback`）.稳定 `code=7` 在
+            // 两类**值得重试**的抛出.
             pkg = try await withTotalTimeout(seconds: 25) {
                 try await packageWithFallback(appID: storeID,
                                               primaryVerID: app.appExtID ?? "",
@@ -1600,13 +1580,12 @@ enum NBStoreClient {
                                               country: country)
             }
         } catch let e as StoreError {
-            // 走到这里 = 上游临时故障（`code=7` 且 msg 含 `dialing`/`请求异常`）或网络错误。
-            // 原始码与 msg 一律进日志；界面文案由调用方给（见 `PackageFailure`）。
+            // 原始码与 msg 一律进日志；界面文案由调用方给（见 `PackageFailure`）.
             if case .server(let code, let message) = e, code == "7" {
                 LoginLogger.shared.log("\(logTag) [失败] 现取直链 code=7（\(app.name) appID=\(storeID)）：\(message)",
                                        category: .appStore)
             }
-            // v0.3.596：现取抛错也回落内嵌快照，但**先探活** —— 死链不发给用户。
+            // 现取抛错也回落内嵌快照，但**先探活** —— 死链不发给用户.
             if let fb = await snapshotFallback(embedded, app: app, reason: "现取失败") {
                 return fb
             }
@@ -1615,7 +1594,7 @@ enum NBStoreClient {
         if let pkg = pkg {
             return pkg
         }
-        // ④ 现取（含版本回退）也没拿到 ⇒ 回落内嵌快照兜底（**先探活**）。
+        // ④ 现取（含版本回退）也没拿到 ⇒ 回落内嵌快照兜底（**先探活**）.
         if let fb = await snapshotFallback(embedded, app: app,
                                            reason: "现取（含版本回退）都没拿到直链") {
             return fb
@@ -1626,34 +1605,34 @@ enum NBStoreClient {
         return nil
     }
 
-    /// bilin 目录补候选（**惰性**：只在主版本/内嵌候选都 `code=7` 时才被 `packageWithFallback` 调）—— v0.3.597.
+    /// bilin 目录补候选（**惰性**：只在主版本/内嵌候选都 `code=7` 时才被 `packageWithFallback` 调）—— .
     ///
     /// ## 为什么（2026-10-13 实测复核）
     /// 版本回退链原来只有内嵌 `appStoreData.metadata.softwareVersionExternalIdentifiers`
     /// 一个来源，而**多数下架条目没有 `appStoreData`**（实测搜「哔哩哔哩」10 条里 **7 条**
-    /// `versionIDs=[]`）⇒ `candidates=[]` ⇒ 回退链只有 1 步 = **等于没回退**。这些条目
-    /// 「最新版被清出库存」时一步都退不动（`tv.danmaku.biliim` 首测即 `code=7`）。
+    /// `versionIDs=[]`）⇒ `candidates=[]` ⇒ 回退链只有 1 步 = **等于没回退**.这些条目
+    /// 「最新版被清出库存」时一步都退不动（`tv.danmaku.biliim` 首测即 `code=7`）.
     ///
     /// ## 怎么补
     /// 走 `versionList(trackID:)`（= `AppStoreService.versionHistoryFromCatalog`，
     /// 本项目**已在用**的 bilin 目录，不新增任何外部依赖）取全量版本，用它的
-    /// `external_identifier`（= NB 要的 `appVerId`）当候选。实测 `tv.danmaku.biliim` 用
-    /// bilin 候选第 1 步即 `code=0`（`841714489`，新鲜直链）。
+    /// `external_identifier`（= NB 要的 `appVerId`）当候选.实测 `tv.danmaku.biliim` 用
+    /// bilin 候选第 1 步即 `code=0`（`841714489`，新鲜直链）.
     ///
-    /// ## v0.3.597：从「无条件前置」改成「惰性」—— 这是「获取变慢」的根因修法
-    /// v0.3.596 在 `offSalePackage` 里**先** `await offSaleCandidates(...)` 再取包 ⇒ 主版本本来
+    /// ## ：从「无条件前置」改成「惰性」—— 这是「获取变慢」的根因修法
+    /// 在 `offSalePackage` 里**先** `await offSaleCandidates(...)` 再取包 ⇒ 主版本本来
     /// 能命中的条目也要先等 bilin（实测 median ~1.4s；且 bilin 限流紧、3 连打即 429，失败还触发
-    /// `AppStoreService` 的 400ms 退避重试）。改后由 `packageWithFallback` 在**主版本/内嵌候选都
-    /// 未命中时**才调本函数 ⇒ 命中路径 0 次 bilin（回到改前速度），失败路径仍能补候选（能力不丢）。
+    /// `AppStoreService` 的 400ms 退避重试）.改后由 `packageWithFallback` 在**主版本/内嵌候选都
+    /// 未命中时**才调本函数 ⇒ 命中路径 0 次 bilin（回到改前速度），失败路径仍能补候选（能力不丢）.
     ///
     /// ## 两道保险（bilin 限流实测：3 连打第 3 发即 `429`）
     /// - **缓存**：目录自带 **6h 成功缓存 + 3min 负缓存**（`AppStoreService`），重复取包不打网络；
     /// - **非阻塞**：这里 `do/catch` 吞掉任何失败，补不到就回 `[]`、**照常单发**，
-    ///   绝不因 bilin 失败把取包整体判死。
+    ///   绝不因 bilin 失败把取包整体判死.
     ///
     /// - Note: bilin 目录实测**新→旧**排列（`t13_bilin_order.py`：`1517062289` 是
     ///   2026-09-27 → … → 2020-07-11），与 NB 要的候选方向一致，**不再反转**；
-    ///   内嵌数组是**旧→新**，才需要 `.reversed()`。
+    ///   内嵌数组是**旧→新**，才需要 `.reversed()`.
     private static func bilinCandidates(storeID: String, appName: String) async -> [String] {
         do {
             let list = try await versionList(trackID: storeID)
@@ -1673,17 +1652,17 @@ enum NBStoreClient {
 
     /// bilin 补候选的**数量上限**：`packageWithFallback` 只用到前 `maxAttempts`（6）个版本，
     /// 目录对某些 App 能回 473 个（如 `736536022`）—— 截断到 6 个（与 `maxAttempts` 对齐）
-    /// 足够覆盖回退链，少建长数组（v0.3.597：8 → 6）。
+    /// 足够覆盖回退链，少建长数组（8 → 6）.
     private static let offSaleCandidateLimit = 6
 
-    /// Apple CDN 直链的 `accessKey` 是否**该让位给现取**（过期，或判不出过期时间）。
+    /// Apple CDN 直链的 `accessKey` 是否**该让位给现取**（过期，或判不出过期时间）.
     ///
-    /// `accessKey` 形如 `<过期unix秒>_<num>_<base64签名>` —— 首个 `_` 前就是**过期时间**。
-    /// 实测（2026-10-10）：过期时间戳（过去）→ `HTTP 403`；未来时间戳 → `206`。
+    /// `accessKey` 形如 `<过期unix秒>_<num>_<base64签名>` —— 首个 `_` 前就是**过期时间**.
+    /// 实测（2026-10-10）：过期时间戳（过去）→ `HTTP 403`；未来时间戳 → `206`.
     ///
     /// **判不出时间戳时返回 `true`（按「可能已过期」处理）** —— 语义是「**优先去现取**」，
     /// **不是**「这条链接一定不能用」：现取失败时 `offSalePackage` 会回落到这条内嵌快照兜底
-    /// （v0.3.593），保证用户至少「看到有下载任务」。返回 `false`（判出且未过期）才直接用它。
+    /// ，保证用户至少「看到有下载任务」.返回 `false`（判出且未过期）才直接用它.
     private static func accessKeyExpired(_ urlString: String) -> Bool {
         guard let url = URL(string: urlString),
               let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -1695,16 +1674,16 @@ enum NBStoreClient {
         return Date().timeIntervalSince1970 >= epoch
     }
 
-    /// 下架取包的**第一段**：把搜索结果里内嵌的那份 `appStoreData` 翻成 `NBPackage`（没有则 nil）。
+    /// 下架取包的**第一段**：把搜索结果里内嵌的那份 `appStoreData` 翻成 `NBPackage`（没有则 nil）.
     ///
-    /// `dataHex` 是 **hex**，而下游 `PackageSINFWriter` 吃的是 **base64** —— 这里必须转。
+    /// `dataHex` 是 **hex**，而下游 `PackageSINFWriter` 吃的是 **base64** —— 这里必须转.
     /// 以前直接把 hex 塞进 `sinfBase64`，`Data(base64Encoded:)` 必然失败 →
-    /// 包内写不进 sinf → 安装报「缺少 SC_Info/*.sinf」。
+    /// 包内写不进 sinf → 安装报「缺少 SC_Info/*.sinf」.
     private static func embeddedOffSalePackage(from app: OffSaleApp) -> NBPackage? {
         guard let url = app.packageURL, !url.isEmpty else { return nil }
-        // v0.3.664：这条路径与 `package()` 走**同一个**校验器，不各写一套。
+        // 这条路径与 `package()` 走**同一个**校验器，不各写一套.
         // 原来这里只判「hexToBase64 返回了 nil 没有」，等于只校验了编码；编码对但内容不是 sinf
-        // 依然会被当成「有 sinf」交给下游。`where:` 标明是哪一条产出路径（下架搜索的内嵌快照）。
+        // 依然会被当成「有 sinf」交给下游.`where:` 标明是哪一条产出路径（下架搜索的内嵌快照）.
         let sinfB64 = app.packageSinf.flatMap { raw in
             app.packageSinfIsHex
                 ? validatedSinf(hex: raw, where: "searchOffSaleApp.appStoreData.sinfs.dataHex",
@@ -1717,7 +1696,7 @@ enum NBStoreClient {
                          version: app.displayVersion)
     }
 
-    // MARK: - sinf 形态校验（v0.3.664）
+    // MARK: - sinf 形态校验
 
     /// 服务端响应里到底**有没有** sinf 字段（区分「没回」与「回了但坏」）.
     private static func hasSinfField(_ d: [String: Any]) -> Bool {
@@ -1725,34 +1704,34 @@ enum NBStoreClient {
         return string(first["dataHex"]) != nil || string(first["data"]) != nil
     }
 
-    /// 把服务端给的 sinf 编码成 base64，并**校验它真的是一份 sinf 容器**；不合格返回 nil 并明确报错。
+    /// 把服务端给的 sinf 编码成 base64，并**校验它真的是一份 sinf 容器**；不合格返回 nil 并明确报错.
     ///
-    /// ## 为什么光「编码解对了」不够（v0.3.664）
+    /// ## 为什么光「编码解对了」不够
     ///
-    /// v0.3.563 修的是**编码层**（hex 被当 base64 ⇒ 1.5 倍垃圾）。但编码正确**不等于**内容是 sinf：
+    /// 修的是**编码层**（hex 被当 base64 ⇒ 1.5 倍垃圾）.但编码正确**不等于**内容是 sinf：
     /// 服务端回一段任意 2144 字符的合法 hex，`hexToBase64` 照样返回一个非 nil 的 base64，
-    /// 全链路只判 `!= nil` ⇒ 界面上就打「已取到直链 + sinf」，写包时才发现不对。
-    /// 把它挡在**产出处**，是唯一能让错误在最早的、还能说清是哪一层的地方暴露的做法。
+    /// 全链路只判 `!= nil` ⇒ 界面上就打「已取到直链 + sinf」，写包时才发现不对.
+    /// 把它挡在**产出处**，是唯一能让错误在最早的、还能说清是哪一层的地方暴露的做法.
     ///
     /// ## 判据不在这里定义 —— 复用 `PackageSINFWriter.sinfStructure`
     ///
     /// **不能**用「前 4 字节 == `00 00 04 30`」当魔数：那 4 字节是**长度字段**，
     /// 1056 字节的合法 sinf 头是 `00 00 04 20 73 69 6e 66`（`IPADownloadCenter.swift:1717-1719`
-    /// 有实测记录）。写侧早就用「头 4 字节大端 == 实际长度 且 第 5-8 字节 == "sinf"」或
-    /// SuperBlob（`0xFADE0CC0`）做三态判定；这里直接调它，**保证同一份判据**，不另立第二套。
+    /// 有实测记录）.写侧早就用「头 4 字节大端 == 实际长度 且 第 5-8 字节 == "sinf"」或
+    /// SuperBlob（`0xFADE0CC0`）做三态判定；这里直接调它，**保证同一份判据**，不另立第二套.
     ///
     /// ## 三态处理
     /// - `.valid` → 返回 base64；
     /// - `.invalid` → 认定为坏，返回 nil 并报「**结构坏了**」（格式认识，长度对不上）；
-    /// - `.unrecognized` → 认定为未知形态，返回 nil 并报「**格式不认识**」。
+    /// - `.unrecognized` → 认定为未知形态，返回 nil 并报「**格式不认识**」.
     ///   注意与写侧的区别：写侧对 `.unrecognized` 也只跳过写入，但**未知不等于坏** ——
-    ///   日志措辞必须让排查的人看出来这是「我们不认识的第三种格式」，而不是「服务端坏了」。
+    ///   日志措辞必须让排查的人看出来这是「我们不认识的第三种格式」，而不是「服务端坏了」.
     ///
     /// - Parameters:
-    ///   - hex: 服务端给的 hex 串（NB 的 `dataHex`）。
-    ///   - base64: 服务端给的 base64 串（NB 的 `data`）。
-    ///   - layer: 出错时告诉排查者**是哪一层**出的问题（哪个接口的哪个字段）。
-    ///   - appID: 只用于日志定位。
+    ///   - hex: 服务端给的 hex 串（NB 的 `dataHex`）.
+    ///   - base64: 服务端给的 base64 串（NB 的 `data`）.
+    ///   - layer: 出错时告诉排查者**是哪一层**出的问题（哪个接口的哪个字段）.
+    ///   - appID: 只用于日志定位.
     private static func validatedSinf(hex: String? = nil,
                                       base64: String? = nil,
                                       where layer: String,
@@ -1788,7 +1767,7 @@ enum NBStoreClient {
         case .valid:
             return data.base64EncodedString()
         case .invalid:
-            // 格式认识、结构坏了 —— 典型就是历史那次 1584 字节垃圾（头声明的长度对不上）。
+            // 格式认识、结构坏了 —— 典型就是历史那次 1584 字节垃圾（头声明的长度对不上）.
             let declared = data.count >= 4
                 ? (Int(data[data.startIndex]) << 24) | (Int(data[data.startIndex + 1]) << 16)
                   | (Int(data[data.startIndex + 2]) << 8) | Int(data[data.startIndex + 3])
@@ -1800,13 +1779,13 @@ enum NBStoreClient {
                                    category: .appStore)
             return nil
         case .unrecognized:
-            // ⚠️ 这里**放行**，与「不认识 ≠ 坏」保持一致（枚举做成三态就是为这件事）。
+            // ⚠️ 这里**放行**，与「不认识 ≠ 坏」保持一致（枚举做成三态就是为这件事）.
             //
             // 拒绝的代价：丢掉一份可能合法的 sinf ⇒ 用户拿到一个装不上的包
-            // （症状是「缺少 SC_Info/*.sinf」），而且是我们主动造成的。
+            // （症状是「缺少 SC_Info/*.sinf」），而且是我们主动造成的.
             // 放行的代价：写出未知形态的字节 —— 但写包侧 PackageSINFWriter.writeIfNeeded
-            // 会**再**按同一判据过一遍，且包内已有的 sinf 不会被它覆盖。
-            // 前提是必须有日志留下线索，否则放行就等于静默。
+            // 会**再**按同一判据过一遍，且包内已有的 sinf 不会被它覆盖.
+            // 前提是必须有日志留下线索，否则放行就等于静默.
             LoginLogger.shared.log("\(logTag) [注意] sinf **格式不认识**｜层=\(layer)｜来源=\(origin)"
                                    + "｜appID=\(appID)：解出 \(data.count) 字节，"
                                    + "既非「长度+sinf+TLV」也非 SuperBlob 0xFADE0CC0"
@@ -1816,10 +1795,10 @@ enum NBStoreClient {
         }
     }
 
-    /// hex 串 → Data（容忍空格/换行）。
+    /// hex 串 → Data（容忍空格/换行）.
     ///
     /// 与 `hexToBase64` 共用同一套严格判定（`hexByte`），**不另写一份** ——
-    /// 两份 hex 解析器是「一处修好、另一处还是旧 bug」的经典来源。
+    /// 两份 hex 解析器是「一处修好、另一处还是旧 bug」的经典来源.
     private static func hexDecoded(_ hex: String) -> Data? {
         let cleaned = hex.filter { !$0.isWhitespace }
         guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
@@ -1838,7 +1817,7 @@ enum NBStoreClient {
     /// 严格解一个 hex 字节（ND-02）.
     ///
     /// `UInt8("", radix: 16)` 在 Swift 里返回 `Optional(0)` 而不是 nil，所以
-    /// 只依赖它会把 `"_"` / `"__"` 这类占位串解成 0x00 —— 先做字符集校验。
+    /// 只依赖它会把 `"_"` / `"__"` 这类占位串解成 0x00 —— 先做字符集校验.
     private static func hexByte(_ s: String, _ from: String.Index, _ to: String.Index) -> UInt8? {
         let chars = s[from..<to]
         guard chars.count == 2 else { return nil }
@@ -1846,11 +1825,11 @@ enum NBStoreClient {
         return UInt8(chars, radix: 16)
     }
 
-    /// 十六进制字符串 → base64 字符串（NB 的 sinf 是 hex，下游要 base64）。
+    /// 十六进制字符串 → base64 字符串（NB 的 sinf 是 hex，下游要 base64）.
     ///
-    /// 输入可能带空格/换行（服务端偶尔分行发），先清掉再解。
-    /// 非 hex 字符一律返回 nil（ND-02：不再把占位串解成 0x00）。
-    /// v0.3.664：hex→Data 的部分抽到 `hexDecoded`，与形态校验共用**同一份**解析。
+    /// 输入可能带空格/换行（服务端偶尔分行发），先清掉再解.
+    /// 非 hex 字符一律返回 nil（ND-02：不再把占位串解成 0x00）.
+    /// hex→Data 的部分抽到 `hexDecoded`，与形态校验共用**同一份**解析.
     private static func hexToBase64(_ hex: String) -> String? {
         hexDecoded(hex)?.base64EncodedString()
     }
@@ -1866,7 +1845,7 @@ enum NBStoreClient {
         return nil
     }
 
-    /// 把「元素是数字/字符串的数组」（如 `softwareVersionExternalIdentifiers`）翻成 `[String]`。
+    /// 把「元素是数字/字符串的数组」（如 `softwareVersionExternalIdentifiers`）翻成 `[String]`.
     private static func stringArray(_ v: Any?) -> [String] {
         guard let arr = v as? [Any] else { return [] }
         return arr.compactMap { string($0) }

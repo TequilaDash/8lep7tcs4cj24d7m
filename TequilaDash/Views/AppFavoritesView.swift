@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// 收藏栏 —— AppStore 商店右上角「…」里的入口。
+/// 收藏栏 —— AppStore 商店右上角「…」里的入口.
 ///
 /// 每条记录 = **一次收藏**（`id` 为 UUID），同一个应用可以收藏多次，
-/// 列表里以收藏时间区分；支持编辑态多选批量删除与滑动删除。
+/// 列表里以收藏时间区分；支持编辑态多选批量删除与滑动删除.
 struct AppFavoritesView: View {
 
     @State private var query = ""

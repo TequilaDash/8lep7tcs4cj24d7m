@@ -16,7 +16,7 @@ struct SSHDebugView: View {
     @State private var formError: String? = nil
 
     /// 局域网 IP 到底探到没有 —— `lanIP` 未就绪时是「获取中…」/「未连接 Wi-Fi」，
-    /// 那种占位文案不能拼进 ssh 命令里（v0.3.404 加「局域网」那条命令时用）。
+    /// 那种占位文案不能拼进 ssh 命令里（加「局域网」那条命令时用）.
     private var hasLAN: Bool { service.lanIP.split(separator: ".").count == 4 }
 
     var body: some View {
@@ -54,7 +54,7 @@ struct SSHDebugView: View {
                         .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice, radius: AppRadius.button))
                         .disabled(draftPassword.count < 6)
                         if let err = formError {
-                            // v0.3.683：区块级错误行统一到 AppErrorRow.
+                            // 区块级错误行统一到 AppErrorRow.
                             AppErrorRow(message: err)
                         }
                     }
@@ -170,9 +170,9 @@ struct SSHDebugView: View {
                         .font(.body.monospaced())
                         .textSelection(.enabled)
                 }
-                // v0.3.406：连接命令**只留「局域网」这一条** —— v0.3.404 与 v0.3.405 加的那两条
-                // 都按用户要求撤掉了（原话：「不改 ssh」）。
-                // 注意： 服务端监听地址没动（仍是 `0.0.0.0`）。
+                // 连接命令**只留「局域网」这一条** —— 与 加的那两条
+                // 都按用户要求撤掉了（原话：「不改 ssh」）.
+                // 注意： 服务端监听地址没动（仍是 `0.0.0.0`）.
                 if hasLAN {
                     HStack {
                         Text("局域网")
@@ -188,7 +188,7 @@ struct SSHDebugView: View {
             }
 
             Section {
-                // v0.3.405：不再在文案里枚举命令（加一条就得改一次，迟早写歪）；`help` 里是全的
+                // 不再在文案里枚举命令（加一条就得改一次，迟早写歪）；`help` 里是全的
                 Label("受限 shell：只应答内置诊断命令（help 查看全部）", systemImage: "lock.shield")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -196,7 +196,7 @@ struct SSHDebugView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 if let err = service.lastError {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)
                 }
             } header: {

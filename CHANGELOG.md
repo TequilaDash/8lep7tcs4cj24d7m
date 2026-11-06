@@ -1,3 +1,15 @@
+## [0.3.775] - 2026-11-06
+
+### 新增
+- 设置页「数据」分组加「重置本机应用数据」：按钮弹出警告「继续会清空当前应用数据」，取消/确认两个按钮.确认后清掉账号登录态、证书、Anisette 身份、钥匙串、偏好设置与本应用写入的文件缓存；从设备导出的备份（Documents/Backups）一律不在删除范围.完成回执按「偏好 / 钥匙串 / 文件 / 字节」四项报数（TequilaDash/Engine/AppDataResetService.swift + Views/RootView.swift）.
+
+### 修复
+- 蜂窝卡点窗口内改为**主动建链**：此前关完蜂窝只「探测」隧道通没通，250ms 预算里一条 VPN 根本起不来，探测必然落空，只能如实报「蜂窝通路仍未建立」.现在按隧道载体主动发起 —— LocalDevVPN 走深链拉起、内置隧道直接 start 一个 NE 会话；跳转类（Shadowrocket / Surge / Loon）不自动跳走，只提示在该工具内开启（跳走会打断正在显示的卡点弹窗）.同步入口 waitForBringUp 接进 prepareForTunnel ⇒ 28 个调用点整链生效；卡点窗口另有 4000ms 事件上限，事件命中立刻返回（TequilaDash/Engine/CellularTunnelManager.swift、Engine/CellularGlitchCoordinator.swift）.
+- 重开蜂窝不再重复弹卡：通路凭证此前由单次 TCP 探测无条件翻转，蜂窝恢复瞬间一次未命中就判死，于是又弹一次卡.改为探测未命中但 utun 仍在场时保留凭证，连续两次未命中才判死（TequilaDash/Engine/TunnelReadiness.swift）.
+- 设备错误文案统一：35 处 FFI 错误直读 String(cString:) 改走 DeviceErrorText.cleaned / annotate，按 lockdown 错误标识补一句可执行建议（MCProtected / SessionActive / PasscodeRequired 等 12 类），并剥掉已知的调试 shell 包裹，报错不再只是一串十六进制（TequilaDash/Engine/DeviceErrorText.swift 新增）.
+
+### 清理
+- 注释治理（用户令「不是代码层的注释不要加进来」）：283 个文件的版本流水注释剥掉版本记号只留实质内容，约 300 行纯流水账整行删除，5698 行注释里的中文句号统一改英文句点；出处评述（Gnoix / SideStore / 上游）凡不带代码标识符的一律删掉.
 ## [0.3.774] - 2026-11-06
 
 ### 修复

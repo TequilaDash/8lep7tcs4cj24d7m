@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// v0.3.184：应用类型标签（应用板块列表行内）.
-/// v0.3.184 7 类（细分 App Store 正版 / 共享 + 隐藏应用）.
-/// v0.3.364：文案改走 `AppType.displayName`（对齐爱思；`.appStore` 兜底不再显示
+/// 应用类型标签（应用板块列表行内）.
+/// 7 类（细分 App Store 正版 / 共享 + 隐藏应用）.
+/// 文案改走 `AppType.displayName`（对齐爱思；`.appStore` 兜底不再显示
 /// 「AppStore」，与苹果正版同文案），并新增「越狱版」（红/粉系）.
 /// 配色：品牌蓝=正版/紫=共享/橙=企业/绿=开发/橙状态=越狱/灰=系统或兜底.
 struct AppTypeBadge: View {

@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// 通过 LocalDevVPN 隧道安装到设备.导入走 SharedDocumentPicker 统一调用点
 /// （LC/证书直装环境可靠）.
 ///
-/// v0.3.723 重构：原实现是 List + 9 个 .insetGrouped 默认样式分区 ——
+/// 重构：原实现是 List + 9 个 .insetGrouped 默认样式分区 ——
 /// 除页头外零品牌视觉，且「选 IPA / 登录 / 安装」三个主步骤与
 /// 「自动登录 / 进度 / 失败 / 完成」四个辅助分区**权重完全相同**，
 /// 主流程没被视觉串起来，主操作按钮还埋在列表最末尾.
@@ -27,14 +27,14 @@ struct IPAInstallView: View {
     @State private var ipaURL: URL?
     @State private var ipaLink = ""
     @State private var isDownloading = false
-    /// 直链输入面板是否展开（v0.3.723：默认收起，点「粘贴直链」才展开）.
+    /// 直链输入面板是否展开（默认收起，点「粘贴直链」才展开）.
     @State private var showLinkField = false
     /// 「已下载的 IPA」列表（Documents/Custom 目录）.
     @State private var savedIPAs: [SavedIPA] = []
     /// 待确认删除的 IPA.
     @State private var pendingDeleteIPA: SavedIPA?
 
-    // v0.3.745 账户体系：本页不再自带登录 UI，签名账户 = 「更多 → Apple ID 账户」的当前账户.
+    // 账户体系：本页不再自带登录 UI，签名账户 = 「更多 → Apple ID 账户」的当前账户.
     @ObservedObject private var accountStore = AppleUserAccountStore.shared
     // 流程
     @State private var isRunning = false
@@ -42,7 +42,7 @@ struct IPAInstallView: View {
     @State private var successMessage: String?
     @State private var step: Step = .idle
     @State private var installProgress: Double = 0
-    /// v0.3.662（task-8 发现10）：本次安装的签名产物 .app 路径，装完/失败后删除.
+    /// 本次安装的签名产物 .app 路径，装完/失败后删除.
     @State private var lastSignedAppPath: String?
 
     /// 一个已下载/导入的 IPA 文件.
@@ -93,7 +93,7 @@ struct IPAInstallView: View {
                 heroCard
                     .appAppear(index: 0)
                 if !pairingFileExists {
-                    // v0.3.245：配对引导卡独立板块（与其他功能页同一 PairingGuideCard 视觉）.
+                    // 配对引导卡独立板块（与其他功能页同一 PairingGuideCard 视觉）.
                     // ScrollView 场景要自带卡片底与手动 chevron（List 的 .insetGrouped 会自动给）.
                     PairingGuideCard(showsBackground: true,
                                      note: "IPA 侧载需要配对文件（签名安装依赖设备身份）.",
@@ -186,7 +186,7 @@ struct IPAInstallView: View {
 
     /// 页头：品牌图标块 + 标题 + 三个关键状态 stat.
     ///
-    /// v0.3.721 重构：原先是 Section 里手搓的「40pt 图标 + headline + caption」，
+    /// 重构：原先是 Section 里手搓的「40pt 图标 + headline + caption」，
     /// 与全仓详情页的 AppHeroHeader 语言不一致，且进页看不出「配对文件有没有 /
     /// 登录没登录 / IPA 选没选」. 改用 AppHeroHeader 后这三件事一眼可见.
     private var heroCard: some View {
@@ -270,7 +270,7 @@ struct IPAInstallView: View {
 
     /// 选择 IPA：虚线投放区（视觉主角）+ 折叠的直链面板 + 已下载清单.
     ///
-    /// v0.3.723 改版：原来「一行导入入口 + 常驻直链输入框 + 发丝线 + 列表」是四段平铺，
+    /// 改版：原来「一行导入入口 + 常驻直链输入框 + 发丝线 + 列表」是四段平铺，
     /// 与「签名账号」等卡完全同构，看不出这一步是在「挑一个文件」. 改成虚线投放区，
     /// 直链输入折到按钮后面，已下载清单降为次级分组.
     private var sourceCard: some View {
@@ -495,7 +495,7 @@ struct IPAInstallView: View {
 
     // MARK: - 签名账号
 
-    /// 签名账号卡：只读展示「Apple ID 账户」的当前账户（v0.3.745 账户体系）.
+    /// 签名账号卡：只读展示「Apple ID 账户」的当前账户（账户体系）.
     /// 登录/切换/退出全部收敛到「更多 → Apple ID 账户」二级页.
     private var accountCard: some View {
         sectionCard(title: "签名账号", icon: "person.crop.circle.badge.checkmark", tint: AppTheme.categorySign) {
@@ -737,7 +737,7 @@ struct IPAInstallView: View {
 
     // MARK: - 安装流程
 
-    /// v0.3.662（task-8 发现10）：**签名产物 .app 目录用完必须删**.
+    /// **签名产物 .app 目录用完必须删**.
     ///
     /// IPAInstallService.signIPA（Engine/IPAInstallService.swift:447）返回的是 Rust 侧
     /// 在沙盒里新建的**已签名 .app 目录**，本 View 之前只把它当路径用、安装完 / 失败后
@@ -766,7 +766,7 @@ struct IPAInstallView: View {
 
         Task {
             do {
-                // v0.3.745 账户体系：登录态来自「更多 → Apple ID 账户」的当前账户
+                // 账户体系：登录态来自「更多 → Apple ID 账户」的当前账户
                 // （warmUp 已在 App 启动时恢复）；未登录直接提示，不再页内登录.
                 guard service.isSignedIn else {
                     step = .idle
@@ -779,7 +779,7 @@ struct IPAInstallView: View {
                 let signedPath = try await Task.detached(priority: .userInitiated) {
                     try IPAInstallService.shared.signIPA(ipaPath: ipa.path)
                 }.value
-                // v0.3.662（task-8 发现10）：先记下，成功/失败后由 cleanupSignedProduct() 删.
+                // 先记下，成功/失败后由 cleanupSignedProduct() 删.
                 lastSignedAppPath = signedPath
                 // 3. 安装
                 step = .installing
@@ -796,7 +796,7 @@ struct IPAInstallView: View {
                 step = .idle
                 errorMessage = error.localizedDescription
             }
-            // v0.3.723 修：原实现在 Task **之外**同步调用 cleanupSignedProduct()，
+            // 原实现在 Task **之外**同步调用 cleanupSignedProduct()，
             // 那一刻 lastSignedAppPath 还是 nil ⇒ 从来没删过任何签名产物（注释写「无论成功失败
             // 都清掉」，代码却什么也没做）. 现在挪到 Task 内部收尾，成功/失败都会执行.
             cleanupSignedProduct()

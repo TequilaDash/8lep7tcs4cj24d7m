@@ -1,15 +1,15 @@
 import SwiftUI
 import UIKit
 
-/// AppStore 应用详情。
+/// AppStore 应用详情.
 struct AppStoreDetailView: View {
     @State var item: AppStoreItem
 
     /// 从「已购列表」的下架条目进来时为 true：App Store 已查不到它 ——
-    /// 详情改吃 NB 下架库内嵌的那份 lookup 快照（不白屏），且不给「去 App Store 安装」。
+    /// 详情改吃 NB 下架库内嵌的那份 lookup 快照（不白屏），且不给「去 App Store 安装」.
     var delisted: Bool = false
     /// 从「已购列表」进来时带上的账号邮箱：历史版本 / 下载要用**持有该已购的那个账号**，
-    /// 不能默认拿全局「当前下载账号」（两者可能不是同一个）。
+    /// 不能默认拿全局「当前下载账号」（两者可能不是同一个）.
     var accountEmail: String? = nil
 
     @ObservedObject private var center = IPADownloadCenter.shared
@@ -23,10 +23,10 @@ struct AppStoreDetailView: View {
 
     // 预览浏览器
     //
-    // v0.3.403：从 `viewerIndex: Int?` 改成「图数组 + 看第几张」——图标预览要看的是图标、
-    // 截图预览要看的是截图，共用一个查看器就得让数组跟着点的那一项变（列表页本来就是这套写法）。
-    // v0.3.408：「图数组 + 看第几张」**两份都收进 `ImagePreviewTarget`**，页面上不再留
-    // `previewImages`（原来数组与触发器是两次独立写入，弹窗会读到旧的空数组 → 「没有可查看的图片」）。
+    // 从 `viewerIndex: Int?` 改成「图数组 + 看第几张」——图标预览要看的是图标、
+    // 截图预览要看的是截图，共用一个查看器就得让数组跟着点的那一项变（列表页本来就是这套写法）.
+    // 「图数组 + 看第几张」**两份都收进 `ImagePreviewTarget`**，页面上不再留
+    // `previewImages`（原来数组与触发器是两次独立写入，弹窗会读到旧的空数组 → 「没有可查看的图片」）.
     @State private var previewTarget: ImagePreviewTarget?
 
     // 内置网页
@@ -55,7 +55,7 @@ struct AppStoreDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // 每点一次 = 收进收藏栏一次（收藏栏按时间独立成条）；
-                // 要撤销请长按 → 「清空该应用的收藏」。
+                // 要撤销请长按 → 「清空该应用的收藏」.
                 Button {
                     let count = AppFavoritesStore.shared.add(item)
                     isFavorite = true
@@ -96,12 +96,12 @@ struct AppStoreDetailView: View {
         }
         .sheet(isPresented: $showDownloadManager) {
             NavigationStack {
-                // v0.3.588：AppStore 商店的「下载管理」**只列 Apple ID 通道**的下载
+                // AppStore 商店的「下载管理」**只列 Apple ID 通道**的下载
                 // （用户要求「每个入口只显示自己来源的东西」）—— 第三方软件源 / 免登录源的
-                // 下载不再混进本页（它们各自在自己商店的下载管理里）。
+                // 下载不再混进本页（它们各自在自己商店的下载管理里）.
                 // 来源集合要覆盖**本页自己能发起的全部下载**：`:123` / `:555` 走
-                // `startWithAppleID`（.appleID），`:592` 走 `startFromI4Source`（.i4Free）。
-                // 原先只传 `[.appleID]` ⇒ 本页发起的爱思源下载在自己的下载管理里看不到。
+                // `startWithAppleID`（.appleID），`:592` 走 `startFromI4Source`（.i4Free）.
+                // 原先只传 `[.appleID]` ⇒ 本页发起的爱思源下载在自己的下载管理里看不到.
                 IPADownloadManagerView(filterSource: [.appleID, .i4Free])
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -140,17 +140,17 @@ struct AppStoreDetailView: View {
             InAppBrowserView(title: target.title, url: target.url)
         }
         .fullScreenCover(item: $previewTarget) { target in
-            // v0.3.399：预览组件已搬去 `ImagePreviewSupport.swift`（`ImageGalleryViewer`），
-            // 与爱思源详情页共用同一套 —— 这里只是换个名字，行为一字未改。
-            // v0.3.403：`urls` 改读预览数组（点图标就是 [图标]，点截图就是整组截图）。
-            // v0.3.408：这份数组现在**在 target 里**（不再读页面上的 `previewImages`）
+            // 预览组件已搬去 `ImagePreviewSupport.swift`（`ImageGalleryViewer`），
+            // 与爱思源详情页共用同一套 —— 这里只是换个名字，行为一字未改.
+            // `urls` 改读预览数组（点图标就是 [图标]，点截图就是整组截图）.
+            // 这份数组现在**在 target 里**（不再读页面上的 `previewImages`）
             ImageGalleryViewer(urls: target.urls, startIndex: target.index)
         }
         .toastHost()
         .task { await loadDetail() }
         .onAppear { refreshFavorite() }
         // 下拉刷新：先清掉商品页缓存（含平台限制类失败的负缓存）再重新取数 ——
-        // 用户换网络 / 挂代理 / 换账号后能立刻重试，不必等负缓存 TTL 到期。
+        // 用户换网络 / 挂代理 / 换账号后能立刻重试，不必等负缓存 TTL 到期.
         .refreshable {
             AppStoreService.clearProductPageCache()
             await loadDetail()
@@ -175,7 +175,7 @@ struct AppStoreDetailView: View {
         center.activeJob(bundleId: item.bundleId, name: item.name)
     }
 
-    /// 下架提示：这些条目 Apple 已经搜不到，页面信息来自下架库收录的快照。
+    /// 下架提示：这些条目 Apple 已经搜不到，页面信息来自下架库收录的快照.
     private var delistedSection: some View {
         Section {
             Label("已从 App Store 下架 · 信息来自下架库快照.",
@@ -220,10 +220,10 @@ struct AppStoreDetailView: View {
         }
     }
 
-    /// 图标：长按只弹菜单，点菜单里的「查看图标 / 提取图标」才动作（避免误触）。
+    /// 图标：长按只弹菜单，点菜单里的「查看图标 / 提取图标」才动作（避免误触）.
     ///
-    /// v0.3.403：两项都换成 `ImagePreviewSupport.swift` 里的共用实现 —— 与 AppleID 列表、
-    /// 爱思源两处一字不差（原来这里只有「提取图标」）。
+    /// 两项都换成 `ImagePreviewSupport.swift` 里的共用实现 —— 与 AppleID 列表、
+    /// 爱思源两处一字不差（原来这里只有「提取图标」）.
     private var iconView: some View {
         AsyncImage(url: URL(string: item.iconURL ?? item.iconSmallURL ?? "")) { phase in
             switch phase {
@@ -238,7 +238,7 @@ struct AppStoreDetailView: View {
         .contextMenu {
             iconMenuItems(iconURL: item.iconURL ?? item.iconSmallURL,
                           fileNameBase: "\(item.bundleId ?? item.id)-icon") {
-                // v0.3.408：图数组由 `showIconPreview` 写进 target
+                // 图数组由 `showIconPreview` 写进 target
                 showIconPreview(item.iconURL ?? item.iconSmallURL, target: $previewTarget)
             }
         }
@@ -247,23 +247,23 @@ struct AppStoreDetailView: View {
     @ViewBuilder
     private var installArea: some View {
         if let job = activeJob {
-            // v0.3.367：与「下载管理」页同款的三段式展示 —— 阶段胶囊 + 文字 + 百分比 + 进度条 + 操作。
+            // 与「下载管理」页同款的三段式展示 —— 阶段胶囊 + 文字 + 百分比 + 进度条 + 操作.
             // 原先只有「一行文字 + 一条百分比 + 细进度条」，看不出当前处于哪个阶段
-            //（下载与安装共用同一条 0→100% 的总体进度，光看数字分不清是在下包还是在装包）。
+            //（下载与安装共用同一条 0→100% 的总体进度，光看数字分不清是在下包还是在装包）.
             VStack(alignment: .leading, spacing: 10) {
-                // ▸▸▸ v0.3.583（用户截图 IMG_6740）：**与其它 5 个下载渲染页统一**。
+                // ▸▸▸ ：**与其它 5 个下载渲染页统一**.
                 //
                 // 「阶段文案」的唯一真源是 `job.displayStage`（见 `IPADownloadCenter.Job.displayStage`）：
                 // 它**只特判 `.paused`**（该态恒返回「已暂停」），其余阶段一律原样透出 `stageText`；
                 // `.failed` / `.done` **不**归一 —— 归一会把「文件不存在」「已下载」这类具体原因
-                // 抹成「失败」「已完成」，丢信息。本页此前各自拼 `phase == .paused ? "已暂停" : stageText`
-                // 去遮「暂停态却被滞后回调刷成『下载中』」的矛盾 —— 现在直接读这一个取值，不再推导。
+                // 抹成「失败」「已完成」，丢信息.本页此前各自拼 `phase == .paused ? "已暂停" : stageText`
+                // 去遮「暂停态却被滞后回调刷成『下载中』」的矛盾 —— 现在直接读这一个取值，不再推导.
                 //
                 // 胶囊画的是 `phase.title`（阶段名）；「额外一行」只在文案与胶囊**不同**时才画，
-                // 免得同屏出现两遍相同文字（如「下载中」）。所以「等待中 + 排队中」「下载中 + 准备中」
-                // 这种**两段**是有意的（胶囊 = 阶段、黑字 = 细节），与改前一致，**不是**回归。
+                // 免得同屏出现两遍相同文字（如「下载中」）.所以「等待中 + 排队中」「下载中 + 准备中」
+                // 这种**两段**是有意的（胶囊 = 阶段、黑字 = 细节），与改前一致，**不是**回归.
                 // 本页状态行由 `activeJob`（只认 `phase.isBusy`）驱动 ⇒ 实际只会落到
-                // `.waiting / .downloading / .paused / .installing` 四态（`.done` / `.failed` 走下面另一分支）。
+                // `.waiting / .downloading / .paused / .installing` 四态（`.done` / `.failed` 走下面另一分支）.
                 HStack(spacing: 8) {
                     phaseChip(job.phase)
                     if job.displayStage != job.phase.title {
@@ -282,15 +282,15 @@ struct AppStoreDetailView: View {
                 HStack(spacing: 16) {
                     // 暂停/继续：只有直链下载期间可用（安装阶段不可暂停）
                     //
-                    // v0.3.398（④）：这个按钮的两半都是从 `center` **实时**读的
+                    // 这个按钮的两半都是从 `center` **实时**读的
                     //（`activeJob` 是计算属性，视图持有 `@ObservedObject center`，
-                    // 所以 `jobs` 一变就会重画 —— 原诊断「本地缓存了一份 phase」并不存在）。
+                    // 所以 `jobs` 一变就会重画 —— 原诊断「本地缓存了一份 phase」并不存在）.
                     // 但**动作**这里再加固一层：点击那一刻**现取一次**任务最新状态，
-                    // 不用渲染时的快照 —— 否则快照过期时（如下载刚好自己完成）会误发暂停/继续。
-                    // v0.3.398（⑤）：**失败的任务在这一页也要能重试**。
+                    // 不用渲染时的快照 —— 否则快照过期时（如下载刚好自己完成）会误发暂停/继续.
+                    // **失败的任务在这一页也要能重试**.
                     // 用户原话「…而且不能继续」——他就是在详情页遇到失败后无处可点
-                    //（原先这一格只会画一个灰的「暂停」，点不动）。
-                    // 只改这一个状态位的文案/动作/颜色，**布局（间距、字号、行高）一律不动**。
+                    //（原先这一格只会画一个灰的「暂停」，点不动）.
+                    // 只改这一个状态位的文案/动作/颜色，**布局（间距、字号、行高）一律不动**.
                     Button {
                         guard let live = center.job(job.id) else { return }
                         switch live.phase {
@@ -319,8 +319,8 @@ struct AppStoreDetailView: View {
 
                     Button {
                         // 旧代码无条件弹「已取消并删除该安装包」—— 台账只读（损坏）/ 文件被占用时
-                        // **根本没删成**，这是假成功。现在按 `cancel` 返回的实际结果提示
-                        // （口径同 `IPADownloadManagerView.reportRemoval`）。
+                        // **根本没删成**，这是假成功.现在按 `cancel` 返回的实际结果提示
+                        // （口径同 `IPADownloadManagerView.reportRemoval`）.
                         if let result = center.cancel(job.id) {
                             switch result {
                             case .removed:
@@ -331,7 +331,7 @@ struct AppStoreDetailView: View {
                                 ToastCenter.shared.show("未删除安装包：文件无法删除（可能被占用）")
                             }
                         } else {
-                            // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作。
+                            // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作.
                             ToastCenter.shared.show("已取消下载")
                         }
                     } label: {
@@ -358,7 +358,7 @@ struct AppStoreDetailView: View {
             }
         } else if let failed = center.lastFinishedJob(bundleId: item.bundleId, name: item.name),
                   failed.phase == .failed, let err = failed.error {
-            // v0.3.694：改用 AppErrorRow 的**按钮位**（trailing）—— 整颗复用 getButton，
+            // 改用 AppErrorRow 的**按钮位**（trailing）—— 整颗复用 getButton，
             // 不再自己拼「info.circle + 橙字 + 按钮」三件套（ui-error-inline.md 第三节把这里
             // 记为「需按钮位形态」的遗留项：原字号 caption、取色 .orange 与全仓错误行不统一）.
             AppErrorRow(message: err, trailing: { getButton })
@@ -410,7 +410,7 @@ struct AppStoreDetailView: View {
                 HStack(spacing: 12) {
                     ForEach(Array(item.screenshots.enumerated()), id: \.offset) { index, url in
                         Button {
-                            // v0.3.408：整组截图 + 起始下标**一次写进 target**（原来分两次写，
+                            // 整组截图 + 起始下标**一次写进 target**（原来分两次写，
                             // 弹窗可能先构建 → 读到旧的空数组 → 「没有可查看的图片」）
                             previewTarget = ImagePreviewTarget(index: index,
                                                                urls: item.screenshots)
@@ -489,8 +489,8 @@ struct AppStoreDetailView: View {
 
     // MARK: App 隐私
 
-    /// 「App 隐私」：三组（用于追踪 / 与你关联 / 不与你关联），组内每条 = 类别名 + 用途。
-    /// 数据来自商品页 HTML（与历史版本同一条免登录通道），拿不到时该节不显示。
+    /// 「App 隐私」：三组（用于追踪 / 与你关联 / 不与你关联），组内每条 = 类别名 + 用途.
+    /// 数据来自商品页 HTML（与历史版本同一条免登录通道），拿不到时该节不显示.
     private var privacySection: some View {
         Section("App 隐私") {
             ForEach(privacyGroups) { group in
@@ -536,7 +536,7 @@ struct AppStoreDetailView: View {
         Section {
             NavigationLink {
                 // 下架已购应用：账号通道（App Store 下载协议）对「已购」的下架应用仍能给出
-                // 全量版本身份且能直接下载指定版本，所以下架态把它提到第一跳。
+                // 全量版本身份且能直接下载指定版本，所以下架态把它提到第一跳.
                 AppStoreVersionHistoryView(item: item,
                                            country: AppStoreService.countryCode,
                                            accountFirst: delisted,
@@ -544,7 +544,7 @@ struct AppStoreDetailView: View {
             } label: {
                 Label("历史版本", systemImage: "clock.arrow.circlepath")
             }
-            // 下架应用在 App Store 里已经搜不到，系统安装页会直接报「找不到」——不给这个入口。
+            // 下架应用在 App Store 里已经搜不到，系统安装页会直接报「找不到」——不给这个入口.
             if !delisted {
                 Button {
                     _ = AppStoreInstaller.openInAppStore(item)
@@ -559,7 +559,7 @@ struct AppStoreDetailView: View {
                     Label("网页版商店页", systemImage: "safari")
                 }
             }
-            // v0.3.367：失败原因已由头部 installArea 展示，这里不再重复一遍。
+            // 失败原因已由头部 installArea 展示，这里不再重复一遍.
         }
     }
 
@@ -580,8 +580,8 @@ struct AppStoreDetailView: View {
         ToastCenter.shared.show("已开始用「\(list[0].email)」下载")
     }
 
-    /// 获取许可证：用「当前下载账号」把该应用加入授权列表（免费应用）。
-    /// 与下载链路里 9610 分支做的是同一件事 —— 刷新登录 → buyProduct。
+    /// 获取许可证：用「当前下载账号」把该应用加入授权列表（免费应用）.
+    /// 与下载链路里 9610 分支做的是同一件事 —— 刷新登录 → buyProduct.
     private func acquireLicense() {
         guard let email = AppStoreDownloadStore.shared.emailForDownloads(), !email.isEmpty else {
             ToastCenter.shared.show("先登录一个 Apple ID")
@@ -620,14 +620,14 @@ struct AppStoreDetailView: View {
     }
 
     /// 进入详情时：Lookup 补全字段（预览图 / 大小 / 版本 / 兼容性…都来自这里），
-    /// 同时取「App 隐私」—— 走商品页 HTML（与历史版本页**共用同一份 HTML 缓存**）。
-    /// 两条通道互不依赖，并行发；隐私拿不到就保持空 → 该节不显示。
+    /// 同时取「App 隐私」—— 走商品页 HTML（与历史版本页**共用同一份 HTML 缓存**）.
+    /// 两条通道互不依赖，并行发；隐私拿不到就保持空 → 该节不显示.
     private func loadDetail() async {
         let appId = item.id
         // 抓取区域在发起时就定死：URL 与缓存键都用它，免得和「进商店时跟随账号区」的
-        // 时机错开，抓到一个空结果的区（第一次进详情看不到、刷新才有）。
+        // 时机错开，抓到一个空结果的区（第一次进详情看不到、刷新才有）.
         let region = AppStoreService.countryCode
-        // 下架应用：Apple lookup 天然回空，先吃 NB 下架库内嵌的那份 lookup 快照把页面填满。
+        // 下架应用：Apple lookup 天然回空，先吃 NB 下架库内嵌的那份 lookup 快照把页面填满.
         if delisted { await mergeDelistedDetail(appId: appId) }
         async let lookup = AppStoreService.lookup(id: appId, country: region)
         async let privacy = AppStoreService.privacyDetail(appId: appId, country: region)
@@ -645,9 +645,9 @@ struct AppStoreDetailView: View {
         }
     }
 
-    /// 下架应用：Apple 的 `lookup` 与商品页都查不到它。NB 下架库收录时把当初那份
-    /// 完整 lookup 整段存了下来（`lookupData`，43 个键），直接映射成详情填满页面 —— 不白屏。
-    /// 按 **App Store ID → Bundle ID → 名称** 认领，认不出就不动（保持已购那点已知信息）。
+    /// 下架应用：Apple 的 `lookup` 与商品页都查不到它.NB 下架库收录时把当初那份
+    /// 完整 lookup 整段存了下来（`lookupData`，43 个键），直接映射成详情填满页面 —— 不白屏.
+    /// 按 **App Store ID → Bundle ID → 名称** 认领，认不出就不动（保持已购那点已知信息）.
     private func mergeDelistedDetail(appId: String) async {
         let key = item.name.isEmpty ? (item.bundleId ?? appId) : item.name
         guard !key.isEmpty,

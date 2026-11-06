@@ -7,31 +7,31 @@ import UIKit
 /// category styling. Uses TequilaDash's own model fields (no localization system).
 ///
 /// ## 界面硬规则（用户明确要求，永久生效）
-/// 1. **不要全宽实心色块 banner**（用户原话：「为什么那个 banner 是方块状的，我不喜欢这种方块」）。
-///    深色品牌色**只出现在紧凑的连续圆角图标块**（`AppBrandTile`）里，不做全宽渐变填充 banner。
+/// 1. **不要全宽实心色块 banner**（用户原话：「为什么那个 banner 是方块状的，我不喜欢这种方块」）.
+///    深色品牌色**只出现在紧凑的连续圆角图标块**（`AppBrandTile`）里，不做全宽渐变填充 banner.
 /// 2. **一律连续圆角**（`RoundedCornerStyle.continuous`）：卡片 `AppRadius.card`、图标块
-///    `AppRadius.appIcon`、行内图标底 `AppRadius.icon`；不要直角、不要纯方。
+///    `AppRadius.appIcon`、行内图标底 `AppRadius.icon`；不要直角、不要纯方.
 /// 3. **按钮一律「半透明着色 + 发丝描边」**（`TintedButtonStyle`）：主行动用
 ///    `TintedButtonStyle(tint: 该页模块色, radius: AppRadius.button)`，模块色取 `AppModule.xxx.tint`；
-///    不属任何功能模块的页面退回 `AppTheme.accent`，次要动作用默认号。不用纯蓝实底，
-///    **也不用全宽深色渐变实底**（见硬规则 7）。
-/// 4. 界面文案一律英文句点 `.`，不用中文句号，不用符号化标记 / 星形符号。
+///    不属任何功能模块的页面退回 `AppTheme.accent`，次要动作用默认号.不用纯蓝实底，
+///    **也不用全宽深色渐变实底**（见硬规则 7）.
+/// 4. 界面文案一律英文句点 `.`，不用中文句号，不用符号化标记 / 星形符号.
 /// 5. **设置类列表用全宽行 + 发丝分隔**（`AppSettingsRow` + `AppHairline`），**不要套 16 圆角卡片**
-///    （TRApp 设置页实测：行底 / 分隔线均全宽 0–828px；规范 §1.4 / §③组件 5）。
+///    （TRApp 设置页实测：行底 / 分隔线均全宽 0–828px；规范 §1.4 / §③组件 5）.
 /// 6. **颜色一律明暗两套值**：品牌实测色写死 sRGB 时必须用 `Color(UIColor { trait in ... })`
 ///    给出深色分支；浅色专用的浅底（如空态圆 `emptyStateCircleFill`）在深色下必须换深色值，
-///    不得沿用浅色字面量（否则深色模式出现刺眼亮块）。防复发见 `swift_theme_blue_guard.py` G4。
-/// 7. **不用全宽深色实底按钮**（用户原话：「那个开始修复按钮颜色太丑了」）。大面积深色 +
-///    全宽 ⇒ 突兀，尤其深藏青渐变（`brandGradient`）铺满一整行时像一块「深色板」。深色品牌色
-///    只允许出现在**紧凑的连续圆角图标块**（`AppBrandTile`）里。主行动按钮改用
-///    `TintedButtonStyle`（半透明着色 + 发丝描边）。防复发见 `swift_theme_blue_guard.py` G7。
+///    不得沿用浅色字面量（否则深色模式出现刺眼亮块）.防复发见 `swift_theme_blue_guard.py` G4.
+/// 7. **不用全宽深色实底按钮**（用户原话：「那个开始修复按钮颜色太丑了」）.大面积深色 +
+///    全宽 ⇒ 突兀，尤其深藏青渐变（`brandGradient`）铺满一整行时像一块「深色板」.深色品牌色
+///    只允许出现在**紧凑的连续圆角图标块**（`AppBrandTile`）里.主行动按钮改用
+///    `TintedButtonStyle`（半透明着色 + 发丝描边）.防复发见 `swift_theme_blue_guard.py` G7.
 enum AppTheme {
     /// Brand accent. Unified blue: TRApp-measured `#005493` in light mode,
     /// a brightened `#76D6FF` in dark mode for contrast.
     ///
     /// 统一「两套蓝」（决定见简报 §③）：此前全局 `accent` 是 `systemBlue`、新页面另用写死的
     /// `trAccent`（`#005493`），同页出现两套蓝（`I4MobileInstallView` heroChip 用 accent、
-    /// sectionHeader 用 trAccent）。现合并为**单一自适应 token**：亮 `#005493`（TRApp 实测
+    /// sectionHeader 用 trAccent）.现合并为**单一自适应 token**：亮 `#005493`（TRApp 实测
     /// Accent）、暗 `#76D6FF`（提亮保证对比度）；`trAccent` 已删除，调用点全部改用 `accent`.
     /// 仍走 `Color(UIColor { trait in ... })` 随明暗模式自适应，不写死单值.
     static let accent = Color(UIColor { trait in
@@ -39,7 +39,7 @@ enum AppTheme {
             ? UIColor(red: 0x76 / 255, green: 0xD6 / 255, blue: 0xFF / 255, alpha: 1)
             : UIColor(red: 0x00 / 255, green: 0x54 / 255, blue: 0x93 / 255, alpha: 1)
     })
-    /// 页面内容左右边距。TRApp 列表页实测 **20**（此前 16，见规范 §1.3）.
+    /// 页面内容左右边距.TRApp 列表页实测 **20**（此前 16，见规范 §1.3）.
     static let pageInset: CGFloat = 20
     static let appIconSize: CGFloat = 44
 
@@ -59,16 +59,16 @@ enum AppTheme {
     /// 未选中态的图标灰（选择圈、占位图形）.
     static let unselected = Color.secondary.opacity(0.5)
 
-    /// 安全评分色阶（v0.3.626 统一）.
+    /// 安全评分色阶（统一）.
     ///
     /// 此前「评分 → 颜色」有两套实现**且已漂移**：
     ///   · HomeView.swift:446-452 —— 蓝档 80+、黄档 60..<80、其余橙
     ///   · HealthCheckView.swift:145-147 —— 蓝档 90+、黄档 70+、其余橙
-    /// 用户从主页点「立即体检」进去，**同一个分数颜色会变**（80 分在主页是蓝、在体检页是黄）。
-    /// 两处还都用系统 .yellow / .orange（单值色，无明暗两套，违反规则 6）。
+    /// 用户从主页点「立即体检」进去，**同一个分数颜色会变**（80 分在主页是蓝、在体检页是黄）.
+    /// 两处还都用系统 .yellow / .orange（单值色，无明暗两套，违反规则 6）.
     ///
     /// 现在统一到这里：阈值取 90 / 70（体检页口径更严，且它是「评分」的权威页面），
-    /// 颜色改用自适应 token —— 深色模式下提亮以保证对比度。
+    /// 颜色改用自适应 token —— 深色模式下提亮以保证对比度.
     static func scoreColor(_ score: Int) -> Color {
         switch score {
         case 90...: return success      // 优秀
@@ -91,7 +91,7 @@ enum AppTheme {
     // MARK: - TRApp 风格语义色（新增）
     //
     // 对照 TRApp 逆向结论（`P4_全能签逆向/_简报/逆向_TRApp的UI.md`）：TRApp 只有 7 个
-    // 自定义语义色，其余全走系统语义色。本仓已有 success / pending / danger，这里补齐
+    // 自定义语义色，其余全走系统语义色.本仓已有 success / pending / danger，这里补齐
     // warning / mark 两个缺口，口径与既有四个 token 一致（`Color(uiColor:)` 语义色，随
     // 明暗模式自适应，不写死 RGB）.
 
@@ -104,7 +104,7 @@ enum AppTheme {
     //
     // 取自 TRApp AppIcon 解码实测：深藏青竖向渐变 `#2C3A6A → #161F2E` + 纯白图形.
     // **仅供紧凑的连续圆角图标块 `AppBrandTile` 使用**（硬规则 1 / 7）：不作为全局 accent，
-    // **更不用于按钮填充**（大面积深色 + 全宽 ⇒ 突兀，用户已明确反馈）。hero 是深色品牌底，
+    // **更不用于按钮填充**（大面积深色 + 全宽 ⇒ 突兀，用户已明确反馈）.hero 是深色品牌底，
     // 与蓝色强调色并存，不参与「两套蓝」的统一（那是 `accent` 与 `trAccent` 的事，现已合并到
     // `accent`）.
 
@@ -123,7 +123,7 @@ enum AppTheme {
     // MARK: - TRApp 实测语义色（本轮从 Assets.car 解出）
     //
     // 上一轮只拿到命名色的**名称**；本轮用 `car-unpacker-py`（纯 Python，BOMStore + RLOC
-    // float64 分量）解 `Assets.car`，拿到 TRApp 7 个命名色的**真实 RGB**（取自 flat-ui 调色板）。
+    // float64 分量）解 `Assets.car`，拿到 TRApp 7 个命名色的**真实 RGB**（取自 flat-ui 调色板）.
     // 这是品牌实测值，故直接写死 sRGB；**仅供新页面使用**，不动既有 `success/pending/danger/
     // warning/mark`（那四个仍走系统语义色，全 App 影响面大）.
     // 证据：`P4_全能签逆向/_简报/实现_TRApp风格落地爱思移动端页.md` §①.
@@ -149,10 +149,10 @@ enum AppTheme {
 
     // MARK: - 完整规范补充色（本轮落「巨魔录音机完整规范」）
     //
-    // 下列 token 取自规范 §1.1 / §1.4 / §③：开关 ON 色、品牌青绿、空状态配色。均为 `.car`
-    // 实测 sRGB（品牌实测值，故写死）。语义状态色 `success/pending/danger/warning/mark`
+    // 下列 token 取自规范 §1.1 / §1.4 / §③：开关 ON 色、品牌青绿、空状态配色.均为 `.car`
+    // 实测 sRGB（品牌实测值，故写死）.语义状态色 `success/pending/danger/warning/mark`
     // 维持系统语义色不动：它们被既有页面引用、且是随明暗模式自适应的语义色，全 App 替换
-    // 影响面大且非本次目标（规范亦承认「新页面用 tr* 实测值」）。
+    // 影响面大且非本次目标（规范亦承认「新页面用 tr* 实测值」）.
 
     /// 开关 ON 色（TRApp 实测 `#005493`，`UISwitch.onTintColor` = Accent；规范 §③组件 6）.
     /// 即统一后的 `accent`（亮 `#005493` / 暗 `#76D6FF`）；单独命名以便设置页
@@ -183,14 +183,14 @@ enum AppTheme {
 
     // MARK: - 多色板系统（本轮新增：解决「颜色单一」）
     //
-    // 背景：用户反馈「全面改造 TequilaDash 的 UI 风格…更不要单一的颜色」。此前全站只有
-    // 一个强调蓝（`accent`）+ 少量系统语义色，各功能模块之间没有颜色区分 ⇒ 观感单一。
+    // 背景：用户反馈「全面改造 TequilaDash 的 UI 风格…更不要单一的颜色」.此前全站只有
+    // 一个强调蓝（`accent`）+ 少量系统语义色，各功能模块之间没有颜色区分 ⇒ 观感单一.
     // 本组 token 建立**三层色彩层次**，全部 `Color(UIColor { trait in ... })` 明暗两套：
     //   ① 模块色 `categoryXxx` —— 一个功能模块一个颜色，用于该模块的图标底 / 标题强调；
     //   ② 表面层 `surfaceXxx` —— base / card / elevated / sunken 四级背景，撑起卡片层次；
-    //   ③ 强调变体 `accentSoft` / `accentBorder` —— 主强调色的淡填充与描边。
+    //   ③ 强调变体 `accentSoft` / `accentBorder` —— 主强调色的淡填充与描边.
     // 硬规则（见文件头 1 / 7）：仍不做全宽深色实底；模块色只用于**紧凑图标块 / 小控件**，
-    // 不铺满整行。防复发：`Resources/Scripts/swift_theme_blue_guard.py` G8 校验下列新增
+    // 不铺满整行.防复发：`Resources/Scripts/swift_theme_blue_guard.py` G8 校验下列新增
     // 色 token 均为自适应色（定义体内出现 `userInterfaceStyle` + `.dark`）.
 
     // ── ① 模块色（一个功能模块一个颜色）──
@@ -212,7 +212,7 @@ enum AppTheme {
     })
     /// 电池健康模块色（绿）.
     ///
-    /// v0.3.xxx：主页「电池健康」入口此前借语义色 `AppTheme.success`（= 操作成功）当模块装饰色.
+    /// 主页「电池健康」入口此前借语义色 `AppTheme.success`（= 操作成功）当模块装饰色.
     /// 语义色一旦被当调色板，后续调 `success` 就会连带动到主页观感. 这里给它一个**专用模块色**，
     /// 色相仍取「健康绿」，明暗两套（硬规则 6，口径同 `swift_theme_blue_guard.py` G8）.
     static let categoryHealth = Color(UIColor { trait in
@@ -223,9 +223,9 @@ enum AppTheme {
     /// 扩展与商店模块色（青蓝）.
     ///
     /// ⚠️ 此前为**橙棕** `#C2620E`（HSL 28° / 86% / 41%）——用户原话「我不喜欢棕色的颜色
-    /// 主页你踩雷了，特别是你看"扩展与商店"那两个选区的颜色，你不许用棕色」。棕 = 低明度暖橙，
+    /// 主页你踩雷了，特别是你看"扩展与商店"那两个选区的颜色，你不许用棕色」.棕 = 低明度暖橙，
     /// 且本 token 常以 ~15% 透明度铺在浅底上（`AppRowIcon` 图标底）⇒ 叠出**米褐色**，正是用户
-    /// 看到的「棕」。修法：整族移出暖区，改用**冷青蓝** `#0B8FC9`（HSL 198° / 90% / 42%），
+    /// 看到的「棕」.修法：整族移出暖区，改用**冷青蓝** `#0B8FC9`（HSL 198° / 90% / 42%），
     /// 低透明度铺底得到浅蓝，彻底去棕；与「设备与系统」被认可的冷色语言同源.
     static let categoryStore = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
@@ -256,9 +256,9 @@ enum AppTheme {
             ? UIColor(red: 0xFF / 255, green: 0x8F / 255, blue: 0xB4 / 255, alpha: 1)
             : UIColor(red: 0xCE / 255, green: 0x32 / 255, blue: 0x68 / 255, alpha: 1)
     })
-    // 高级功能模块色（原 categoryAdvanced 正红 #E5342B）已并入 AppTheme.danger。
-    // 理由：仓库只允许一个红。模块识别色里再留一个正红，用户就无法凭颜色判断
-    // 「红 = 危险」，这条语义一旦失效，整套配色规则都塌。见 HARD-RULES 第 28 条。
+    // 高级功能模块色（原 categoryAdvanced 正红 #E5342B）已并入 AppTheme.danger.
+    // 理由：仓库只允许一个红.模块识别色里再留一个正红，用户就无法凭颜色判断
+    // 「红 = 危险」，这条语义一旦失效，整套配色规则都塌.见 HARD-RULES 第 28 条.
 
     // ── ② 表面层（四级背景，撑起卡片层次）──
     //
@@ -321,7 +321,7 @@ enum AppTheme {
     /// 暖色渐变组（粉 → 红）：暖色模块图标块.
     ///
     /// ⚠️ 此前为 `[categoryStore, categorySign]`（橙 → 粉）；`categoryStore` 已去棕改为冷青蓝，
-    /// 若沿用则「暖色渐变」名不副实（青→粉）。故改由**两个仍在暖区、且都已去棕**的模块色构成：
+    /// 若沿用则「暖色渐变」名不副实（青→粉）.故改由**两个仍在暖区、且都已去棕**的模块色构成：
     /// 签名粉 `categorySign`（HSL 338°）→ 危险红 `danger`（HSL 3°），保持暖色语义.
     static let gradientWarm = LinearGradient(
         colors: [categorySign, danger],
@@ -339,7 +339,7 @@ enum AppTheme {
 /// 功能模块 → 模块色（多色板系统）：供页面按模块取色，避免各处手挑颜色.
 ///
 /// 每个 case 对应 App 的一个功能板块，`tint` 即该模块的主色（取自 `AppTheme.categoryXxx`，
-/// 全部明暗两套）。用法示例：`AppRowIcon(systemName: "sparkles", tint: AppModule.clean.tint)`。
+/// 全部明暗两套）.用法示例：`AppRowIcon(systemName: "sparkles", tint: AppModule.clean.tint)`.
 enum AppModule {
     case clean, device, store, treasure, settings, download, sign, advanced
 
@@ -363,17 +363,17 @@ enum AppModule {
 /// 只加这一个样式，不另造体系：前景取品牌蓝 `AppTheme.accent`（自适应 `#005493` / `#76D6FF`），
 /// 背景取**同一色低透明度** —— 与 `AppRowIcon` / `SizePill` /
 /// `PackageChip` / `ImportFlowBanner` 的 `tint.opacity(...)` 是同一口径（本仓既有的
-/// 「淡底 + 同色前景」语言）。全程**不写死 RGB**，只用语义色 + 不透明度.
+/// 「淡底 + 同色前景」语言）.全程**不写死 RGB**，只用语义色 + 不透明度.
 ///
-/// 与 `.borderedProminent` 的差别：后者是**实底**（用户不喜欢的纯蓝背景），本样式是**淡底**。
+/// 与 `.borderedProminent` 的差别：后者是**实底**（用户不喜欢的纯蓝背景），本样式是**淡底**.
 ///
-/// 明暗辨识度（本轮修正）：固定 12% 淡底在**深色背景**上几乎与背景同色，按钮边界辨识度弱。
+/// 明暗辨识度（本轮修正）：固定 12% 淡底在**深色背景**上几乎与背景同色，按钮边界辨识度弱.
 /// 故按 `colorScheme` 分档：浅色维持 12%，深色提到 22%（按下再提一档作为反馈，替代实底样式的
 /// 自动变暗）；并补一圈**发丝描边**（同为 `tint` 语义色），即便淡底与背景相近也有一条清晰边界.
 ///
 /// 与同排次要按钮（`.bordered`）的风格对齐（本轮修正）：圆角 10 → 8（对齐系统 `.bordered` 常规号）、
 /// 字号 `subheadline`(15) → `body`(17)（对齐 `.bordered` 的默认字号）、常规号竖向内边距 8 → 6
-/// （使总高 ≈ `.bordered` 的 34pt）。小号（卡片内动作，无 `.bordered` 同排）维持原度量.
+/// （使总高 ≈ `.bordered` 的 34pt）.小号（卡片内动作，无 `.bordered` 同排）维持原度量.
 struct TintedButtonStyle: ButtonStyle {
     var tint: Color = AppTheme.accent
     /// 圆角覆盖：`nil` 时按 `controlSize` 取既有默认（小号 7 / 常规 8）. 传 `AppRadius.button`
@@ -384,7 +384,7 @@ struct TintedButtonStyle: ButtonStyle {
     /// 本模块里 `vendor/ApplePackage` 另有一个 `public enum Configuration`，它在模块作用域里
     /// **盖过**了 `ButtonStyle.Configuration` ⇒ 裸写 `Configuration` 会解析成那个枚举，
     /// 报「cannot convert value of type 'Configuration' to expected argument type
-    /// 'ButtonStyleConfiguration'」（v0.3.585 首次 CI 实测）。
+    /// 'ButtonStyleConfiguration'」（首次 CI 实测）.
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         TintedBody(configuration: configuration, tint: tint, radiusOverride: radius)
     }
@@ -392,12 +392,12 @@ struct TintedButtonStyle: ButtonStyle {
     /// 样式体单独成一个 `View`：只有 `View` 能读 `@Environment`，用它在**禁用**时换一套配色
     /// （自定义 `ButtonStyle` 不会像 `.borderedProminent` 那样自动置灰）.
     ///
-    /// v0.3.723：禁用态原来是整块 `.opacity(0.4)`，淡底 + 淡字叠在浅色页面上等于「看不清」，
+    /// 禁用态原来是整块 `.opacity(0.4)`，淡底 + 淡字叠在浅色页面上等于「看不清」，
     /// 用户实测反馈刺眼难辨. 改为「次级灰字 + 系统填充底 + 分隔线描边」，禁用但可读.
     ///
     /// 名字**不能**叫 `Body`：`ButtonStyle` 有名为 `Body` 的关联类型，同名嵌套类型会被当成
     /// 那个关联类型去匹配协议要求，而它又是 `private` ⇒ 报
-    /// 「struct 'Body' must be as accessible as its enclosing type」（同一次 CI 实测）。
+    /// 「struct 'Body' must be as accessible as its enclosing type」（同一次 CI 实测）.
     private struct TintedBody: View {
         let configuration: ButtonStyleConfiguration
         let tint: Color
@@ -467,8 +467,8 @@ struct AppRowIcon: View {
 /// 品牌图标块（TRApp AppIcon 语言）：深藏青渐变底 + 连续圆角的**紧凑方图块**，内嵌白色 SF Symbol.
 ///
 /// **用途**：页面头部替代「全宽渐变 banner」——深色品牌色只出现在这个小的圆角图标块里，
-/// 不做全宽实心填充（用户明确不喜欢全宽方块 banner）。对照 TRApp：设置页无 hero、直接大标题 +
-/// 卡片分组；欢迎页 App 图标就是一个深色大圆角方块。标题 / 副标题走页面背景上的主 / 次字色。
+/// 不做全宽实心填充（用户明确不喜欢全宽方块 banner）.对照 TRApp：设置页无 hero、直接大标题 +
+/// 卡片分组；欢迎页 App 图标就是一个深色大圆角方块.标题 / 副标题走页面背景上的主 / 次字色.
 struct AppBrandTile: View {
     let systemName: String
     /// 图标块边长（默认 `AppMetrics.appIconTile`）.
@@ -505,7 +505,7 @@ struct InfoActionCard: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
     var disabled: Bool = false
-    /// 内容组的水平对齐。默认 `.leading`（v0.3.736 起卡片拉满宽，左贴是正常排版）；
+    /// 内容组的水平对齐.默认 `.leading`（卡片拉满宽，左贴是正常排版）；
     /// 空态占位（日志板块等）传 `.center` 让「图标 + 文字」整组居中.
     var contentAlignment: Alignment = .leading
 
@@ -522,7 +522,7 @@ struct InfoActionCard: View {
                 if let actionTitle = actionTitle, let action = action {
                     // 统一「透明淡蓝」（本轮修正）：此前默认走 `.borderedProminent` + `.tint(accent)`
                     // 实底，深色模式下 accent（亮 `#76D6FF`）会变成**亮蓝实底**（对比突兀、违反
-                    // 「不用纯蓝实底按钮」硬规则）。故本卡动作按钮一律用 `TintedButtonStyle`，
+                    // 「不用纯蓝实底按钮」硬规则）.故本卡动作按钮一律用 `TintedButtonStyle`，
                     // 并去掉了原 `actionTinted` 开关（两分支等价，开关已无意义）.
                     Button(action: action) {
                         Text(actionTitle)
@@ -539,7 +539,6 @@ struct InfoActionCard: View {
     }
 }
 
-/// 应用行（v0.3.634 新增）.
 ///
 /// ## 为什么要有它
 /// 「应用图标 + 名称 + 标识符 + 类型徽章」这个组合全仓有 **6 份独立实现**（审计实证）：
@@ -557,21 +556,21 @@ struct InfoActionCard: View {
 /// \`\`\`
 ///
 /// ## 设计
-/// 只抽**最通用的形态**（图标 + 标题 + 副标题 + 可选尾部件），不把每个调用方的业务字段塞进来。
-/// 各页面要显示「占用大小」「备份时间」这类，走 \`trailing\` 闭包。
+/// 只抽**最通用的形态**（图标 + 标题 + 副标题 + 可选尾部件），不把每个调用方的业务字段塞进来.
+/// 各页面要显示「占用大小」「备份时间」这类，走 \`trailing\` 闭包.
 ///
-/// 尺寸默认 44（AppListView 用的是默认 40 的 AppIconView，这里统一到 AppMetrics.heroIconSize 的一半）。
+/// 尺寸默认 44（AppListView 用的是默认 40 的 AppIconView，这里统一到 AppMetrics.heroIconSize 的一半）.
 struct AppRow<Trailing: View>: View {
     let icon: UIImage?
     let title: String
     var subtitle: String? = nil
-    /// 标题右侧的徽章（如「系统」/ 类型胶囊）。
+    /// 标题右侧的徽章（如「系统」/ 类型胶囊）.
     var badge: AnyView? = nil
-    /// 选中圈（可选，用于多选列表）。
+    /// 选中圈（可选，用于多选列表）.
     var selection: Bool? = nil
-    /// 行尾内容（占用大小、按钮等）。
+    /// 行尾内容（占用大小、按钮等）.
     @ViewBuilder var trailing: () -> Trailing
-    /// 图标边长。
+    /// 图标边长.
     var iconSize: CGFloat = 44
 
     var body: some View {
@@ -612,7 +611,7 @@ extension AppRow where Trailing == EmptyView {
     }
 }
 
-/// 区块级加载行（v0.3.682 新增）.
+/// 区块级加载行（新增）.
 ///
 /// ## 为什么要有它
 /// 全仓「区块正在加载」的写法有 3 套并存（审计实证）：
@@ -641,9 +640,9 @@ extension AppRow where Trailing == EmptyView {
 ///                  替代散落各页的 `VStack { ProgressView(); Text(...) }` 整页加载
 /// 三档共用同一套文案与取色（标题 secondary / detail tertiary），不新增符号.
 struct AppLoadingRow: View {
-    /// 加载态档位（本次新增）。三档只改「圈的大小 / 留白 / 对齐」，不改文案与取色.
+    /// 加载态档位（本次新增）.三档只改「圈的大小 / 留白 / 对齐」，不改文案与取色.
     enum Level {
-        /// 行内一行（默认）：小圈 + 标题 + 可选 detail，左对齐、无额外留白 —— 即 v0.3.682 的既有形态.
+        /// 行内一行（默认）：小圈 + 标题 + 可选 detail，左对齐、无额外留白 —— 即 的既有形态.
         case inline
         /// 区块一段：圈略大、上下留白到 `AppSpacing.section`，用于卡片内「这一块正在加载」.
         case block
@@ -655,9 +654,9 @@ struct AppLoadingRow: View {
     let title: String
     /// 可选补充说明，显示在标题下方.
     var detail: String? = nil
-    /// 是否居中。列表内的行默认左对齐；整页加载场景可居中.
+    /// 是否居中.列表内的行默认左对齐；整页加载场景可居中.
     var centered: Bool = false
-    /// 档位。默认 `.inline` 与既有调用点行为逐像素一致（不传此参数即不变）.
+    /// 档位.默认 `.inline` 与既有调用点行为逐像素一致（不传此参数即不变）.
     var level: Level = .inline
 
     @ViewBuilder
@@ -672,7 +671,7 @@ struct AppLoadingRow: View {
         }
     }
 
-    /// 行内一行：与 v0.3.682 的实现逐像素一致（小圈 + footnote 标题 + caption detail，左对齐）.
+    /// 行内一行：与 的实现逐像素一致（小圈 + footnote 标题 + caption detail，左对齐）.
     private var inlineBody: some View {
         HStack(alignment: .center, spacing: 10) {
             ProgressView()
@@ -720,7 +719,7 @@ struct AppLoadingRow: View {
     /// 整页居中：大圈 + 标题（+ 可选 detail）竖排居中，上下留白 60pt.
     ///
     /// 60pt 不是随手取的数：被替换的 3 处整页加载（设备信息 / 电池健康 / 硬盘详情）
-    /// 原本都是 `.padding(.vertical, 60)`，是 v0.3.650 用户反馈「页面像坏了」后加的呼吸留白；
+    /// 原本都是 `.padding(.vertical, 60)`，是 用户反馈「页面像坏了」后加的呼吸留白；
     /// 换组件时保留同值，页面高度不变、内容不跳动.
     private var pageBody: some View {
         VStack(spacing: AppSpacing.row) {
@@ -742,7 +741,7 @@ struct AppLoadingRow: View {
     }
 }
 
-/// 行内错误提示（v0.3.630 新增）.
+/// 行内错误提示（新增）.
 ///
 /// ## 为什么要有它
 /// 全仓错误提示的**渲染方式**有 4 套并存（审计实证）：
@@ -752,7 +751,7 @@ struct AppLoadingRow: View {
 ///   · \`InfoActionCard\` + 重试 —— 33 处 / 21 文件（最规范）
 ///
 /// 同一句「读不出来」，有的红色、有的灰色；有的 footnote、有的 callout；
-/// 有的居中、有的左对齐 —— 用户在不同页面看到不同形态。
+/// 有的居中、有的左对齐 —— 用户在不同页面看到不同形态.
 ///
 /// ## 用法
 /// \`\`\`swift
@@ -767,7 +766,7 @@ struct AppLoadingRow: View {
 /// AppErrorRow(message: error, largeIcon: true)
 /// \`\`\`
 ///
-/// ## 三个可选形态（v0.3.694 新增）
+/// ## 三个可选形态（新增）
 ///
 ///   · `badge: AnyView?` —— 文案下方的徽标位（「需重新登录」「已过期」这类状态胶囊）.
 ///     与 `AppRow.badge` 同口径：调用方自己包 `AnyView`，组件不预设底色与圆角.
@@ -782,22 +781,22 @@ struct AppLoadingRow: View {
 ///
 /// ## 为什么用 pending（橙）而不是 danger（红）
 /// 列表/数据读不出来通常是「隧道没通 / 配对文件缺失 / 网络抖动」这类**可恢复**问题，
-/// 红色会让用户以为设备坏了或数据损坏了。真正不可恢复的才用 danger。
-/// 这与 \`AppStateSection.error\` 的取色一致。
+/// 红色会让用户以为设备坏了或数据损坏了.真正不可恢复的才用 danger.
+/// 这与 \`AppStateSection.error\` 的取色一致.
 struct AppErrorRow: View {
     let message: String
-    /// 可选重试动作。给了就显示「重试」按钮。
+    /// 可选重试动作.给了就显示「重试」按钮.
     var retry: (() -> Void)? = nil
-    /// 是否居中。列表内的行内错误默认左对齐；整页空态场景可居中。
+    /// 是否居中.列表内的行内错误默认左对齐；整页空态场景可居中.
     var centered: Bool = false
-    /// 可选徽标位（v0.3.694 新增）：渲染在文案下方，用于「需重新登录 / 已过期」这类状态胶囊.
-    /// 与 `AppRow.badge` 同口径（`AnyView?`），底色与圆角由调用方决定。
+    /// 可选徽标位（新增）：渲染在文案下方，用于「需重新登录 / 已过期」这类状态胶囊.
+    /// 与 `AppRow.badge` 同口径（`AnyView?`），底色与圆角由调用方决定.
     var badge: AnyView? = nil
-    /// 可选按钮位（v0.3.694 新增）：`retry` 表达不了的自定义按钮，整颗复用（不拆「标题 + 动作」）.
-    /// 与 `retry` 同时给时本项优先。
+    /// 可选按钮位（新增）：`retry` 表达不了的自定义按钮，整颗复用（不拆「标题 + 动作」）.
+    /// 与 `retry` 同时给时本项优先.
     var trailing: AnyView? = nil
-    /// 大图标结果页形态（v0.3.694 新增）：图标 `largeTitle` + 整块居中 + 文案 `callout`.
-    /// 给「整页只有一个错误」的兜底页用；列表内的行内错误保持默认 `false`。
+    /// 大图标结果页形态（新增）：图标 `largeTitle` + 整块居中 + 文案 `callout`.
+    /// 给「整页只有一个错误」的兜底页用；列表内的行内错误保持默认 `false`.
     var largeIcon: Bool = false
 
     @ViewBuilder
@@ -873,18 +872,18 @@ extension AppErrorRow {
     }
 }
 
-/// 「Apple 会话已过期（1100）」统一错误卡片（v0.3.754 定版：全仓唯一形态）.
+/// 「Apple 会话已过期（1100）」统一错误卡片（定版：全仓唯一形态）.
 ///
 /// ## 为什么要有它
 /// 证书管理与增加内存限制两页曾各出一种风格（大卡 vs 行内 AppErrorRow），
-/// 同一个错误两种长相，用户裁定不允许并存（HARD-RULES 规则 42）。
+/// 同一个错误两种长相，用户裁定不允许并存（HARD-RULES 规则 42）.
 /// 全仓所有呈现「会话已过期 / 1100」类错误的位置必须调用本组件；
-/// 以后新增页面同样只允许这一个入口，禁止再走 AppErrorRow 行样式。
+/// 以后新增页面同样只允许这一个入口，禁止再走 AppErrorRow 行样式.
 ///
 /// ## 用法
 /// ```swift
 /// // 有结构化标记（如 CertificateManager.lastErrorIsSessionExpired）直接判；
-/// // 只有文案时用 isSessionExpiredMessage(_:) 兜底。
+/// // 只有文案时用 isSessionExpiredMessage(_:) 兜底.
 /// if AppSessionExpiredCard.isSessionExpiredMessage(message) {
 ///     AppSessionExpiredCard(message: message, retry: { reload() })
 /// } else {
@@ -908,13 +907,13 @@ struct AppSessionExpiredCard: View {
     }
 
     /// 文案级判定（对齐 AppleAuthModels.swift:156 的 1100 文案口径）：
-    /// 调用方拿不到结构化标记（如 teamState 里的裸 message）时用它兜底。
+    /// 调用方拿不到结构化标记（如 teamState 里的裸 message）时用它兜底.
     static func isSessionExpiredMessage(_ message: String) -> Bool {
         message.contains("会话已过期") || message.lowercased().contains("session has expired")
     }
 }
 
-/// 列表的「加载 / 错误 / 空」三态统一容器（v0.3.626 新增）.
+/// 列表的「加载 / 错误 / 空」三态统一容器（新增）.
 ///
 /// ## 为什么要有它
 /// 全仓这三种状态有 **4 套并存**的写法（审计实证）：
@@ -922,11 +921,11 @@ struct AppSessionExpiredCard: View {
 ///   · `ContentUnavailableView`（系统）—— 7 个文件
 ///   · `InfoActionCard`（当空态用）—— 21 个文件
 ///   · **裸 `Text("暂无…")` —— 26 处 / 21 文件**（最不规范的那种反而最多）
-/// 加载态更是 136 处裸 `ProgressView()` 散在 70 个文件里。
+/// 加载态更是 136 处裸 `ProgressView()` 散在 70 个文件里.
 ///
 /// ## 正确形态的来源
 /// `BackupsListView.swift:109-137` 是全仓唯一把三态做得一致的地方 ——
-/// 三态**全部用 InfoActionCard**，错误态还带重试动作。本组件就是它的抽象。
+/// 三态**全部用 InfoActionCard**，错误态还带重试动作.本组件就是它的抽象.
 ///
 /// ## 用法
 /// ```swift
@@ -936,10 +935,10 @@ struct AppSessionExpiredCard: View {
 /// // 三态都不成立时返回 nil，调用方直接不渲染
 /// ```
 ///
-/// 判据：**只渲染状态，不渲染内容**。调用方按
-/// `if let s = AppStateSection.state(...) { s } else { 真实内容 }` 使用。
+/// 判据：**只渲染状态，不渲染内容**.调用方按
+/// `if let s = AppStateSection.state(...) { s } else { 真实内容 }` 使用.
 struct AppStateSection: View {
-    /// 三态之一。每一态都自带默认图标与色调，调用方可覆盖。
+    /// 三态之一.每一态都自带默认图标与色调，调用方可覆盖.
     enum State {
         /// 正在加载
         case loading(_ title: String, detail: String? = nil)
@@ -953,10 +952,10 @@ struct AppStateSection: View {
 
     /// 是否自带一层 `Section`（默认 `true`）.
     ///
-    /// 本组件默认输出 `Section { InfoActionCard(...) }`，用于「列表里除了这三态没有别的内容」的场景。
-    /// 但 v0.3.677 那批把空态塞进已有 `Section` 时没拆外层，全仓 18 处因此成了 **Section 套 Section**
-    /// （外层带 header/footer，内层又起一个分组）。这些位置传 `false`，只输出 `InfoActionCard`，
-    /// 让它作为外层 Section 的一行渲染 —— 与「裸 Text 空态」原来的层级一致。
+    /// 本组件默认输出 `Section { InfoActionCard(...) }`，用于「列表里除了这三态没有别的内容」的场景.
+    /// 但 那批把空态塞进已有 `Section` 时没拆外层，全仓 18 处因此成了 **Section 套 Section**
+    /// （外层带 header/footer，内层又起一个分组）.这些位置传 `false`，只输出 `InfoActionCard`，
+    /// 让它作为外层 Section 的一行渲染 —— 与「裸 Text 空态」原来的层级一致.
     var wrapsSection: Bool = true
     /// 透传给 InfoActionCard 的内容组水平对齐（空态居中场景用 `.center`）.
     var contentAlignment: Alignment = .leading
@@ -974,7 +973,7 @@ struct AppStateSection: View {
         case .error(let title, let message, let retry):
             // 错误态用 pending（橙）而不是 danger（红）：
             // 列表读不出来通常是「隧道没通 / 配对文件缺失」这类可恢复问题，
-            // 红色会让用户以为设备坏了。真危险操作才用 danger。
+            // 红色会让用户以为设备坏了.真危险操作才用 danger.
             card(icon: "info.circle",
                  tint: AppTheme.pending,
                  title: title,
@@ -1149,8 +1148,8 @@ struct AppHairline: View {
 /// 设置行（TRApp 设置列表语言，IMG_0081 / IMG_0083）：**全宽行 + 发丝分隔**，非内缩圆角卡片.
 ///
 /// 结构（规范 §③组件 5 / 组件 6）：左图标（≈22pt）→ 标题（17pt semibold）+ 关键词副标题
-/// （13pt 次字色，多值用「 / 」连接）→ 右侧 chevron（次字色，右边距 22pt）。行高参考
-/// `AppMetrics.rowHeight`（≈84，含 1 行副标题），内容左右边距 `AppSpacing.settingsInset`（22）。
+/// （13pt 次字色，多值用「 / 」连接）→ 右侧 chevron（次字色，右边距 22pt）.行高参考
+/// `AppMetrics.rowHeight`（≈84，含 1 行副标题），内容左右边距 `AppSpacing.settingsInset`（22）.
 /// 行底可附一条全宽发丝分隔 `AppHairline`.
 struct AppSettingsRow: View {
     /// 左侧 SF Symbol 名.
@@ -1165,13 +1164,13 @@ struct AppSettingsRow: View {
     /// 行底是否附全宽发丝分隔.
     var showsSeparator: Bool = true
     var action: (() -> Void)? = nil
-    /// 图标着色（v0.3.643 新增）.
+    /// 图标着色（新增）.
     ///
-    /// 原实现**恒用 `AppTheme.accent`**，注释还专门写了「TRApp 设置行即单色图标」。
+    /// 原实现**恒用 `AppTheme.accent`**，注释还专门写了「TRApp 设置行即单色图标」.
     /// 但实际调用点里存在需要语义着色的场景（如「危险操作」行该用 danger、
-    /// 「已完成」行该用 success），硬编码 accent 会让这些行与语义脱节。
+    /// 「已完成」行该用 success），硬编码 accent 会让这些行与语义脱节.
     ///
-    /// 默认值仍是 accent —— **向后兼容**，现有调用点行为不变。
+    /// 默认值仍是 accent —— **向后兼容**，现有调用点行为不变.
     var iconTint: Color = AppTheme.accent
 
     var body: some View {
@@ -1217,11 +1216,11 @@ struct AppSettingsRow: View {
     }
 }
 
-/// 行内空态（v0.3.721 新增）：**列表 / 卡片里的一句空结果**，与整页空态 `AppEmptyState` 分工.
+/// 行内空态（新增）：**列表 / 卡片里的一句空结果**，与整页空态 `AppEmptyState` 分工.
 ///
 /// ## 为什么要有它
 /// 全仓空态曾有三套并存：`AppEmptyState`（整页 118pt 浅蓝圆）、`ContentUnavailableView`（系统灰）、
-/// 裸 `Text("暂无…")`（最不规范的一种）. 前两套已在 v0.3.720 统一，剩下的裸 `Text` 收敛到这里.
+/// 裸 `Text("暂无…")`（最不规范的一种）. 前两套已在 统一，剩下的裸 `Text` 收敛到这里.
 ///
 /// 与 `AppEmptyState` 的分工：`AppEmptyState` 是**整页**只有一个空态时的插画式空态；
 /// 本组件是**行内**的（渲染在调用方已有的 `Section` / `List` 行里），不画卡片底、不自带 `Section`.
@@ -1262,7 +1261,7 @@ struct AppEmptyRow: View {
 /// 空状态（TRApp IMG_0079 语言）：**118pt 浅蓝圆 + 青绿字形 + 20pt 标题 + 一句俏皮副标题**，垂直居中.
 ///
 /// 对照规范 §③组件 3：`.car` 内**无** placeholder 图片资源 ⇒ 空状态插画是**运行时 SF Symbols
-/// 组合**（`waveform` + `magnifyingglass`）。本组件即用两层 SF Symbol 叠加还原该「波形 + 放大镜」。
+/// 组合**（`waveform` + `magnifyingglass`）.本组件即用两层 SF Symbol 叠加还原该「波形 + 放大镜」.
 /// 文案由调用方传入（副标题可俏皮，如 TRApp 原味「这里，只有空气」）.
 struct AppEmptyState: View {
     /// 主字形（默认 `waveform`）.
@@ -1307,7 +1306,7 @@ struct AppEmptyState: View {
 // MARK: - TRApp 风格 token 层（新增）
 //
 // 对照 TRApp 逆向结论：全站 SF Rounded（`design: .rounded`）+ Dynamic Type、
-// 连续圆角、毛玻璃、数字等宽、分层符号渲染。以下把字号/圆角/间距收成命名 token，
+// 连续圆角、毛玻璃、数字等宽、分层符号渲染.以下把字号/圆角/间距收成命名 token，
 // 供**新页面**使用；既有页面内联的字号与圆角**保持不变**（不一次全改，避免大范围回归）.
 
 /// 字体层：SF Rounded + Dynamic Type，数字场景走等宽.
@@ -1381,25 +1380,24 @@ enum AppSpacing {
     static let settingsInset: CGFloat = 22
 }
 
-/// 阴影层（v0.3.626 新增）.
 ///
 /// 此前 DesignSystem 里**没有任何阴影 token** —— 全仓只有 3 处硬编码 shadow
-/// （MapDropPin.swift:34、JoystickPad.swift:23、VirtualLocationView.swift:197）。
+/// （MapDropPin.swift:34、JoystickPad.swift:23、VirtualLocationView.swift:197）.
 /// 卡片层次全靠「底色 + 发丝描边」表达，这在浅色模式够用，
 /// 但深色模式下 surfaceCard(#1B1F26) 与 surfaceBase(#0E1116) 明度差很小，
-/// 卡片边界主要靠 accentBorder 0.30 的描边撑着，观感偏平。
+/// 卡片边界主要靠 accentBorder 0.30 的描边撑着，观感偏平.
 ///
 /// 这里只补**两级**阴影，不做完整体系（与 AppRadius 的克制口径一致）：
 /// - card：卡片浮起（浅色下极淡，深色下更重 —— 深色背景上必须靠对比托起卡片）
 /// - raised：浮层 / 拖拽中的元素（如 MapDropPin 拖拽态）
 ///
-/// 判据（v0.3.721 起）：两级阴影在**两种模式下都生效**，但深色下必须更重。
+/// 判据：两级阴影在**两种模式下都生效**，但深色下必须更重.
 ///
-/// 原判据是「深色模式用描边而非阴影」，理由是深色背景上的黑色阴影会把边缘糊成脏带。
+/// 原判据是「深色模式用描边而非阴影」，理由是深色背景上的黑色阴影会把边缘糊成脏带.
 /// 实测下来这条只对**极淡**的阴影成立：深色下 card 取 `.clear` ⇒ 卡片与页底只靠
-/// accentBorder 0.30 的 0.5pt 描边区分，观感偏平（用户 2026-10-27 批准放开深色阴影）。
+/// accentBorder 0.30 的 0.5pt 描边区分，观感偏平（用户 2026-10-27 批准放开深色阴影）.
 /// 现在深色 card 用黑 35% —— 比浅色的 6% 重得多，靠**对比**把卡片从页底托起来，
-/// 而不是靠一层糊在边缘的浅灰。若将来发现边缘发脏，先调这个不透明度，不要退回 .clear。
+/// 而不是靠一层糊在边缘的浅灰.若将来发现边缘发脏，先调这个不透明度，不要退回 .clear.
 enum AppShadow {
     /// 卡片投影：浅色黑 6% / 深色黑 35%（radius 8，y 2）.
     static func card(_ scheme: ColorScheme) -> Color {
@@ -1420,7 +1418,7 @@ enum AppShadow {
     static let raisedY: CGFloat = 4
 }
 
-/// 卡片背景 token（v0.3.626 新增）.
+/// 卡片背景 token（新增）.
 ///
 /// 此前 `appCard()` 内部**硬取** `Color(uiColor: .secondarySystemGroupedBackground)`
 /// （DesignSystem.swift:842），于是全仓出现 4 种卡片底取色路径：
@@ -1428,11 +1426,11 @@ enum AppShadow {
 ///   · 手拼 `RoundedRectangle + Color(.secondarySystemGroupedBackground)` —— 21 个文件
 ///   · `Color(.systemGroupedBackground)`（页面底色）—— 10 个文件
 ///   · `AppTheme.surfaceCard` / `surfaceBase` —— 4 个文件
-/// 同一条「卡片」硬规则有两套落地方式。
+/// 同一条「卡片」硬规则有两套落地方式.
 ///
 /// 现在把「卡片底」提升为显式 token，`appCard()` 改为引用它；
 /// 页面若要自定义卡片底（如 `AppGridTile(tinted: true)` 的模块色渐变），
-/// 应该在**这个底之上叠加**，而不是另取一个系统色。
+/// 应该在**这个底之上叠加**，而不是另取一个系统色.
 enum AppSurface {
     /// 卡片底色（跟随系统 grouped 背景，明暗自适应）.
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
@@ -1440,8 +1438,8 @@ enum AppSurface {
     static let page = Color(uiColor: .systemGroupedBackground)
     /// 内层容器底（卡片里的嵌套块，比卡片底再深一级）.
     ///
-    /// v0.3.684：此前这类底在 AppLayout 里直接写 Color(uiColor: .tertiarySystemGroupedBackground)，
-    /// 全仓 2 处。值与 token 完全一致，只是给它一个名字，避免下一轮又长出第四种取色路径.
+    /// 此前这类底在 AppLayout 里直接写 Color(uiColor: .tertiarySystemGroupedBackground)，
+    /// 全仓 2 处.值与 token 完全一致，只是给它一个名字，避免下一轮又长出第四种取色路径.
     static let inner = Color(uiColor: .tertiarySystemGroupedBackground)
     /// 卡片描边（发丝，0.5pt 用）.
     static let cardBorder = Color(uiColor: .separator)
@@ -1488,7 +1486,7 @@ enum AppHaptics {
 
     /// 关键动作反馈（安装开始 / 录音开始 / 成功确认等）：照 TRApp `RecordingStarts.ahap` 曲线 ——
     /// **Transient(intensity 0.8 / sharpness 0.4) + Continuous(0.25s, 0.8 / 0.4)**，叠加强度衰减曲线
-    /// `1 → 0.5 → 0` 与锐度曲线 `0 → -0.3`（规范 §1.5）。硬件不支持 CoreHaptics 时退回 `.rigid`
+    /// `1 → 0.5 → 0` 与锐度曲线 `0 → -0.3`（规范 §1.5）.硬件不支持 CoreHaptics 时退回 `.rigid`
     /// 单次冲击，保证始终有反馈.
     @MainActor
     static func keyAction() {
@@ -1574,7 +1572,7 @@ struct AppCardBackground: ViewModifier {
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    // v0.3.684：卡片底统一走 token。此前这里硬取系统色，导致 AppSurface.card
+                    // 卡片底统一走 token.此前这里硬取系统色，导致 AppSurface.card
                     // 定义了却零消费（全仓 grep 命中 0），Step 3 批 1 把这条路径接上电.
                     .fill(AppSurface.card)
             )
@@ -1623,7 +1621,7 @@ extension View {
 extension ReclaimRisk {
     /// Visual role color: safe = success, session = pending, kept = unselected.
     ///
-    /// v0.3.701：改取 AppTheme 语义 token（原为裸 Color.green / .orange / .secondary）.
+    /// 改取 AppTheme 语义 token（原为裸 Color.green / .orange / .secondary）.
     var tint: Color {
         switch self {
         case .safe: return AppTheme.success

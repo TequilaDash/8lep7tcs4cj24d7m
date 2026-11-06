@@ -2,7 +2,7 @@
 //  TunnelDiagnostics.swift
 //  TequilaDash
 //
-//  v0.3.723：隧道诊断日志的**统一出口**（纯加法，不重写任何建隧道逻辑）.
+//  隧道诊断日志的**统一出口**（纯加法，不重写任何建隧道逻辑）.
 //
 //  为什么需要：本仓走 RSD 的隧道有 20 来份 `createTunnel` / `makeTunnel` 实现，
 //  失败原因各写各的，用户点「设备信息」「文件浏览」「安装」「崩溃日志」看到的现象一样、
@@ -11,7 +11,7 @@
 //
 //  本类型把它们统一到一个出口：一律写 `LoginLogger.Category.tunnelCellular`，
 //  也就是界面「隧道日志」页（Views/TunnelLogView.swift）与 SSH `tunnellog` 命令读的
-//  **同一份数据**。不新开分类、不新开日志文件、不新开存储 —— 现有 API 已经够用.
+//  **同一份数据**.不新开分类、不新开日志文件、不新开存储 —— 现有 API 已经够用.
 //
 //  纪律（任务书硬约束）：
 //    · 只记服务名、端口、错误码、错误原文前 200 字符；
@@ -83,7 +83,7 @@ enum TunnelDiagnostics {
     /// FFI 错误码版本：调用方自己持有 `IdeviceFfiError` 指针时用这个.
     ///
     /// 本函数**不读也不释放**那个指针 —— 所有权仍归调用方，避免改变既有的
-    /// `idevice_error_free` 语义（那是 v0.3.673 / v0.3.661 逐个文件修出来的纪律）.
+    /// `idevice_error_free` 语义（那是 / 逐个文件修出来的纪律）.
     static func fail(_ stage: String,
                      code: Int32,
                      message: String?,
@@ -189,7 +189,7 @@ enum TunnelDiagnostics {
     private static let stateLock = NSLock()
 
     // 这三项是**受 stateLock 保护**的全局可变状态：读写全部在 stateLock.lock()/
-    // unlock() 之间，逻辑上没有数据竞争。Swift 6 的并发检查看不到锁，只会看到
+    // unlock() 之间，逻辑上没有数据竞争.Swift 6 的并发检查看不到锁，只会看到
     // 「nonisolated 全局可变状态」，所以必须显式标 nonisolated(unsafe) 才编得过
     // （CI 实测：#MutableGlobalVariable error）.
     nonisolated(unsafe) private static var lastKey = ""

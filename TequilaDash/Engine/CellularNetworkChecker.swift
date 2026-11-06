@@ -2,7 +2,7 @@
 //  CellularNetworkChecker.swift
 //  TequilaDash
 //
-//  v0.3.755：常驻蜂窝/Wi-Fi 网络状态探针（Gnoix `CellularNetworkChecker` 同职责）.
+//  常驻蜂窝/Wi-Fi 网络状态探针（Gnoix `CellularNetworkChecker` 同职责）.
 //
 
 import Foundation
@@ -130,7 +130,6 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     /// 当前网络在线快照（读带锁镜像，不等主线程发布）.
     var isNetworkConnectedNow: Bool { connectedBox.value }
 
-    // MARK: - BSD 接口快照（Gnoix `isWiFiInterfaceActive` 同款判定源）
 
     /// getifaddrs() 枚举 BSD 接口得到的状态快照：
     /// · `wifi` = en* 在 UP+RUNNING 且持有 IPv4/IPv6 地址（与状态栏 Wi-Fi 图标同源）；
@@ -197,7 +196,7 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
         reconnectRegistry.finishAll(false)
     }
 
-    /// 等待网络恢复在线（v0.3.757：开蜂窝效果校验用）. 同上，纯事件驱动 + 一次性上限.
+    /// 等待网络恢复在线（开蜂窝效果校验用）. 同上，纯事件驱动 + 一次性上限.
     /// - Returns: 期间恢复联网 = `true`；上限到点仍离线 = `false`.
     func waitForNetworkToReturn(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
         if shouldAbort?() == true || Task.isCancelled { return false }
@@ -213,7 +212,6 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
         return woken || connectedBox.value
     }
 
-    /// 一次性 Wi-Fi 探针（Gnoix `isWiFiInterfaceActive()` 同职责）.
     /// 探不到不冒充 Wi-Fi（默认 `false`，与 `isWiFiSatisfied` 的超时放行策略相反）.
     static func isWiFiInterfaceActive(timeout: TimeInterval = 1.0) -> Bool {
         let monitor = NWPathMonitor()

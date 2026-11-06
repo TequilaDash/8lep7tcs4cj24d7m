@@ -7,29 +7,29 @@ import SwiftUI
 //   容器 `.padding()` + `.padding(.bottom, 18)` + `.frame(maxWidth: .infinity)` + `.background(.bar)`.
 //
 // 主按钮样式：原为 `.borderedProminent` + `.tint(AppTheme.accent)`（纯蓝实底），
-// 用户审美要求「不要纯蓝背景、要透明淡蓝」⇒ 改用 `TintedButtonStyle`。
+// 用户审美要求「不要纯蓝背景、要透明淡蓝」⇒ 改用 `TintedButtonStyle`.
 // 本组件**只被共享转换三个二级页使用**（`grep BatchActionBar(` 只命中已导入 / 待修补 / 已修补），
 // 故这里换样式不影响别的页面；`ReclaimTabView` 继续用自己的私有 `batchBar`，观感零改动.
 //
 // 挂载方式（照 `ReclaimTabView.swift:61-69`）：在页面的 `.safeAreaInset(edge: .bottom)` 里，
-// **仅在选择态**挂本组件；未进选择态用 `Color.clear.frame(height: 12)` 占位（避免列表末项顶到底栏）。
+// **仅在选择态**挂本组件；未进选择态用 `Color.clear.frame(height: 12)` 占位（避免列表末项顶到底栏）.
 
-/// 通用批量操作底条。
+/// 通用批量操作底条.
 ///
 /// - Parameters:
-///   - selectedCount: 已选数量，左侧「已选 N 项」。
-///   - subtitle: 副标题（可选，如合计字节 / 合计大小）。为空时不占位。
-///   - primaryTitle: 主按钮标题。
-///   - primaryDisabled: 主按钮是否禁用。
-///   - primaryAction: 主按钮动作。
-///   - actions: 主按钮**左侧**的附加动作（如「移除」/「导出」）。留空则不占位。
+///   - selectedCount: 已选数量，左侧「已选 N 项」.
+///   - subtitle: 副标题（可选，如合计字节 / 合计大小）.为空时不占位.
+///   - primaryTitle: 主按钮标题.
+///   - primaryDisabled: 主按钮是否禁用.
+///   - primaryAction: 主按钮动作.
+///   - actions: 主按钮**左侧**的附加动作（如「移除」/「导出」）.留空则不占位.
 struct BatchActionBar<Actions: View>: View {
 
     let selectedCount: Int
     let subtitle: String?
     let primaryTitle: String
     let primaryDisabled: Bool
-    /// 主按钮 tint. 默认 AppTheme.accent；各页按模块色传入（v0.3.715）.
+    /// 主按钮 tint. 默认 AppTheme.accent；各页按模块色传入.
     var primaryTint: Color = AppTheme.accent
     let primaryAction: () -> Void
     let actions: () -> Actions
@@ -75,7 +75,7 @@ struct BatchActionBar<Actions: View>: View {
 }
 
 extension BatchActionBar where Actions == EmptyView {
-    /// 无附加动作的便捷构造（只有主按钮）。
+    /// 无附加动作的便捷构造（只有主按钮）.
     init(selectedCount: Int,
          subtitle: String? = nil,
          primaryTitle: String,

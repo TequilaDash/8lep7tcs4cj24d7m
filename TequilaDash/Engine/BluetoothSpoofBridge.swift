@@ -26,17 +26,17 @@ final class BluetoothSpoofBridge {
             Task { @MainActor in self?.apply(coordinate) }
         }
 
-        // A 机：收到 B 机的「请求下发」→ 把该坐标推回给 B（v0.3.540）.
+        // A 机：收到 B 机的「请求下发」→ 把该坐标推回给 B.
         coordinator.onPushRequest = { [weak self] coordinate in
             Task { @MainActor in self?.push(coordinate) }
         }
 
         // A 机：图钉变化即下发.
         //
-        // v0.3.540：**必须限定角色** —— B 机选图钉模式下，B 机自己每次
+        // **必须限定角色** —— B 机选图钉模式下，B 机自己每次
         // `teleport` 也会改 `SpoofSession.shared.pin`，若不判角色，B 机会把
         // 自己刚收到的坐标再下发一次（回环），A 机则会被自己收到的
-        // 请求带回的 pin 变化反复触发。
+        // 请求带回的 pin 变化反复触发.
         SpoofSession.shared.$pin
             .compactMap { $0 }
             .removeDuplicates { $0.latitude == $1.latitude && $0.longitude == $1.longitude }
@@ -53,7 +53,7 @@ final class BluetoothSpoofBridge {
             }
             .store(in: &cancellables)
 
-        // B 机：本机图钉变化 → 请求 A 机下发该坐标（v0.3.540 B 机选图钉）.
+        // B 机：本机图钉变化 → 请求 A 机下发该坐标（B 机选图钉）.
         SpoofSession.shared.$pin
             .compactMap { $0 }
             .removeDuplicates { $0.latitude == $1.latitude && $0.longitude == $1.longitude }
@@ -80,7 +80,7 @@ final class BluetoothSpoofBridge {
         coordinator.onPushRequest = nil
     }
 
-    /// 手动推当前图钉：按角色分流（v0.3.540）.
+    /// 手动推当前图钉：按角色分流.
     ///
     /// A 机 = 下发；B 机 = 请求下发（走反向链路）.
     /// 两条链路终点都是「让 B 机应用这个坐标」，只是发起方与路径不同.
@@ -99,7 +99,7 @@ final class BluetoothSpoofBridge {
         coordinator.send(latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
 
-    /// B 机请求 A 机下发：传本机刚选的图钉坐标（v0.3.540）.
+    /// B 机请求 A 机下发：传本机刚选的图钉坐标.
     private func request(_ coordinate: CLLocationCoordinate2D) {
         guard coordinator.isActive else { return }
         coordinator.requestPush(latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -110,7 +110,7 @@ final class BluetoothSpoofBridge {
     /// 注意：`SpoofSession.apply` 内部已做 `ChinaCoordinateTransform.mapCoordinateToSystemCoordinate`，
     /// 这里必须传原始地图坐标，**不要再变换一次**（双重变换会把位置偏出去）.
     ///
-    /// v0.3.540：改走 `applyRemoteCoordinate` —— 行为与 `teleport` 相同，
+    /// 改走 `applyRemoteCoordinate` —— 行为与 `teleport` 相同，
     /// 只是缺配对文件时给的是链路场景专用的提示语.
     private func apply(_ coordinate: CLLocationCoordinate2D) {
         guard coordinator.isActive else { return }

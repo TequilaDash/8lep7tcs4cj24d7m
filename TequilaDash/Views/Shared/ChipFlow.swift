@@ -1,22 +1,22 @@
 import SwiftUI
 
-// 共享组件 · 胶囊自动换行布局。
+// 共享组件 · 胶囊自动换行布局.
 //
 // 由 `I4StoreFreeView.swift` 的 file-private 实现提升而来（原实现另在
-// `SignSourceAppListView.swift` 内整份复制了一份，因该文件被并行占用，本轮不迁）。
-// 提升后调用点共用同一份实现，实现体逐字节不变 ⇒ 渲染结果零变化。
+// `SignSourceAppListView.swift` 内整份复制了一份，因该文件被并行占用，本轮不迁）.
+// 提升后调用点共用同一份实现，实现体逐字节不变 ⇒ 渲染结果零变化.
 
-/// 一颗胶囊（文本 + 着色），供 `ChipFlow` 使用。
+/// 一颗胶囊（文本 + 着色），供 `ChipFlow` 使用.
 struct ChipItem {
     let text: String
     let tint: Color
 }
 
 /// 一行放得下就横排，放不下就把**整个胶囊**挪到下一行 ——
-/// 不缩字号、不折行内文字、不截断。
+/// 不缩字号、不折行内文字、不截断.
 ///
 /// 用 `HStack` 做不到这件事：空间不足时它会把 `Text` 压成竖排（真机截图里
-/// `v8.0.78` 变成 `v8.0.` / `78` 两行就是这个原因）。
+/// `v8.0.78` 变成 `v8.0.` / `78` 两行就是这个原因）.
 struct ChipFlow: Layout {
     var spacing: CGFloat = 6
 

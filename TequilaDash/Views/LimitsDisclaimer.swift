@@ -25,8 +25,8 @@ struct LimitsDisclaimerView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                 Spacer()
-                // 硬规则 3：不用全宽深色实底按钮。.borderedProminent 是实底（用户明确不喜欢），
-                // 改用 TintedButtonStyle —— 半透明着色 + 发丝描边，与全站主行动一致。
+                // 硬规则 3：不用全宽深色实底按钮..borderedProminent 是实底（用户明确不喜欢），
+                // 改用 TintedButtonStyle —— 半透明着色 + 发丝描边，与全站主行动一致.
                 Button("我已了解", action: onAcknowledge)
                     .buttonStyle(TintedButtonStyle(tint: AppTheme.categorySettings, radius: AppRadius.button))
                     .controlSize(.large)

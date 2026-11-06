@@ -53,22 +53,40 @@ struct EscapeKeychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// 删掉本 service 下的全部条目（`重置数据` 用）.
+    /// account 传 nil = 整个 service 族；`kSecAttrSynchronizableAny` 与 delete(_:) 同源，
+    /// 为的是连历史上可能已同步的旧条目一并删干净.
+    /// 返回值来自 SecItemCopyMatching 计数，只作量级提示，不是精确删除数.
+    func deleteAllItems() -> Int {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+        ]
+        var countQuery: [String: Any] = query
+        countQuery[kSecReturnAttributes as String] = kCFBooleanTrue
+        countQuery[kSecMatchLimit as String] = kSecMatchLimitAll
+        var items: AnyObject?
+        let found = SecItemCopyMatching(countQuery as CFDictionary, &items)
+        if SecItemDelete(query as CFDictionary) != errSecSuccess { return 0 }
+        return found == errSecSuccess ? ((items as? [[String: Any]])?.count ?? 0) : 0
+    }
+
     private func baseQuery(for key: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             // ⚠️ 必须 false：本类存的是 **Apple ID 明文密码**（applePassword / pw:<email>）、
-            // dsid、authToken、adiPb 等凭据。原先这里写 kCFBooleanTrue，
+            // dsid、authToken、adiPb 等凭据.原先这里写 kCFBooleanTrue，
             // 意味着这些条目会随 iCloud Keychain 同步到该用户的**其它所有设备** ——
-            // 对一个「凭据只留在本机」的侧载工具是不可接受的暴露面扩大。
-            // delete() 里用 kSecAttrSynchronizableAny 是为了兼容历史已同步条目（能删干净）。
+            // 对一个「凭据只留在本机」的侧载工具是不可接受的暴露面扩大.
+            // delete() 里用 kSecAttrSynchronizableAny 是为了兼容历史已同步条目（能删干净）.
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any
         ]
     }
 }
 
-// MARK: - SideStore account import
 
 struct SideStoreAccount: Decodable {
     let email: String
@@ -131,7 +149,6 @@ final class MemoryLimitSettings: ObservableObject {
     /// （win.ani.sidestore.io 502 / ani.owoellen.rocks DNS 失败 / ani.neoarz.com 超时），
     /// 清单里混进的 RFC 5737 文档地址一并剔除.
     /// 排序依据：2026-10-21 起 Apple 拒绝 Android ADI 库的 anisette（-80046），Windows 服务器
-    /// 已陆续改跑 macOS 库 —— macOS ADI 的排前面，SideStore 主站（Android ADI 遗留）靠后.
     static let anisetteServers = [
         // macOS ADI（当前可用主力）
         "https://new.ani.sidestore.io",
@@ -141,7 +158,6 @@ final class MemoryLimitSettings: ObservableObject {
         "https://mac-ani.jkcoxson.com",
         "https://ani.jkcoxson.com",
         "https://ani.stikstore.app",
-        // SideStore 主站与镜像
         "https://ani.sidestore.app",
         "https://ani.sidestore.zip",
         "https://ani.846969.xyz",
@@ -169,7 +185,7 @@ final class MemoryLimitSettings: ObservableObject {
     @Published private(set) var isLoggedIn: Bool = false
     @Published private(set) var appleID: String = ""
 
-    /// v0.3.185：绕过 MainActor 隔离直读 keychain 的 appleID（SecItem 调用线程安全）.
+    /// 绕过 MainActor 隔离直读 keychain 的 appleID（SecItem 调用线程安全）.
     /// 供后台队列使用（如 AppListViewModel.loadAppTypes 的正版/共享判定）——
     /// 后台上下文直接读 `shared.appleID` 会触发
     /// "main actor-isolated property 'appleID' can not be referenced from a
@@ -311,7 +327,6 @@ final class MemoryLimitSettings: ObservableObject {
         keychain.delete("firstName")
         keychain.delete("lastName")
         keychain.delete("isLoggedIn")
-        // 与SideStore一致：设备identifier不随账户退出销毁.
         if keepAnisetteData { AnisetteProvider.shared.clearMemoryCache() }
         else { AnisetteProvider.shared.resetProvisioning() }
         if !keepAnisetteHeaders {
@@ -337,7 +352,7 @@ final class MemoryLimitSettings: ObservableObject {
         keychain.set(password, for: "pw:" + email)
         addLoginHistory(email)
         refresh()
-        // v0.3.745 账户体系：同步多账户台账（登录即保持，切换免重登）.
+        // 账户体系：同步多账户台账（登录即保持，切换免重登）.
         AppleUserAccountStore.shared.upsertFromKeychain(
             email: email, password: password,
             swiftDSID: session.dsid, swiftAuthToken: session.authToken,
@@ -389,7 +404,7 @@ final class MemoryLimitSettings: ObservableObject {
         return nil
     }
 
-    /// v0.3.745 账户体系：把台账中某账户的完整双链会话写回 keychain 主键
+    /// 账户体系：把台账中某账户的完整双链会话写回 keychain 主键
     /// （AppleUserAccountStore.switchActive 调用）.与 completeSignIn 的区别：
     /// 不写 pw:<email> 历史、不动登录历史、sessionOwner 按会话有无推断.
     func restoreAccountSession(email: String, password: String,
@@ -418,7 +433,6 @@ final class MemoryLimitSettings: ObservableObject {
         refresh()
     }
 
-    // MARK: - SideStore import
 
     func importSideStoreAccount(_ account: SideStoreAccount) throws {
         let email = account.email.trimmingCharacters(in: .whitespacesAndNewlines)

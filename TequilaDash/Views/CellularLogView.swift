@@ -2,7 +2,7 @@
 //  CellularLogView.swift
 //  TequilaDash
 //
-//  v0.3.756：蜂窝开关运行日志面板（CellularSupportView 右上角入口）.
+//  蜂窝开关运行日志面板（CellularSupportView 右上角入口）.
 //
 
 import SwiftUI

@@ -5,11 +5,11 @@ import UIKit
 import CommonCrypto
 import Security
 
-/// v0.3.203：设备体检引擎 —— 安全检测项执行器.
+/// 设备体检引擎 —— 安全检测项执行器.
 ///
 /// 方法论 1:1 移植 Lessica/Reveil（内嵌 IOSSecuritySuite）：越狱环境组 / 沙箱违规组 /
 /// 静态完整性组 / 动态完整性组 / 调试模拟器组 / 网络代理组；名单升级为爱思助手
-/// SecurityPresets.plist（v0.3.203 起由该 plist 自动生成 SecurityPresets.swift，
+/// SecurityPresets.plist（由该 plist 自动生成 SecurityPresets.swift，
 /// 比 Reveil 内置名单更新——用户非 LC 容器安装时文件系统检测可用，勿再删项）.
 ///
 /// 检测项（34 项分组内可落地部分，每项三态 passed/warn/failed）：
@@ -28,7 +28,7 @@ struct SecurityCheckResult: Identifiable {
     let detail: String
     let passed: Bool
     let warn: Bool
-    /// v0.3.206：uncertain —— 依赖私有 API/需更高权限，无法判定（Reveil .unchanged 语义）.
+    /// uncertain —— 依赖私有 API/需更高权限，无法判定（Reveil .unchanged 语义）.
     /// 默认 false：既有构造点免改.
     var uncertain: Bool = false
     /// 该检查扣分值（failed 扣分；warn 小扣；uncertain 不扣但显示 ?）
@@ -39,7 +39,7 @@ struct SecurityCheckResult: Identifiable {
         uncertain ? "questionmark.circle" : (passed ? "checkmark.circle.fill" : (warn ? "info.circle" : "xmark.circle.fill"))
     }
     var color: Color {
-        // v0.3.682：规则 6（颜色必须明暗两套）—— 原先用系统 .yellow / .green / .orange
+        // 规则 6（颜色必须明暗两套）—— 原先用系统 .yellow / .green / .orange
         // 这类固定色，深色模式下对比度不足；改用 AppTheme 语义 token（Color(uiColor:) 自适应）.
         uncertain ? .gray : (passed ? AppTheme.success : (warn ? AppTheme.warning : AppTheme.pending))
     }
@@ -94,7 +94,7 @@ enum SecurityScanner {
 
     /// 供「设备信息」页的越狱状态复用：命中返回第一条痕迹路径（未命中 nil）.
     ///
-    /// v0.3.723：设备信息页原先用 AFC 读设备 /bin 判断越狱，在 App 沙盒内必然失败
+    /// 设备信息页原先用 AFC 读设备 /bin 判断越狱，在 App 沙盒内必然失败
     /// （详见 DeviceInfoService.jailbrokenTrace 注释）. 这里复用本页已固化的 suspiciousFiles
     /// 名单与四重探测，两处判据保持同源，避免再出现两套口径.
     static func jailbreakFileTrace() -> String? {
@@ -408,9 +408,9 @@ extension SecurityScanner {
     /// 设备上安装的 provisioning profile 是否与白名单哈希一致（Presets secureMobileProvisioningProfileHashes）.
     /// 读全量 profile 需 misagent + RSD 配对（TequilaDash 已具备）；无配对/失败时标 uncertain.
     static func checkProvisioningProfiles() -> SecurityCheckResult {
-        // 规则 29/实时判据：本项是全扫描里唯一要建隧道的。隧道没就绪就**绝不发起**——
+        // 规则 29/实时判据：本项是全扫描里唯一要建隧道的.隧道没就绪就**绝不发起**——
         // 闸门读的是 TunnelGate 缓存（非阻塞），秒回「待复检」项，扫描照常往下走；
-        // VPN 一开（TunnelReadiness 翻 ready），调用方会自动复检本项。
+        // VPN 一开（TunnelReadiness 翻 ready），调用方会自动复检本项.
         if !TunnelGate.isReady {
             return SecurityCheckResult(id: "provisioning", title: "权限配置文件",
                 detail: "等待 LocalDevVPN 隧道（开启后自动复检本项）",

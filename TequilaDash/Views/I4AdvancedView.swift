@@ -5,21 +5,21 @@ import SwiftUI
 ///
 /// ## 为什么拆出来（用户原话）
 /// 「爱思「开启高级功能」你没做好而且这个是单独一个功能」——
-///   1. **没做好** ⇒ 原来只是弹一句「本应用尚未实现这一步」的窗，什么都没做。现在点它**真写**：
+///   1. **没做好** ⇒ 原来只是弹一句「本应用尚未实现这一步」的窗，什么都没做.现在点它**真写**：
 ///      读设备身份 → 构造授权标记 plist → 经 house_arrest 写进载体 App 的 `Documents/` → 读回校验，
-///      并把「哪一份文件写了、哪一份构造不出、为什么」逐条摆出来（引擎见 `I4PairingService`）。
-///   2. **是单独一个功能** ⇒ 它有**独立入口**（百宝箱 → 「开启高级功能」），不再只藏在安装流程里。
+///      并把「哪一份文件写了、哪一份构造不出、为什么」逐条摆出来（引擎见 `I4PairingService`）.
+///   2. **是单独一个功能** ⇒ 它有**独立入口**（百宝箱 → 「开启高级功能」），不再只藏在安装流程里.
 ///
 /// ## 诚实边界（本页必须让用户看到，不假装能开）
 /// 高级功能由设备端「爱思移动端」（`com.ownbook.notes` 等马甲包）起 VPN 提供，前提是往它沙盒写
-/// **三份文件**。其中：
+/// **三份文件**.其中：
 ///   - **授权标记 `8es1421dg.be`**：本页「开启高级功能」按钮**真写**（读设备身份 → 构造 plist →
 ///     经 house_arrest 写进沙盒 → 读回校验）.
 ///   - **`pair.config`**：本页**另设**「尝试现场配对」按钮 —— 经 RSD 隧道连设备本机 `lockdownd`
-///     发一次真 lockdown `Pair`，设备接受才拿得到记录。**成败以设备应答为准**，本页把设备返回的
+///     发一次真 lockdown `Pair`，设备接受才拿得到记录.**成败以设备应答为准**，本页把设备返回的
 ///     **原始错误**如实摆出来，绝不把「请求已发出」说成「已配对」.
 ///   - **`RTD.cfg`**（PC 本地资源清单）：**造不出真值**，逐条说明.
-/// ⇒ 设备端 VPN 起不起得来，取决于 `pair.config` 是否真的拿到；本页不弹「已开启」的假窗。
+/// ⇒ 设备端 VPN 起不起得来，取决于 `pair.config` 是否真的拿到；本页不弹「已开启」的假窗.
 /// 逐条依据见 `I4PairingService` 文件头与 `P3_爱思助手_逆向/_简报/爱思9_配对与设备端Agent.md`.
 ///
 /// ## 不内嵌第三方资源
@@ -316,7 +316,7 @@ struct I4AdvancedView: View {
     private func reportCard(_ report: I4PairingService.Report) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                // v0.3.682：硬规则 4（不用 exclamationmark.triangle）—— 未写入时改 info.circle,
+                // 硬规则 4（不用 exclamationmark.triangle）—— 未写入时改 info.circle,
                 // 与同文件 errorCard / AppTheme.pending 的失败语义保持一致.
                 Image(systemName: report.verified.isEmpty ? "info.circle" : "checkmark.seal.fill")
                     .font(.system(size: 14))
@@ -354,15 +354,15 @@ struct I4AdvancedView: View {
     private func errorCard(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                // v0.3.682：错误卡语义（高级功能没走通）属可重试失败，按 AppErrorRow /
+                // 错误卡语义（高级功能没走通）属可重试失败，按 AppErrorRow /
                 // AppStateSection.error 的口径统一成 info.circle + pending 橙，不再用红色八角叉.
                 Image(systemName: "info.circle").font(.system(size: 14))
                     .foregroundStyle(AppTheme.pending).appSymbol()
                 Text("未完成").font(AppFont.headline)
                 Spacer(minLength: 0)
             }
-            // v0.3.688：本卡头部已按「可重试失败」口径统一成 info.circle + AppTheme.pending（见 :362-363），
-            // 正文却还留着 danger 红 —— 同一张卡两套语义。正文跟随头部改用 pending.
+            // 本卡头部已按「可重试失败」口径统一成 info.circle + AppTheme.pending（见 :362-363），
+            // 正文却还留着 danger 红 —— 同一张卡两套语义.正文跟随头部改用 pending.
             Text(text).font(AppFont.subheadline).foregroundStyle(AppTheme.pending)
                 .fixedSize(horizontal: false, vertical: true)
         }

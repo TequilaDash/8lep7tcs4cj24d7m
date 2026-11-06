@@ -73,7 +73,7 @@ struct RingtonesView: View {
                             PairingGuideCard(showsBackground: false)
                                 .listRowInsets(EdgeInsets())
                         } else {
-                            // v0.3.683：区块级错误行统一到 AppErrorRow.
+                            // 区块级错误行统一到 AppErrorRow.
                             AppErrorRow(message: errorMessage, retry: { reload() })
                         }
                     }
@@ -81,7 +81,7 @@ struct RingtonesView: View {
 
                 Section {
                     if loading {
-                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        // 区块级加载行收口到 AppLoadingRow（.block 档）.
                         AppLoadingRow(title: "正在扫描铃声…", level: .block)
                     } else if ringtones.isEmpty {
                         AppStateSection(state: .empty(

@@ -1,15 +1,13 @@
 import Foundation
 
-/// 定位 bundle 内的 `SAPAssets/`（Asspp 本地 SAP 登录所需的 4 个 Apple 资产）。
 ///
 /// **为什么不能只写 `Bundle.main.resourceURL`**：本 App 常被侧载在
-/// **LiveContainer** 里运行（进程名是 `LiveProcess`），此时 `Bundle.main` 未必指向
 /// 我们自己的 .app —— 真机表现为日志里
 /// `[SAP] 失败：Missing or truncated SAP assets. Rebuild the app.`，
 /// 而 IPA 里的资产其实是完整的（已核对：CoreFP 29,014,912 / CoreFP.icxs 5,288,352 /
-/// CommerceKit 3,271,840 / CommerceCore 207,744 字节，全部与 SAPContext.mm 的校验值一致）。
+/// CommerceKit 3,271,840 / CommerceCore 207,744 字节，全部与 SAPContext.mm 的校验值一致）.
 ///
-/// 所以按「最可能正确 → 兜底」的顺序逐个试，取第一个真的存在 `CoreFP` 的目录。
+/// 所以按「最可能正确 → 兜底」的顺序逐个试，取第一个真的存在 `CoreFP` 的目录.
 enum SAPAssetsLocator {
 
     /// 资产文件名（用它做存在性判定，它是最大的那个）
@@ -20,7 +18,7 @@ enum SAPAssetsLocator {
         var bases: [URL] = []
         // ① 包含 SAPContext 类的那 **image** 所在的 bundle —— 最可靠：
         //    class_getImageName 拿的是编译进这个类的 Mach-O，也就是我们的 .app，
-        //    与进程的 main bundle 是谁无关。
+        //    与进程的 main bundle 是谁无关.
         if let cls = NSClassFromString("SAPContext") {
             let bundle = Bundle(for: cls)
             if let url = bundle.resourceURL { bases.append(url) }

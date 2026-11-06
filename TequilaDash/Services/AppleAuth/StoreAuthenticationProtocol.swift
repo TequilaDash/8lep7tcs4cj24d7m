@@ -69,52 +69,49 @@ enum StoreAuthenticationError: LocalizedError, Sendable {
 enum StoreAuthenticationProtocol {
     static let authenticationPath = "/WebObjects/MZFinance.woa/wa/authenticate"
 
-    /// v0.3.355：Apple 的**前置边缘按 `Content-Type` 路由请求体**（PC 复现，2026-09-12：
+    /// Apple 的**前置边缘按 `Content-Type` 路由请求体**（PC 复现，2026-09-12：
     /// 同一份 XML plist body，`x-www-form-urlencoded` → 404 + 146 字节 HTML 错误页，
-    /// `x-apple-plist` → 204 空响应）。两者都不是认证结论，说明请求没进到认证应用。
-    /// 真机日志里反复出现的「HTTP 204 空响应」「HTTP 403/404 + 146 字节」就是这个形状。
-    /// 所以先按上游 ipatool 的写法发一次，被边缘拒了再换 Apple 自家商店客户端的写法发一次。
+    /// `x-apple-plist` → 204 空响应）.两者都不是认证结论，说明请求没进到认证应用.
+    /// 真机日志里反复出现的「HTTP 204 空响应」「HTTP 403/404 + 146 字节」就是这个形状.
     static let primaryContentType = "application/x-www-form-urlencoded"
     static let alternateContentType = "application/x-apple-plist"
 
-    /// v0.3.356：**二改版 AssppPro 4.2.5 的登录请求是这么发的**（从它的二进制字面量直接挖出来，
+    /// **二改版 AssppPro 4.2.5 的登录请求是这么发的**（从它的二进制字面量直接挖出来，
     /// strings @0x46414-0x46419，紧挨着 `MZFinance.woa/wa/authenticate/`）：
     ///   · `Accept: application/xml, application/x-apple-plist, text/xml`
     ///   · 端点默认值 **带尾斜杠** `…/authenticate/`
-    /// 我们此前两样都没有。PC 复现显示，同一个 URL 加不加 `Accept`、带不带尾斜杠，
-    /// Apple 前置回的状态码都不一样（301/204/403/404 混着来）—— 说明这两项影响**前置路由**。
-    /// 所以按参考客户端对齐：一律带 `Accept`，被前置拒了再试一次尾斜杠变体。
+    /// 我们此前两样都没有.PC 复现显示，同一个 URL 加不加 `Accept`、带不带尾斜杠，
+    /// Apple 前置回的状态码都不一样（301/204/403/404 混着来）—— 说明这两项影响**前置路由**.
+    /// 所以按参考客户端对齐：一律带 `Accept`，被前置拒了再试一次尾斜杠变体.
     static let storeClientAccept = "application/xml, application/x-apple-plist, text/xml"
 
-    /// v0.3.357：**现代认证端点** `auth.itunes.apple.com/auth/v1/native/fast/`。
+    /// **现代认证端点** `auth.itunes.apple.com/auth/v1/native/fast/`.
     ///
-    /// 依据：dompling/Jsbox-Ipa（JAsspp 0.2.1，`config.js:52-53` + `auth.js:187-202`）把
     /// native 端点列为**第一候选**，bag 给的 auth.itunes.apple.com 端点还会补 `/fast`；
-    /// 候选顺序是 native → bag → legacy。对照我们的现实：bag 给的是 legacy
+    /// 候选顺序是 native → bag → legacy.对照我们的现实：bag 给的是 legacy
     /// `buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate`，而 Apple 前置对它
-    /// 只回 204 空响应 / 301 / 403 / 404（真机日志 + PC 复现），**从来没进到认证应用**。
-    /// 所以把 native 端点作为**第一候选**加进登录梯子（有界，每档只打一次）。
+    /// 只回 204 空响应 / 301 / 403 / 404（真机日志 + PC 复现），**从来没进到认证应用**.
+    /// 所以把 native 端点作为**第一候选**加进登录梯子（有界，每档只打一次）.
     ///
-    /// v0.3.358 更正归属：**native-first 是 JAsspp 独有的做法，不是 ipatool 上游行为。**
-    /// 上游 `appstore_bag.go:103-118` 的 `validateAuthenticationEndpoint` 只放行
+    /// 更正归属：**native-first 是 JAsspp 独有的做法，不是 ipatool 上游行为.**
     /// `buy.itunes.apple.com` / `*-buy.itunes.apple.com`，且路径必须**恰好**是
     /// `/WebObjects/MZFinance.woa/wa/authenticate` —— native 端点反而进不去；另外
     /// `appstore_login.go:29-31` 已把 `LoginInput.Endpoint` 标记 deprecated，注释原文
     /// 「Login always uses the SAP configuration from Apple's current bag so unsigned or
-    /// caller-selected fallbacks are impossible」。所以这一档只能当作**便宜的额外形状探测**，
-    /// 不要引用它当上游依据；上游对齐的解释仍是「边缘按请求形状路由」（v0.3.355/356 的方向）。
+    /// caller-selected fallbacks are impossible」.所以这一档只能当作**便宜的额外形状探测**，
+    /// 不要引用它当上游依据；上游对齐的解释仍是「边缘按请求形状路由」（/356 的方向）.
     static let nativeFastHost = "auth.itunes.apple.com"
     static let nativeFastPath = "/auth/v1/native/fast"
 
-    /// 规范化 native 端点：**bag 给出的 native 地址通常缺少 `/fast` 子路径**。
+    /// 规范化 native 端点：**bag 给出的 native 地址通常缺少 `/fast` 子路径**.
     ///
     /// 依据：Jsbox-Ipa `bag.js:33-53` 的 `normalizeAuthURL` —— host 是
     /// `auth.itunes.apple.com` 时一律把路径补成 `…/native/fast/`（去掉多余尾斜杠、
-    /// 缺 `/fast` 就补上、再补回一个尾斜杠），并保留原有查询串；legacy 端点原样返回。
-    /// 它的注释原话：「bag 中的 native 认证端点缺少 /fast/ 子路径，直接访问会 301 到 HTML」。
+    /// 缺 `/fast` 就补上、再补回一个尾斜杠），并保留原有查询串；legacy 端点原样返回.
+    /// 它的注释原话：「bag 中的 native 认证端点缺少 /fast/ 子路径，直接访问会 301 到 HTML」.
     ///
     /// 我们此前只按**精确路径**放行 native，bag 一旦返回 native 就 `invalidRedirect` ——
-    /// 这正是「bag 拿到了却登不上」的那一半。所以按同一规则规范化。
+    /// 这正是「bag 拿到了却登不上」的那一半.所以按同一规则规范化.
     static func nativeFastURL(_ value: String) -> URL? {
         guard let url = URL(string: value), url.scheme?.lowercased() == "https",
               let host = url.host, isNativeFastHost(host),
@@ -123,7 +120,7 @@ enum StoreAuthenticationProtocol {
         else { return nil }
         var path = url.path
         while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        // 只接受 native 家族的路径；避免把 host 上的意外路径拼成 /fast/ 这种畸形端点。
+        // 只接受 native 家族的路径；避免把 host 上的意外路径拼成 /fast/ 这种畸形端点.
         guard path.lowercased().contains("/native") else { return nil }
         if !path.hasSuffix("/fast") { path += "/fast" }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -139,41 +136,35 @@ enum StoreAuthenticationProtocol {
         host.lowercased() == nativeFastHost
     }
 
-    // v0.3.358：URL 上的 `?guid=` 只是 JAsspp 为保留历史实现而带的幂等参数，**不是路由要求**。
-    // 上游 ipatool 把 guid 只放进请求体（`appstore_login.go:258-278` 的 `URL: endpoint` 原样使用，
-    // `appstore_login_test.go:155` 直接断言 `req.URL == testAuthEndpoint`，无查询串）。
+    // URL 上的 `?guid=` 只是 JAsspp 为保留历史实现而带的幂等参数，**不是路由要求**.
+    // `appstore_login_test.go:155` 直接断言 `req.URL == testAuthEndpoint`，无查询串）.
     // 真机日志里也没有「带 / 不带 guid 返回不同状态码」的对照样本，所以保留它只为与参考客户端
-    // 逐字节一致，**不要**据此推断「必须带 guid 才能通过认证」。
+    // 逐字节一致，**不要**据此推断「必须带 guid 才能通过认证」.
 
     /// 设备标识：Jsbox-Ipa 两处放宽口径一致 —— `device.js:11` 用
     /// `/^[0-9a-f]{12,32}$/i`，`sap.js:884` 用 `/^(?:[0-9A-F]{2}){1,20}$/`
-    /// （偶数长度十六进制、大小写不敏感）。
+    /// （偶数长度十六进制、大小写不敏感）.
     ///
     /// 我们只认**恰好 12 位**，真机 `invalidConfiguration` 的来源之一：本地
     /// `device_guid.txt` 是从旧版本 `UserDefaults` 迁移过来的**任意非空串**
     /// （`AppStoreDownloadStore.bootstrapDeviceIdentifier` 不校验格式），长度一旦不是 12
-    /// 就直接放弃登录。这里放宽到与参考实现一致，硬件 ID 仍取**前 12 位**（6 字节）。
+    /// 就直接放弃登录.这里放宽到与参考实现一致，硬件 ID 仍取**前 12 位**（6 字节）.
     static func isDeviceGUID(_ value: String) -> Bool {
         guard (12 ... 32).contains(value.count), value.count.isMultiple(of: 2) else { return false }
         return value.allSatisfy(\.isHexDigit)
     }
 
-    /// v0.3.357：SAP 端点的**硬编码兜底**（Jsbox-Ipa `sap.js:24-25` 同款）。
-    /// bag 拿不到/不合规时不该让整次登录直接 `invalidConfiguration`。
+    /// SAP 端点的**硬编码兜底**（Jsbox-Ipa `sap.js:24-25` 同款）.
+    /// bag 拿不到/不合规时不该让整次登录直接 `invalidConfiguration`.
     ///
-    /// v0.3.358 更正：上游 ipatool **没有**这组兜底，且这是 JAsspp 血统而非上游行为。
-    /// 上游 `appstore_bag.go:89-94` 对 SAP 端点只校验「https + host 非空」，**不 pin 主机名**；
-    /// `appstore_bag.go:96-98` 要求 `Version == 200`。所以遇到 SAP 端点被拒时，正确方向是
-    /// **放宽 host 校验**（见 `isAppleHost`），而不是加更多硬编码默认值。这里保留兜底只为
-    /// bag 完全缺字段时不至于直接失败，属**最后手段**，不是上游依据。
+    /// 上游 ipatool **没有**这组兜底，且这是 JAsspp 血统而非上游行为.
+    /// `appstore_bag.go:96-98` 要求 `Version == 200`.所以遇到 SAP 端点被拒时，正确方向是
+    /// **放宽 host 校验**（见 `isAppleHost`），而不是加更多硬编码默认值.这里保留兜底只为
     static let fallbackSAPCertURL = "https://s.mzstatic.com/sap/setupCert.plist"
     static let fallbackSAPSetupURL = "https://fpinit.itunes.apple.com/v1/signSapSetup/legacy"
 
-    /// v0.3.358：SAP setup / 证书端点的 host 只要求**落在 Apple 自有域内**。
-    /// 上游只查 `https` + host 非空（`appstore_bag.go:89-94`）而不 pin 具体主机名；我们此前
-    /// pin 死 `s.mzstatic.com` / `fpinit.itunes.apple.com`，比上游严 —— bag 一旦换到同域其它
-    /// 主机名就会被丢弃并回退硬编码值。这里收紧到 Apple 域（而不是上游的任意 host），
-    /// 既不丢掉 bag 给的合法值，也不让资产/凭据请求被引到第三方域。
+    /// SAP setup / 证书端点的 host 只要求**落在 Apple 自有域内**.
+    /// 既不丢掉 bag 给的合法值，也不让资产/凭据请求被引到第三方域.
     static func isAppleHost(_ host: String) -> Bool {
         let host = host.lowercased()
         return host == "apple.com" || host.hasSuffix(".apple.com")
@@ -190,7 +181,7 @@ enum StoreAuthenticationProtocol {
 
     static func authenticationURL(_ value: String) throws -> URL {
         // native/fast 是独立 host，先按参考客户端规则**规范化路径**再放行
-        // （bag 返回的 native 地址常缺 `/fast`；其它一切仍走 storeURL 白名单）。
+        // （bag 返回的 native 地址常缺 `/fast`；其它一切仍走 storeURL 白名单）.
         if let url = URL(string: value), let host = url.host, isNativeFastHost(host) {
             guard let normalized = nativeFastURL(value) else {
                 throw StoreAuthenticationError.invalidRedirect
@@ -242,28 +233,27 @@ enum StoreAuthenticationProtocol {
         ], format: .xml, options: 0)
     }
 
-    /// 认证请求是否值得**原样重发**（同一份 body + 新签名）。
+    /// 认证请求是否值得**原样重发**（同一份 body + 新签名）.
     ///
-    /// v0.3.353：对齐上游 ipatool `retryableAuthenticationError` —— 它重试的是
-    /// **204 No Content / 404 / 5xx**（最多 3 次，延迟 250ms × 第几次）。
+    /// 对齐上游 ipatool `retryableAuthenticationError` —— 它重试的是
+    /// **204 No Content / 404 / 5xx**（最多 3 次，延迟 250ms × 第几次）.
     /// Apple 边缘在瞬时拒绝时回的就是这几个码（真机日志里 204 / 404 / 500 / 503 都出现过），
     /// 老实现只认 502/503/504 且额外要求「body 非空且不是 plist」→ **204（空 body）与
-    /// 404（HTML）直接被判死**，还会顺带触发 60 秒本地冷却，表现就是「每次登录都不成」。
+    /// 404（HTML）直接被判死**，还会顺带触发 60 秒本地冷却，表现就是「每次登录都不成」.
     ///
     /// 另外把「3xx **但没有 Location**」也纳入重试：那是 Apple 边缘的畸形应答，
-    /// 没有可跟随的跳转地址，直接判死等于把一次瞬时抖动升级成一次登录失败。
+    /// 没有可跟随的跳转地址，直接判死等于把一次瞬时抖动升级成一次登录失败.
     ///
-    /// v0.3.358 保留 403 / 429 在外：上游 `retryableAuthenticationError`（`appstore_login.go:210-222`）
-    /// 只重试 204 / 404 / 5xx，**不含 403 / 429**；JAsspp 把 403 / 429 加进 `TRANSIENT_STATUSES`
-    /// 是它自己的放宽。此外真机日志（`_tmp_ssh/login_full.log`）里 429、403 作为状态码**出现 0 次**
-    /// —— 实际只有 204×3 / 404 / 301 / 500 / 503，没有「429 其实是抖动」的样本支撑。
-    /// 所以 403 / 429 不纳入轮换（429 另由 `Retry-After` 走 `rateLimited` 退避，不重放凭据）。
+    /// 保留 403 / 429 在外：上游 `retryableAuthenticationError`（`appstore_login.go:210-222`）
+    /// 是它自己的放宽.此外真机日志（`_tmp_ssh/login_full.log`）里 429、403 作为状态码**出现 0 次**
+    /// —— 实际只有 204×3 / 404 / 301 / 500 / 503，没有「429 其实是抖动」的样本支撑.
+    /// 所以 403 / 429 不纳入轮换（429 另由 `Retry-After` 走 `rateLimited` 退避，不重放凭据）.
     static func retryable(status: Int, hasRedirect: Bool) -> Bool {
         if status == 204 || status == 404 || (500 ... 599).contains(status) { return true }
         return (300 ... 399).contains(status) && !hasRedirect
     }
 
-    /// 与 ipatool `authenticationRetryDelay` 同款：250ms × 第几次。
+    /// 与 ipatool `authenticationRetryDelay` 同款：250ms × 第几次.
     static func retryDelay(attempt: Int) -> Duration { .milliseconds(250 * attempt) }
 
     static func retryAfter(_ value: String?, now: Date = Date()) -> TimeInterval? {

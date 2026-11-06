@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// NB 源（NB Pro）的应用详情页。
+/// NB 源（NB Pro）的应用详情页.
 ///
-/// ## 这一版做了什么（v0.3.545）
+/// ## 这一版做了什么
 ///
 /// 用户反馈：「**NB 源的应用详情界面没有详情和预览界面，NB 助手是有的**」——
 /// 于是去反编译了 NB 助手（`XNZS`），把它的详情页实现搬了过来：
@@ -15,19 +15,18 @@ import SwiftUI
 /// | `DXSTDetailDescView`（简介） | `descriptionSection` |
 /// | `DXSTDetailVersionView`（最近更新） | `releaseSection` |
 ///
-/// **数据来源照搬 NB 的做法**：`itunes.apple.com/lookup`（NB 的 `DXSTiTunesAPI` 就是它）。
 /// 反编译出的 `DXSTDetailModel` 字段表与 Apple lookup 的响应键**逐字一致**，
-/// 所以这一层没有自创协议，就是把 lookup 的响应对进模型。
+/// 所以这一层没有自创协议，就是把 lookup 的响应对进模型.
 ///
 /// ## 与另外两个免登录详情页的关系
 ///
 /// 「下载中」区块与安装按钮的**布局**与爱思/牛蛙详情页同款，但**不是同一份实现**：
 /// 本页用的是自己的 `jobSection(_:)`（`:299`）与版本行里的安装入口，
 /// 而爱思/牛蛙详情页用的那两个组件（`DownloadJobSection` / `InstallButton`）是
-/// `I4StoreFreeDetailView.swift` 里的 `private` 类型，**本文件根本引用不到**。
-/// （旧注释曾谎称「复用」它们 —— 与事实不符，已更正。）
+/// `I4StoreFreeDetailView.swift` 里的 `private` 类型，**本文件根本引用不到**.
+/// （旧注释曾谎称「复用」它们 —— 与事实不符，已更正.）
 /// 真正共用的是**下游**：三处的「下载中」区块都读同一份阶段真源 `Job.displayStage`，
-/// 且下载/安装都走 `IPADownloadCenter` —— 全项目仍然只有一套下载/安装实现。
+/// 且下载/安装都走 `IPADownloadCenter` —— 全项目仍然只有一套下载/安装实现.
 ///
 /// ## 取包链路（没变）
 /// 1. **版本列表** → `NBStoreClient.versionList(trackID:)`（走 bilin 目录）
@@ -37,15 +36,15 @@ struct NBStoreDetailView: View {
 
     /// App Store 数字 ID（NB 的 `appID` 与 bilin 路径参数同源）
     ///
-    /// v0.3.549：从 `let` 改成 `@State` —— 下架记录的 `id` 是 NB 自己的行号，
+    /// 从 `let` 改成 `@State` —— 下架记录的 `id` 是 NB 自己的行号，
     /// 真实 App Store ID 要**进页面后解析**（见 `resolveTrackIDIfNeeded`），
     /// 解析出来才能查版本、取包、查详情.
     @State private var trackID: String
     /// 区域（NB 的 `country` 参数；`cn` / `us` / `hk`）
     let country: String
 
-    /// 可选的展示名：从榜单/搜索跳进来时带上，直接粘贴 ID 时为空。
-    /// 详情 lookup 回来后会被真名覆盖，所以这里只是「还没加载完时先显示什么」。
+    /// 可选的展示名：从榜单/搜索跳进来时带上，直接粘贴 ID 时为空.
+    /// 详情 lookup 回来后会被真名覆盖，所以这里只是「还没加载完时先显示什么」.
     let displayName: String?
 
     @ObservedObject private var center = IPADownloadCenter.shared
@@ -53,8 +52,8 @@ struct NBStoreDetailView: View {
     /// 列表页带进来的图标（不用等 lookup 回来就能显示）
     private let seedIcon: String?
 
-    /// 是否处于「下架」筛选（从列表页带进来）。
-    /// 决定取包走 `getAppHistoryList` 还是 `getOffSaleAppHistoryList`（见 `NBStoreClient`）。
+    /// 是否处于「下架」筛选（从列表页带进来）.
+    /// 决定取包走 `getAppHistoryList` 还是 `getOffSaleAppHistoryList`（见 `NBStoreClient`）.
     private let offSale: Bool
 
     @State private var detail: NBStoreRankClient.AppDetail?
@@ -144,7 +143,7 @@ struct NBStoreDetailView: View {
             ImageGalleryViewer(urls: target.urls, startIndex: target.index)
         }
         .task { await loadAll() }
-        // v0.3.705：三方版本目录的 3 分钟负缓存只有下拉刷新能立刻解除（fetch 成功才自清），
+        // 三方版本目录的 3 分钟负缓存只有下拉刷新能立刻解除（fetch 成功才自清），
         // 原来本页没有刷新入口，撞上负缓存即停在错误页且无法自救.
         .refreshable {
             AppStoreService.clearCatalogFailure(appId: trackID)
@@ -168,7 +167,7 @@ struct NBStoreDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 // 图标长按 = 「查看图标 / 提取图标」，与其它免登录源（I4）、AppleID 商店、
-                // 列表行三处走**同一个** `ImagePreviewSupport.iconMenuItems` —— 不再各写一套。
+                // 列表行三处走**同一个** `ImagePreviewSupport.iconMenuItems` —— 不再各写一套.
                 .contextMenu {
                     iconMenuItems(iconURL: iconURL,
                                   fileNameBase: detail?.bundleID ?? title) {
@@ -215,11 +214,11 @@ struct NBStoreDetailView: View {
 
     // MARK: - 截图（预览）—— 对应 NB 的 DXSTDetailADView
 
-    /// 截图画廊：横向滚动，点一张进全屏查看器。
+    /// 截图画廊：横向滚动，点一张进全屏查看器.
     ///
     /// **为什么要横向滚动**：NB 的 `DXSTDetailADView` 就是一个横向翻页容器；
-    /// App Store 详情页也是同样的形态。用 `List` 里的 `ScrollView(.horizontal)`
-    /// 而非 `TabView` —— 后者在列表行里高度会塌成 0（SwiftUI 的已知行为）。
+    /// App Store 详情页也是同样的形态.用 `List` 里的 `ScrollView(.horizontal)`
+    /// 而非 `TabView` —— 后者在列表行里高度会塌成 0（SwiftUI 的已知行为）.
     private func screenshotSection(_ d: NBStoreRankClient.AppDetail) -> some View {
         Section("预览") {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -312,7 +311,7 @@ struct NBStoreDetailView: View {
 
     // MARK: - 下载中
 
-    /// 「下载中」区块 —— 与爱思/牛蛙详情页同款布局。
+    /// 「下载中」区块 —— 与爱思/牛蛙详情页同款布局.
     private func jobSection(_ job: IPADownloadCenter.Job) -> some View {
         Section("下载中") {
             VStack(alignment: .leading, spacing: 8) {
@@ -347,7 +346,7 @@ struct NBStoreDetailView: View {
 
                     Button {
                         // 按**实际结果**提示：台账只读 / 文件被占用时删除被拒，不能默默当成功
-                        // （口径同 `IPADownloadManagerView.reportRemoval`）。
+                        // （口径同 `IPADownloadManagerView.reportRemoval`）.
                         if let result = center.cancel(job.id) {
                             switch result {
                             case .removed:
@@ -358,7 +357,7 @@ struct NBStoreDetailView: View {
                                 ToastCenter.shared.show("未删除安装包：文件无法删除（可能被占用）")
                             }
                         } else {
-                            // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作。
+                            // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作.
                             ToastCenter.shared.show("已取消下载")
                         }
                     } label: {
@@ -392,7 +391,7 @@ struct NBStoreDetailView: View {
     private var versionSection: some View {
         Section {
             if versions.isEmpty {
-                // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。
+                // 裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）.
                 AppStateSection(state: .empty("该应用暂无历史版本",
                                               message: "该应用在当前源里没有其它版本记录.",
                                               icon: "clock.arrow.circlepath"), wrapsSection: false)
@@ -480,18 +479,18 @@ struct NBStoreDetailView: View {
 
     private func errorSection(_ text: String) -> some View {
         Section {
-            // v0.3.683：区块级错误行统一到 AppErrorRow.
+            // 区块级错误行统一到 AppErrorRow.
             AppErrorRow(message: text)
         }
     }
 
     // MARK: - 加载 / 下载
 
-    /// 详情与版本列表并行拉 —— 两者互不依赖，串行会让页面多等一个来回。
+    /// 详情与版本列表并行拉 —— 两者互不依赖，串行会让页面多等一个来回.
     ///
-    /// v0.3.549：前面先插一步 **ID 解析**（下架记录带的是 NB 行号，不是 App Store ID）.
+    /// 前面先插一步 **ID 解析**（下架记录带的是 NB 行号，不是 App Store ID）.
     private func loadAll() async {
-        // v0.3.705：先复位再取 —— 原来不复位任何 @State，detail 一旦被下架库内嵌 lookup 填上，
+        // 先复位再取 —— 原来不复位任何 @State，detail 一旦被下架库内嵌 lookup 填上，
         // loadDetail 的 ②③④ 跳与 loadVersions 的 errorText 清理都不会再执行，刷新等于重放旧结果.
         detail = nil
         detailErrorText = nil
@@ -504,11 +503,11 @@ struct NBStoreDetailView: View {
         }
     }
 
-    /// 确保 `trackID` 是**真正的 App Store 数字 ID**（v0.3.549）.
+    /// 确保 `trackID` 是**真正的 App Store 数字 ID**.
     ///
     /// ## 为什么需要这一步
     /// 下架记录里 `id` 是 NB 自己的行号（如 15993），`appStoreID` 与 `lookupData.trackId`
-    /// 才可能有一个是真 ID。列表页传进来时已经优先挑了真 ID（`OffSaleApp.storeID`），
+    /// 才可能有一个是真 ID.列表页传进来时已经优先挑了真 ID（`OffSaleApp.storeID`），
     /// 但**两个都空**的场合仍会传空串 —— 那时就只能靠名字去下架库反查.
     ///
     /// 拿不到就保持原样，由 `loadVersions` 报那句「缺少 App Store ID」——
@@ -538,19 +537,19 @@ struct NBStoreDetailView: View {
         }
     }
 
-    /// 拉详情（`itunes.apple.com/lookup`）。
+    /// 拉详情（`itunes.apple.com/lookup`）.
     ///
     /// **失败不挡主要内容**：详情拿不到只是少几个区块，版本列表与取包照常，
-    /// 所以这里只把错误记进日志，不占页面的 error 区块（那是给版本列表用的）。
+    /// 所以这里只把错误记进日志，不占页面的 error 区块（那是给版本列表用的）.
     ///
-    /// ## v0.3.549：**下架应用必须走 NB 自己的详情**
+    /// ## ：**下架应用必须走 NB 自己的详情**
     ///
     /// 用户反馈「NB 源的应用详情界面还是没有详情和预览」—— 真因就在这一句 lookup：
     /// **下架应用在 Apple 的 lookup 里根本查不到**（它就是被下架了才搜不到），
     /// 所以 `results` 为空 → `detail` 为 nil → 页面上「预览 / 简介 / 信息 / 新功能」
     /// 四个区块**整组不渲染**，只剩「来源」和「历史版本」，正是用户那张截图的样子.
     ///
-    /// ## v0.3.559：下架态**第一跳就走 NB 下架库**
+    /// ## ：下架态**第一跳就走 NB 下架库**
     ///
     /// 上一版把下架回退放在 lookup 之后，等于每次都要先白等一次必然为空的请求，
     /// 而且回退里还指望「拿到 trackId 再直查 lookup」能中 —— Apple 对已下架的 id
@@ -618,7 +617,7 @@ struct NBStoreDetailView: View {
         }
     }
 
-    /// 下架详情兜底（v0.3.549）：`trackID` 已经就是 App Store ID 的场合，直查一次.
+    /// 下架详情兜底：`trackID` 已经就是 App Store ID 的场合，直查一次.
     ///
     /// 与 `loadDetail` 的差别：这里**换区域再试一次** —— 下架应用常常是「在本区下架、
     /// 别的区还在架」，澳洲/美国区查得到的话就能把截图与简介补上.
@@ -645,7 +644,7 @@ struct NBStoreDetailView: View {
         } catch {
             // F-04：NB 侧错误照旧走 `packageFailure(from:)`（内部码不外泄）；
             // `versionList` 的数据源是 AppStoreService，抛的是 `AppStoreError` ——
-            // 它的 `errorDescription` 本就是面向用户的整句，直接用，不再套前缀。
+            // 它的 `errorDescription` 本就是面向用户的整句，直接用，不再套前缀.
             if let failure = NBStoreClient.packageFailure(from: error) {
                 errorText = failure.userMessage
             } else if let storeError = error as? AppStoreError {
@@ -657,32 +656,31 @@ struct NBStoreDetailView: View {
         loading = false
     }
 
-    /// 取某个版本的包并交给统一下载中心。
+    /// 取某个版本的包并交给统一下载中心.
     ///
-    /// v0.3.556 曾把历史版本这条链路限定为「只对在架应用有效」，理由当时写成
-    /// 「下架应用只能从搜索结果取包」。**该结论已被推翻**（2026-10-09 直连实测）：
+    /// 曾把历史版本这条链路限定为「只对在架应用有效」，理由当时写成
+    /// 「下架应用只能从搜索结果取包」.**该结论已被推翻**（2026-10-09 直连实测）：
     /// `getAppHistoryList`（本方法走的 action）**对下架 App 完全可用** —— 传
-    /// `appID` + `appVerId` 回 `code=0` 且 `data` 完整（直链 + sinf），直链 HEAD → HTTP 200。
-    /// 早先取不到的是**另一个**名字相近的 `getOffSaleAppHistoryList`，别再混为一谈。
+    /// `appID` + `appVerId` 回 `code=0` 且 `data` 完整（直链 + sinf），直链 HEAD → HTTP 200.
+    /// 早先取不到的是**另一个**名字相近的 `getOffSaleAppHistoryList`，别再混为一谈.
     ///
-    /// ⇒ v0.3.586 起下架态也能用本方法按 `appVerId` 取指定版本（版本列表走
-    /// `versionList(trackID:)`，即 bilin 目录，对下架 App 同样有数据）。
+    /// ⇒ 起下架态也能用本方法按 `appVerId` 取指定版本（版本列表走
+    /// `versionList(trackID:)`，即 bilin 目录，对下架 App 同样有数据）.
     ///
-    /// ## v0.3.590：取包失败**不再把内部码弹给用户**
+    /// ## ：取包失败**不再把内部码弹给用户**
     ///
     /// 原来这里 `catch` 直接 `ToastCenter.shared.show("取包失败：\(error.localizedDescription)")`，
     /// 而 NB 的 `StoreError.server` 会把它格式化成 `msg（7）` ⇒ 用户看到
-    /// 「取包失败：未获取到数据（7）」这种内部码（用户 2026-10-11 截图原话）。
-    /// 现改为走 `NBStoreClient.packageFailure(from:)` 分类，原始 error 只进 `[NB源]` 日志。
+    /// 「取包失败：未获取到数据（7）」这种内部码（用户 2026-10-11 截图原话）.
+    /// 现改为走 `NBStoreClient.packageFailure(from:)` 分类，原始 error 只进 `[NB源]` 日志.
     ///
-    /// ## v0.3.596：两处失败分支各归其位（本轮校正）
+    /// ## ：两处失败分支各归其位（本轮校正）
     ///
-    /// v0.3.592 起 `packageWithFallback` 把**稳定** `code=7` 吞成 `nil`（不再抛）⇒ 语义落点是：
-    /// - **`nil`（`guard let pkg else`）= 库里没包**（稳定 `code=7`）。这里给用户文案；
-    ///   若这一版**不是最新版**，追加一句「可试试最新版」的替代路（`isLatestVersion`）。
-    /// - **`catch` = 上游临时故障**（`code=7` 且 msg 含 `dialing`/`请求异常`）或网络错误
-    ///   → `PackageFailure.upstreamBusy.userMessage`（「请稍后重试.」）。
-    /// （v0.3.590 的注释把「库里没包」记在 `catch` —— 那是 v0.3.592 之前的行为，已按上面校正。）
+    /// `packageWithFallback` 把**稳定** `code=7` 吞成 `nil`（不再抛）⇒ 语义落点是：
+    /// - **`nil`（`guard let pkg else`）= 库里没包**（稳定 `code=7`）.这里给用户文案；
+    ///   若这一版**不是最新版**，追加一句「可试试最新版」的替代路（`isLatestVersion`）.
+    ///   → `PackageFailure.upstreamBusy.userMessage`（「请稍后重试.」）.
+    /// （的注释把「库里没包」记在 `catch` —— 那是 之前的行为，已按上面校正.）
     @MainActor
     private func installVersion(_ v: NBStoreClient.NBVersion) async {
         fetchingID = v.externalIdentifier
@@ -693,11 +691,11 @@ struct NBStoreDetailView: View {
                                                                bundleID: detail?.bundleID ?? "",
                                                                country: country)
             guard let pkg else {
-                // v0.3.596：`nil` = 稳定 `code=7`（**这一版库里没包**；v0.3.592 起
-                // `packageWithFallback` 把稳定 7 吞成 nil、不再抛，故这里才是「没包」那一支）。
+                // `nil` = 稳定 `code=7`（**这一版库里没包**；起
+                // `packageWithFallback` 把稳定 7 吞成 nil、不再抛，故这里才是「没包」那一支）.
                 // 详情页不擅自换版本（`packageByVersion` 的 `fallbackCandidates` 仍为空），
                 // 但若这一版**不是最新版**，给一句「可试最新版」的替代路 ——
-                // 别让用户对着一个取不到的旧版本干等。
+                // 别让用户对着一个取不到的旧版本干等.
                 if isLatestVersion(v) {
                     ToastCenter.shared.show("该版本在 NB 下架库里没有可用的安装包.")
                 } else {
@@ -711,8 +709,7 @@ struct NBStoreDetailView: View {
                                   version: v.version,
                                   iconURL: iconURL)
         } catch {
-            // 界面只给用户看得懂的话；内部码 / 服务端原话进日志（`[NB源]` 前缀）排查用。
-            // 走到这里 = 上游临时故障（`code=7` 且 msg 含 `dialing`/`请求异常`）或网络错误。
+            // 界面只给用户看得懂的话；内部码 / 服务端原话进日志（`[NB源]` 前缀）排查用.
             LoginLogger.shared.log("\(NBStoreClient.logTag) [失败] 详情取包：\(error.localizedDescription)",
                                    category: .appStore)
             ToastCenter.shared.show(NBStoreClient.packageFailure(from: error)?.userMessage
@@ -720,10 +717,10 @@ struct NBStoreDetailView: View {
         }
     }
 
-    /// 这一版是不是历史版本列表里的**最新版** —— v0.3.596.
+    /// 这一版是不是历史版本列表里的**最新版** —— .
     ///
-    /// bilin 目录实测**新→旧**排列（`t13_bilin_order.py`），故 `versions.first` 即最新版。
-    /// 供「点旧版本取不到包时提示可试最新版」判断用（最新版本身取不到就不给这句，免得自相矛盾）。
+    /// bilin 目录实测**新→旧**排列（`t13_bilin_order.py`），故 `versions.first` 即最新版.
+    /// 供「点旧版本取不到包时提示可试最新版」判断用（最新版本身取不到就不给这句，免得自相矛盾）.
     private func isLatestVersion(_ v: NBStoreClient.NBVersion) -> Bool {
         guard let first = versions.first else { return false }
         return first.externalIdentifier == v.externalIdentifier

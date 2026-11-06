@@ -1,26 +1,26 @@
 import Foundation
 
-/// ▸ 只读诊断探针（svc-notfound / 2026-09-19）：回答「设备上到底挂没挂 DDI」这个**独立**问题。
+/// ▸ 只读诊断探针（svc-notfound / 2026-09-19）：回答「设备上到底挂没挂 DDI」这个**独立**问题.
 ///
 /// ## 注意： 先读这段：这份探针当初是为一个**已被推翻的假设**写的
 /// 它当初要验证的**主导假设**是「CoreDevice 那块是 **DDI 门控**的 —— 设备没挂 DDI ⇒
-/// RSD 不广播整块 ⇒ app_service 必现 `ServiceNotFound`(21)」。**该假设已作废。**
-/// 后来写过的第三版归因「接错隧道」**也作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）。
+/// RSD 不广播整块 ⇒ app_service 必现 `ServiceNotFound`(21)」.**该假设已作废.**
+/// 后来写过的第三版归因「接错隧道」**也作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）.
 ///
 /// **事实（用户实测 + PC 侧交叉验证）**：`ServiceNotFound`(21) 是**设备侧的服务状态问题**，
 /// **不是本 App 的缺陷** —— 该服务在设备侧**偶尔**不可用，**重启手机即恢复**（用户实测；
-/// 同类工具也这么处理）。**与 DDI 无关，也与「用哪条隧道」无关**：PC 侧标准工具
-/// `pymobiledevice3` 拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**。
-/// **原理未知** —— 不要再往这个方向补推测。
+/// 同类工具也这么处理）.**与 DDI 无关，也与「用哪条隧道」无关**：PC 侧标准工具
+/// `pymobiledevice3` 拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**.
+/// **原理未知** —— 不要再往这个方向补推测.
 ///
-/// ## ▸ `ddiprobe` 现在还有没有用？有。
+/// ## ▸ `ddiprobe` 现在还有没有用？有.
 /// 它回答的是「**DDI 挂没挂**」这个**独立**问题（设备侧已挂载的开发者镜像列表），
-/// 与 `ServiceNotFound` 无关 —— 所以**本文件与 `ddiprobe` 命令都保留**。
-/// 只是**不要再拿它的结果去解释 `ServiceNotFound`**。
+/// 与 `ServiceNotFound` 无关 —— 所以**本文件与 `ddiprobe` 命令都保留**.
+/// 只是**不要再拿它的结果去解释 `ServiceNotFound`**.
 ///
 /// ## 探针当初的依据（保留作历史记录，**归因部分已作废**）
 /// 主页两个内置模块（`com.tequila.locache` / `com.tequila.wifirefresh`，都是 `type: "signal"`）
-/// 执行时会出现 `ServiceNotFound`（错误码 21）。仍然成立的一条：
+/// 执行时会出现 `ServiceNotFound`（错误码 21）.仍然成立的一条：
 /// - `RsdHandshake::connect` 是纯 `HashMap` 查表，查不到直接 `Err(ServiceNotFound)`，无回退
 ///   （`idevice/src/services/rsd.rs:171-189`）⇒ 失败时**重试 3 次毫无意义**；
 ///
@@ -28,60 +28,60 @@ import Foundation
 /// - ~~真机 19 次 RSD dump 里整块 `com.apple.coredevice.*` 都不在 ⇒ 缺 CoreDevice 那一块~~；
 /// - ~~主导假设：CoreDevice 那块是 DDI 门控的；旁证 pymobiledevice3 #1744 /
 ///   `remote_service_discovery.py:462-465` 的报错文案 / StikDebug 把挂 DDI 当前置条件~~；
-/// - ~~第三版：本仓接错了握手（CoreDevice 族只在 CoreDeviceProxy 隧道内的第二个 RSD 握手上）~~。
+/// - ~~第三版：本仓接错了握手（CoreDevice 族只在 CoreDeviceProxy 隧道内的第二个 RSD 握手上）~~.
 ///
-/// **本探针只回答一个问题：设备上已挂载的开发者镜像列表是空还是非空。**
+/// **本探针只回答一个问题：设备上已挂载的开发者镜像列表是空还是非空.**
 ///
 /// ## ▸ 为什么走 C 垫片（`EscDDIProbe.c`），而不是 Swift 直调 FFI
 /// 本探针要用的两个函数的出参都是 **opaque 指针数组**形状：
 ///   · `image_mounter_connect_rsd(..., struct ImageMounterHandle **client)`
 ///   · `image_mounter_copy_devices(..., plist_t **devices, size_t *devices_len)`
 /// 而本 FFI 头里 `plist_t` 是 `typedef void *`（`idevice.h:317`），它的指针出参在
-/// Clang Importer 下类型推断**不可靠**。项目记忆 `.workbuddy/memory/2026-09-10.md`
-/// 「v0.3.279 八轮攻坚终结（C 垫片方案）」原文：
+/// Clang Importer 下类型推断**不可靠**.项目记忆 `.workbuddy/memory/2026-09-10.md`
+/// 「八轮攻坚终结（C 垫片方案）」原文：
 ///   > 271~278 八轮 CI 里 `&x` / `withUnsafeMutablePointer` 闭包 /
-///   > **显式 allocate** 三种写法**全部编译失败**；改用 C 垫片后 run 453 SUCCESS。
-///   > 教训：这个 FFI 头的 typedef void* 指针在 Swift 侧不可靠，一律走 C 垫片。
+///   > **显式 allocate** 三种写法**全部编译失败**；改用 C 垫片后 run 453 SUCCESS.
+///   > 教训：这个 FFI 头的 typedef void* 指针在 Swift 侧不可靠，一律走 C 垫片.
 /// ⇒ 本探针照 `EscBrowseApps.c` 的先例：**调用 + 遍历 + 序列化全在 C 层**，
-/// Swift 侧只传两个 `OpaquePointer`、拿回 bplist 字节，**零 `plist_t` / 零 opaque 指针出参**。
+/// Swift 侧只传两个 `OpaquePointer`、拿回 bplist 字节，**零 `plist_t` / 零 opaque 指针出参**.
 ///
 /// ## 安全约束（必须遵守）
-/// 依据：v0.3.419/420 的真机事故 ——
-/// v0.3.419/420 在自检/detached 路径对 RSD 服务做 `adapter_connect` + `rsd_checkin`，
+/// 依据：/420 的真机事故 ——
+/// /420 在自检/detached 路径对 RSD 服务做 `adapter_connect` + `rsd_checkin`，
 /// 导致设备端 RPPairing `attemptPairVerify` **此后全部零响应**（连续 63 次超时），
-/// **所有走 RSD 隧道的功能一起失效**。
+/// **所有走 RSD 隧道的功能一起失效**.
 ///
 /// 1. **跑在 `AFCService` 的同一条串行队列上**（`AFCService.runExclusively`）——
-///    不自建队列，避免与 AFC / 进程管理 / 设备控制并发建隧道互相抢占。
+///    不自建队列，避免与 AFC / 进程管理 / 设备控制并发建隧道互相抢占.
 /// 2. **只建一条服务连接**，用完立即 `free` —— 现已**落在 C 垫片内部**
 ///    （`esc_ddi_copy_devices` 里 `image_mounter_connect_rsd` → 用完 → `image_mounter_free`），
-///    Swift 侧连句柄都拿不到，从结构上杜绝"忘记释放"。
+///    Swift 侧连句柄都拿不到，从结构上杜绝"忘记释放".
 ///    真机实证：同一次运行内**第 2 个服务连接会卡死在 `adapter_connect` 上永不返回**
-///    （`SSHServerService.swift:358-362`）⇒ 本探针**绝不开第二条服务连接**。
-///    `rsd_get_services` 只是读已建隧道里的**内存结构**，不建连。
-/// 3. **只读**：不挂载、不发信号、不改任何设备状态。
-/// 4. **只由 SSH 命令 `ddiprobe` 显式触发**，不挂任何 UI 路径、不自启、不放 `Task.detached`。
+///    （`SSHServerService.swift:358-362`）⇒ 本探针**绝不开第二条服务连接**.
+///    `rsd_get_services` 只是读已建隧道里的**内存结构**，不建连.
+/// 3. **只读**：不挂载、不发信号、不改任何设备状态.
+/// 4. **只由 SSH 命令 `ddiprobe` 显式触发**，不挂任何 UI 路径、不自启、不放 `Task.detached`.
 ///
 /// ## 所有权
-/// - 垫片返回的 bplist 字节由 libplist 分配 ⇒ 本文件用 **`plist_mem_free`** 释放。
-/// - 垫片返回的失败原因字符串由 `malloc` 分配 ⇒ 本文件用 **`free`** 释放。
+/// - 垫片返回的 bplist 字节由 libplist 分配 ⇒ 本文件用 **`plist_mem_free`** 释放.
+/// - 垫片返回的失败原因字符串由 `malloc` 分配 ⇒ 本文件用 **`free`** 释放.
 /// - `image_mounter_copy_devices` 的**外层指针数组**在 C 层**故意泄漏**
-///   （`count × 8` 字节；本库没有该来源的释放函数）—— 细节见 `EscDDIProbe.c` 第 5 步注释。
-///   一次性只读探针，**可接受**。
+///   （`count × 8` 字节；本库没有该来源的释放函数）—— 细节见 `EscDDIProbe.c` 第 5 步注释.
+///   一次性只读探针，**可接受**.
 enum DDIMountProbe {
 
     /// 落盘文件名（`Documents/LoginLogs/ddi_probe.txt`，覆盖式）
     static let logFileName = "ddi_probe.txt"
 
-    /// 强制跑一次（忽略任何单飞标记）。返回完整记录，同时落盘。
-    /// 调用方必须是 SSH 命令处理路径（见 `SSHServerService` 的 `ddiprobe`）。
+    /// 强制跑一次（忽略任何单飞标记）.返回完整记录，同时落盘.
+    /// 调用方必须是 SSH 命令处理路径（见 `SSHServerService` 的 `ddiprobe`）.
     @discardableResult
     static func runOnce() -> String {
         var lines: [String] = []
         let stamp = ISO8601DateFormatter().string(from: Date())
         lines.append("=== DDI 挂载只读探针 @ \(stamp) ===")
         lines.append("目的：判定设备上是否已挂载 Developer Disk Image（DDI）")
-        // 依据行（用户可见输出）：只写事实与恢复办法，**不写任何成因推测**。
+        // 依据行（用户可见输出）：只写事实与恢复办法，**不写任何成因推测**.
         lines.append("依据：ServiceNotFound(21) 是设备侧的服务状态问题，不是本 App 的缺陷；该服务偶尔不可用，重启手机即恢复（用户实测），与 DDI、与「用哪条隧道」均无关")
         lines.append("")
 
@@ -136,9 +136,9 @@ enum DDIMountProbe {
 
         // 2) 读 RSD 服务表（**只读内存结构，不建连**）
         //    注意： 下面 dump 出来的「coredevice 整块不在表里」**不解释 `ServiceNotFound`** ——
-        //       既不是 DDI 造成的，也不是「接错隧道」造成的（两版归因都已作废）。
+        //       既不是 DDI 造成的，也不是「接错隧道」造成的（两版归因都已作废）.
         //       `dumpServiceTable` 的判据 A/B/C 仍有参考价值（判据 C 是「DDI 挂没挂」的旁证），
-        //       但**不要把它读成 `ServiceNotFound` 的解释**。
+        //       但**不要把它读成 `ServiceNotFound` 的解释**.
         out.append("")
         out.append("[2] RSD 服务表（rsd_get_services，只读内存，不建连）")
         dumpServiceTable(handshake, into: &out)
@@ -148,9 +148,9 @@ enum DDIMountProbe {
         out.append("[3] ▸ 判据 esc_ddi_copy_devices（C 垫片）")
         out.append("    垫片内部：image_mounter_connect_rsd → copy_devices → image_mounter_free")
         //
-        // 注意： 这里**刻意不出现任何 FFI 指针** —— 理由见本文件头注释「为什么走 C 垫片」。
+        // 注意： 这里**刻意不出现任何 FFI 指针** —— 理由见本文件头注释「为什么走 C 垫片」.
         //    一句话：`ImageMounterHandle **` / `plist_t **` 这两个 opaque 指针数组出参
-        //    在 Swift 侧烧掉过八轮 CI（271~278），垫片是本仓唯一被验证过的路（run 453 SUCCESS）。
+        //    在 Swift 侧烧掉过八轮 CI（271~278），垫片是本仓唯一被验证过的路（run 453 SUCCESS）.
         var byteLen: UInt32 = 0
         var errorCStr: UnsafeMutablePointer<CChar>?
         let bytes = esc_ddi_copy_devices(adapter, handshake, &byteLen, &errorCStr)
@@ -166,7 +166,7 @@ enum DDIMountProbe {
         defer { plist_mem_free(bytes) }                 // bplist 字节由 libplist 分配 ⇒ plist_mem_free
         out.append("  · 返回 bplist 字节数 = \(byteLen)")
 
-        // ▸ 解析失败必须与「列表为空」区分开 —— 否则会把「查不了」误报成「没挂 DDI」。
+        // ▸ 解析失败必须与「列表为空」区分开 —— 否则会把「查不了」误报成「没挂 DDI」.
         guard let images = parsePlistArray(bytes, byteLen) else {
             out.append("  [失败] 垫片返回的字节解析失败（length=\(byteLen)）")
             out.append("")
@@ -187,9 +187,9 @@ enum DDIMountProbe {
 
         out.append("")
         out.append("[5] 结论")
-        // 注意： 下面两个分支只报告「设备挂没挂 DDI」这个**独立事实**。
+        // 注意： 下面两个分支只报告「设备挂没挂 DDI」这个**独立事实**.
         //    不要再把它当成 `ServiceNotFound` 的解释（DDI 与「接错隧道」两版归因都已作废），
-        //    **也不要照着它去挂 DDI**。
+        //    **也不要照着它去挂 DDI**.
         if !images.isEmpty {
             out.append("  ⇒ **已挂 DDI**：设备侧已挂载开发者镜像（与 ServiceNotFound 无关）.")
             out.append("     ServiceNotFound(21) 是设备侧服务状态问题，该服务偶尔不可用，")
@@ -213,7 +213,7 @@ enum DDIMountProbe {
         }
     }
 
-    /// `10.7.0.1:49152`（RPPairing）+ 3 次退避重试 —— 与 `AFCService.createTunnel` 完全同款。
+    /// `10.7.0.1:49152`（RPPairing）+ 3 次退避重试 —— 与 `AFCService.createTunnel` 完全同款.
     private static func buildTunnel(into tunnel: inout TunnelHandles, pairingPath: String) throws {
         var pairingFile: OpaquePointer?
         if let ffiError = pairingPath.withCString({ rp_pairing_file_read($0, &pairingFile) }) {
@@ -241,17 +241,17 @@ enum DDIMountProbe {
         TunnelDiagnostics.begin("DDI 探针隧道")
         for attempt in 0..<3 {
             var candidate = TunnelHandles()
-            // v0.3.643：改用**独立** hostname。
+            // 改用**独立** hostname.
             //
             // 原值与 DeviceControlService 共用 `"TequilaDashDevice"`，违反本仓自己的
             // RSD 隧道铁律（AFCService.swift:19-20）：
-            //   「同一 hostname 并发 tunnel_create_rppairing 会互相抢占」。
+            //   「同一 hostname 并发 tunnel_create_rppairing 会互相抢占」.
             //
             // DDIMountProbe 跑在 AFCService 的串行队列上（:90 runExclusively），
             // 但 DeviceControlService **没有任何串行队列** —— 两者并发时同 hostname 会抢占，
-            // 表现为其中一方 ServiceNotFound / 建连失败，且没有闸门保护。
+            // 表现为其中一方 ServiceNotFound / 建连失败，且没有闸门保护.
             //
-            // 改成独立值后两条路径互不干扰。
+            // 改成独立值后两条路径互不干扰.
             let ffiError = "TequilaDashDDIProbe".withCString { hn in
                 withUnsafePointer(to: &addr) { pointer in
                     pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -290,7 +290,7 @@ enum DDIMountProbe {
 
     // MARK: - 服务表（只读内存，不建连）
 
-    /// dump RSD 服务表，并**显式点名**三条与本问题直接相关的判据。
+    /// dump RSD 服务表，并**显式点名**三条与本问题直接相关的判据.
     private static func dumpServiceTable(_ handshake: OpaquePointer, into out: inout [String]) {
         var servicesArray: UnsafeMutablePointer<CRsdServiceArray>?
         if let ffiError = rsd_get_services(handshake, &servicesArray) {
@@ -316,7 +316,7 @@ enum DDIMountProbe {
             }
         }
         out.append("  · 服务总数 = \(total)（隧道内受信 RSD；直连 untrusted RSD 只有 7 个）")
-        // v0.3.723：服务表同时写进隧道日志，SSH `tunnellog` 与界面「隧道日志」页都能直接看.
+        // 服务表同时写进隧道日志，SSH `tunnellog` 与界面「隧道日志」页都能直接看.
         TunnelDiagnostics.noteServiceTable(names)
 
         // 判据 A：本探针要连的服务在不在
@@ -330,7 +330,7 @@ enum DDIMountProbe {
         for name in coreDevice { out.append("      - \(name)") }
 
         // 判据 C：DDI 已挂的两个外部标志（pymobiledevice3 #1744 用的判据）
-        //   仅用于回答「DDI 挂没挂」这个独立问题，**与 ServiceNotFound 无关**。
+        //   仅用于回答「DDI 挂没挂」这个独立问题，**与 ServiceNotFound 无关**.
         for marker in ["com.apple.dt.testmanagerd.remote", "com.apple.dt.ViewHierarchyAgent.remote"] {
             out.append("  · [判据 C] \(marker) → \(names.contains(marker) ? "在表里（旁证：DDI 已挂）" : "不在表里")")
         }
@@ -342,10 +342,10 @@ enum DDIMountProbe {
 
     // MARK: - 工具（**纯 Foundation，不碰 plist_t**）
 
-    /// 把垫片返回的 bplist 字节解析成「镜像字典」数组。
+    /// 把垫片返回的 bplist 字节解析成「镜像字典」数组.
     ///
-    /// - Returns: 解析成功返回数组（**空数组 = 设备未挂 DDI**）；解析失败返回 `nil`。
-    ///   注意： 失败与「空」**必须区分**，否则会把「查不了」误报成「没挂 DDI」。
+    /// - Returns: 解析成功返回数组（**空数组 = 设备未挂 DDI**）；解析失败返回 `nil`.
+    ///   注意： 失败与「空」**必须区分**，否则会把「查不了」误报成「没挂 DDI」.
     private static func parsePlistArray(_ bytes: UnsafeMutablePointer<UInt8>,
                                         _ length: UInt32) -> [[String: Any]]? {
         guard length > 0 else { return nil }
@@ -357,7 +357,7 @@ enum DDIMountProbe {
         return array
     }
 
-    /// 把一个镜像字典序列化成可读 XML（纯 Foundation，不碰 plist_t）。
+    /// 把一个镜像字典序列化成可读 XML（纯 Foundation，不碰 plist_t）.
     private static func xmlOfDictionary(_ dict: [String: Any]) -> String {
         guard let data = try? PropertyListSerialization.data(fromPropertyList: dict,
                                                              format: .xml, options: 0),

@@ -13,8 +13,8 @@ import Foundation
 final class DeviceControlService {
 
     /// Swift 6 并发检查：本类型非 Sendable，但**没有任何可变实例状态** ——
-    /// 隧道句柄都是方法内局部量，方法本身不保存任何跨调用状态。
-    /// 因此实例本身线程安全，`shared` 跨线程共享无风险。
+    /// 隧道句柄都是方法内局部量，方法本身不保存任何跨调用状态.
+    /// 因此实例本身线程安全，`shared` 跨线程共享无风险.
     nonisolated(unsafe) static let shared = DeviceControlService()
     private init() {}
 
@@ -72,7 +72,7 @@ final class DeviceControlService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "设备控制")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -123,27 +123,27 @@ final class DeviceControlService {
 
     // MARK: 进程信号
 
-    /// connect 失败自动重试（最多 3 次、短退避）。
+    /// connect 失败自动重试（最多 3 次、短退避）.
     ///
     /// ## 注意： 这条注释已经被改过三次 —— 前两版「成因」都是猜的，**全部作废**
     /// ① 原版「RSD 服务发现**偶发** `ServiceNotFound` —— 多页面并发建隧道竞争导致」：作废；
     /// ② 第二版「设备未挂 DDI ⇒ CoreDevice 整块不广播」：作废（见 `CHANGELOG.md` `[0.3.462]`）；
     /// ③ 第三版「接错隧道 —— CoreDevice 族只在 CoreDeviceProxy 隧道里的第二个 RSD 握手上」：
-    ///    **同样作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）。
-    /// **⇒ 本文件从此不再写任何成因推测。**
+    ///    **同样作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）.
+    /// **⇒ 本文件从此不再写任何成因推测.**
     ///
     /// ## 事实（用户实测 + PC 侧交叉验证）
     /// - `ServiceNotFound`(21) 是**设备侧的服务状态问题**，**不是本 App 的缺陷**：
-    ///   该服务在设备侧**偶尔**不可用，**重启手机即恢复**（用户实测；同类工具也这么处理）。
+    ///   该服务在设备侧**偶尔**不可用，**重启手机即恢复**（用户实测；同类工具也这么处理）.
     /// - **与 DDI 无关，也与「用哪条隧道」无关** —— 已用 PC 侧标准工具 `pymobiledevice3`
-    ///   交叉验证：它拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**。
-    /// - **原理未知。** 别再往这个方向补推测。
+    ///   交叉验证：它拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**.
+    /// - **原理未知.** 别再往这个方向补推测.
     ///
     /// ## 仍然成立的两条（保留）
     /// - `rsd.rs:171-189` 查服务是纯 `HashMap`、查不到直接 `Err(ServiceNotFound)`（错误码 21），
     ///   **无回退** ⇒ 失败时**重试 3 次毫无意义**（只是白等 0.9s）；
     /// - 两个内置模块 / 进程管理 / 虚拟定位停止 / 拨号器主题重启电话 / IPCC 重启 CommCenter /
-    ///   设备控制重启 SpringBoard **共用同一套 `app_service` 底座** ⇒ 它不可用时这些会一起失败。
+    ///   设备控制重启 SpringBoard **共用同一套 `app_service` 底座** ⇒ 它不可用时这些会一起失败.
     // MARK: 服务表预检（与 Views/ProcessManagerService.swift:197-214 同一口径）
 
     /// RSD 服务表里的 CoreDevice 入口名（= 上游 `AppServiceClient::rsd_service_name()`）.
@@ -313,7 +313,7 @@ final class DeviceControlService {
         var connectError: NSError?
         // 注意： 同 `withAppService`：这里的 3 次重试**覆盖不了任何东西** ——
         // 失败是设备侧 `app_service` 服务偶尔不可用（`ServiceNotFound`，**重启手机即恢复**），
-        // 重试只是白等 0.9s（详见 `withAppService` 注释）。
+        // 重试只是白等 0.9s（详见 `withAppService` 注释）.
         for attempt in 0..<3 {
             var candidate: OpaquePointer?
             if let ffiError = app_service_connect_rsd(adapter, handshake, &candidate) {

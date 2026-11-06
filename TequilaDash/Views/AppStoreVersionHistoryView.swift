@@ -2,12 +2,11 @@ import SwiftUI
 
 /// AppStore 商店 —— 历史版本
 ///
-/// 两个来源（界面分别叫「三方 API」/「苹果 API」，v0.3.364 改名前是「版本目录」/「Apple 账号」）：
+/// 两个来源（界面分别叫「三方 API」/「苹果 API」，改名前是「版本目录」/「Apple 账号」）：
 /// 1. **苹果 API**（优先）：已登录 Apple ID 时走 App Store 下载协议
-///    （`VersionFinder` + `VersionLookup`，与 Asspp 同款），拿全量版本身份与发布日期。
-///    任何区域都有数据，且能**直接下载指定历史版本**。
+///    任何区域都有数据，且能**直接下载指定历史版本**.
 /// 2. **三方 API**（回退）：免登录打第三方版本目录接口，一次拿全且带发布日期；
-///    另外商品页内嵌的 `versionHistory` 也会被用来补真实日期。
+///    另外商品页内嵌的 `versionHistory` 也会被用来补真实日期.
 struct AppStoreVersionHistoryView: View {
 
     let item: AppStoreItem
@@ -15,15 +14,15 @@ struct AppStoreVersionHistoryView: View {
 
     /// 下架已购应用：Apple 的 `lookup` 与商品页都查不到它，版本目录（bilin）也常常没有 ——
     /// 但**账号通道**（App Store 下载协议）对「已购」的下架应用仍能给出全量版本身份，
-    /// 且能直接下载指定版本。所以从下架详情进来时把它提到第一跳。
+    /// 且能直接下载指定版本.所以从下架详情进来时把它提到第一跳.
     var accountFirst: Bool = false
     /// 从「已购列表」进来时带上的账号邮箱：历史版本要走**持有该已购的那个账号**
-    /// （下载指定版本必须用同一账号），不能默认拿全局「当前下载账号」。
+    /// （下载指定版本必须用同一账号），不能默认拿全局「当前下载账号」.
     var preferredEmail: String? = nil
 
     private enum Channel { case account, web, catalog }
 
-    /// 查询方式：两条来源各有所长，让用户自己选（失败会自动回退另一条）。
+    /// 查询方式：两条来源各有所长，让用户自己选（失败会自动回退另一条）.
     enum Source: String, CaseIterable, Identifiable {
         case catalog
         case account
@@ -51,20 +50,20 @@ struct AppStoreVersionHistoryView: View {
 
     @State private var loading = true
     @State private var loadingMore = false
-    /// v0.3.365：**整次加载唯一的一次重登额度**（对齐 `downloadInformation` 的 `refreshed`）。
+    /// **整次加载唯一的一次重登额度**（对齐 `downloadInformation` 的 `refreshed`）.
     /// 原来每个版本身份取元数据失败都会各自 rotate，一次「加载更多」最坏 20 次重登；
     /// 现在额度在 `loadAccount` 里**优先发给身份通道**（它一次拿全量版本身份），
-    /// 后面的 metadata 批次一律不重登 —— 整次加载 rotate 上界 = 1。
+    /// 后面的 metadata 批次一律不重登 —— 整次加载 rotate 上界 = 1.
     @State private var didUseRotateQuota = false
     @State private var errorText: String?
     @State private var expanded: Set<String> = []
-    /// 已知的「版本号 → 真实发布日期」。只来自商品页通道；
-    /// Apple 下载协议给不出每版的日期（每版都返回应用首次上架日期）。
+    /// 已知的「版本号 → 真实发布日期」.只来自商品页通道；
+    /// Apple 下载协议给不出每版的日期（每版都返回应用首次上架日期）.
     @State private var dateByVersion: [String: Date] = [:]
 
-    /// v0.3.367：在制的加载任务（整次加载与「加载更多」共用这一格）。
+    /// 在制的加载任务（整次加载与「加载更多」共用这一格）.
     /// 读取过程中**允许随时切换来源** —— 切换/刷新先取消这里，再按新来源重来；
-    /// 被取消的那次在写状态前静默作废，保证同一时刻只有一次加载在写状态（不会串台）。
+    /// 被取消的那次在写状态前静默作废，保证同一时刻只有一次加载在写状态（不会串台）.
     @State private var loadTask: Task<Void, Never>?
     /// 同上：后台补日期的任务也要能取消，否则旧来源的日期会写进新来源的列表
     @State private var harvestTask: Task<Void, Never>?
@@ -86,7 +85,7 @@ struct AppStoreVersionHistoryView: View {
                 }
             } else if let errorText {
                 Section {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: errorText)
                 }
             } else if versions.isEmpty {
@@ -136,8 +135,8 @@ struct AppStoreVersionHistoryView: View {
                         .labelStyle(.titleAndIcon)
                         .font(.caption)
                 }
-                // v0.3.367：**读取中也允许切换** —— 切换即取消在制的那次并重来，
-                // 不再像 v0.3.364 那样把选择器禁掉（用户明确要求能随时切）。
+                // **读取中也允许切换** —— 切换即取消在制的那次并重来，
+                // 不再像 那样把选择器禁掉（用户明确要求能随时切）.
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -148,28 +147,28 @@ struct AppStoreVersionHistoryView: View {
             }
         }
         .onChange(of: sourceRaw) { _, _ in startLoad() }
-        // v0.3.367：给页面挂一个**存活期取消锚**。用户离开页面时 SwiftUI 会取消这个结构化
+        // 给页面挂一个**存活期取消锚**.用户离开页面时 SwiftUI 会取消这个结构化
         // 任务，我们借 `onCancel` 把取消转达给在制的那次加载（含分页与后台补日期）——
-        // 否则切走后还会把剩下 10 条 metadata 白打完。取消是转达式的，不改动加载本身的状态。
+        // 否则切走后还会把剩下 10 条 metadata 白打完.取消是转达式的，不改动加载本身的状态.
         .task {
             startLoad()
             await withTaskCancellationHandler {
-                // 只作锚：一直挂到页面消失；被取消时 sleep 立刻抛出，随后走 onCancel。
+                // 只作锚：一直挂到页面消失；被取消时 sleep 立刻抛出，随后走 onCancel.
                 try? await Task.sleep(nanoseconds: 3_600_000_000_000)
             } onCancel: {
                 loadTask?.cancel()
                 harvestTask?.cancel()
             }
         }
-        // 下拉刷新：复用本页既有的加载入口（startLoad → load），不另写一套请求。
+        // 下拉刷新：复用本页既有的加载入口（startLoad → load），不另写一套请求.
         // 先清掉两条通道的失败负缓存，让错误文案里那句「下拉刷新可立即重试」成立 ——
-        // 否则用户拉下去只会再撞回同一句冷却提示，等于没有手动重试入口。
+        // 否则用户拉下去只会再撞回同一句冷却提示，等于没有手动重试入口.
         .refreshable {
             AppStoreService.clearCatalogFailure(appId: item.id)
             AppStoreService.clearProductPageCache()
             startLoad()
             // startLoad 是同步登记，直接返回会让系统指示器还没转就被收掉；
-            // 等这一轮真的读完再收（与 IPADownloadManagerView 的 async 包装同一口径）。
+            // 等这一轮真的读完再收（与 IPADownloadManagerView 的 async 包装同一口径）.
             if let task = loadTask { await task.value }
         }
     }
@@ -200,10 +199,10 @@ struct AppStoreVersionHistoryView: View {
                              fillOpacity: 0.15)
                 }
                 Spacer(minLength: 0)
-                // 只在**确实知道**该版本发布日期时才显示。
+                // 只在**确实知道**该版本发布日期时才显示.
                 // Apple 的下载协议对每个版本都回同一个 `releaseDate`（= 应用首次上架日期，
                 // 实测 Gmail 无论请求哪个 externalVersionId 都是 2011-11-02），
-                // 拿它当版本日期会整列显示同一个错误日期 —— 所以宁可留空。
+                // 拿它当版本日期会整列显示同一个错误日期 —— 所以宁可留空.
                 if let date = v.date {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(DateText.string(from: date, style: .day))
@@ -245,7 +244,7 @@ struct AppStoreVersionHistoryView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(AppTheme.accent)
             } else if !isCurrent {
-                // v0.3.749（用户：「也没有下载的提示标志」）：三方 API 的版本没有苹果版本标识，
+                // 三方 API 的版本没有苹果版本标识，
                 // 下不了 —— 旧写法直接不渲染，用户以为功能缺了. 现在留一枚灰色说明标，
                 // 看得见但不可点（功能行禁色，颜色只留给能点的动作）.
                 Text("不可下载")
@@ -284,9 +283,9 @@ struct AppStoreVersionHistoryView: View {
 
     // MARK: - 加载
 
-    /// v0.3.367：起一次读取并**登记为在制的那次** —— 切换来源、点刷新都走这里：
-    /// 先取消上一次（含正在分页的那次与后台补日期），再按当前来源重来。
-    /// 被取消的旧加载不会写任何状态，所以两次加载不会并发串台。
+    /// 起一次读取并**登记为在制的那次** —— 切换来源、点刷新都走这里：
+    /// 先取消上一次（含正在分页的那次与后台补日期），再按当前来源重来.
+    /// 被取消的旧加载不会写任何状态，所以两次加载不会并发串台.
     private func startLoad() {
         loadTask?.cancel()
         harvestTask?.cancel()
@@ -310,10 +309,10 @@ struct AppStoreVersionHistoryView: View {
         didUseRotateQuota = false
 
         // 按用户选的查询方式先来一条，失败/为空则自动回退另一条，
-        // 最后兜底商品页通道（免登录，覆盖不全）。
-        // 每步之后都确认没被取消：取消时各通道会立刻返回 false，收尾交给接棒的那次。
+        // 最后兜底商品页通道（免登录，覆盖不全）.
+        // 每步之后都确认没被取消：取消时各通道会立刻返回 false，收尾交给接棒的那次.
         if source == .catalog {
-            // 下架已购应用：账号通道是唯一还能给出「可下载版本」的来源，优先它。
+            // 下架已购应用：账号通道是唯一还能给出「可下载版本」的来源，优先它.
             if accountFirst {
                 if await loadAccount(), !Task.isCancelled { loading = false; return }
                 if await loadCatalog(), !Task.isCancelled { loading = false; return }
@@ -329,9 +328,9 @@ struct AppStoreVersionHistoryView: View {
         if !Task.isCancelled { loading = false }
     }
 
-    /// 三方 API 通道（免登录，一次拿全 + 带发布日期 + 带 externalVersionID）。
+    /// 三方 API 通道（免登录，一次拿全 + 带发布日期 + 带 externalVersionID）.
     /// Apple 的苹果 API 通道不带版本号时对不少应用回静默空包，这条通道不受影响；
-    /// 与 IPARanger 2.6.0 用的是同一个接口。
+    /// 与 IPARanger 2.6.0 用的是同一个接口.
     @discardableResult
     private func loadCatalog() async -> Bool {
         if Task.isCancelled { return false }
@@ -341,7 +340,7 @@ struct AppStoreVersionHistoryView: View {
             versions = list
             channel = .catalog
             // 通道成功就必须清掉上一条通道留下的警告 —— 否则回退拿到了数据，
-            // 界面仍被那句橙色警告盖住（列表永远显示不出来）。
+            // 界面仍被那句橙色警告盖住（列表永远显示不出来）.
             errorText = nil
             LoginLogger.shared.log("版本历史：三方 API 通道 \(list.count) 条", category: .appStore)
             return true
@@ -351,8 +350,8 @@ struct AppStoreVersionHistoryView: View {
             LoginLogger.shared.log("版本历史：三方 API 通道失败（\(error.localizedDescription)）",
                                    category: .appStore)
             // 失败要上屏：这条通道以前只写日志，界面停在「没有可读取的版本记录」，
-            // 用户会以为这 App 就是没有历史版本。只有手上一条数据都没有时才占用错误位，
-            // 后面还有账号 / 商品页通道可以接手（与 loadWeb 同口径）。
+            // 用户会以为这 App 就是没有历史版本.只有手上一条数据都没有时才占用错误位，
+            // 后面还有账号 / 商品页通道可以接手（与 loadWeb 同口径）.
             if versions.isEmpty { errorText = error.localizedDescription }
             return false
         }
@@ -368,19 +367,18 @@ struct AppStoreVersionHistoryView: View {
             bundleId = full.bundleId
         }
         if Task.isCancelled { return false }
-        // 从已购列表进来时用**持有该已购的账号**，否则回落到全局「当前下载账号」。
+        // 从已购列表进来时用**持有该已购的账号**，否则回落到全局「当前下载账号」.
         let preferred = (preferredEmail?.isEmpty == false) ? preferredEmail : nil
         guard let bundleId, !bundleId.isEmpty else {
-            // v0.3.749：两条 false 出口以前都无痕迹 —— 界面只表现为「悄悄回落到三方 API」.
+            // 两条 false 出口以前都无痕迹 —— 界面只表现为「悄悄回落到三方 API」.
             LoginLogger.shared.log("版本历史：账号通道缺 bundleId（\(item.bundleId ?? "nil")）",
                                    category: .appStore)
             return false
         }
-        // v0.3.750（用户：「账户是正常的，也能下载应用，历史版本就出现这种问题，也不可能是会话问题吧」）：
-        // 这里以前只认旧轨 selectedEmail。多账户重做后新登录不再写旧轨，于是同一个账号从商店
+        // 这里以前只认旧轨 selectedEmail.多账户重做后新登录不再写旧轨，于是同一个账号从商店
         // 列表/已购列表能正常下载（那条路径走 usableAccounts），却在版本历史这条路上被判「没有
-        // 可用商店会话」，界面表现就是「账号会话未就绪，正在重新获取.」。改成与下载入口同一口径：
-        // selectedAccount 自带「选中账号不可用就回退第一个可用账号」的兜底。
+        // 可用商店会话」，界面表现就是「账号会话未就绪，正在重新获取.」.改成与下载入口同一口径：
+        // selectedAccount 自带「选中账号不可用就回退第一个可用账号」的兜底.
         let resolvedEmail = AppStoreDownloadStore.shared.emailForDownloads(preferred: preferred)
         guard let email = resolvedEmail, !email.isEmpty else {
             LoginLogger.shared.log("版本历史：账号通道没有可用商店会话（preferred=\(preferred ?? "nil")，"
@@ -389,9 +387,9 @@ struct AppStoreVersionHistoryView: View {
                                    category: .appStore)
             return false
         }
-        // v0.3.365：整次加载唯一的重登额度**先给身份通道** —— 无论它是否真的用到，
+        // 整次加载唯一的重登额度**先给身份通道** —— 无论它是否真的用到，
         // 后面的 metadata 批次都不再重登，保证整次加载 rotate 上界 = 1
-        // （每帧 metadata 各 rotate 一次的老写法最坏 20 次完整 SAP 登录）。
+        // （每帧 metadata 各 rotate 一次的老写法最坏 20 次完整 SAP 登录）.
         let allowRotate = !didUseRotateQuota
         didUseRotateQuota = true
         do {
@@ -406,7 +404,7 @@ struct AppStoreVersionHistoryView: View {
             channel = .account
             errorText = nil
             // 商品页通道能给出**真实**的版本日期（内嵌 versionHistory shelf），
-            // 但覆盖不全；能拿到就补上，拿不到就不显示日期。
+            // 但覆盖不全；能拿到就补上，拿不到就不显示日期.
             harvestTask?.cancel()
             harvestTask = Task { await harvestWebDates() }
             await loadMore()
@@ -459,25 +457,25 @@ struct AppStoreVersionHistoryView: View {
         }
     }
 
-    /// v0.3.365：单次「加载更多」的两个上界。
+    /// 单次「加载更多」的两个上界.
     ///
-    /// · `versionsPerFetch = 5`：一批补 5 条，与改前一致（用户可预期的节奏）。
-    /// · `versionsPerBatch = 10`：最多往后扫 10 个版本身份。选 10 的理由 ——
-    ///   真机实测 Apple 只拒**最新 1~2 个**版本（v0.3.361 结论），留 5 倍余量足够
-    ///   跨过被拒的前缀；同时把单次点击的最坏请求数从 20 次 volumeStore 砍半到 10 次。
+    /// · `versionsPerFetch = 5`：一批补 5 条，与改前一致（用户可预期的节奏）.
+    /// · `versionsPerBatch = 10`：最多往后扫 10 个版本身份.选 10 的理由 ——
+    ///   真机实测 Apple 只拒**最新 1~2 个**版本（结论），留 5 倍余量足够
+    ///   跨过被拒的前缀；同时把单次点击的最坏请求数从 20 次 volumeStore 砍半到 10 次.
     private static let versionsPerFetch = 5
     private static let versionsPerBatch = 10
 
-    /// 账号通道：分批取版本元数据。
+    /// 账号通道：分批取版本元数据.
     ///
-    /// v0.3.364：Apple 只对**该账号真正可下的那些版本**回元数据，最新的一两个会被拒。
-    /// 所以不能「第一条失败就把整列报错」—— 那会让账号通道永远显示不出任何东西。
-    /// v0.3.365：整批一条都没取到、或重登后仍失效 → **失败即停**（剩下身份标成已读），
-    /// 否则用户每点一次就再打 10 发，纯放大（审计结论）。
+    /// Apple 只对**该账号真正可下的那些版本**回元数据，最新的一两个会被拒.
+    /// 所以不能「第一条失败就把整列报错」—— 那会让账号通道永远显示不出任何东西.
+    /// 整批一条都没取到、或重登后仍失效 → **失败即停**（剩下身份标成已读），
+    /// 否则用户每点一次就再打 10 发，纯放大（审计结论）.
     private func loadMore() async {
         guard canLoadMore, !loadingMore else { return }
         guard let email = accountEmail else {
-            // v0.3.749：这里也曾静默 return —— 「加载更多」点了像摆设.
+            // 这里也曾静默 return —— 「加载更多」点了像摆设.
             ToastCenter.shared.show("账号会话未就绪，正在重新获取.")
             startLoad()
             return
@@ -506,7 +504,7 @@ struct AppStoreVersionHistoryView: View {
             } catch ApplePackageError.passwordTokenExpired {
                 if Task.isCancelled { return }
                 // 整次加载的重登额度已被身份通道花掉（或刚花掉仍失效）→ 关闸并停下，
-                // 剩下几十条不再各自重登。文案只描述接口行为，不牵扯账号/用户。
+                // 剩下几十条不再各自重登.文案只描述接口行为，不牵扯账号/用户.
                 didUseRotateQuota = true
                 loadedIDs.insert(id)
                 authBroken = true
@@ -525,7 +523,7 @@ struct AppStoreVersionHistoryView: View {
                                category: .appStore)
         if versions.isEmpty {
             // 同一原因同一说法：直接取源头文案（ApplePackageError），视图不再抄一份，
-            // 否则源头改了文案这里会静默变成另一种说法。
+            // 否则源头改了文案这里会静默变成另一种说法.
             errorText = authBroken ? ApplePackageError.passwordTokenExpired.localizedDescription
                                    : "Apple 没有返回这批版本"
         }

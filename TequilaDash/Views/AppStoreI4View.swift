@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.3.298：爱思商店（专题 / 榜单）—— 走 `I4StoreClient` 的签名接口
+/// 爱思商店（专题 / 榜单）—— 走 `I4StoreClient` 的签名接口
 struct AppStoreI4View: View {
     @State private var specials: [[String: Any]] = []
     @State private var apps: [[String: Any]] = []
@@ -52,7 +52,7 @@ struct AppStoreI4View: View {
                 }
             } else if let errorText {
                 Section {
-                    // v0.3.x 批 3 错误态收敛：同构错误区统一到 AppErrorRow.
+                    // 错误态收敛：同构错误区统一到 AppErrorRow.
                     AppErrorRow(message: errorText, retry: { Task { await reload() } }, centered: true)
                         .padding(.vertical, 30)
                 }
@@ -80,7 +80,7 @@ struct AppStoreI4View: View {
     @ViewBuilder
     private var specialSection: some View {
         if specials.isEmpty {
-            // v0.3.721：系统 ContentUnavailableView 收敛到 AppStateSection —— 同一张 Section 卡里
+            // 系统 ContentUnavailableView 收敛到 AppStateSection —— 同一张 Section 卡里
             // 的 loading / error 早就是 AppLoadingRow / AppErrorRow，只有 empty 还是系统件.
             AppStateSection(state: .empty("暂无专题",
                                           message: "签名成功后等待服务端返回专题列表.",
@@ -196,9 +196,9 @@ struct AppStoreI4View: View {
                 suggestedName: "\(bid)-\(hit.version ?? "x").ipa",
                 onLog: { @Sendable line in LoginLogger.shared.log("[爱思源] \(line)", category: .i4Store) })
             await MainActor.run {
-                // v0.3.393：**把两条链接一起写进台账** —— 这里是爱思源直装路径，
-                // `hit` 手上就带着 `ipaURL`（下载直链）与 `itemId`（App Store trackId）。
-                // 以前只传了前 6 个参数 → 「已下载」面板里「提取下载链接」「复制商店链接」都是「无」。
+                // **把两条链接一起写进台账** —— 这里是爱思源直装路径，
+                // `hit` 手上就带着 `ipaURL`（下载直链）与 `itemId`（App Store trackId）.
+                // 以前只传了前 6 个参数 → 「已下载」面板里「提取下载链接」「复制商店链接」都是「无」.
                 IPADownloadLibrary.shared.record(fileURL: ipa,
                                                  displayName: name.isEmpty ? hit.name : name,
                                                  bundleId: bid,
@@ -249,13 +249,13 @@ struct AppStoreI4View: View {
     }
 }
 
-/// v0.3.299：专题内的应用列表（`remd=2` + `specialid`）
+/// 专题内的应用列表（`remd=2` + `specialid`）
 ///
 /// 说明：爱思服务端对参数极敏感 —— `getAppList.xhtml` 仅在
-/// `{pageSize, pageno, remd, sort}` 四参数时返回结构，多一个字段即返回空。
+/// `{pageSize, pageno, remd, sort}` 四参数时返回结构，多一个字段即返回空.
 /// 专题内应用当前实测返回空数据（`{"app":{"id":-100}}` 或空体），
 /// 因此本页在拿不到数据时给出**原始响应**，便于区分「签名/请求是否正确」与
-/// 「服务端是否还有数据」，不作误导性展示。
+/// 「服务端是否还有数据」，不作误导性展示.
 struct I4SpecialAppsView: View {
     let specialId: String
     let name: String
@@ -365,9 +365,9 @@ struct I4SpecialAppsView: View {
                 suggestedName: "\(bid)-\(hit.version ?? "x").ipa",
                 onLog: { @Sendable line in LoginLogger.shared.log("[爱思源] \(line)", category: .i4Store) })
             await MainActor.run {
-                // v0.3.393：**把两条链接一起写进台账** —— 这里是爱思源直装路径，
-                // `hit` 手上就带着 `ipaURL`（下载直链）与 `itemId`（App Store trackId）。
-                // 以前只传了前 6 个参数 → 「已下载」面板里「提取下载链接」「复制商店链接」都是「无」。
+                // **把两条链接一起写进台账** —— 这里是爱思源直装路径，
+                // `hit` 手上就带着 `ipaURL`（下载直链）与 `itemId`（App Store trackId）.
+                // 以前只传了前 6 个参数 → 「已下载」面板里「提取下载链接」「复制商店链接」都是「无」.
                 IPADownloadLibrary.shared.record(fileURL: ipa,
                                                  displayName: name.isEmpty ? hit.name : name,
                                                  bundleId: bid,
@@ -388,7 +388,7 @@ struct I4SpecialAppsView: View {
     }
 }
 
-/// 爱思接口返回的是 `[String: Any]`，字段名各接口大小写不一致 —— 按候选键依次取值。
+/// 爱思接口返回的是 `[String: Any]`，字段名各接口大小写不一致 —— 按候选键依次取值.
 private func i4Value(_ d: [String: Any], keys: [String]) -> String {
     for k in keys {
         if let v = d[k] as? String, !v.isEmpty { return v }

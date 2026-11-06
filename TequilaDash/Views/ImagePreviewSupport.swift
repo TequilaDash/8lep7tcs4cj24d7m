@@ -1,17 +1,17 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 取图（v0.3.404）
+// MARK: - 取图
 
-/// v0.3.404：预览图的**内存缓存** —— 同一地址只下一次；翻页回来、重开预览都是秒出
-///（用户反馈"感觉不能实时刷新"，其实是每翻一页都重下一遍）。
+/// 预览图的**内存缓存** —— 同一地址只下一次；翻页回来、重开预览都是秒出
+///（用户反馈"感觉不能实时刷新"，其实是每翻一页都重下一遍）.
 ///
-/// 只用 `NSCache`（内存，系统吃紧时自己回收）：不做磁盘缓存，避免沙盒里堆一堆过期图。
+/// 只用 `NSCache`（内存，系统吃紧时自己回收）：不做磁盘缓存，避免沙盒里堆一堆过期图.
 enum PreviewImageCache {
     /// `nonisolated(unsafe)`：`NSCache` 是 Apple **文档明确保证线程安全**的类型
     /// （"You can add, remove, and query items in the cache from different threads
     /// without having to lock the cache yourself"），因此这个全局引用没有并发风险，
-    /// 不需要额外加锁，也不该把它挪到某个 actor 上（取图是跨线程的）。
+    /// 不需要额外加锁，也不该把它挪到某个 actor 上（取图是跨线程的）.
     nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
         c.countLimit = 120
@@ -22,34 +22,34 @@ enum PreviewImageCache {
     static func store(_ image: UIImage, for url: String) { cache.setObject(image, forKey: url as NSString) }
 }
 
-/// v0.3.404：**预览取图的唯一实现** —— 地址候选链 + 内存缓存。
-/// 展示（`PreviewImageView`）与「长按保存」都走它，不再各写一条下载路径。
+/// **预览取图的唯一实现** —— 地址候选链 + 内存缓存.
+/// 展示（`PreviewImageView`）与「长按保存」都走它，不再各写一条下载路径.
 enum PreviewImageLoader {
 
-    /// 地址里的**尺寸变体**（`100x100bb` / `320x480bb` / 爱思图床的 `…_540x960bb.jpg` 都命中）。
+    /// 地址里的**尺寸变体**（`100x100bb` / `320x480bb` / 爱思图床的 `…_540x960bb.jpg` 都命中）.
     private static let sizePattern = #"(\d+)x(\d+)bb"#
 
-    /// **候选地址链**（本项目"点开全屏一片黑"与"以前是清晰的"两次回归都出在这一行上）。
+    /// **候选地址链**（本项目"点开全屏一片黑"与"以前是清晰的"两次回归都出在这一行上）.
     ///
     /// 三代写法，前两代的坑都记在下面，别再走回去：
-    /// · **v0.3.404 之前** —— `String.appStoreHighResImage`（v0.3.406 已删，见 `MediaSaver.swift`）
-    ///   **无差别**把地址里的 `\d+x\d+bb` 换成 `1024x1024bb`。这招只对**正方形**的图标变体成立：
+    /// · **之前** —— `String.appStoreHighResImage`（已删，见 `MediaSaver.swift`）
+    ///   **无差别**把地址里的 `\d+x\d+bb` 换成 `1024x1024bb`.这招只对**正方形**的图标变体成立：
     ///   截图不是正方形（Apple 的 `screenshotUrls` 是 `392x696bb`，爱思图床把尺寸写进文件名
     ///   `…_540x960bb.jpg`），换出来是一个**不存在的资源** → 请求失败 →
     ///   而缩略图用的是原址（`AsyncImage(url: URL(string: url))`）→
-    ///   **缩略图看得见、点开全屏一片黑**。
-    /// · **v0.3.404** —— 改成「只有正方形变体升高清」。黑屏没了，但截图退回**服务端给的缩略尺寸**
+    ///   **缩略图看得见、点开全屏一片黑**.
+    /// · **** —— 改成「只有正方形变体升高清」.黑屏没了，但截图退回**服务端给的缩略尺寸**
     ///   （真机日志：`取图成功（候选 1/1 · is1-ssl.mzstatic.com/320x480bb.jpg）`），
-    ///   用户看到的就是"以前是清晰的，现在糊了"。
-    /// · **v0.3.406（本版）** —— **保持长宽比**放大：宽固定 1024，高按同一比例算
-    ///   （`320x480` → `1024x1536`）。正方形算出来仍是 `1024x1024bb`，与上一版一字不差。
+    ///   用户看到的就是"以前是清晰的，现在糊了".
+    /// · **** —— **保持长宽比**放大：宽固定 1024，高按同一比例算
+    ///   （`320x480` → `1024x1536`）.正方形算出来仍是 `1024x1024bb`，与上一版一字不差.
     ///
     /// 候选链固定两档：**[按比例放大的高清, 原址]** —— 这一档服务端不认（不是所有图床都接受
     /// 任意尺寸）就自动回落原址，**绝不会再出现黑屏**；真机日志里的 `候选 1/2` 表示高清成了、
-    /// `候选 2/2` 表示回落到缩略。
+    /// `候选 2/2` 表示回落到缩略.
     ///
     /// 尺寸已经够大（长边 ≥ 1024）或地址里没有尺寸标记 → 只给原址一个候选，**不做放大**
-    /// （放大到 1024 反而是缩图，白折腾）。
+    /// （放大到 1024 反而是缩图，白折腾）.
     static func candidateURLs(for raw: String) -> [String] {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -67,15 +67,15 @@ enum PreviewImageLoader {
         return [trimmed.replacingCharacters(in: match, with: highRes), trimmed]
     }
 
-    /// 取图：命中缓存直接返回；否则按候选链逐个试，成功即写缓存。
+    /// 取图：命中缓存直接返回；否则按候选链逐个试，成功即写缓存.
     ///
-    /// **每一次尝试都落日志**：v0.3.404 之前这条路径一条日志都没有，出问题只能靠猜。
+    /// **每一次尝试都落日志**：之前这条路径一条日志都没有，出问题只能靠猜.
     /// 日志行首是 `[预览]`，取的是「主机 + 末段路径」——尺寸变体（`392x696bb`）就在末段，
-    /// 够定位又不刷屏。
+    /// 够定位又不刷屏.
     ///
-    /// `logCategory`：日志写进哪个板块。本组件全页共用，默认 `nil` ⇒ 沿用既有的「通用」板块
+    /// `logCategory`：日志写进哪个板块.本组件全页共用，默认 `nil` ⇒ 沿用既有的「通用」板块
     /// （调用方不传即零变化）；哪一页希望这些取图日志归到自己那一类，就由**该页**传进来
-    /// （例如软件源侧传 `.signSource`）。
+    /// （例如软件源侧传 `.signSource`）.
     static func image(for raw: String,
                       logCategory: LoginLogger.Category? = nil) async throws -> UIImage {
         let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,19 +110,19 @@ enum PreviewImageLoader {
         return (u.host ?? "") + "/" + u.lastPathComponent
     }
 
-    /// `category` 为 `nil` ⇒ 落既有的「通用」板块（历史行为）；非 `nil` ⇒ 由调用方指定板块。
+    /// `category` 为 `nil` ⇒ 落既有的「通用」板块（历史行为）；非 `nil` ⇒ 由调用方指定板块.
     private static func log(_ message: String, category: LoginLogger.Category? = nil) {
         LoginLogger.shared.log("[预览] \(message)", category: category ?? .general)
     }
 }
 
-/// v0.3.404：全屏预览里的**一张图** —— 三种状态都看得见：环形加载 / 图片 / 「加载失败 + 重试」。
+/// 全屏预览里的**一张图** —— 三种状态都看得见：环形加载 / 图片 / 「加载失败 + 重试」.
 ///
 /// 这里原来是 `AsyncImage`：加载失败只有一枚 40% 白的小图标，没有文案、没有重试、也不写日志，
-/// 在纯黑背景上用户看到的就是"点开是黑的、也没转圈"。
+/// 在纯黑背景上用户看到的就是"点开是黑的、也没转圈".
 struct PreviewImageView: View {
     let url: String
-    /// 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）。
+    /// 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）.
     var logCategory: LoginLogger.Category? = nil
 
     private enum Phase { case loading, loaded(UIImage), failed }
@@ -180,30 +180,30 @@ struct PreviewImageView: View {
     }
 }
 
-/// v0.3.399：**全屏图片预览** —— App Store 与爱思源（免登录商店）**共用同一套**。
+/// **全屏图片预览** —— App Store 与爱思源（免登录商店）**共用同一套**.
 ///
 /// 这段原来长在 `AppStoreDetailView.swift` 里、名字叫 `AppStoreScreenshotViewer`（`struct` 本身
-/// 不是 private，所以当时只有 App Store 详情页在用）。爱思源这边要用同一个东西时，
-/// 那个名字就成了错的 —— 所以搬到本文件并改成中性名，**实现一字未改**，避免在爱思侧再写一套。
+/// 不是 private，所以当时只有 App Store 详情页在用）.爱思源这边要用同一个东西时，
+/// 那个名字就成了错的 —— 所以搬到本文件并改成中性名，**实现一字未改**，避免在爱思侧再写一套.
 ///
 /// 交互：
 /// · 左右翻页（`TabView` + `.page`，底部页码点），进入时定位到点开的那一张；
 /// · **长按** 图片 → 二次确认 → 「保存到相册」（失败回落 App 沙盒 `Documents/AppIcons`，见 `MediaSaver`）；
-/// · 右上角关闭按钮。
+/// · 右上角关闭按钮.
 ///
-/// v0.3.404：**不再用 `AsyncImage`**（失败静默 → 纯黑一片），改走 `PreviewImageView`
-/// （环形加载 / 加载失败 + 重试）与 `PreviewImageLoader`（候选地址链 + 内存缓存）。
+/// **不再用 `AsyncImage`**（失败静默 → 纯黑一片），改走 `PreviewImageView`
+/// （环形加载 / 加载失败 + 重试）与 `PreviewImageLoader`（候选地址链 + 内存缓存）.
 ///
-/// v0.3.406：地址改成**按原比例**升高清（截图不再退回缩略尺寸），
-/// 长按保存与「提取图标」走的都是同一份取图逻辑，所以清晰度一起回来。
+/// 地址改成**按原比例**升高清（截图不再退回缩略尺寸），
+/// 长按保存与「提取图标」走的都是同一份取图逻辑，所以清晰度一起回来.
 ///
-/// v0.3.408：`urls` **只能来自 `ImagePreviewTarget`**（调用点统一写
-/// `ImageGalleryViewer(urls: target.urls, startIndex: target.index)`）。
-/// 别再把它接到页面上的某个 `@State` 数组 —— 那正是"弹窗读到旧的空数组"的成因。
+/// `urls` **只能来自 `ImagePreviewTarget`**（调用点统一写
+/// `ImageGalleryViewer(urls: target.urls, startIndex: target.index)`）.
+/// 别再把它接到页面上的某个 `@State` 数组 —— 那正是"弹窗读到旧的空数组"的成因.
 struct ImageGalleryViewer: View {
     let urls: [String]
     @State var startIndex: Int
-    /// 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）。各页按自己归属传入。
+    /// 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）.各页按自己归属传入.
     var logCategory: LoginLogger.Category? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var current: Int = 0
@@ -215,10 +215,10 @@ struct ImageGalleryViewer: View {
             Color.black.ignoresSafeArea()
             if urls.isEmpty {
                 // 兜底分支：正常路径进不来 —— 四个调用点都会先确认有图才构造 target
-                //（图标：`showIconPreview` 里空地址只 toast；截图：`screenshots.isEmpty` 直接跳过）。
-                // v0.3.404 之前空数组是**纯黑**（`TabView` 一页都没有 → 什么都不画、也不提示），
-                // 所以这里留一句文案；v0.3.408 起它只在"代码写错"时可见。
-                // v0.3.677：兜底空态改用统一组件 AppStateSection（原为裸 Text）。
+                //（图标：`showIconPreview` 里空地址只 toast；截图：`screenshots.isEmpty` 直接跳过）.
+                // 之前空数组是**纯黑**（`TabView` 一页都没有 → 什么都不画、也不提示），
+                // 所以这里留一句文案；起它只在"代码写错"时可见.
+                // 兜底空态改用统一组件 AppStateSection（原为裸 Text）.
                 AppStateSection(state: .empty("没有可查看的图片",
                                               message: "图片地址为空，请返回后重新打开.",
                                               icon: "photo"))
@@ -263,8 +263,8 @@ struct ImageGalleryViewer: View {
         ToastCenter.shared.show("正在保存")
         Task { @MainActor in
             do {
-                // v0.3.404：走**同一份取图逻辑** —— 刚看过的图直接命中缓存，不再重下；
-                // 也不会再去要那个被"图标高清改写"改坏的地址（旧版存图同样会拿到 404）。
+                // 走**同一份取图逻辑** —— 刚看过的图直接命中缓存，不再重下；
+                // 也不会再去要那个被"图标高清改写"改坏的地址（旧版存图同样会拿到 404）.
                 let image = try await PreviewImageLoader.image(for: url, logCategory: logCategory)
                 let outcome = try await MediaSaver.save(image, fileName: "screenshot-\(current + 1)")
                 switch outcome {
@@ -278,13 +278,13 @@ struct ImageGalleryViewer: View {
     }
 }
 
-/// 全屏预览「要看哪一组图、看第几张」—— `.fullScreenCover(item:)` 需要一个 `Identifiable`。
-/// 各页面共用它（截图预览与 v0.3.403 起的单张图标预览都走这里），不再各写一个私有包装。
-/// `index` 对图标预览恒为 0（数组里就一张）。
+/// 全屏预览「要看哪一组图、看第几张」—— `.fullScreenCover(item:)` 需要一个 `Identifiable`.
+/// 各页面共用它（截图预览与 起的单张图标预览都走这里），不再各写一个私有包装.
+/// `index` 对图标预览恒为 0（数组里就一张）.
 ///
-/// ## v0.3.408：**图数组必须挂在这里**（这是一次真实回归）
+/// ## ：**图数组必须挂在这里**（这是一次真实回归）
 ///
-/// 用户报「查看图标时全黑 + 『没有可查看的图片』，也不自动刷新，返回才刷新，可明明有图标」。
+/// 用户报「查看图标时全黑 + 『没有可查看的图片』，也不自动刷新，返回才刷新，可明明有图标」.
 ///
 /// 根因：图数组原来挂在**页面**上（各页一个 `@State viewerImages/previewImages`），弹窗这样写：
 /// ```swift
@@ -299,45 +299,45 @@ struct ImageGalleryViewer: View {
 /// ```
 /// `fullScreenCover(item:)` 的 content 是在 item 变非 nil 那一刻构建的，而两次写入**不保证**
 /// 落在同一事务里 —— 弹窗先构建就会读到**旧的空数组** → `urls.isEmpty` → 「没有可查看的图片」；
-/// 返回时视图重算才拿到新值，于是"返回才刷新"。
+/// 返回时视图重算才拿到新值，于是"返回才刷新".
 ///
-/// ⇒ 现在 `urls` 跟着 item 一起走：**一次写入，弹窗构建时读的就是它自己那份**，不存在时序问题。
-/// 页面上不要再出现「预览图数组」这种 `@State`（`viewerImages` / `previewImages` 已全部删除）。
+/// ⇒ 现在 `urls` 跟着 item 一起走：**一次写入，弹窗构建时读的就是它自己那份**，不存在时序问题.
+/// 页面上不要再出现「预览图数组」这种 `@State`（`viewerImages` / `previewImages` 已全部删除）.
 struct ImagePreviewTarget: Identifiable {
     let index: Int
     let urls: [String]
-    /// 打开这组预览时的日志板块（取图成功 / 失败写进这里）；`nil` ⇒ 沿用「通用」（既有行为）。
+    /// 打开这组预览时的日志板块（取图成功 / 失败写进这里）；`nil` ⇒ 沿用「通用」（既有行为）.
     ///
     /// 与 `urls` 一起写在**同一个 target** 里（一次写入）—— 若另开一个 `@State`，
-    /// `fullScreenCover(item:)` 构建时可能读到旧值，正是下面 `urls` 踩过的时序坑。
+    /// `fullScreenCover(item:)` 构建时可能读到旧值，正是下面 `urls` 踩过的时序坑.
     var logCategory: LoginLogger.Category? = nil
 
     /// **既不能只用 `index`，也不能用 `UUID()`**：
     /// · 只用 `index` —— 同一个 index 配不同 urls 是常态（图标预览恒 0；不同应用/不同组的
     ///   第 1 张也是 0），id 撞上会让 SwiftUI 把它当成同一个 item；
-    /// · `UUID()` —— 每次求值都变，item 还活着时重新求值就是新一轮弹窗（会反复重弹）。
-    /// 取「下标 + 张数 + 首图」：本项目所有调用点都够区分，且在**一次展示内恒定**。
+    /// · `UUID()` —— 每次求值都变，item 还活着时重新求值就是新一轮弹窗（会反复重弹）.
+    /// 取「下标 + 张数 + 首图」：本项目所有调用点都够区分，且在**一次展示内恒定**.
     var id: String { "\(index)-\(urls.count)-\(urls.first ?? "")" }
 }
 
-/// v0.3.403：长按菜单里**「查看图标 + 提取图标」这两项的唯一一份内容**。
+/// 长按菜单里**「查看图标 + 提取图标」这两项的唯一一份内容**.
 ///
 /// 四个调用点（AppleID 商店列表 / AppleID 应用详情 / 爱思源列表 / 爱思源详情）都调它 ——
-/// 「查看图标」开 `ImageGalleryViewer`（图标只有一张，塞进去即可），「提取图标」走 `IconExporter`。
-/// 别在页面里再抄一份这两行 `Button`，四处菜单长得不一样这个坑刚踩过。
+/// 「查看图标」开 `ImageGalleryViewer`（图标只有一张，塞进去即可），「提取图标」走 `IconExporter`.
+/// 别在页面里再抄一份这两行 `Button`，四处菜单长得不一样这个坑刚踩过.
 ///
-/// `viewIcon` 由调用方传入：预览状态是各页自己的 `@State`，这里只负责触发，不持有状态。
+/// `viewIcon` 由调用方传入：预览状态是各页自己的 `@State`，这里只负责触发，不持有状态.
 ///
-/// `logCategory`：「提取图标」取图失败/成功的日志板块；`nil` ⇒ 沿用「通用」（既有行为）。
+/// `logCategory`：「提取图标」取图失败/成功的日志板块；`nil` ⇒ 沿用「通用」（既有行为）.
 /// 「查看图标」那一项的日志板块由 `viewIcon` 闭包自己的页面决定（它走的是页面构造的
-/// `ImageGalleryViewer`，那里有同名的可选参数）。
+/// `ImageGalleryViewer`，那里有同名的可选参数）.
 ///
 /// 外面这层 `Group` 不是装饰：菜单项由「返回 `some View` 的函数」给出时，包一层 `Group`
-/// 才能被确定地摊平成多条菜单项 —— 本仓库 `FileBrowserView.itemMenu(for:)` 是同样的写法。
+/// 才能被确定地摊平成多条菜单项 —— 本仓库 `FileBrowserView.itemMenu(for:)` 是同样的写法.
 ///
 /// `@MainActor`：**顶层自由函数不会像 `View` 那样被推断成主 actor**，而这里要调
-/// `IconExporter`（`@MainActor`）——不标注就是「非隔离上下文调主 actor 方法」。四个调用点
-/// 都在 `View` 内，天然在主 actor 上。
+/// `IconExporter`（`@MainActor`）——不标注就是「非隔离上下文调主 actor 方法」.四个调用点
+/// 都在 `View` 内，天然在主 actor 上.
 @MainActor
 @ViewBuilder
 func iconMenuItems(iconURL: String?, fileNameBase: String,
@@ -357,18 +357,18 @@ func iconMenuItems(iconURL: String?, fileNameBase: String,
     }
 }
 
-/// v0.3.403：点「查看图标」→ 开**单张**全屏预览（`ImageGalleryViewer`）。
+/// 点「查看图标」→ 开**单张**全屏预览（`ImageGalleryViewer`）.
 ///
-/// 地址为空只提示一句、不开空预览；判定与文案四处一致。
-/// 图标只有一张，仍然走同一个查看器 —— 于是「长按存图」白得，和截图那条路径行为一致。
-/// `@MainActor` 的理由同 `iconMenuItems`（顶层自由函数 + 直接驱动 `ToastCenter`）。
+/// 地址为空只提示一句、不开空预览；判定与文案四处一致.
+/// 图标只有一张，仍然走同一个查看器 —— 于是「长按存图」白得，和截图那条路径行为一致.
+/// `@MainActor` 的理由同 `iconMenuItems`（顶层自由函数 + 直接驱动 `ToastCenter`）.
 ///
-/// v0.3.408：**`images:` 那个 `Binding` 撤掉了** —— 图数组不再挂在页面上，而是**写进 target**
-/// （理由见 `ImagePreviewTarget` 的注释：两次独立写入会让弹窗读到旧的空数组）。
-/// 现在只剩「图片地址 + 触发器」两个参数，**一次写入**。
+/// **`images:` 那个 `Binding` 撤掉了** —— 图数组不再挂在页面上，而是**写进 target**
+/// （理由见 `ImagePreviewTarget` 的注释：两次独立写入会让弹窗读到旧的空数组）.
+/// 现在只剩「图片地址 + 触发器」两个参数，**一次写入**.
 ///
-/// `logCategory`：取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）。由调用方按该图标归属传入，
-/// 与 `urls` 一起写进 target（一次写入）。
+/// `logCategory`：取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）.由调用方按该图标归属传入，
+/// 与 `urls` 一起写进 target（一次写入）.
 @MainActor
 func showIconPreview(_ iconURL: String?,
                      target: Binding<ImagePreviewTarget?>,
@@ -381,13 +381,13 @@ func showIconPreview(_ iconURL: String?,
     target.wrappedValue = ImagePreviewTarget(index: 0, urls: [raw], logCategory: logCategory)
 }
 
-/// 从 IPA **现取**图标再开预览（共享转换三页共用）。
+/// 从 IPA **现取**图标再开预览（共享转换三页共用）.
 ///
 /// 与 `showIconPreview` 的区别：先经 `ImportedPackageIconStore.previewIconURL(for:)` **强制**重新提取，
-/// **不复用**列表缩略图那份缓存文件 —— 预览是全屏放大，要的是当前提取器能取到的最大图。
-/// 取图是阻塞 I/O，放后台；完成后把地址交给 `showIconPreview` 这个统一入口（空地址只 toast）。
+/// **不复用**列表缩略图那份缓存文件 —— 预览是全屏放大，要的是当前提取器能取到的最大图.
+/// 取图是阻塞 I/O，放后台；完成后把地址交给 `showIconPreview` 这个统一入口（空地址只 toast）.
 ///
-/// `@MainActor` 的理由同 `showIconPreview`（顶层自由函数 + 直接驱动 `ToastCenter`）。
+/// `@MainActor` 的理由同 `showIconPreview`（顶层自由函数 + 直接驱动 `ToastCenter`）.
 @MainActor
 func showPackageIconPreview(_ package: ImportedPackage,
                             target: Binding<ImagePreviewTarget?>) {
@@ -400,20 +400,20 @@ func showPackageIconPreview(_ package: ImportedPackage,
     }
 }
 
-/// v0.3.399：**「提取图标」的共用实现** —— 下载图标 → 优先存相册（失败回落 `Documents/AppIcons`）。
+/// **「提取图标」的共用实现** —— 下载图标 → 优先存相册（失败回落 `Documents/AppIcons`）.
 ///
-/// v0.3.399 从 App Store 详情页图标长按的私有实现里抽出来；v0.3.403 起四个页面的
-/// 「提取图标」都走这里 —— **同一份实现，不做第二套**。
+/// 从 App Store 详情页图标长按的私有实现里抽出来；起四个页面的
+/// 「提取图标」都走这里 —— **同一份实现，不做第二套**.
 ///
 /// `@MainActor`：本类直接驱动 `ToastCenter`（它本身是 `@MainActor` 类）与 UI 状态，
-/// 显式标注比依赖「调用点恰好也在主 actor」可靠。异步部分再显式 `Task { @MainActor in }`。
+/// 显式标注比依赖「调用点恰好也在主 actor」可靠.异步部分再显式 `Task { @MainActor in }`.
 @MainActor
 enum IconExporter {
 
     /// - Parameters:
     ///   - iconURL: 图标地址（空 → 只提示，不做任何事）
-    ///   - fileNameBase: 落沙盒时的文件名（不含扩展名）。调用方给 bundleId 或应用名。
-    ///   - logCategory: 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）。
+    ///   - fileNameBase: 落沙盒时的文件名（不含扩展名）.调用方给 bundleId 或应用名.
+    ///   - logCategory: 取图日志的板块；`nil` ⇒ 沿用「通用」（既有行为）.
     static func save(iconURL: String?, fileNameBase: String,
                      logCategory: LoginLogger.Category? = nil) {
         let raw = (iconURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -424,7 +424,7 @@ enum IconExporter {
         ToastCenter.shared.show("正在提取图标")
         Task { @MainActor in
             do {
-                // v0.3.404：图标也走**同一份取图逻辑**（正方形变体升高清、失败回落原址、命中缓存）
+                // 图标也走**同一份取图逻辑**（正方形变体升高清、失败回落原址、命中缓存）
                 let image = try await PreviewImageLoader.image(for: raw, logCategory: logCategory)
                 let outcome = try await MediaSaver.save(image, fileName: fileNameBase)
                 switch outcome {

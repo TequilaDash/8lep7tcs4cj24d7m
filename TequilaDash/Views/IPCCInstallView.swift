@@ -26,7 +26,7 @@ struct IPCCInstallView: View {
         List {
             Section {
                 if let errorMessage {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: errorMessage)
                 }
                 if let parsed {

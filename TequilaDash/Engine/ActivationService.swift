@@ -17,10 +17,10 @@ import UIKit
 /// RSD 服务表查表拿端口 → `adapter.connect(port)` → `rsd_checkin` → 发二进制 plist，
 /// 是本项目唯一可用的一条.
 ///
-/// ▸ 为什么不是 lockdownd 的 `StartService`：v0.3.530 曾用
+/// ▸ 为什么不是 lockdownd 的 `StartService`：曾用
 /// `LockdownClient::connect_rsd` → `start_service(...)`，真机回
 /// `Socket(BrokenPipe, "channel closed")` —— RSD 通道不支持该 RPC.
-/// v0.3.531 改走服务表路线（与已在生产跑通的 MCInstall 同款范式），
+/// 改走服务表路线（与已在生产跑通的 MCInstall 同款范式），
 /// 并在 FFI 内做**分步诊断**（`[反激活诊断][步骤N-…]`），一次真机即可定案.
 ///
 /// ## 安全闸（三条，缺一不可）
@@ -295,7 +295,6 @@ enum ActivationService {
     /// - Note: 整段跑在 `AFCService` 的串行队列上（RSD 隧道并发铁律）.
     ///   注意 `readStatus()` 内部也会进同一条串行队列，所以**必须等它返回后**再进队列 ——
     ///   在队列里再 `sync` 同一条队列会死锁.
-    ///   上游注释说 Deactivate 可能**不给应答**，故以「FFI 返回 nil 错误」为准.
     static func deactivate() throws {
         let status = try readStatus()
         guard status.canDeactivate else {

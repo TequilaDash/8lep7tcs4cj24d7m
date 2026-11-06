@@ -58,7 +58,7 @@ struct ZipAddedFile {
 /// Store-only ZIP writer for backups and Compress. Files are stored uncompressed
 /// (DEFLATE adds little for already-compressed app data).
 ///
-/// Layout notes (v0.3.531):
+/// Layout notes ():
 /// - Small archives are byte-for-byte identical to the pre-ZIP64 writer, so
 ///   existing readers (including older TequilaDash builds) keep working.
 /// - Sizes / offsets at or above 4 GiB are written through a ZIP64 extended

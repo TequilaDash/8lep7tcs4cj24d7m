@@ -45,7 +45,7 @@ struct PlistEditorView: View {
             }
             .overlay {
                 if vm.isSaving {
-                    // v0.3.721：原先这里是逐字复制的浅色卡片遮罩，已收进 AppBusyOverlay 的 .card 档.
+                    // 原先这里是逐字复制的浅色卡片遮罩，已收进 AppBusyOverlay 的 .card 档.
                     AppBusyOverlay(title: "正在写入…", style: .card)
                 }
             }
@@ -54,7 +54,7 @@ struct PlistEditorView: View {
     @ViewBuilder
     private var content: some View {
         if vm.isLoading {
-            // v0.3.700：整页加载态收口到 AppLoadingRow（.page 档）.
+            // 整页加载态收口到 AppLoadingRow（.page 档）.
             AppLoadingRow(title: "正在解析…", level: .page)
         } else if vm.errorMessage != nil {
             InfoActionCard(

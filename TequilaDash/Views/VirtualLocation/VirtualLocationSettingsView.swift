@@ -32,7 +32,7 @@ struct VirtualLocationSettingsView: View {
                     }
 
                     Button("清除虚拟定位") {
-                        // v0.3.254：无条件执行 clear（自带「无会话先建会话」幂等逻辑）
+                        // 无条件执行 clear（自带「无会话先建会话」幂等逻辑）
                         // + 走 RSD 隧道 SIGKILL 设备侧 locationd；后台跑不冻 UI，两态反馈.
                         guard !isClearing else { return }
                         isClearing = true
@@ -64,9 +64,9 @@ struct VirtualLocationSettingsView: View {
 
                     if session.hasPairing {
                         Button("重置配对文件", role: .destructive) {
-                            // v0.3.673（task-7 发现4）：建连进行中会被拒绝（-8）。
+                            // 建连进行中会被拒绝（-8）.
                             // 旧代码无条件把 lastError 清空 —— 用户看到“已重置”，
-                            // 实际配对文件仍在、隧道仍连着旧身份。
+                            // 实际配对文件仍在、隧道仍连着旧身份.
                             do {
                                 try TunnelContext.shared.resetPairingFile()
                                 session.lastError = nil

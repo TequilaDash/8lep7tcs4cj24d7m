@@ -4,21 +4,19 @@ import UIKit
 @main
 struct TequilaDashApp: App {
     init() {
-        // v0.3.742：先装崩溃现场记录 —— 越早越好，启动期崩溃也要抓得到.
+        // 先装崩溃现场记录 —— 越早越好，启动期崩溃也要抓得到.
         // 写 Documents/LoginLogs/crash.log（信号 + 栈帧地址），SSH 可直接 cat.
         CrashGuard.install()
         let previousCrashCount = CrashGuard.previousCrashCount()
-        // v0.3.481：注册宿主内置的「模块原生 SwiftUI 界面」.
+        // 注册宿主内置的「模块原生 SwiftUI 界面」.
         // 模块清单（module.json）里 `ui.view` 写的是**注册名**，SwiftUI 视图没法从
         // zip 加载，必须编译进宿主；注册必须在任何 UI 构建之前完成 —— 模块卡片的
         // 「打开」入口要靠注册表判断该注册名是否存在（缺失就不给入口）.
         registerBuiltinModuleUIs()
-        // Consume the LiveContainer host-issued container sandbox extensions
         // (read/write) so guest containers — including shared/"converted" App
         // Group data — are reachable for scanning and reclaim on iOS 26.
         SandboxEscape.bootstrapLiveContainerExtensions()
         // MHA branch: auto-detect the host process's App Group for the iOS 26
-        // sacrifice route. Inside LiveContainer the app runs as the LC process,
         // so LC's App Group is inherited and used here — no separately
         // registered App Group needed. Falls back to the placeholder if the
         // process has none (then GestaltEngine tries the InternalDaemon route).
@@ -28,7 +26,7 @@ struct TequilaDashApp: App {
            !override.trimmingCharacters(in: .whitespaces).isEmpty {
             MCMIntegration.configure(appGroup: override.trimmingCharacters(in: .whitespaces))
         }
-        // Go runtime 内存节流（v0.3.81）：必须在**任何 Go 调用之前**设置——
+        // Go runtime 内存节流：必须在**任何 Go 调用之前**设置——
         // Go 在 runtime 初始化时快照 environ，之后再 setenv 对 Go 不可见.
         // 目的：二进制模块服务启动阶段疑似内存超限被系统硬杀（stderr 无任何输出），
         // 这里压低 Go 堆上限与 P 数量，给 LC 宿主留出内存余量.
@@ -37,26 +35,26 @@ struct TequilaDashApp: App {
         setenv("GOMAXPROCS", "4", 1)         // 6 核设备限制 P 数，减少线程与结构开销
         // SSH Debug 模式：开启后随 App 启动自动拉起 SSH 服务（见 SSH 调试页开关）
         SSHServerService.shared.autoStartIfNeeded()
-        // v0.3.756：启动即探测私有蜂窝开关 API 并写蜂窝日志面板首条——
+        // 启动即探测私有蜂窝开关 API 并写蜂窝日志面板首条——
         // 用户打开「Cellular 隧道支持 → 运行日志」第一屏就能看到判定结论.
         CellularLogStore.shared.log("App 启动，探测私有蜂窝开关 API…")
         _ = CellularDataToggleService.shared
-        // v0.3.725：iOS 27.2 起 RPPairing 端口不再固定 49152，启动即后台解析一次
-        // （_remotepairing._tcp.）。current 只读缓存，解析不阻塞这里.
+        // iOS 27.2 起 RPPairing 端口不再固定 49152，启动即后台解析一次
+        // （_remotepairing._tcp.）.current 只读缓存，解析不阻塞这里.
         RemotePairingPort.warmUp()
-        // v0.3.726：隧道就绪状态机 —— 后台持续探测（不通 1.5s 一拍 / 通 20s 保活），
+        // 隧道就绪状态机 —— 后台持续探测（不通 1.5s 一拍 / 通 20s 保活），
         // 各 createTunnel 的 TunnelGate.guardReady() 读缓存：通了零等待，没通快速失败.
         TunnelReadiness.shared.start()
-        // v0.3.543：装配 kbsync 生成器 —— `ent/download` 免登录下载链的唯一前置。
-        // 用 storeagent 解释执行生成机器绑定凭据（见 Services/AppleAuth/KBSyncProvider.swift）。
-        // 装配失败不报错：`ent/download` 那一跳会静默跳过，下载照常走旧链。
+        // 装配 kbsync 生成器 —— `ent/download` 免登录下载链的唯一前置.
+        // 用 storeagent 解释执行生成机器绑定凭据（见 Services/AppleAuth/KBSyncProvider.swift）.
+        // 装配失败不报错：`ent/download` 那一跳会静默跳过，下载照常走旧链.
         KBSyncProvider.install()
-        // v0.3.5xx：装配「首轮版本号预解析」provider —— 让首选的 `ent/download` 首轮就带
-        // 版本号，跳过 `volumeStore + redownload` 弯路（真机实测白等 8.9~11.4s）。
-        // 没缓存时返回 nil，下载链原样落回旧链（见 AppStorePreferredVersion.swift）。
+        // 装配「首轮版本号预解析」provider —— 让首选的 `ent/download` 首轮就带
+        // 版本号，跳过 `volumeStore + redownload` 弯路（真机实测白等 8.9~11.4s）.
+        // 没缓存时返回 nil，下载链原样落回旧链（见 AppStorePreferredVersion.swift）.
         AppStorePreferredVersion.install()
-        // v0.3.361：启动就在日志里写下版本号 —— 排查时先看这一行，别再靠截图猜用户跑的是哪个包
-        // （2026-09-13 真就为「界面改了没生效」来回确认过一轮版本）。
+        // 启动就在日志里写下版本号 —— 排查时先看这一行，别再靠截图猜用户跑的是哪个包
+        // （2026-09-13 真就为「界面改了没生效」来回确认过一轮版本）.
         LoginLogger.shared.log("TequilaDash "
             + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
             + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?") + ") 启动",
@@ -65,26 +63,26 @@ struct TequilaDashApp: App {
             LoginLogger.shared.log("[崩溃] 上次运行留下 \(previousCrashCount) 条崩溃记录（LoginLogs/crash.log）",
                                    category: .general)
         }
-        // v0.3.164：后台保活恢复——开关已开但上次进程已死时，启动即恢复保活
+        // 后台保活恢复——开关已开但上次进程已死时，启动即恢复保活
         // （audio 静音播放，UIBackgroundModes audio）; 否则开关开了也没人 start.
         if KeepAliveManager.shared.isEnabled {
             KeepAliveManager.shared.start()
         }
         // 切后台/回前台时保活状态同步：audio session 可能被系统中断释放，
         // 回前台或切后台都补一次 start（幂等）; 关闭开关时收回.
-        // v0.3.655：恢复蜂窝数据 —— `turnOnDataIfNeeded()` 此前在全仓**零调用点**
+        // 恢复蜂窝数据 —— `turnOnDataIfNeeded()` 此前在全仓**零调用点**
         // （只在 CellularTunnelManager.swift:319 的注释里被提到），于是
         // `turnOffDataIfNeeded()` 关掉的蜂窝永远不会被打开，L318 那句
         // 「用完即还，不留副作用」是句空话：用户在蜂窝模式下用完 App 后
-        // 蜂窝数据一直是关的，只能自己去系统设置里手动打开。
+        // 蜂窝数据一直是关的，只能自己去系统设置里手动打开.
         //
         // 为什么挂在生命周期而不是挂在「隧道断开」处：本仓**没有**隧道断开通知
         // （TunnelContext.m 只暴露 ensureHeartbeatWithError / hasActiveTunnel /
         // isConnecting / lastTunnelError 这类方法），而回前台 / 切后台是唯一
-        // 稳定的、与「用户用完了」等价的生命周期信号。
+        // 稳定的、与「用户用完了」等价的生命周期信号.
         //
         // 幂等性由 `turnOnDataIfNeeded()` 内部保证（`guard didTurnOffData`）：
-        // 没关过蜂窝时是纯 no-op，不跑任何快捷指令、不发任何请求。
+        // 没关过蜂窝时是纯 no-op，不跑任何快捷指令、不发任何请求.
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                            object: nil, queue: .main) { _ in
@@ -102,10 +100,10 @@ struct TequilaDashApp: App {
         }
     }
 
-    /// v0.3.655：把「恢复蜂窝」收成一个函数，供生命周期 observer 复用.
+    /// 把「恢复蜂窝」收成一个函数，供生命周期 observer 复用.
     ///
     /// `turnOnDataIfNeeded()` 是 `@MainActor async`，而 observer 回调是同步
-    /// 闭包 ⇒ 起一个 `Task { @MainActor in ... }` 把调用搬回主隔离域。
+    /// 闭包 ⇒ 起一个 `Task { @MainActor in ... }` 把调用搬回主隔离域.
     /// 不 await、不阻塞回调线程（私有开关执行期间 App 可能已被挂起，属于预期降级）.
     private static func restoreCellularDataIfNeeded(reason: String) {
         let manager = CellularTunnelManager.shared

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.3.203: Security detection presets auto-generated from aisi SecurityPresets.plist (do not edit).
+/// Security detection presets auto-generated from aisi SecurityPresets.plist (do not edit).
 /// Detection methodology mirrors Lessica/Reveil (embedded IOSSecuritySuite).
 enum SecurityPresets {
 

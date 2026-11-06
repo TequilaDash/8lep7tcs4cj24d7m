@@ -23,7 +23,6 @@
 //
 //  移植时相对 Ketamine 的改动：
 //  - 解压/打包改用 TequilaDash 自带的 ZipReader / ZipWriter，不引入 ZIPFoundation.
-//  - 沙盒句柄统一走 SandboxEscape（含 LiveContainer 容器扩展的 sentinel 分支）.
 //  - 缓存目录名（TelephonyUI-<版本>）不再硬编码为 -10，扫描前缀并取版本号最高者，
 //    避免 iOS 大版本升级后目录名变化导致整个功能失效.
 //
@@ -92,7 +91,7 @@ final class DialerThemeManager {
 
     /// Swift 6 并发检查：本类型非 Sendable，但**没有可变实例状态** ——
     /// 只有 `fm`（FileManager）与 `escape`（SandboxEscape）两个无状态工具实例，
-    /// 其余全是计算属性；所有方法只做文件 IO，不保存跨调用状态。
+    /// 其余全是计算属性；所有方法只做文件 IO，不保存跨调用状态.
     nonisolated(unsafe) static let shared = DialerThemeManager()
 
     private init() {}
@@ -179,13 +178,12 @@ final class DialerThemeManager {
     /// 列出目录下的一级条目名.
     ///
     /// 优先用 FileManager（调用前应已持有该路径的沙盒扩展）；返回空时回退
-    /// `bad_query_list`（fsgetpath inode 扫描）— LiveContainer 访客沙盒下
     /// FileManager 列目录会被裁剪，实测不可信.
     private func entryNames(at directory: String, maxInode: Int64 = 200_000) -> [String] {
         let fmNames = (try? fm.contentsOfDirectory(atPath: directory)) ?? []
         if !fmNames.isEmpty { return fmNames }
 
-        // v0.3.412：走漏洞利用注册表（拿不到任何条目 = 空数组）。
+        // 走漏洞利用注册表（拿不到任何条目 = 空数组）.
         return ExploitRegistry.run { $0.entryNames(at: directory, maxInode: maxInode) } ?? []
     }
 
@@ -479,7 +477,6 @@ final class DialerThemeManager {
 
     /// 覆盖目标文件：先把新内容写入临时文件，再「先删后拷」进缓存目录.
     /// 对齐 Ketamine 原版的 removeItem + copyItem 方式 —— 直接对沙盒扩展路径做
-    /// 原子写（Data.write(atomic) = 写临时文件 + rename）在 LiveContainer 环境下
     /// 不可靠，rename 可能因文件系统/权限策略失败；而 copyItem 是壁纸功能验证过的路径.
     private func replaceFile(at destination: String, with payload: Data) throws {
         let tempURL = fm.temporaryDirectory

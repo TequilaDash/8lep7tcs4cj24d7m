@@ -6,7 +6,7 @@ import XPC
 //  MDMBypassService.swift
 //  TequilaDash
 //
-//  v0.3.228：MDM 沙盒逃逸 + 配置文件管理（移植自 mond-main MDM 绕过，个人测试用途）.
+//  MDM 沙盒逃逸 + 配置文件管理（移植自 mond-main MDM 绕过，个人测试用途）.
 //
 //  iOS 26.5/26.6 对 configurationprofiles SystemGroup 拒绝签发沙盒扩展
 //  （bad_query 返回 -4 / copy_sandbox_token 返回 NULL）.mond 的绕过思路：

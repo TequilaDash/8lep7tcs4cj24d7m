@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// 拉起应用（Launch Apps，汉化移植自 StikDebug 的 Other / Launch 标签页）.
 /// 列出全部已安装应用（含系统应用），点击即以普通方式启动（不启用 JIT）.
 ///
 /// 布局（本轮）：**布局 E（自适应网格）** —— 应用是「尺寸一致的图标条目流」，用 `AppAdaptiveGrid`
@@ -35,7 +34,7 @@ struct LaunchAppsView: View {
         List {
             Section {
                 if isLoading && apps.isEmpty {
-                    // v0.3.700：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                    // 整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
                     AppLoadingRow(title: "正在枚举已安装应用…", level: .page)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
@@ -86,7 +85,7 @@ struct LaunchAppsView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     // 分块行：每 24 个一节、一节一个 List 行 —— List 逐行实现，图标拉取与
-                    // 位图解码跟着滚动推进。整网格一行时 LazyVGrid 在 List 行内被全量物化，
+                    // 位图解码跟着滚动推进.整网格一行时 LazyVGrid 在 List 行内被全量物化，
                     // 进场瞬间上百个 .task 齐发 = 滑动卡顿（2026-11-01 用户报告）.
                     ForEach(Array(stride(from: 0, to: filteredApps.count, by: 24)), id: \.self) { start in
                         let chunk = Array(filteredApps[start..<min(start + 24, filteredApps.count)])

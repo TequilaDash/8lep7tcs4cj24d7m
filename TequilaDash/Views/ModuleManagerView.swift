@@ -2,7 +2,7 @@
 //  ModuleManagerView.swift
 //  TequilaDash
 //
-//  模块管理主界面（v0.3.48，底栏第五个 tab；v0.3.49 卡片化重构）.
+//  模块管理主界面（底栏第五个 tab； 卡片化重构）.
 //  卡片风格对齐 KernelSU / 爱思模块市场：名称 + 启用 Toggle + 版本/作者 +
 //  描述 + 动作按钮 + 底部「打开(WebView) / 卸载」胶囊按钮.
 //
@@ -27,7 +27,7 @@ struct ModuleManagerView: View {
     @State private var uninstallTarget: EscapeModule? = nil
     @State private var actionMenuModule: EscapeModule? = nil
     @State private var showModuleSettings = false
-    // v0.3.197：自动恢复容器迁移 — 全屏修复进度 + 结果
+    // 自动恢复容器迁移 — 全屏修复进度 + 结果
     @State private var repairInProgress: Bool = false
     @State private var repairResult: String? = nil
     @State private var webviewModule: EscapeModule? = nil
@@ -63,7 +63,7 @@ struct ModuleManagerView: View {
                 .accessibilityLabel("导入模块")
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                // v0.3.163：右上角刷新——重扫模块列表与运行状态
+                // 右上角刷新——重扫模块列表与运行状态
                 Button {
                     reload()
                 } label: {
@@ -75,7 +75,7 @@ struct ModuleManagerView: View {
         .sheet(isPresented: $showModuleSettings) {
             NavigationStack {
                 List {
-                    // v0.3.164：已删除「覆盖安装后恢复内置模块」开关——内置模块
+                    // 已删除「覆盖安装后恢复内置模块」开关——内置模块
                     // 卸载后不会随任何覆盖安装自动回归；恢复走下方手动按钮.
                     Section {
                         Button {
@@ -92,7 +92,7 @@ struct ModuleManagerView: View {
                         Text("内置模块被卸载后想恢复时点此（清空卸载记录并重新安装内置模块）.")
                     }
 
-                    // v0.3.197：自动恢复容器迁移 — OpenList 等 Go 模块的 config.json
+                    // 自动恢复容器迁移 — OpenList 等 Go 模块的 config.json
                     // 若残留旧容器绝对路径，启动时会 mkdir 失败→ log.Fatal→杀宿主.
                     // 这里扫所有模块的 config.json，检测到残留就按当前 dataDir
                     // 语义重写 4 个路径字段（temp/bleve/data.db/log）.
@@ -127,10 +127,10 @@ struct ModuleManagerView: View {
             ModuleLogView(module: mod) { showingLogFor = nil }
         }
         .refreshable { reload() }
-        // v0.3.197：容器路径修复全屏进度（阻断其它操作）
+        // 容器路径修复全屏进度（阻断其它操作）
         .fullScreenCover(isPresented: $repairInProgress) {
-            // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中 + 60pt 呼吸留白）.
-            // 原文的 32pt 左右留白照原值保留，长说明仍是缩进块。
+            // 整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中 + 60pt 呼吸留白）.
+            // 原文的 32pt 左右留白照原值保留，长说明仍是缩进块.
             AppLoadingRow(
                 title: "正在修复容器路径…",
                 detail: "扫描所有模块 config.json 中残留的旧容器绝对路径，按当前 dataDir 语义重写.\n期间不启动任何模块，完成前请勿操作.",
@@ -244,7 +244,7 @@ struct ModuleManagerView: View {
                     }
                 } else {
                     // 模块未声明任何可打开页面（理论上不会到这：按钮只在有页面时出现）
-                    // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
+                    // 空态改用统一组件 AppStateSection（原为裸 Text）.
                     AppStateSection(state: .empty("该模块没有可打开的 Web 页面",
                                                   message: "该模块没有静态 webroot，也没有正在运行的本地服务.",
                                                   icon: "globe"))
@@ -263,7 +263,7 @@ struct ModuleManagerView: View {
     // MARK: 子视图
 
     private var emptyState: some View {
-        // v0.3.721：整页空态统一到 AppEmptyState（自包含，不依赖 List 的 Section 提供卡片外观）.
+        // 整页空态统一到 AppEmptyState（自包含，不依赖 List 的 Section 提供卡片外观）.
         AppEmptyState(
             icon: "shippingbox",
             secondaryIcon: nil,
@@ -278,7 +278,7 @@ struct ModuleManagerView: View {
             // 搜索无结果时也必须保留 List（.searchable 挂在上面，
             // 切换视图会把搜索框整个卸载）
             if filteredModules.isEmpty {
-                // v0.3.721：搜索无结果收敛到 AppStateSection（与 I4StoreFreeView / LiveCleanTabView 同款文案）.
+                // 搜索无结果收敛到 AppStateSection（与 I4StoreFreeView / LiveCleanTabView 同款文案）.
                 // 不再套 .listRowBackground(Color.clear)：AppStateSection 自带 Section，
                 // 保留默认行背景才能让 InfoActionCard 落进卡片里（InfoActionCard 自身无背景）.
                 AppStateSection(state: .empty("没有匹配「\(searchText)」的模块",
@@ -321,7 +321,7 @@ struct ModuleManagerView: View {
                 if running {
                     if runner.webURL(for: module) != nil {
                         Button {
-                            // v0.3.157：当前界面内嵌打开（对齐 KernelSU WebUI 体验，不再跳 Safari）
+                            // 当前界面内嵌打开（对齐 KernelSU WebUI 体验，不再跳 Safari）
                             webviewModule = module
                         } label: {
                             Label("WebUI", systemImage: "globe")
@@ -329,14 +329,14 @@ struct ModuleManagerView: View {
                         }
                         .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryStore))
                     }
-                    // v0.3.159：停止等模块功能全部由「执行」菜单（actions 声明）承载，
+                    // 停止等模块功能全部由「执行」菜单（actions 声明）承载，
                     // 宿主不再内置停止按钮——动作语义完全由模块决定
                 }
                 // 启动按钮移至底栏左侧（与卸载对称，用户规范）——此处不再重复
             }
 
             if let err = runner.startErrors[module.id] {
-                // v0.3.683：区块级错误行统一到 AppErrorRow（模块启动失败 = 操作失败）.
+                // 区块级错误行统一到 AppErrorRow（模块启动失败 = 操作失败）.
                 AppErrorRow(message: err)
             }
         }
@@ -348,7 +348,7 @@ struct ModuleManagerView: View {
     private func moduleCard(_ module: EscapeModule) -> some View {
         let enabled = enabledMap[module.id] ?? true
         let hasWeb = ModuleService.shared.webrootURL(for: module) != nil
-        // v0.3.481：模块自带原生 SwiftUI 二级界面（注册名已在宿主内注册）时，
+        // 模块自带原生 SwiftUI 二级界面（注册名已在宿主内注册）时，
         // 「打开」走原生界面而不是 WKWebView —— 两者都有时**原生优先**.
         let hasNativeUI = ModuleUIRegistry.shared.hasTabs(named: module.nativeUIViewName)
         let running = BinaryModuleRunner.shared.isRunning(module: module)
@@ -394,7 +394,7 @@ struct ModuleManagerView: View {
             // v1.3：模块被阻断（缺宿主能力 / 宿主版本太老）—— 装载期就明说原因，
             // 同时把下面的「执行 / 打开」入口置灰（而不是让用户点下去在运行时静默失败）.
             // 这里用 `blockingIssues`（人话清单）而不是 `missingCapabilities`：后者只覆盖
-            // 能力缺失，漏掉了 minHostVersion 版本门禁。**不加「缺少宿主能力：」前缀** ——
+            // 能力缺失，漏掉了 minHostVersion 版本门禁.**不加「缺少宿主能力：」前缀** ——
             // 每条 issue 自带说明（「缺少宿主能力：…」/「需要宿主 v…，当前 v…」），
             // 加前缀会重复成「缺少宿主能力：缺少宿主能力：fs.read」.
             if !module.blockingIssues.isEmpty {
@@ -412,7 +412,7 @@ struct ModuleManagerView: View {
             Divider()
 
             // 底栏：启动/执行 + 打开 在左，卸载在右（截图同款灰胶囊黑字）
-            // v0.3.161：二进制模块未运行显示「启动」，运行后同位置变「执行」（互斥）；
+            // 二进制模块未运行显示「启动」，运行后同位置变「执行」（互斥）；
             // 非二进制模块（热补丁/Lua）无运行态，始终显示「执行」.
             HStack(spacing: 12) {
                 let showStart = enabled && module.isBinaryModule && !running
@@ -441,7 +441,7 @@ struct ModuleManagerView: View {
                     .disabled(!usable)
                     .opacity(usable ? 1 : 0.5)
                 }
-                // v0.3.481：原生 SwiftUI 二级界面优先；没有再退回 webroot 的 WKWebView
+                // 原生 SwiftUI 二级界面优先；没有再退回 webroot 的 WKWebView
                 if hasNativeUI && enabled {
                     pill(label: "打开", icon: "square.grid.2x2") {
                         ModuleUIRouter.shared.open(module)
@@ -468,7 +468,7 @@ struct ModuleManagerView: View {
                     .padding(.vertical, 9)
                     .background(Capsule().fill(Color(.systemGray6)))
                 } else {
-                    // v0.3.113：日志 pill（导入模块也显示；内置模块用上面的禁用 卸载 HStack）
+                    // 日志 pill（导入模块也显示；内置模块用上面的禁用 卸载 HStack）
                     pill(label: "日志", icon: "doc.text.magnifyingglass") {
                         showingLogFor = module
                     }
@@ -532,7 +532,7 @@ struct ModuleManagerView: View {
         })
     }
 
-    /// v0.3.197：检测并修复所有模块 config.json 的容器路径残留——OpenList 等
+    /// 检测并修复所有模块 config.json 的容器路径残留——OpenList 等
     /// Go 模块的 config.json 在容器 UUID 变化后会含旧路径，导致 Go mkdir 失败→Fatal→宿主崩.
     /// 这里用 ModuleService.repairContainerMigratedConfig 修复（仅改路径字段，
     /// 保留用户配置如 jwt_secret / 数据库账号）.
@@ -636,7 +636,7 @@ struct ModuleManagerView: View {
             await MainActor.run {
                 runningActionID = nil
                 resultAlert = result
-                // v0.3.163：桥 action 声明 marksStopped → 成功/失败都收口宿主状态并刷新
+                // 桥 action 声明 marksStopped → 成功/失败都收口宿主状态并刷新
                 if action.marksStopped == true {
                     BinaryModuleRunner.shared.markStopped(module: module)
                 }
@@ -668,7 +668,7 @@ struct ModuleRunResult {
 /// 模块 WebView 页（KernelSU webroot 对齐）：
 /// - file:// 静态页（模块 webroot 目录内 index.html，读权限限模块目录）
 /// - http(s):// 模块自起本地服务（binary.port 声明的 127.0.0.1 管理页）
-/// v0.3.157：统一在 App 内打开，不再跳 Safari.
+/// 统一在 App 内打开，不再跳 Safari.
 struct ModuleWebView: UIViewRepresentable {
     let startPage: URL
     let readAccessRoot: URL?
@@ -731,8 +731,8 @@ struct ModuleImportPicker: UIViewControllerRepresentable {
             guard self.isPresented else { return }
             self.isPresented = false
             // Swift 6：本闭包是 @Sendable 的非隔离上下文，而 present 已收敛到
-            // @MainActor。这里确实已经在主队列上，用 assumeIsolated 断言即可
-            //（不会真的切线程，语义与改动前完全一致）。
+            // @MainActor.这里确实已经在主队列上，用 assumeIsolated 断言即可
+            //（不会真的切线程，语义与改动前完全一致）.
             MainActor.assumeIsolated {
                 SharedDocumentPicker.present(
                     allowedTypes: [UTType.zip],
@@ -809,17 +809,17 @@ struct ModuleInstallSheet: View {
 }
 
 
-// v0.3.111：模块日志查看器（v0.3.111：每个已安装模块可查看/导出/复制/清空运行日志）
+// 模块日志查看器（每个已安装模块可查看/导出/复制/清空运行日志）
 /// 模块运行日志（查看 / 复制 / 分享 / 清空）.
 ///
-/// 数据源 = 模块目录下的 `run.log` + `data/go_stderr.log` 两份文件，按行合并展示。
+/// 数据源 = 模块目录下的 `run.log` + `data/go_stderr.log` 两份文件，按行合并展示.
 /// 排版走共享的 `LogConsoleView`（逐行 `Text` + 行间 `Divider` + 自动滚底 + 复制带元信息头）——
-/// 此前是**一整块 `Text`**。
+/// 此前是**一整块 `Text`**.
 ///
 /// 注意： 统一到「四件套工具栏」带来的两处能力变化（有意为之，供上层知情）：
 /// ① 「清空」不再区分两份文件，一次清掉两个（旧版是二选一的 `confirmationDialog`）；
 /// ② 旧版可用 `ShareLink` 单独导出 `run.log` / `go_stderr.log` 两个**文件**，
-///    现在分享的是**合并后的文本**（带元信息头）。需要原文件时请走文件浏览器。
+///    现在分享的是**合并后的文本**（带元信息头）.需要原文件时请走文件浏览器.
 struct ModuleLogView: View {
     let module: EscapeModule
     var onClose: () -> Void
@@ -830,7 +830,7 @@ struct ModuleLogView: View {
 
     var body: some View {
         // 本页由父级的 `.sheet(item:)` 弹出，**必须自带导航容器** —— 否则 `LogConsoleView` 的
-        // `navigationTitle` 与工具栏（清除/复制/分享/完成）没有导航栏可挂，整条工具栏都不会出现。
+        // `navigationTitle` 与工具栏（清除/复制/分享/完成）没有导航栏可挂，整条工具栏都不会出现.
         NavigationStack {
             LogConsoleView(
                 lines: lines,
@@ -855,7 +855,7 @@ struct ModuleLogView: View {
         }
     }
 
-    /// 两份文件按行合并（每份前面加一行 `[文件名]` 便于区分来源），只留最后 `maxRenderedLines` 行。
+    /// 两份文件按行合并（每份前面加一行 `[文件名]` 便于区分来源），只留最后 `maxRenderedLines` 行.
     private func reload() {
         let all = [logFile, goStderr].flatMap { url -> [String] in
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }

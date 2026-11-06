@@ -55,7 +55,6 @@ struct MCMIntegration {
 
     /// The actual signed-code identifier of the running process, as reported by
     /// SecTaskCopySigningIdentifier. Use this to confirm on-device whether the
-    /// MHA identity survived LiveContainer's re-signing.
     static var signedCodeIdentifier: String {
         BQMCMSignedCodeIdentifierString()
     }
@@ -72,7 +71,6 @@ struct MCMIntegration {
     }
 
     /// Auto-detect the host process's App Group(s) from its entitlements and
-    /// use the first for the iOS 26 sacrifice route. Inside LiveContainer this
     /// borrows the host's App Group (the contained app runs as the LC process).
     static func detectHostAppGroup() {
         BQMCMDetectHostAppGroup()

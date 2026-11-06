@@ -65,11 +65,11 @@ struct HexEditorView: View {
         return "需为 2 位十六进制，如 0A 或 FF."
     }
 
-    /// 单个字节的 hex 文本 -> UInt8。三防：空串 / 字符集 / 定长 2 位.
+    /// 单个字节的 hex 文本 -> UInt8.三防：空串 / 字符集 / 定长 2 位.
     ///
     /// 不能只靠 `UInt8(_:radix:16)` 判非法 —— 它的失败模式是「非 nil 的垃圾」：
     /// `UInt8("+F", radix: 16) == Some(15)`（前导正号被当成合法）、
-    /// `UInt8("", radix: 16) == Some(0)`（空串被当成 0x00）。
+    /// `UInt8("", radix: 16) == Some(0)`（空串被当成 0x00）.
     /// 口径对齐 BigInt.swift:52 `init?(hex:)` 与 IPADownloadCenter.swift:1830 `hexDecoded`：
     /// 先 allSatisfy { $0.isHexDigit }，再判空，再判长度；超过 2 位不静默截断，一律拒绝.
     private static func hexByteValue(_ text: String) -> UInt8? {

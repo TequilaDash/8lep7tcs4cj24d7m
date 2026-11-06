@@ -36,19 +36,19 @@ struct BigInt: Equatable, Comparable, CustomStringConvertible {
     /// Parse a big-endian hex string (optionally 0x-prefixed).
     ///
     /// 口径对齐 GSAAuth.hexToBytes 与 IPADownloadCenter.hexDecoded（同一 bug 的另两个副本）：
-    /// 先查长度与字符集，再交 `UInt8(_:radix:16)`；解析失败一律显式返回 nil。
+    /// 先查长度与字符集，再交 `UInt8(_:radix:16)`；解析失败一律显式返回 nil.
     ///
     /// 修掉的三处历史缺陷（`swift_hex_parse_guard.py` 按这三条机械判定）：
     /// 1. 前导正号：`UInt8("+1", radix: 16) == Some(1)`，`"+ab"` 被静默解成 `01 ab`；
-    ///    `UInt8("+", radix: 16)` 才是 nil（WSL Swift 6.1.3 实测）—— 只有字符集校验能挡。
+    ///    `UInt8("+", radix: 16)` 才是 nil（WSL Swift 6.1.3 实测）—— 只有字符集校验能挡.
     /// 2. 奇数长度分支原 `?? 0` 兜底把解析失败静默当成 `0x00`，同属非 nil垃圾，
-    ///    改为显式返回 nil。该兜底仅在 `isHexDigit == true` 却解不出字节时可达，
-    ///    实测只有全角数字/字母（U+FF10-FF19 / U+FF21-FF26 / U+FF41-FF46，共 22 个）能走到。
-    /// 3. 空串与裸 `"0x"` 返回 nil；旧实现返回 count=0 的零值 BigInt。
+    ///    改为显式返回 nil.该兜底仅在 `isHexDigit == true` 却解不出字节时可达，
+    ///    实测只有全角数字/字母（U+FF10-FF19 / U+FF21-FF26 / U+FF41-FF46，共 22 个）能走到.
+    /// 3. 空串与裸 `"0x"` 返回 nil；旧实现返回 count=0 的零值 BigInt.
     ///
-    /// 容忍首尾空格/换行（与 `GSAAuth.hexToBytes` 口径一致），接受 `0x` / `0X` 前缀。
+    /// 容忍首尾空格/换行（与 `GSAAuth.hexToBytes` 口径一致），接受 `0x` / `0X` 前缀.
     ///
-    /// 三防对应：字符集 `isHexDigit` / 奇偶 `% 2` / 空串 `isEmpty`，缺一即守卫 ERROR。
+    /// 三防对应：字符集 `isHexDigit` / 奇偶 `% 2` / 空串 `isEmpty`，缺一即守卫 ERROR.
     init?(hex: String) {
         let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         let s = (trimmed.hasPrefix("0x") || trimmed.hasPrefix("0X"))

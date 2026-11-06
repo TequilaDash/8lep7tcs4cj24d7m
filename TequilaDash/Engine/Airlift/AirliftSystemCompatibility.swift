@@ -2,7 +2,7 @@ import Foundation
 
 /// Airlift（AirTraffic 沙盒逃逸）支持的系统范围（移植自 AirBeep 的 `SystemCompatibility`）.
 ///
-/// 范围依据 airlift 的 AirTraffic 逃逸：iOS/iPadOS 18.0 至 27.2 B2。
+/// 范围依据 airlift 的 AirTraffic 逃逸：iOS/iPadOS 18.0 至 27.2 B2.
 /// 超出范围**如实报不支持**（由访问层在运行时给出真实错误），不做乐观假设.
 ///
 /// 命名说明：AirBeep 原类名 `SystemCompatibility`（过于通用，易与其它兼容性判据撞名）；

@@ -2,11 +2,11 @@ import Foundation
 
 /// Account cookie mutations are transactions. Actor reentrancy alone does not serialize awaits.
 private actor StoreAccountRequestGate {
-    /// email → 持有者令牌集合。**必须是令牌而非裸 email**（v0.3.742 修复）：
+    /// email → 持有者令牌集合.**必须是令牌而非裸 email**（修复）：
     /// 旧实现用 `Set<String>`，强制接管那条路**不插入自己的 entry**（`insert` 失败），
     /// 于是接管者手里有租约、门里却没有它的记录 —— 一旦它 `release` 清掉僵尸 entry，
     /// 门就变成空集，**任何并发调用都能立刻拿到租约**，同一账号又回到「多持有者并发」，
-    /// 正是「搜索 → 点下载」两条链同时持账号会话、进而闪退的形状（33429ee 只给已购链加了单飞）。
+    /// 正是「搜索 → 点下载」两条链同时持账号会话、进而闪退的形状（33429ee 只给已购链加了单飞）.
     /// 改成令牌后：每次 acquire 都插入自己的令牌，release 只删自己的令牌，
     /// 强制接管时**清掉该 email 下所有旧令牌再插入自己的** —— 门不会再永久失信.
     private var owners: [String: Set<UInt64>] = [:]
@@ -14,30 +14,30 @@ private actor StoreAccountRequestGate {
     /// 下一个令牌（单调递增，进程内唯一）.
     private var nextToken: UInt64 = 0
 
-    /// 取锁等待的**上限**。超时后**强制接管**（宁可变慢/偶发并发，绝不永久卡死）。
+    /// 取锁等待的**上限**.超时后**强制接管**（宁可变慢/偶发并发，绝不永久卡死）.
     ///
-    /// ## 为什么必须有这个上限（v0.3.389 真机事故）
-    /// 本门是**纯内存态**，`release` 只在 `withAccount` 的 do/catch 两路被调用。
+    /// ## 为什么必须有这个上限（真机事故）
+    /// 本门是**纯内存态**，`release` 只在 `withAccount` 的 do/catch 两路被调用.
     /// 同一进程内，持锁请求迟迟未返回时，后续请求会等待它释放租约.
     /// 进程被系统回收会清空本门，不会留下跨进程的内存锁.
     /// 此上限只限制等待时间；不能据此断定旧请求已经结束，
-    /// 而且**一条日志都没有**（卡死在第一条 `onLog` 之前，`[AppleID] 请求下载信息…` 永远不出现）。
-    /// 真机实测就是这个形状：用户点下载 → 顶部「准备中 0%」不动 → 日志里没有任何下载记录。
+    /// 而且**一条日志都没有**（卡死在第一条 `onLog` 之前，`[AppleID] 请求下载信息…` 永远不出现）.
+    /// 真机实测就是这个形状：用户点下载 → 顶部「准备中 0%」不动 → 日志里没有任何下载记录.
     ///
-    /// 旧实现用 `withCheckedContinuation` 排队，等待者**没有任何超时/取消能力** → 一旦泄漏就是永久。
+    /// 旧实现用 `withCheckedContinuation` 排队，等待者**没有任何超时/取消能力** → 一旦泄漏就是永久.
     /// 现在改成**轮询 + 超时接管**：超时后本次照常继续，并由调用方的 `release` 把那个僵尸 owner 清掉，
-    /// 于是**一次超时之后链路自行恢复**。
+    /// 于是**一次超时之后链路自行恢复**.
     static let acquireTimeout: TimeInterval = 25
 
     /// 因超时被强制接管的次数（诊断用）.
     ///
-    /// v0.3.662（task-13 发现13）：此前该计数器**只写不读**（全仓无消费者）,
+    /// 此前该计数器**只写不读**（全仓无消费者）,
     /// 而它恰好是排查「下载卡在准备中 0%」时最关键的一项指标 —— 每次强制接管
-    /// 都意味着有并发操作在共享同一账号会话。现在在接管发生的那条日志里带上它,
-    /// 让它不再是一条死代码。
+    /// 都意味着有并发操作在共享同一账号会话.现在在接管发生的那条日志里带上它,
+    /// 让它不再是一条死代码.
     private(set) var forcedAcquires = 0
 
-    /// 取锁。返回 `(令牌, 是否超时夺来)`；调用方**必须**用同一令牌 release.
+    /// 取锁.返回 `(令牌, 是否超时夺来)`；调用方**必须**用同一令牌 release.
     func acquire(_ email: String) async throws -> (token: UInt64, forced: Bool) {
         let deadline = Date().addingTimeInterval(Self.acquireTimeout)
         while true {
@@ -64,7 +64,7 @@ private actor StoreAccountRequestGate {
         }
     }
 
-    /// 释放**自己那一个**令牌。别的持有者的令牌不受影响.
+    /// 释放**自己那一个**令牌.别的持有者的令牌不受影响.
     func release(_ email: String, token: UInt64) {
         guard var set = owners[email] else { return }
         set.remove(token)
@@ -97,7 +97,7 @@ enum StoreAccountSession {
         }
         do {
             try Task.checkCancellation()
-            // v0.3.743 面包屑：拿到租约之后、取账号会话之前 —— 与调用方的
+            // 面包屑：拿到租约之后、取账号会话之前 —— 与调用方的
             // 「申请账号租约…」配对，用来区分「门排队」和「取账号会话」两段.
             LoginLogger.shared.log("[会话] 租约已获得，取账号会话…", category: .appleID)
             guard var account = AppStoreDownloadStore.shared.account(for: email) else {
@@ -130,9 +130,9 @@ actor StoreLoginBackoff {
         // Date 比较改比 Double 时间戳（守卫 swift_date_compare_guard.py：beta 上 >=/<= 是 weak import）.
         if let until = blockedUntil[key],
            until.timeIntervalSinceReferenceDate > Date().timeIntervalSinceReferenceDate {
-            // v0.3.5xx：此前这里**静默抛错** —— 日志里一行都没有，用户只看到「点了没反应」。
+            // 此前这里**静默抛错** —— 日志里一行都没有，用户只看到「点了没反应」.
             // 补一条明确日志（含剩余冷却时长）；冷却窗口内直接失败、不重试（避免重复发送密码），
-            // 且不写 email，避免 PII 进日志。
+            // 且不写 email，避免 PII 进日志.
             let remaining = Int(ceil(until.timeIntervalSinceNow))
             LoginLogger.shared.log(
                 "[会话] 登录退避冷却中 剩余=\(remaining)s",
@@ -145,7 +145,7 @@ actor StoreLoginBackoff {
     func record(_ error: StoreAuthenticationError, email: String) {
         guard let interval = error.backoffInterval else { return }
         blockedUntil[email.lowercased()] = Date().addingTimeInterval(interval)
-        // v0.3.5xx：退避**开始**也补一条日志（原只在 UI 显示）；冷却期间自动重登会被直接拒绝。
+        // 退避**开始**也补一条日志（原只在 UI 显示）；冷却期间自动重登会被直接拒绝.
         LoginLogger.shared.log(
             "[会话] 登录失败触发退避 冷却=\(Int(interval))s",
             category: .appleID)
@@ -185,10 +185,10 @@ actor StoreRefreshCoordinator {
         let id = UUID()
         let task = Task<AppStoreAccount, Error> {
             let currentGUID = AppleIDSignInService.sapGUID()
-            // v0.3.354：Apple 的 store 会话与「机器身份」绑定。用户点过「重置设备标识」之后，
+            // Apple 的 store 会话与「机器身份」绑定.用户点过「重置设备标识」之后，
             // 旧 passwordToken/Cookie 在 Apple 眼里属于另一台设备 —— 继续把它们当 Cookie 发出去，
             // Auth 边缘回的是畸形应答（真机实测 204 空响应 / 302 无 Location），
-            // 而不是一句清楚的「Sign In to the iTunes Store」。换过身份就**不带旧会话**重登。
+            // 而不是一句清楚的「Sign In to the iTunes Store」.换过身份就**不带旧会话**重登.
             let reusableCookies = stored.deviceGuid == currentGUID ? stored.cookie : []
             if let old = stored.deviceGuid, old != currentGUID {
                 LoginLogger.shared.log("[SAP] 设备标识已变更（\(old) → \(currentGUID)），登录不带旧会话",

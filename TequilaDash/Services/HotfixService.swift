@@ -2,7 +2,6 @@
 //  HotfixService.swift
 //  TequilaDash
 //
-//  热补丁系统（v0.3.66）：
 //
 //  一期（签名 + 声明式）：
 //   - 热补丁模块 = module.json 含 "hotfix" 键的模块，必须携带官方 ed25519 签名
@@ -29,7 +28,7 @@ import JavaScriptCore
 /// `@unchecked Sendable`：所有可变状态（`featureFlags` / `textOverrides` /
 /// `jsModulesLoaded` / `jsLog` 四个 @Published）只在主线程写——`reload()` 的两个
 /// 调用点（`ModuleService` 安装/导入后的钩子）都在 `DispatchQueue.main.async`
-/// 里，UI（`MoreView`）也在主线程读。跨线程不存在并发写。
+/// 里，UI（`MoreView`）也在主线程读.跨线程不存在并发写.
 final class HotfixService: NSObject, ObservableObject, @unchecked Sendable {
     static let shared = HotfixService()
 
@@ -63,7 +62,7 @@ final class HotfixService: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: 聚合（app 启动 / 模块变更时调用）
 
-    /// 热补丁聚合（v0.3.662 / task-13 发现6）.
+    /// 热补丁聚合（/ task-13 发现6）.
     ///
     /// 旧实现两个问题：
     ///  1. 在**主队列**上同步遍历模块目录并逐条读 hotfix 脚本 —— 主线程做文件 IO；
@@ -160,8 +159,8 @@ final class HotfixService: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: JS 引擎（二期，JavaScriptCore）
 
     /// @MainActor：EscapeJSBridge 已收敛主线程，JS 的执行与桥创建都须在主线程.
-    /// v0.3.662（task-13 发现6）：形参由 `EscapeModule` 改为 `(id, version)` ——
-    /// reload 现在只在后台带纯值、在主 actor 内重新组装，不再跨隔离域搬运整份模块模型。
+    /// 形参由 `EscapeModule` 改为 `(id, version)` ——
+    /// reload 现在只在后台带纯值、在主 actor 内重新组装，不再跨隔离域搬运整份模块模型.
     @MainActor
     private func runScript(_ source: String, moduleId: String, moduleVersion: String) {
         let ctx = JSContext()!

@@ -1,17 +1,17 @@
 import Foundation
 
-/// v0.3.293：硬盘/闪存详情（移植爱思「硬盘详情」面板）
+/// 硬盘/闪存详情（移植爱思「硬盘详情」面板）
 ///
-/// 数据源：`diagnostics_relay` 的 IORegistry → **AppleEmbeddedNVMeController** 节点。
+/// 数据源：`diagnostics_relay` 的 IORegistry → **AppleEmbeddedNVMeController** 节点.
 /// 真机 iPhone15,4 / iOS 27.0 实测返回 46 个键，与爱思面板字段**逐项对应**
 /// （vendor-name=Toshiba / Model Number=APPLE SSD AP0512Z / chip-id=S5E /
 ///  firmware-version=590 / controller-unique-id=0ba01ef38134201a /
-///  nand-marketing-name=tlc_3d_g5_2p_512 / msp-version=4.12.2.0.0.0）。
+///  nand-marketing-name=tlc_3d_g5_2p_512 / msp-version=4.12.2.0.0.0）.
 ///
 /// 对照来源：逆向 idm_info.dll 的 `ios_get_detailed_battery_info` 尾部——
 /// 它在电池数据之后继续读 `AppleEmbeddedNVMeController` / `IOFlashMedia` / `ASPStorage`
 /// 的 `controllers`→`dies`→`die-chip-id`、`nand-marketing-name`、`Device/Controller Characteristics`
-/// 等键，即爱思硬盘详情面板的实现路径。
+/// 等键，即爱思硬盘详情面板的实现路径.
 struct StorageDetailInfo {
     // 基本
     var flashVendor: String?      // 闪存颗粒厂商（Controller Characteristics.vendor-name）
@@ -162,11 +162,11 @@ enum StorageDetailService {
         return parse(dict)
     }
 
-    /// v0.3.305/308：按 IORegistry **节点名（EntryName）或类名（EntryClass）** 取原始字典 —— 供设备信息补全复用.
+    /// /308：按 IORegistry **节点名（EntryName）或类名（EntryClass）** 取原始字典 —— 供设备信息补全复用.
     ///
     /// 注意： 两者不可混用（真机实测）：`AppleEmbeddedNVMeController` 只能用 **EntryClass** 查到
-    /// （用 EntryName 查返回空 → 硬盘详情/硬盘类型全部读不到，v0.3.305 引入的回归）；
-    /// 而设备树的 `product` 节点只能用 **EntryName** 查（它是 IODeviceTree 里的节点名，不是类名）。
+    /// （用 EntryName 查返回空 → 硬盘详情/硬盘类型全部读不到，引入的回归）；
+    /// 而设备树的 `product` 节点只能用 **EntryName** 查（它是 IODeviceTree 里的节点名，不是类名）.
     static func queryNode(client: OpaquePointer,
                           entryName: String? = nil,
                           entryClass: String? = nil) -> [String: Any]? {

@@ -4,14 +4,12 @@ import SwiftUI
 struct ReclaimAppView: View {
     let app: InstalledApp
     @ObservedObject var viewModel: AppListViewModel
-    /// Optional pre-decoded icon bytes (e.g. LiveContainer guest apps whose
     /// bundle id isn't in the system app list). Falls back to the
     /// SpringBoard icon cache.
     var guestIcon: Data? = nil
-    /// Optional container UUID shown beneath the app name (LiveContainer
     /// guests). Pass `LiveCleanAppRank.containerUUID` from the caller.
     var containerUUID: String? = nil
-    /// v0.3.529：LiveContainer 访客应用的 `.app` 包路径（`LiveContainerGuest.bundlePath`）.
+    /// LiveContainer 访客应用的 `.app` 包路径（`LiveContainerGuest.bundlePath`）.
     ///
     /// 有值时「容器内容」多一行「浏览 Bundle」，进去看 Info.plist / 可执行文件 /
     /// 资源 / 内嵌框架 —— 改 Info.plist 或塞 dylib 必须先能进 `.app` 包.
@@ -23,7 +21,6 @@ struct ReclaimAppView: View {
     /// Mirrors `AppDetailView`: checks the container is reachable through the
     /// sandbox extension before exposing the file browser.
     @StateObject private var access = ContainerAccessModel()
-    /// Drives the backup action for this app (normal or LiveContainer guest).
     @StateObject private var backup = BackupViewModel()
 
     var body: some View {
@@ -105,7 +102,7 @@ struct ReclaimAppView: View {
         Section(header: Text("访问权限")) {
             switch access.state {
             case .unknown, .checking:
-                // v0.3.700：与 AppDetailView「访问权限」Section 同文案同形态（默认 .inline）.
+                // 与 AppDetailView「访问权限」Section 同文案同形态（默认 .inline）.
                 AppLoadingRow(title: "正在检查容器访问…")
             case .granted:
                 Label("容器可访问", systemImage: "checkmark.shield.fill")
@@ -155,7 +152,7 @@ struct ReclaimAppView: View {
             }
             .disabled(!access.isGranted)
 
-            // v0.3.529：访客应用的 .app 包（改 Info.plist / 塞 dylib 必须能进这里）.
+            // 访客应用的 .app 包（改 Info.plist / 塞 dylib 必须能进这里）.
             // 与上面「浏览文件」同一条通道，不依赖漏洞利用.
             if let bundlePath, !bundlePath.isEmpty {
                 NavigationLink(destination: FileBrowserView(
@@ -238,7 +235,7 @@ struct ReclaimAppView: View {
                 Text("已保存到 TequilaDash → Backups")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                // v0.3.705：这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
+                // 这些文件被列出但没能写进归档（manifest 也没有它们），如实告知.
                 if !result.skippedFiles.isEmpty {
                     Label("\(result.skippedFiles.count) 个文件未能写入归档.", systemImage: "info.circle")
                         .font(.footnote)

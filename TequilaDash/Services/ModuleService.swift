@@ -2,7 +2,7 @@
 //  ModuleService.swift
 //  TequilaDash
 //
-//  TequilaDash 模块系统（v0.3.48）.
+//  TequilaDash 模块系统.
 //  参考 KernelSU 的模块管理形态（module.prop + 声明式动作），升级为 JSON 规范：
 //
 //    escape.module.v1 规范
@@ -25,12 +25,12 @@ import Foundation
 
 /// 宿主版本读取与比较（用于 `minHostVersion` 门禁）.
 ///
-/// 版本号格式是 semver（`0.3.481` / `1.2.3` / 可带 `-rc1` 后缀）。这里**不引入
+/// 版本号格式是 semver（`0.3.481` / `1.2.3` / 可带 `-rc1` 后缀）.这里**不引入
 /// 第三方 semver 库**，只做够用的事：按 `.` 切段比数值，段数不等时缺的当 0，
-/// 后缀（`-` 之后）按「有后缀 < 无后缀」处理（`1.0.0-rc1` 早于 `1.0.0`）。
+/// 后缀（`-` 之后）按「有后缀 < 无后缀」处理（`1.0.0-rc1` 早于 `1.0.0`）.
 ///
 /// 为什么不用 `String.compare(options: .numeric)`：它对 `0.3.10` vs `0.3.9` 是对的，
-/// 但对 `1.0` vs `1.0.0` 会判不等（段数不同），而我们要的是相等。
+/// 但对 `1.0` vs `1.0.0` 会判不等（段数不同），而我们要的是相等.
 enum HostVersion {
     /// 当前宿主版本（CFBundleShortVersionString）
     static var current: String {
@@ -132,7 +132,7 @@ struct BinaryConfig: Codable {
     var webPath: String?
     /// 是否随宿主自启动
     var autoStart: Bool?
-    /// 入口符号名（v0.3.112：模块化——引擎默认自动扫描 dylib 符号表里 "*Main"
+    /// 入口符号名（模块化——引擎默认自动扫描 dylib 符号表里 "*Main"
     /// 结尾的导出，只有模块想显式指定时才在 module.json 里声明，避免引擎耦合模块符号名）
     var entrySymbol: String?
 }
@@ -145,11 +145,11 @@ struct LuaModuleConfig: Codable {
 
 /// 原生 SwiftUI 界面配置（module.json "ui" 键，v1.3）
 ///
-/// 模块想自带**原生**界面（而不是 `webroot` 的 WKWebView）时声明这个键。
+/// 模块想自带**原生**界面（而不是 `webroot` 的 WKWebView）时声明这个键.
 /// 视图实现必须编译进宿主（SwiftUI 视图没法从 zip 里加载），所以 `view` 是一个
 /// **注册名**：宿主在启动时把内置视图按名字注册进 `ModuleUIRegistry`，
-/// 模块只声明"我要用哪个视图"。注册名缺失 ⇒ 模块卡片不显示「打开」按钮
-/// （不会崩，也不会给用户一个点进去是空白的入口）。
+/// 模块只声明"我要用哪个视图".注册名缺失 ⇒ 模块卡片不显示「打开」按钮
+/// （不会崩，也不会给用户一个点进去是空白的入口）.
 struct ModuleUIConfig: Codable {
     /// 界面形态，目前只有 "native"
     var style: String
@@ -216,8 +216,8 @@ struct EscapeModule: Identifiable, Codable {
     /// v1.3：可选.声明需要的宿主能力（见 HostCapabilityService.capabilityList）
     ///
     /// 宿主装载时校验：缺任何一项 ⇒ 模块视为「不可用」（卡片显示缺哪一项，
-    /// actions 与原生界面都不给入口）。这样能力缺失是**装载期可见**的，
-    /// 而不是用户点下去才在运行时静默失败。
+    /// actions 与原生界面都不给入口）.这样能力缺失是**装载期可见**的，
+    /// 而不是用户点下去才在运行时静默失败.
     var requires: [String]?
     /// 二进制模块是否随宿主自启动（默认读 binary.autoStart）
     var autoStart: Bool?
@@ -246,9 +246,9 @@ struct EscapeModule: Identifiable, Codable {
 
     /// 宿主版本是否低于模块要求（module.json 的 minHostVersion）
     ///
-    /// v0.3.481 起才真正强制。此前 `minHostVersion` 只是被读进来存着，
+    /// 起才真正强制.此前 `minHostVersion` 只是被读进来存着，
     /// 从未参与任何判断 —— 于是「模块声明了需要 0.3.481，却装在 0.3.480 上」
-    /// 会一路放行到运行时才出问题。
+    /// 会一路放行到运行时才出问题.
     var isHostTooOld: Bool {
         guard let need = minHostVersion, !need.isEmpty else { return false }
         return HostVersion.compare(HostVersion.current, need) < 0
@@ -256,8 +256,8 @@ struct EscapeModule: Identifiable, Codable {
 
     /// 阻断使用的问题清单（人话，直接给 UI 显示）；空 = 模块可用
     ///
-    /// 两类问题合成一处：缺宿主能力、宿主版本太老。UI 只认这一个属性，
-    /// 免得以后再加一类阻断原因时漏改界面。
+    /// 两类问题合成一处：缺宿主能力、宿主版本太老.UI 只认这一个属性，
+    /// 免得以后再加一类阻断原因时漏改界面.
     var blockingIssues: [String] {
         var issues: [String] = []
         let missing = missingCapabilities
@@ -284,9 +284,9 @@ struct EscapeModule: Identifiable, Codable {
 // MARK: - 服务
 
 final class ModuleService {
-    /// Swift 6 并发检查：本类型非 Sendable。可变状态只有 `inPlaceBundled`（内置原地模块表），
+    /// Swift 6 并发检查：本类型非 Sendable.可变状态只有 `inPlaceBundled`（内置原地模块表），
     /// 仅在 `bootstrapBundledModules()` / 内置模块安装流程里写入、之后只读；
-    /// 其余全是计算属性或对 UserDefaults / 文件系统的无状态操作。
+    /// 其余全是计算属性或对 UserDefaults / 文件系统的无状态操作.
     nonisolated(unsafe) static let shared = ModuleService()
 
     /// 模块安装根目录：Documents/Modules
@@ -311,7 +311,7 @@ final class ModuleService {
 
     /// 首次启动时把 bundle 内置模块安装到 Documents/Modules.
     /// 幂等：目录已存在 或 用户曾主动卸载过 → 跳过.
-    /// v0.3.164：已删除「覆盖安装后自动恢复内置模块」——覆盖安装（含升级）
+    /// 已删除「覆盖安装后自动恢复内置模块」——覆盖安装（含升级）
     /// 一律尊重卸载记录；需要恢复时用模块设置的「立即恢复内置模块」手动按钮.
 
     /// 内置且不落盘（bundle 原地加载）的二进制模块：id → bundle 内模块目录
@@ -333,11 +333,11 @@ final class ModuleService {
 
     // MARK: Lua 模块执行（v1.2：纯脚本模块，走内置 Rust+mlua 解释器）
 
-    /// `lua_host_exec` 的结果盒：用于把返回值从并发闭包带回同步调用方。
+    /// `lua_host_exec` 的结果盒：用于把返回值从并发闭包带回同步调用方.
     ///
     /// 线程安全论证：`value` 的写发生在 `sem.signal()` **之前**、读发生在 `sem.wait()`
     /// 返回**之后**，两者之间由 `DispatchSemaphore` 建立 happens-before 关系，
-    /// 且期间不存在第二个访问者 —— 故 `@unchecked Sendable` 成立。
+    /// 且期间不存在第二个访问者 —— 故 `@unchecked Sendable` 成立.
     private final class LuaResultBox: @unchecked Sendable {
         var value: Int32 = -99
     }
@@ -356,7 +356,7 @@ final class ModuleService {
         WiFiPowerBridge.shared.ensureRegistered()   // 注册隧道 wifi handler（幂等）
         onProgress?("执行 \(module.luaEntry)（\(code.count) 字符）…")
         // Swift 6：结果经引用盒回传（不能在被捕获的局部 `var` 上跨并发闭包写入），
-        // 线程安全论证见 `LuaResultBox`。
+        // 线程安全论证见 `LuaResultBox`.
         let retBox = LuaResultBox()
         let sem = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .userInitiated).async {
@@ -377,8 +377,8 @@ final class ModuleService {
     private func bootstrapBundledModules() {
         // 安装版本锚点：CFBundleVersion（build 号）.
         // 旧方案（bundle 目录/可执行文件 mtime）在 LC 环境会漂移——卸载后重启模块"复活"的 bug 根因.
-        // CFBundleVersion 每次发版必变、同版本内永远稳定（v0.3.72 修复）.
-        // v0.3.164：不再随覆盖安装/升级自动恢复内置模块（尊重卸载记录）——
+        // CFBundleVersion 每次发版必变、同版本内永远稳定（ 修复）.
+        // 不再随覆盖安装/升级自动恢复内置模块（尊重卸载记录）——
         // 需要恢复时用模块设置里的「立即恢复内置模块」手动按钮.
         let installVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
         let recorded = UserDefaults.standard.string(forKey: Self.hostInstallVersionKey)
@@ -404,7 +404,7 @@ final class ModuleService {
                 let dataRoot = modulesRoot.appendingPathComponent(id, isDirectory: true)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     // 旧版落盘副本清理：只删残留的 bin/（旧 dylib，现已编译进 App）.
-                    // 注意： v0.3.80 修复：此前这里执行 removeItem(dest)，而 dest 与 dataRoot
+                    // 注意： 修复：此前这里执行 removeItem(dest)，而 dest 与 dataRoot
                     // 对内置原地模块是同一目录 —— 等于每次启动都把模块数据目录（日志/配置/
                     // 数据库）整个删掉，既导致模块数据无法留存，也销毁了排障日志.
                     let legacyBin = dest.appendingPathComponent("bin", isDirectory: true)
@@ -463,9 +463,9 @@ final class ModuleService {
         listModules().first { $0.id == id }
     }
 
-    // MARK: 容器迁移修复（v0.3.195）
+    // MARK: 容器迁移修复
 
-    /// v0.3.195：App 重装 / LiveContainer 容器 UUID 变化后，Go 二进制模块（OpenList 等）
+    /// App 重装 / LiveContainer 容器 UUID 变化后，Go 二进制模块（OpenList 等）
     /// 的 config.json 仍写着旧容器的绝对路径（temp_dir/db_file/bleve_dir/log.name）——
     /// Go 启动时 mkdir 旧路径 → operation not permitted → log.Fatal → os.Exit 杀宿主.
     /// 这里按 OpenList internal/conf.DefaultConfig(dataDir) 的语义重写这 4 个路径字段为
@@ -584,7 +584,7 @@ final class ModuleService {
 
         // module.json 所在目录（"" 表示 zip 根）——signature.sig 必须与 module.json 同目录
         // 用纯字符串切分（NSString.deletingLastPathComponent 返回值斜杠语义不可靠，
-        // 之前 dropLast() 掐掉真实字符导致 extractedRoot/签名 key 双双找错——v0.3.68 修复）
+        // 之前 dropLast() 掐掉真实字符导致 extractedRoot/签名 key 双双找错—— 修复）
         let manifestDir: String
         if let mn = manifestName, let idx = mn.lastIndex(of: "/") {
             manifestDir = String(mn[...idx])          // 保留末尾 "/"，如 "modules/<id>/"
@@ -593,7 +593,7 @@ final class ModuleService {
         }
         // 安装根 = module.json 所在目录（支持任意嵌套：modules/<id>/、module-esc-main/modules/<id>/ 均可）
         // 注意： 根级 module.json 时 manifestDir 为空 → 直接用 tmp 本身，
-        //    不能拼出 "tmp/."（"/." 后缀会让 moveItem 报"未能将 . 移到…"——v0.3.99 实测）
+        //    不能拼出 "tmp/."（"/." 后缀会让 moveItem 报"未能将 . 移到…"—— 实测）
         let extractedRoot: URL
         if manifestDir.isEmpty {
             extractedRoot = tmp
@@ -621,18 +621,18 @@ final class ModuleService {
         }
 
         // actions 为空是合法的 —— 前提是模块有**别的入口**：
-        // binary（自启动服务）/ lua（脚本）/ ui（原生 SwiftUI 界面）。
-        // 注意： v0.3.482 修：原来漏了 `hasNativeUI`，导致「功能全在原生界面里、
+        // binary（自启动服务）/ lua（脚本）/ ui（原生 SwiftUI 界面）.
+        // 注意： 修：原来漏了 `hasNativeUI`，导致「功能全在原生界面里、
         // 不声明任何 action」的模块在导入时被拒
-        //（真机报「模块未声明任何 action」）。模块仓库的 validate.py 早就允许了，
-        // 宿主这里没跟上 —— 两处校验必须同步改。
+        //（真机报「模块未声明任何 action」）.模块仓库的 validate.py 早就允许了，
+        // 宿主这里没跟上 —— 两处校验必须同步改.
         guard !module.actions.isEmpty
                 || module.isBinaryModule
                 || module.isLuaModule
                 || module.hasNativeUI else {
             throw ModuleError.badSpec("模块未声明 action，也无 binary / lua / ui 入口")
         }
-        // 校验动作声明（v0.3.159：type 自由——非 signal 一律走通用桥调用，语义由模块决定；
+        // 校验动作声明（type 自由——非 signal 一律走通用桥调用，语义由模块决定；
         // 只校验字段完备性：signal 需 process，桥调用需 symbol）
         for action in module.actions {
             if action.type == "signal" {
@@ -652,7 +652,7 @@ final class ModuleService {
         }
         let dest = modulesRoot.appendingPathComponent(module.id, isDirectory: true)
         if FileManager.default.fileExists(atPath: dest.path) {
-            // v0.3.93 升级导入：data/ 原位保留（用户数据库/配置在里面），
+            // 升级导入：data/ 原位保留（用户数据库/配置在里面），
             // 只清掉 data/ 以外的旧内容，再把新版本逐项并入——不做暂存/还原.
             log?("- 检测到旧版本，覆盖升级（保留 data/）")
             let fm = FileManager.default
@@ -747,7 +747,7 @@ final class ModuleService {
         return dir
     }
 
-    // MARK: 执行动作（Rust FFI 管道 + 通用桥调用 v0.3.159）
+    // MARK: 执行动作（Rust FFI 管道 + 通用桥调用 ）
 
     /// 执行模块动作.宿主只提供执行接口，动作语义完全由模块声明决定：
     /// - type == "signal"：按进程名下发信号（原有，Rust FFI 进程列表）
@@ -791,7 +791,7 @@ final class ModuleService {
         let sig = parseSignal(action.signal)
 
         // 枚举进程：宿主内部会**先查 RSD 服务表再选路**（app_service 不在就自动走 DVT 回退），
-        // 这里只需把「连不上」翻译成人话，不再把裸 ServiceNotFound 弹给用户。
+        // 这里只需把「连不上」翻译成人话，不再把裸 ServiceNotFound 弹给用户.
         let entries: [ProcessEntry]
         do {
             entries = try ProcessManagerService.shared.listProcesses()
@@ -813,7 +813,7 @@ final class ModuleService {
         var failed: [String] = []
         for entry in matched {
             do {
-                // 带上期望名：宿主走 DVT 回退时会用它核对 PID，避免复用误杀。
+                // 带上期望名：宿主走 DVT 回退时会用它核对 PID，避免复用误杀.
                 try ProcessManagerService.shared.sendSignal(
                     sig, toPID: Int(entry.pid), expectedName: entry.displayName)
                 killed.append("\(entry.displayName)(\(entry.pid))")
@@ -828,15 +828,15 @@ final class ModuleService {
         return summary
     }
 
-    /// 把宿主进程管理层的 FFI 错误翻译成用户能看懂、能行动的中文。
+    /// 把宿主进程管理层的 FFI 错误翻译成用户能看懂、能行动的中文.
     ///
     /// `ServiceNotFound` 是 Rust 枚举的 Debug 名（由 `errors.rs` 的 `format!("{:?}", err)` 生成），
-    /// 直接弹给用户毫无信息量。错误码 21 的成因见 `ProcessManagerView.swift` 类头注释。
+    /// 直接弹给用户毫无信息量.错误码 21 的成因见 `ProcessManagerView.swift` 类头注释.
     private static func humanizeProcessError(_ error: Error, phase: String) -> String {
         let ns = error as NSError
         let raw = ns.localizedDescription
         // 码 21 = `IdeviceError::ServiceNotFound`（`errors.rs` 用 `format!("{:?}")` 生成 message，
-        // 所以弹窗里会看到裸枚举名）。domain 判定兜底 message 为空的情形。
+        // 所以弹窗里会看到裸枚举名）.domain 判定兜底 message 为空的情形.
         if ns.domain == "ProcessManager", ns.code == 21 || raw.contains("ServiceNotFound") {
             return "\(phase)失败：进程服务（app_service）未广播，DVT 回退通道也不可用."
                 + "请确认 LocalDevVPN 已连接后重试."

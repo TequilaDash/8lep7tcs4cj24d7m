@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// v0.3.378：已下载 IPA 的操作面板 —— 「下载管理」点任意一行弹出。
+/// 已下载 IPA 的操作面板 —— 「下载管理」点任意一行弹出.
 ///
-/// 动作对齐 NB 全能助手：覆盖安装 / 在线安装 / 打开 / 复制商店链接 / 分享 / 删除 / 取消。
-/// 视觉沿用虚拟定位页的液态玻璃卡片（`locusGlass`）+ `AppRowIcon` 图标基调。
+/// 动作对齐 NB 全能助手：覆盖安装 / 在线安装 / 打开 / 复制商店链接 / 分享 / 删除 / 取消.
+/// 视觉沿用虚拟定位页的液态玻璃卡片（`locusGlass`）+ `AppRowIcon` 图标基调.
 ///
 /// **全部复用既有实现，不另起炉灶**：
 /// · 覆盖安装 → 下载中心 `installLocal`（→ `AppStoreInstallService.installLocalIPA`）
@@ -26,25 +26,25 @@ struct IPADownloadActionsSheet: View {
     /// 删除（删文件 + 删台账，列表侧负责刷新与提示）
     let onDelete: () -> Void
 
-    /// v0.3.387：任务**占用中**（`job.phase.isBusy`）时弹这个面板为 true。
+    /// 任务**占用中**（`job.phase.isBusy`）时弹这个面板为 true.
     ///
-    /// v0.3.394 改法（用户参考图是「点一行 → 展开这个包的详情」）：**不再裁剪行**，
-    /// 全部动作照原样渲染，只把**需要本地包文件**的两行使灰 —— 「覆盖安装」「在线安装」。
+    /// 改法（用户参考图是「点一行 → 展开这个包的详情」）：**不再裁剪行**，
+    /// 全部动作照原样渲染，只把**需要本地包文件**的两行使灰 —— 「覆盖安装」「在线安装」.
     /// 其余照常：「提取下载链接」用任务直链、「复制商店链接」用台账商品号、
-    /// 打开/分享/删除在真缺文件时会给出各自的提示（不再是「点下去没反应」）。
-    /// 已下载条目走原样（默认 false）。
+    /// 打开/分享/删除在真缺文件时会给出各自的提示（不再是「点下去没反应」）.
+    /// 已下载条目走原样（默认 false）.
     ///
     /// 语义是「**占用中**」（`waiting / downloading / paused / installing` 都为 true），
-    /// **不是**「正在下载」。所以它只配用来**置灰**这两行，**不配**用来推右侧的状态字 ——
-    /// 那会把暂停也标成「下载中」，见 `pendingStageText`。
+    /// **不是**「正在下载」.所以它只配用来**置灰**这两行，**不配**用来推右侧的状态字 ——
+    /// 那会把暂停也标成「下载中」，见 `pendingStageText`.
     var isPendingDownload: Bool = false
 
-    /// 占用中的任务**当前真实阶段文案**（= `Job.displayStage`，阶段文案唯一真源）。
+    /// 占用中的任务**当前真实阶段文案**（= `Job.displayStage`，阶段文案唯一真源）.
     ///
-    /// 「覆盖安装 / 在线安装」置灰时右侧标的就是它。以前这里硬编码「下载中」，而
+    /// 「覆盖安装 / 在线安装」置灰时右侧标的就是它.以前这里硬编码「下载中」，而
     /// `isPendingDownload` 由 `job.phase.isBusy` 推出、`.paused` 也为 true ⇒
-    /// **暂停任务在面板标「下载中」，与行上的「已暂停」同屏矛盾**（独立审计发现）。
-    /// 台账行（无任务）不传，保持 `nil`。
+    /// **暂停任务在面板标「下载中」，与行上的「已暂停」同屏矛盾**（独立审计发现）.
+    /// 台账行（无任务）不传，保持 `nil`.
     var pendingStageText: String? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -53,15 +53,15 @@ struct IPADownloadActionsSheet: View {
     private enum OpenState { case checking, installed, missing }
     @State private var openState: OpenState = .checking
 
-    /// v0.3.396（A 项）：「在线安装」的前置检查状态。
+    /// 「在线安装」的前置检查状态.
     ///
     /// · `idle`     —— 还没查过 → 点「在线安装」先查一次设备；
     /// · `checking` —— 正在查（行内转圈、置灰）；
-    /// · `reminded` —— 检查已过 → 再点**直接**安装。
+    /// · `reminded` —— 检查已过 → 再点**直接**安装.
     ///
     /// 为什么要有 `reminded` 这一态：设备上已装时先给一次短提示、**不装**，
     /// 用户再点一次才真的重装 —— 用一位状态区分「第一次点」与「第二次点」，
-    /// 不需要额外按钮、也不需要解释性文案。
+    /// 不需要额外按钮、也不需要解释性文案.
     private enum OnlineCheck { case idle, checking, reminded }
     @State private var onlineCheck: OnlineCheck = .idle
 
@@ -86,8 +86,8 @@ struct IPADownloadActionsSheet: View {
         let action: () -> Void
     }
 
-    /// 台账里真实存在的来源直链 = 「**提取下载链接**」的取值（IPA 包原链接，下载时回填）。
-    /// **只给「提取下载链接」用**：「复制商店链接」的取值完全另算（包内 `iTunesMetadata.itemId`）。
+    /// 台账里真实存在的来源直链 = 「**提取下载链接**」的取值（IPA 包原链接，下载时回填）.
+    /// **只给「提取下载链接」用**：「复制商店链接」的取值完全另算（包内 `iTunesMetadata.itemId`）.
     private var sourceLink: String? {
         guard let raw = item.sourceURL?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty, let url = URL(string: raw), url.scheme != nil else { return nil }
@@ -181,12 +181,12 @@ struct IPADownloadActionsSheet: View {
 
     // MARK: - 动作行
 
-    /// 占用中的任务，「覆盖安装 / 在线安装」两行右侧要标的状态字。
+    /// 占用中的任务，「覆盖安装 / 在线安装」两行右侧要标的状态字.
     ///
     /// 取值是任务的 **`Job.displayStage`**（阶段文案唯一真源），**不**由 `isPendingDownload`
     /// 反推成「下载中」：`isPendingDownload` 的语义是 `phase.isBusy`（占用中），`.paused`
-    /// 也为 true —— 写死「下载中」会让暂停任务标「下载中」，与行上的「已暂停」同屏矛盾。
-    /// 非占用中（或未传 `pendingStageText`）→ 无状态字。
+    /// 也为 true —— 写死「下载中」会让暂停任务标「下载中」，与行上的「已暂停」同屏矛盾.
+    /// 非占用中（或未传 `pendingStageText`）→ 无状态字.
     private var pendingStageTrailing: RowTrailing {
         guard isPendingDownload, let text = pendingStageText else { return .none }
         return .text(text)
@@ -194,11 +194,11 @@ struct IPADownloadActionsSheet: View {
 
     /// 安装：覆盖安装（原来的本地安装方式）+ 在线安装
     ///
-    /// v0.3.394：占用中（`isPendingDownload`）的任务**把这两行置灰**（右侧标出**真实阶段**，
+    /// 占用中（`isPendingDownload`）的任务**把这两行置灰**（右侧标出**真实阶段**，
     /// 见 `pendingStageTrailing`）—— 本地还没有包文件，覆盖安装必然落到 `installLocal` 的
     /// 「文件不存在」分支，而那条分支会给**这个文件名**记一条失败（`recordFileFailure`），
-    /// 之后真正下好的同名条目就会被标成红色「下载失败」（v0.3.390 专门修过这个坑）。
-    /// 在线安装同样不该在包还没落地时另起一次。所以这两行只在有本地文件时可点。
+    /// 之后真正下好的同名条目就会被标成红色「下载失败」（专门修过这个坑）.
+    /// 在线安装同样不该在包还没落地时另起一次.所以这两行只在有本地文件时可点.
     private var installRows: [RowSpec] {
         [
             RowSpec(icon: "arrow.down.app.fill", tint: AppTheme.accent, title: "覆盖安装",
@@ -211,13 +211,13 @@ struct IPADownloadActionsSheet: View {
         ]
     }
 
-    /// 「在线安装」行。三条置灰规则：
-    /// 1. **v0.3.394**：占用中的任务（本地还没有包）→ 灰 + 真实阶段（理由见 `installRows`）；
+    /// 「在线安装」行.三条置灰规则：
+    /// 1. ****：占用中的任务（本地还没有包）→ 灰 + 真实阶段（理由见 `installRows`）；
     /// 2. 本机服务器当前被 `.share` 会话占用时不可点
     ///    （单例 server 一次只服务一份文件，再 `start()` 会先 `stop()` 掉那份会话）；
-    /// 3. **v0.3.396（A 项）**：前置检查进行中 → 灰 + 行内转圈（免得用户连点两次）。
-    /// 注意： v0.3.386 起「提取下载链接」已改为纯读台账、不再起本机服务 →
-    /// `blockedByShare` **恒为 `false`**（判断有意保留，见 `IPALocalHTTPServer` 类型注释）。
+    /// 3. ****：前置检查进行中 → 灰 + 行内转圈（免得用户连点两次）.
+    /// 注意： 起「提取下载链接」已改为纯读台账、不再起本机服务 →
+    /// `blockedByShare` **恒为 `false`**（判断有意保留，见 `IPALocalHTTPServer` 类型注释）.
     private var onlineInstallRow: RowSpec {
         if !OnlineInstallService.isImplemented {
             return RowSpec(icon: "icloud.and.arrow.down", tint: .green, title: "在线安装",
@@ -242,10 +242,10 @@ struct IPADownloadActionsSheet: View {
     private var actionRows: [RowSpec] {
         var rows: [RowSpec] = [openRow]
         // 「复制商店链接」**常显**：取值**台账商品号优先**（`item.storeItemId`），
-        // 读包内 `iTunesMetadata.itemId` 只是兜底 —— 重签包那个文件会被删掉。
-        // 与台账 `sourceURL`（「提取下载链接」的取值）无任何关系 —— 两条严格互斥。
+        // 读包内 `iTunesMetadata.itemId` 只是兜底 —— 重签包那个文件会被删掉.
+        // 与台账 `sourceURL`（「提取下载链接」的取值）无任何关系 —— 两条严格互斥.
         // 早期它是按「台账有 sourceURL」条件隐藏的，那个门控随取值来源一起作废了；
-        // 两处都取不到时由 `copyLink()` 自己提示「无商店链接」。
+        // 两处都取不到时由 `copyLink()` 自己提示「无商店链接」.
         rows.append(RowSpec(icon: "link", tint: .teal, title: "复制商店链接") {
             copyLink()
         })
@@ -265,11 +265,11 @@ struct IPADownloadActionsSheet: View {
         ]
     }
 
-    /// 「提取下载链接」行。取值是**台账里的 IPA 包原链接**（`sourceLink`，下载中则由任务直链兜底）：
+    /// 「提取下载链接」行.取值是**台账里的 IPA 包原链接**（`sourceLink`，下载中则由任务直链兜底）：
     /// 纯读本地数据，不读包、不碰任何服务 —— 与「在线安装」没有任何竞争关系，
-    /// 所以**恒可点、永不置灰、也不显示任何状态字**。
-    /// （v0.3.387 删掉了旧的「OTA 进行中 → 灰掉并标『安装中』」：那是本机服务时代的残留语义，
-    /// 用户明确否定 —— 下载/安装状态与「提取下载链接」无关。）
+    /// 所以**恒可点、永不置灰、也不显示任何状态字**.
+    /// （删掉了旧的「OTA 进行中 → 灰掉并标『安装中』」：那是本机服务时代的残留语义，
+    /// 用户明确否定 —— 下载/安装状态与「提取下载链接」无关.）
     private var extractLinkRow: RowSpec {
         return RowSpec(icon: "antenna.radiowaves.left.and.right", tint: .teal, title: "提取下载链接") {
             extractDownloadLink()
@@ -360,7 +360,7 @@ struct IPADownloadActionsSheet: View {
 
     /// 贴合内容高度：固定行高 × 行数 + 头图 + 三个分组标题 + 取消行 + 内边距
     ///
-    /// v0.3.394：「下载中」不再裁行，所以**只有一种高度**（原来那个 pending 分支已删）。
+    /// 「下载中」不再裁行，所以**只有一种高度**（原来那个 pending 分支已删）.
     private var sheetHeight: CGFloat {
         let actionCount = 3                                     // 打开 / 复制商店链接 / 分享（后两条恒显示）
         let rows = 2 + actionCount + 2                          // 安装 2 行 + 其它操作 2 行
@@ -373,11 +373,11 @@ struct IPADownloadActionsSheet: View {
 
     // MARK: - 动作实现
 
-    /// 在线安装入口：**第一次点先查设备是否已装，免得白转一圈**（v0.3.396 A 项）。
+    /// 在线安装入口：**第一次点先查设备是否已装，免得白转一圈**（A 项）.
     ///
     /// 用户实测：设备上已装同一应用时点在线安装，`itms-services` 走完但系统**不会再来拉包**，
-    /// 进度环就一直转（B/C 项的收尾是兜底，这里才是源头 —— 先别让它白转）。
-    /// 已装 → 只提示一次「设备上已安装」，**不装**；用户**再点一次**才走 `performOnlineInstall()`。
+    /// 进度环就一直转（B/C 项的收尾是兜底，这里才是源头 —— 先别让它白转）.
+    /// 已装 → 只提示一次「设备上已安装」，**不装**；用户**再点一次**才走 `performOnlineInstall()`.
     private func onlineInstall() {
         guard onlineCheck == .idle else {
             performOnlineInstall()
@@ -387,13 +387,13 @@ struct IPADownloadActionsSheet: View {
         Task { await checkInstalledThenDecide() }
     }
 
-    /// 前置检查：设备上是否已装这个 `bundleId`。查完主线程决定「提示一次」还是「直接装」。
+    /// 前置检查：设备上是否已装这个 `bundleId`.查完主线程决定「提示一次」还是「直接装」.
     ///
     /// 数据源刻意只用**快路径** `FileSharingService.listAppsWithFileSharing(timeout:)`
     /// （`get_apps`，真机实测约 2.5 秒、带硬超时）——
-    /// **不用**带属性的 `Lookup`（那条命令实测 20 秒一个字节不回，会把点击卡死）。
+    /// **不用**带属性的 `Lookup`（那条命令实测 20 秒一个字节不回，会把点击卡死）.
     /// 失败 / 超时**一律判「查不到」，不阻断安装**（设备未配对、隧道不可用都可能发生，
-    /// 此时宁可按用户意愿装，也不能因为查不到就不让装）。
+    /// 此时宁可按用户意愿装，也不能因为查不到就不让装）.
     private func checkInstalledThenDecide() async {
         let bid = item.bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
         let installed: Bool? = await Task.detached(priority: .userInitiated) { () -> Bool? in
@@ -402,7 +402,7 @@ struct IPADownloadActionsSheet: View {
             case .ok(let apps):
                 return apps.contains { $0.bundleId.caseInsensitiveCompare(bid) == .orderedSame }
             case .failed(let message):
-                // 前置检查失败 / 超时不阻断安装（设备未配对、隧道不可用都可能发生）。
+                // 前置检查失败 / 超时不阻断安装（设备未配对、隧道不可用都可能发生）.
                 LoginLogger.shared.log("[下载面板] 在线安装前置检查失败：\(message)",
                                        category: .download)
                 return nil
@@ -415,7 +415,7 @@ struct IPADownloadActionsSheet: View {
         await MainActor.run {
             onlineCheck = .reminded
             if installed == true {
-                // 已装：只提示一次（onlineCheck = .reminded），再点一次才走重装。
+                // 已装：只提示一次（onlineCheck = .reminded），再点一次才走重装.
                 LoginLogger.shared.log("[下载面板] 在线安装：设备已装 \(bid ?? "?")，先提示一次",
                                        category: .download)
                 ToastCenter.shared.show("设备上已安装")
@@ -426,7 +426,7 @@ struct IPADownloadActionsSheet: View {
     }
 
     /// 真正发起 OTA：IPA 由本机服务器发（`http://127.0.0.1:<port>/package.ipa`），
-    /// 清单托管到 HTTPS 后交给系统装。优先用本地已下载的包，缺文件才退回远端直链。
+    /// 清单托管到 HTTPS 后交给系统装.优先用本地已下载的包，缺文件才退回远端直链.
     private func performOnlineInstall() {
         let local = URL(fileURLWithPath: IPADownloadLibrary.shared.path(for: item))
         let hasLocal = FileManager.default.fileExists(atPath: local.path)
@@ -446,22 +446,21 @@ struct IPADownloadActionsSheet: View {
         }
     }
 
-    /// 复制商店链接：复制这个 App 在 **App Store 上的商店来源链接**。
+    /// 复制商店链接：复制这个 App 在 **App Store 上的商店来源链接**.
     ///
     /// 取值：包内 `Payload/<App>.app/iTunesMetadata.plist` 的 **`itemId`**（商店商品号），
-    /// 拼成 `https://apps.apple.com/<当前商店区>/app/id<itemId>`。
+    /// 拼成 `https://apps.apple.com/<当前商店区>/app/id<itemId>`.
     ///
-    /// **纯读本地文件：零网络、零服务**（不启动 `IPALocalHTTPServer`）。
-    /// 与台账 `sourceURL` **无关** —— 那是「提取下载链接」的取值，两行严格互斥、不互相回落。
-    /// 自签 / 第三方重签包一般没有 `iTunesMetadata` → 提示「无商店链接」。
+    /// **纯读本地文件：零网络、零服务**（不启动 `IPALocalHTTPServer`）.
+    /// 与台账 `sourceURL` **无关** —— 那是「提取下载链接」的取值，两行严格互斥、不互相回落.
+    /// 自签 / 第三方重签包一般没有 `iTunesMetadata` → 提示「无商店链接」.
     private func copyLink() {
-        // ▸ v0.3.391（用户要求）：「商店链接」= App Store 的跳转链接
+        // ▸ ：「商店链接」= App Store 的跳转链接
         // `https://apps.apple.com/app/id<itemId>`，而 **itemId 在下载时就在手上**
         // （`AppStoreItem.id` 就是 `trackId`，见 `IPADownloadCenter.startWithAppleID`）
-        // → 所以这里**台账优先**，不需要去读包。
+        // → 所以这里**台账优先**，不需要去读包.
         //
         // 读包内 `iTunesMetadata.itemId` 只作**兜底**：重签工具会把那个文件删掉
-        // （本机 `AssppPro-4.2.5.ipa` / `NBPro_v3.6.2.ipa` 两个包实测都不含该条目），对重签包必然失败。
         if let storeId = item.storeItemId, !storeId.isEmpty {
             let link = Self.storeLink(itemId: storeId)
             UIPasteboard.general.string = link
@@ -472,13 +471,13 @@ struct IPADownloadActionsSheet: View {
         }
         let path = IPADownloadLibrary.shared.path(for: item)
         guard FileManager.default.fileExists(atPath: path) else {
-            // v0.3.394：下载中还没有文件，「已不存在」是错的提示
+            // 下载中还没有文件，「已不存在」是错的提示
             ToastCenter.shared.show(isPendingDownload ? "安装包尚未下载完成" : "安装包已不存在")
             return
         }
-        // v0.3.391：分步读 + 分步记日志 —— 一次点击就能区分「包里压根没这个条目」
-        // 与「有条目但 zip 解析失败」与「有文件但没 itemId」这三种情况。
-        // （旧写法把它们并成一个 guard，日志只有一句「无 iTunesMetadata.itemId」，无法定位。）
+        // 分步读 + 分步记日志 —— 一次点击就能区分「包里压根没这个条目」
+        // 与「有条目但 zip 解析失败」与「有文件但没 itemId」这三种情况.
+        // （旧写法把它们并成一个 guard，日志只有一句「无 iTunesMetadata.itemId」，无法定位.）
         let metaData = IPAPackageInspector.extractiTunesMetadata(ipaPath: path)
         LoginLogger.shared.log("[下载面板] iTunesMetadata 读取："
                                + (metaData.map { "\($0.count) 字节" } ?? "取不到（包内无此条目，或 zip 解析失败）"),
@@ -510,27 +509,27 @@ struct IPADownloadActionsSheet: View {
     private func shareIPA() {
         let url = URL(fileURLWithPath: IPADownloadLibrary.shared.path(for: item))
         guard FileManager.default.fileExists(atPath: url.path) else {
-            // v0.3.394：下载中还没有文件，「已不存在」是错的提示
+            // 下载中还没有文件，「已不存在」是错的提示
             ToastCenter.shared.show(isPendingDownload ? "安装包尚未下载完成" : "安装包已不存在")
             return
         }
         shareTarget = ShareTarget(url: url)
     }
 
-    /// 提取下载链接：复制这个 IPA **包本身的下载原链接**（当初是从哪个 URL 下下来的）。
+    /// 提取下载链接：复制这个 IPA **包本身的下载原链接**（当初是从哪个 URL 下下来的）.
     ///
-    /// 取值：台账 `IPADownloadItem.sourceURL` —— **v0.3.387 起在下载时（文件名/直链确定的那一刻）
+    /// 取值：台账 `IPADownloadItem.sourceURL` —— **起在下载时（文件名/直链确定的那一刻）
     /// 就写进台账并落盘**（`IPADownloadCenter` 调 `IPADownloadLibrary.updateSourceURL`），
-    /// 不再靠界面 reload 事后回填。下载中的任务由列表把 `Job.remoteURL` 带进 `item.sourceURL`。
+    /// 不再靠界面 reload 事后回填.下载中的任务由列表把 `Job.remoteURL` 带进 `item.sourceURL`.
     ///
     /// **纯读台账：零网络、零服务、不读包** —— 与包内 `iTunesMetadata` 无关
-    /// （那是「复制商店链接」的取值，两行严格互斥、不互相回落）。
-    /// 与下载/安装状态**完全无关**：任何阶段都恒可点。没有直链 → 提示「无下载链接」。
+    /// （那是「复制商店链接」的取值，两行严格互斥、不互相回落）.
+    /// 与下载/安装状态**完全无关**：任何阶段都恒可点.没有直链 → 提示「无下载链接」.
     private func extractDownloadLink() {
         guard let link = sourceLink else {
             LoginLogger.shared.log("[下载面板] 台账无 sourceURL，给不出 IPA 原链接", category: .download)
-            // v0.3.390：文案改准。AppleID 通道的地址是 Apple 按会话动态签发、必须带授权头才有效，
-            // **单独一个 URL 没有意义** → 这类包本来就给不出「可用的下载直链」，不是我们没查到。
+            // 文案改准.AppleID 通道的地址是 Apple 按会话动态签发、必须带授权头才有效，
+            // **单独一个 URL 没有意义** → 这类包本来就给不出「可用的下载直链」，不是我们没查到.
             ToastCenter.shared.show("该来源无公开直链")
             return
         }
@@ -552,7 +551,7 @@ struct IPADownloadActionsSheet: View {
         return t
     }
 
-    /// 商品号 → 商店链接。区用当前商店区；`countryCode` 取不到具体区时才不带区
+    /// 商品号 → 商店链接.区用当前商店区；`countryCode` 取不到具体区时才不带区
     private static func storeLink(itemId: String) -> String {
         let cc = AppStoreService.countryCode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return cc.isEmpty ? "https://apps.apple.com/app/id\(itemId)"

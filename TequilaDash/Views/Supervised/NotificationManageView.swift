@@ -13,7 +13,7 @@ struct NotificationEntry: Identifiable, Codable {
 struct NotificationManageView: View {
     @State private var nsCurrentDict = NSMutableDictionary()
     @State private var catalog: [NotificationEntry]
-    /// 目录是否完整读出（`false` = 读不全，本次会话**拒绝回写**，防止把真台账覆盖成空）。
+    /// 目录是否完整读出（`false` = 读不全，本次会话**拒绝回写**，防止把真台账覆盖成空）.
     @State private var catalogWritable: Bool
 
     @State private var newName = ""
@@ -31,7 +31,7 @@ struct NotificationManageView: View {
     @State private var showError = false
 
     init() {
-        // 读取「通知管理 App」目录，并记下它是否完整读出（读不全则本会话只读、不回写）。
+        // 读取「通知管理 App」目录，并记下它是否完整读出（读不全则本会话只读、不回写）.
         let load = UserDefaults.standard.loadEscNotificationApps()
         _catalog = State(initialValue: load.items)
         _catalogWritable = State(initialValue: load.writable)
@@ -149,10 +149,10 @@ struct NotificationManageView: View {
     private var pickerSheet: some View {
         Group {
             if isPickerLoading {
-                // v0.3.699：整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
+                // 整页加载态收口到 AppLoadingRow（.page 档：大圈 + 标题居中）.
                 AppLoadingRow(title: "正在枚举已安装应用…", level: .page)
             } else if installedApps.isEmpty {
-                // v0.3.721：上一分支是 AppLoadingRow(.page) 的大圈，空态用同量级的 AppEmptyState，
+                // 上一分支是 AppLoadingRow(.page) 的大圈，空态用同量级的 AppEmptyState，
                 // 不再掉回系统 ContentUnavailableView 的灰底小图标（视觉断层）.
                 AppEmptyState(
                     icon: "apps.iphone",
@@ -309,7 +309,7 @@ struct NotificationManageView: View {
 
     private func persistCatalog() {
         // 目录没完整读出来时**不写盘**：否则会把没读到的登记项当成「不存在」而覆盖掉
-        // （读失败 ⇒ 空数组 ⇒ 界面显示「没有」⇒ 一保存就把真台账清空）。
+        // （读失败 ⇒ 空数组 ⇒ 界面显示「没有」⇒ 一保存就把真台账清空）.
         guard catalogWritable else {
             LoginLogger.shared.log("[监督模式] 通知管理目录读取不完整，本次改动未保存（原值保留）",
                                    category: .general)

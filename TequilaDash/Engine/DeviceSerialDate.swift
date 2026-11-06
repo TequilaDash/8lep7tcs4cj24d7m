@@ -2,7 +2,7 @@ import Foundation
 
 /// 整机（主板）序列号 -> 生产日期解码器（**纯本地**：不联网、不外发任何设备标识）.
 ///
-/// ▸ 为什么改成离线：v0.3.530 的「生产日期」是 POST `https://app4.i4.cn/getProdate.xhtml`
+/// ▸ 为什么改成离线：的「生产日期」是 POST `https://app4.i4.cn/getProdate.xhtml`
 ///   拿到的（旧实现 `I4ProdateClient`），会把设备的 `ProductType` / `SerialNumber` / `mlbSerial`
 ///   发到爱思（第三方，非 Apple）服务器. 逆向实测证明：**服务端只是个解码器，不是它独有的数据库**
 ///   —— 同一公式在端侧即可算出，且输入（lockdown 的 `MLBSerialNumber`）本来就在设备上.

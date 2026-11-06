@@ -2,30 +2,30 @@ import SwiftUI
 
 // 共享转换 ·「已导入」二级页（用户需求 #1 / #3）.
 //
-// 从「共享转换」主页的「已导入」栏目**点击进入**（不再在原页展开 / 收拢）。
+// 从「共享转换」主页的「已导入」栏目**点击进入**（不再在原页展开 / 收拢）.
 // 左上角在**系统返回按钮**之外**额外**挂一个向上箭头（不隐藏返回键，左滑返回照常可用）；
-// 支持搜索；多选 + 全选后走底部批量条。
+// 支持搜索；多选 + 全选后走底部批量条.
 //
 // 骨架照仓库现成范式拼（不另造）：
 //   · 向上箭头：leading `ToolbarItem{ Image(systemName: "arrow.up") }` + `dismiss()`
-//     —— 箭头画法见 `AFCBrowserView.swift:86-96`。
+//     —— 箭头画法见 `AFCBrowserView.swift:86-96`.
 //     **刻意不隐藏返回键**：隐藏它会连带禁掉系统左滑返回手势（用户明确要求保留左滑）.
 //   · 搜索栏：`.searchable(placement: .navigationBarDrawer(displayMode: .always), prompt:)`
-//     —— 见 `ModuleManagerView.swift:292-293` / `AppListView.swift:523`。
+//     —— 见 `ModuleManagerView.swift:292-293` / `AppListView.swift:523`.
 //   · 多选 + 全选：`selected: Set<String>` + 导航栏「选择 / 全选」
-//     —— 见 `AppListView.swift:412/484/524-549` / `ReclaimTabView.swift:41-59`（全选在导航栏，不在底条）。
+//     —— 见 `AppListView.swift:412/484/524-549` / `ReclaimTabView.swift:41-59`（全选在导航栏，不在底条）.
 //   · 底部批量条：`.safeAreaInset(edge: .bottom)` 挂 `BatchActionBar`；未进选择态用 `Color.clear.frame(height: 12)` 占位
-//     —— 见 `ReclaimTabView.swift:61-69`。
+//     —— 见 `ReclaimTabView.swift:61-69`.
 //   · 行首真图标 + 长按菜单：`ImportedPackageIconView` + `.contextMenu { iconMenuItems(...) }`
 //     —— 图标提取 / 缓存见 `Shared/ImportedPackageUI.swift`；菜单项复用 `ImagePreviewSupport.iconMenuItems`.
 //
-// 数据源：`ImportedPackageList.scanListing(...).imported`（磁盘证据，本页不另做推断）。
+// 数据源：`ImportedPackageList.scanListing(...).imported`（磁盘证据，本页不另做推断）.
 //
 // 接入（给 `impl-importview`）：主页「已导入」栏目改成一行
 //   `NavigationLink { ImportedListPage() } label: { ... }`
-// 本页**自己扫描 / 自己刷新**，不依赖外部传入状态。
+// 本页**自己扫描 / 自己刷新**，不依赖外部传入状态.
 //
-// 界面文案：不用星形符号做强调 / 分级；不用黄色感叹号；中文句号一律用英文 `.`；「为什么」类解释只写注释。
+// 界面文案：不用星形符号做强调 / 分级；不用黄色感叹号；中文句号一律用英文 `.`；「为什么」类解释只写注释.
 
 struct ImportedListPage: View {
 
@@ -41,25 +41,25 @@ struct ImportedListPage: View {
     /// 单条安装进行中的包 id（在线安装 / 覆盖安装各自一条在跑）.
     /// 用途：该行行尾画转圈、banner 高亮「安装」段并以不确定态呈现.
     @State private var workingId: String?
-    /// 包 id → 图标 `file://` 地址（从 IPA 提取后落 Caches）。读不出就没有这一项，行首回落首字母块.
+    /// 包 id → 图标 `file://` 地址（从 IPA 提取后落 Caches）.读不出就没有这一项，行首回落首字母块.
     @State private var iconURLs: [String: String] = [:]
-    /// 长按一行 → 「查看图标」打开的全屏预览。图数组随 target 一起写（`ImagePreviewTarget`），
+    /// 长按一行 → 「查看图标」打开的全屏预览.图数组随 target 一起写（`ImagePreviewTarget`），
     /// 页面上不再单独留一份预览数组 —— 两次独立写入会让弹窗读到旧的空数组.
     @State private var previewTarget: ImagePreviewTarget?
-    /// 需求 #5：流程 banner 的 N/M 进度（如 `(current: 1, total: 14)`）与补充说明。
+    /// 需求 #5：流程 banner 的 N/M 进度（如 `(current: 1, total: 14)`）与补充说明.
     @State private var flowProgress: (current: Int, total: Int)?
     @State private var flowCaption: String?
     @State private var resultText: String?
 
-    /// 安装前确认（三步确认第三步）：挂起等用户在 `.alert` 上作答。唯一 resume 点是 `resumeInstall`（幂等）。
+    /// 安装前确认（三步确认第三步）：挂起等用户在 `.alert` 上作答.唯一 resume 点是 `resumeInstall`（幂等）.
     @State private var installContinuation: CheckedContinuation<Bool, Never>?
-    /// 页面是否仍在屏上：批量逐条跑时用它兜底，避免对话框无处显示导致 continuation 永久挂起。
+    /// 页面是否仍在屏上：批量逐条跑时用它兜底，避免对话框无处显示导致 continuation 永久挂起.
     @State private var viewActive = true
 
     @State private var alert: ActiveAlert?
 
     /// 本页的确认弹窗（安装前确认 / 修补前确认 / 删除前确认）统一走一个 `.alert(item:)`，
-    /// 避免「同一视图挂多个 `.alert` 只有最后一个生效」的老问题。
+    /// 避免「同一视图挂多个 `.alert` 只有最后一个生效」的老问题.
     private enum ActiveAlert: Identifiable {
         case installConfirm
         case batchRepair(count: Int)
@@ -102,7 +102,7 @@ struct ImportedListPage: View {
 
     var body: some View {
         List {
-            // 需求 #5：流程 banner 常驻（二级页也显示）。
+            // 需求 #5：流程 banner 常驻（二级页也显示）.
             //   · 批量修补 ⇒ 高亮「修补」段，进度以 N/M 显示；
             //   · 单条安装（在线安装 / 覆盖安装）⇒ 高亮「安装」段，无确定进度可报时以转圈呈现.
             ImportFlowBanner(stage: workingId != nil ? .install : .repair,
@@ -126,10 +126,10 @@ struct ImportedListPage: View {
                     }
                 } footer: {
                     // 未修补包提示：本页的包都是**未修补的原始包**（只有 original.ipa，没有产物），
-                    // 左滑可直接安装，用于对比「修补前」的安装行为（尤其是否弹出账户验证）。
+                    // 左滑可直接安装，用于对比「修补前」的安装行为（尤其是否弹出账户验证）.
                     // 判断：**允许 + 提示**，不阻断 —— 用户的用途就是测试未修补包的效果，
-                    // 拦下来反而挡住了测试。App Store 加密包（cryptid=1）装了也可能闪退，
-                    // 但这是用户要观察的现象本身，不是我们该替用户挡掉的错误。
+                    // 拦下来反而挡住了测试.App Store 加密包（cryptid=1）装了也可能闪退，
+                    // 但这是用户要观察的现象本身，不是我们该替用户挡掉的错误.
                     Text("勾选后可修补或删除安装包；点一行即选中它. 左滑可在线安装、覆盖安装或删除安装包，安装后可能无法运行，或要求账户验证.")
                 }
             }
@@ -174,9 +174,9 @@ struct ImportedListPage: View {
                                    primaryAction: { alert = .batchRepair(count: selected.count) }) {
                         // 底栏批量条**不提供在线安装**：在线安装是单包 OTA 通道（`itms-services` 清单
                         // 一次只服务一个包），多选批量语义不成立 —— 它只在行内 `.swipeActions` 提供
-                        //（「已修补」页同理，见 RepairedListPage 底栏注释）。
-                        // 与「有没有产物」无关：在线安装装的是**未修补原件**（`p.originalPath`），本就不需要产物。
-                        // 「删除（N）」= 真删安装包（连同其产物与专属目录镜像），破坏性 ⇒ 先二次确认（见 `alertContent`）。
+                        //（「已修补」页同理，见 RepairedListPage 底栏注释）.
+                        // 与「有没有产物」无关：在线安装装的是**未修补原件**（`p.originalPath`），本就不需要产物.
+                        // 「删除（N）」= 真删安装包（连同其产物与专属目录镜像），破坏性 ⇒ 先二次确认（见 `alertContent`）.
                         Button("删除（\(selected.count)）", role: .destructive) {
                             alert = .remove(items: selectedPackages)
                         }
@@ -185,7 +185,7 @@ struct ImportedListPage: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
-                    // 未进选择态：留出底部间距，避免列表最后一项顶到 Tab 栏（照 ReclaimTabView:61-69）。
+                    // 未进选择态：留出底部间距，避免列表最后一项顶到 Tab 栏（照 ReclaimTabView:61-69）.
                     Color.clear.frame(height: 12)
                 }
             }
@@ -236,9 +236,9 @@ struct ImportedListPage: View {
             }
         }
         .padding(.vertical, 2)
-        // 左滑（从右向左）三个动作：在线安装 / 覆盖安装 / 删除安装包。
+        // 左滑（从右向左）三个动作：在线安装 / 覆盖安装 / 删除安装包.
         // 前两个对象都是**未修补的原件**（`originalPath`）—— 这正是本页存在的意义：
-        // 让用户把未修补包直接装上，对比「修补前」的行为（尤其是否弹账户验证）。
+        // 让用户把未修补包直接装上，对比「修补前」的行为（尤其是否弹账户验证）.
         // 「删除安装包」= 单条删除入口（批量入口在底栏）；破坏性 ⇒ 走二次确认，不整滑触发.
         // 不做全滑（`allowsFullSwipe: false`）：三个动作语义不同，不能一滑就默认触发其中一个.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -265,7 +265,7 @@ struct ImportedListPage: View {
             }
             .disabled(busy)
         }
-        // 长按一行 → 「查看图标 / 提取图标」。菜单项与行首缩略图用**同一个**图标地址；
+        // 长按一行 → 「查看图标 / 提取图标」.菜单项与行首缩略图用**同一个**图标地址；
         // 没有图标（地址为空）时整组置灰，不让用户点下去才发现没图可看.
         // 「保存图标」不在这里：进预览后长按图片即可（`ImageGalleryViewer` 自带），不重复一份.
         // 「查看图标」走 `showPackageIconPreview`：从 IPA **现取**原图，不复用列表缩略图那份缓存.
@@ -277,7 +277,7 @@ struct ImportedListPage: View {
         }
     }
 
-    /// 行主体（图标 + 标题 + chip）。抽出来只为让 `row` 能在外层挂 `.swipeActions` 与行尾转圈.
+    /// 行主体（图标 + 标题 + chip）.抽出来只为让 `row` 能在外层挂 `.swipeActions` 与行尾转圈.
     private func rowBody(_ p: ImportedPackage) -> some View {
         HStack(spacing: 12) {
             if selecting {
@@ -368,7 +368,7 @@ struct ImportedListPage: View {
             let listing = await ImportedPackageScanner.scan()
             packages = listing.imported
             loading = false
-            // 选择集只保留仍在列表里的条目，避免悬空选择。
+            // 选择集只保留仍在列表里的条目，避免悬空选择.
             selected.formIntersection(Set(packages.map(\.id)))
             await loadIcons()
         }
@@ -397,24 +397,24 @@ struct ImportedListPage: View {
 
     // MARK: - 安装（左滑：在线安装 / 覆盖安装）
 
-    // 两个动作装的对象都是**未修补的原件**（`originalPath`），不是产物 —— 本页没有产物。
-    // 这正是本页左滑安装的意义：把未修补包直接装上，对比「修补前」的行为。
+    // 两个动作装的对象都是**未修补的原件**（`originalPath`），不是产物 —— 本页没有产物.
+    // 这正是本页左滑安装的意义：把未修补包直接装上，对比「修补前」的行为.
     //
     // 两者是**两条独立通道**（不是同一个动作的两种叫法）：
     //   · 在线安装 → OTA / `itms-services`：本地 IPA 经本机 HTTP 服务器发出，
-    //     清单托管到 HTTPS，由**系统**拉包安装。走系统通道，App Store 加密包会由系统
+    //     清单托管到 HTTPS，由**系统**拉包安装.走系统通道，App Store 加密包会由系统
     //     向 Apple 请求许可 —— 用户要观察的「账户验证」就出在这条通道上.
     //   · 覆盖安装 → AFC 上传 + `installation_proxy`（RSD 隧道）直接交给 installd 装.
     //     加密包需要包内 `SC_Info/*.sinf`（用本机 Apple ID 下载的包才有），否则直接报错.
 
-    /// 在线安装前置：有原件、且包内有应用标识（bundle id）。
+    /// 在线安装前置：有原件、且包内有应用标识（bundle id）.
     /// OTA 清单必须带 `bundle-identifier`，读不出就没法生成清单.
     private func canOnlineInstall(_ p: ImportedPackage) -> Bool {
         guard let path = p.originalPath, !path.isEmpty else { return false }
         return !(p.bundleId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 覆盖安装前置：只要有原件就能装。
+    /// 覆盖安装前置：只要有原件就能装.
     /// 已装同款走 Upgrade，未装 / 状态未知走 Install，查不到清单不再是阻断理由.
     private func canInstallOrOverwrite(_ p: ImportedPackage) -> Bool {
         guard let path = p.originalPath, !path.isEmpty else { return false }
@@ -424,13 +424,13 @@ struct ImportedListPage: View {
     /// 行下方说明：某个安装通道**不可用**时给一句原因，让置灰的左滑按钮有解释；两个通道都可用就不显示，保持行干净.
     ///
     /// 覆盖安装只要有原件就能装（`canInstallOrOverwrite` 在原件非空时恒真），故本页唯一会置灰的是
-    /// 「在线安装」—— OTA 清单必须带应用标识（`bundle-identifier`），读不出就没法生成清单。此时说明原因
-    /// 并指出可改用覆盖安装。
+    /// 「在线安装」—— OTA 清单必须带应用标识（`bundle-identifier`），读不出就没法生成清单.此时说明原因
+    /// 并指出可改用覆盖安装.
     /// （改前此函数的非 nil 分支**不可达**：`guard` 已保证原件非空 ⇒ `canInstallOrOverwrite` 恒真 ⇒ 永远
-    ///  `return nil`，于是置灰的「在线安装」按钮没有任何解释。现改为「按通道置灰即给原因」，让该分支可达。）
+    ///  `return nil`，于是置灰的「在线安装」按钮没有任何解释.现改为「按通道置灰即给原因」，让该分支可达.）
     private func installBlockReason(_ p: ImportedPackage) -> String? {
         // 防御分支：已导入块恒有原件（`ImportedPackageList.scanListing` 只在 hasOriginal 时入 imported），
-        // 保留它是为了让「找不到原件」这种数据异常也能给出正确原因，而不是误报成「读不出应用标识」。
+        // 保留它是为了让「找不到原件」这种数据异常也能给出正确原因，而不是误报成「读不出应用标识」.
         guard let path = p.originalPath, !path.isEmpty else {
             return "找不到安装包，无法安装."
         }
@@ -440,7 +440,7 @@ struct ImportedListPage: View {
         return nil
     }
 
-    /// 在线安装（OTA / `itms-services`）：装的正是这份**未修补**的原件。
+    /// 在线安装（OTA / `itms-services`）：装的正是这份**未修补**的原件.
     /// `OnlineInstallService` 是本地路径驱动（`file://` 会起本机服务器发 IPA），
     /// 只给最终结果、**不给中间进度**，故 banner 以不确定态转圈呈现（见 `body`），不伪造进度条.
     private func runOnlineInstall(_ p: ImportedPackage) {
@@ -461,8 +461,8 @@ struct ImportedListPage: View {
         }
     }
 
-    /// 覆盖安装：本地装这份**未修补**的原件。已装同款走 Upgrade（覆盖 / 升级），
-    /// 未装或状态未知走 Install（全新安装）。多选时**逐条串行**，进度以 `N/M` 显示.
+    /// 覆盖安装：本地装这份**未修补**的原件.已装同款走 Upgrade（覆盖 / 升级），
+    /// 未装或状态未知走 Install（全新安装）.多选时**逐条串行**，进度以 `N/M` 显示.
     private func runOverwriteInstall(_ targets: [ImportedPackage]) {
         let valid = targets.filter { canInstallOrOverwrite($0) }
         guard !valid.isEmpty else { return }
@@ -504,8 +504,8 @@ struct ImportedListPage: View {
 
     // MARK: - 批量修补（需求 #3 / #5）
 
-    /// 对选中的包**逐条串行**修补并安装（修补是重 I/O，且会踩已知并发问题，不并发）。
-    /// 每条各自走完整流程（含安装前确认）；进度以 `N/M` 显示。
+    /// 对选中的包**逐条串行**修补并安装（修补是重 I/O，且会踩已知并发问题，不并发）.
+    /// 每条各自走完整流程（含安装前确认）；进度以 `N/M` 显示.
     private func startBatchRepair() {
         let targets = selectedPackages
         guard !targets.isEmpty else { return }
@@ -574,8 +574,8 @@ struct ImportedListPage: View {
     // MARK: - 删除安装包（需求 #3：已导入的删除 = 真删安装包 + 产物）
 
     /// 「删除安装包」：把所选包在本机的**全部落点**删掉（原件 / 修补产物 / `Documents/Repaired/` 镜像），
-    /// 并按**实际结果**提示 —— 不做假成功。与「已修补」页**共用** `ImportedPackageDeleter`，
-    /// 两页删除语义一致（同为 4 个落点、同一套二次确认、同一套失败可见）。
+    /// 并按**实际结果**提示 —— 不做假成功.与「已修补」页**共用** `ImportedPackageDeleter`，
+    /// 两页删除语义一致（同为 4 个落点、同一套二次确认、同一套失败可见）.
     ///
     /// 单条（左滑）与批量（底栏）共用本方法；删除前已由弹窗二次确认，不可恢复.
     /// `.notFound`（磁盘上已无落点）计入成功：结果与「删掉了」一致，不该报失败.
@@ -606,7 +606,7 @@ struct ImportedListPage: View {
 
     // MARK: - 安装前确认（三步确认第三步）
 
-    /// 挂起等待用户在弹窗上作答。唯一 resume 点是 `resumeInstall`（幂等：resume 后置 nil）。
+    /// 挂起等待用户在弹窗上作答.唯一 resume 点是 `resumeInstall`（幂等：resume 后置 nil）.
     @MainActor
     private func awaitInstallConfirm() async -> Bool {
         await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in

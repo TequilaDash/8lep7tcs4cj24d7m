@@ -275,7 +275,6 @@ enum AppleDeveloperAPI {
     }
 
     /// 提交 CSR 创建开发证书（免费 Apple ID 通用）.
-    /// 端点/键名对齐 SideStore/AltSign addCertificate：
     /// POST .../ios/submitDevelopmentCSR.action，plist body 携带
     /// csrContent（**完整 PEM 字符串**）+ machineId（随机大写 UUID）+ machineName.
     /// 响应 certRequest.certContent（base64 DER）.
@@ -319,8 +318,8 @@ enum AppleDeveloperAPI {
         }
         // certContent 在 plist 响应里是 <data> 类型（解析后即 Data 对象，非字符串）；
         // 备用键 certificateContent（base64 字符串）——对齐 AltSign ALTX509Certificate 解析
-        // v0.3.129：异步签发是**正常路径**——响应无 certContent = 已受理，
-        // 证书稍后出现在列表里（由调用方轮询）.此处绝不能抛错（v0.3.128 的 bug）.
+        // 异步签发是**正常路径**——响应无 certContent = 已受理，
+        // 证书稍后出现在列表里（由调用方轮询）.此处绝不能抛错（的 bug）.
         let certDER: Data
         if let dataObj = certRequest["certContent"] as? Data {
             certDER = dataObj                                   // 同步签发（罕见）：直接拿内容

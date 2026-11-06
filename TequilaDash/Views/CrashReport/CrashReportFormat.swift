@@ -3,8 +3,6 @@ import Foundation
 /// 崩溃分析显示层的取值与格式化（纯函数，无 UI）.
 ///
 /// 只做「把已解析的模型变成一行文案」，不重复解析 JSON：
-/// 解析一律走 `TequilaDash/Engine/CrashReport/` 的上游搬入件（只读）.
-/// 与上游共用的字段格式化（Version / OS Version）直接复用
 /// `CrashTextRenderer`，避免同一个报告在两个渲染器里写出两种拼法.
 enum CrashFormat {
     /// 不带前导零的十六进制（偏移、寄存器值）.
@@ -71,7 +69,6 @@ enum CrashFormat {
     }
 
     /// 帧的位置行：有符号名走符号，没符号走「地址 + 镜像内偏移」.
-    /// 上游符号化未接入前先显示偏移，已比整块文本可读.
     static func frameLocation(_ frame: Frame, images: [BinaryImage]) -> String {
         if let symbol = frame.symbol {
             let base = "\(symbol) + \(frame.symbolLocation ?? 0)"
@@ -94,7 +91,6 @@ enum CrashFormat {
         }
     }
 
-    // MARK: 与上游渲染器共用的拼法
 
     /// `0.3.8 (62)`.
     static func version(_ process: ProcessDetails) -> String? {

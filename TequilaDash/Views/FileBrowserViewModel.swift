@@ -8,7 +8,7 @@ enum CreateKind {
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写（唯一消费者 FileBrowserView）→
 /// 标 `@MainActor` 是语义正确的隔离，同时让 `self` 成为 Sendable：
 /// 内层 `MainActor.run { self.x = … }` 捕获 self 的 `sending` 诊断自然消失
-/// （该闭包本来就在主线程执行，线程语义与顺序不变）。
+/// （该闭包本来就在主线程执行，线程语义与顺序不变）.
 /// 后台重活方法（list/paste 等）标 `nonisolated`，见各方法处注释.
 @MainActor
 final class FileBrowserViewModel: ObservableObject {
@@ -130,7 +130,6 @@ final class FileBrowserViewModel: ObservableObject {
                 try files.list(directory: path)
             }
         } catch {
-            // 部分环境（如特定 LiveContainer 扩展已覆盖的路径）不需要显式签发
             // 就能用 FileManager 直接列出，失败时退回一次直接读取.
             return try files.list(directory: path)
         }

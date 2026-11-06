@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.3.200：设备体检页 —— 执行 SecurityScanner 真实检测.
+/// 设备体检页 —— 执行 SecurityScanner 真实检测.
 /// 得分通过 binding 回传主页灵动球（立即体检后主页分数同步刷新）.
 struct HealthCheckView: View {
     /// 体检得分绑定（主页灵动球显示用）
@@ -146,8 +146,8 @@ struct HealthCheckView: View {
             .fill(AppSurface.card))
     }
 
-    // v0.3.626：改走统一 token（阈值 90/70 与原实现一致，但取色改为明暗自适应）。
-    // 原实现用系统 .blue/.yellow/.orange（单值色，深色模式下对比度不足，违反规则 6）。
+    // 改走统一 token（阈值 90/70 与原实现一致，但取色改为明暗自适应）.
+    // 原实现用系统 .blue/.yellow/.orange（单值色，深色模式下对比度不足，违反规则 6）.
     private var scoreColor: Color { AppTheme.scoreColor(finalScore) }
     private var scoreLabel: String {
         switch finalScore {
@@ -165,9 +165,9 @@ struct HealthCheckView: View {
         let ids = SecurityScanner.checkIDs
         let scoreBinding = score
         // 规则 29/主线程纪律：检测项里有要建隧道的（provisioning），Task {} 写在 View 里
-        // 会继承 MainActor —— 2026-10-31 真机实证卡死在 14/16 后被看门狗杀掉。
-        // 所以整条扫描跑在 detached 任务里，只在每项完成后回主线程刷一次 UI。
-        // 不加任何「每项节奏」sleep：项与项的真实耗时就是节奏。
+        // 会继承 MainActor —— 2026-10-31 真机实证卡死在 14/16 后被看门狗杀掉.
+        // 所以整条扫描跑在 detached 任务里，只在每项完成后回主线程刷一次 UI.
+        // 不加任何「每项节奏」sleep：项与项的真实耗时就是节奏.
         Task.detached(priority: .userInitiated) {
             var collected: [SecurityCheckResult] = []
             for id in ids {
@@ -188,7 +188,7 @@ struct HealthCheckView: View {
         }
     }
 
-    /// 单项执行（nonisolated：跑在调用方给的线程上，绝不上主线程）。
+    /// 单项执行（nonisolated：跑在调用方给的线程上，绝不上主线程）.
     nonisolated private static func perform(_ id: String) -> SecurityCheckResult? {
         switch id {
         case "urlscheme": return SecurityScanner.checkURLSchemes()
@@ -212,7 +212,7 @@ struct HealthCheckView: View {
     }
 
     /// 实时复检：隧道就绪翻转的瞬间，正在扫/已扫完的页面自动补跑一次，
-    /// 「待复检」的隧道项当场补上 —— 不用用户退出重进，也不需要定时器。
+    /// 「待复检」的隧道项当场补上 —— 不用用户退出重进，也不需要定时器.
     private func recheckWhenTunnelReady() {
         guard TunnelReadiness.shared.isReady, phase != .scanning else { return }
         Task.detached(priority: .userInitiated) {

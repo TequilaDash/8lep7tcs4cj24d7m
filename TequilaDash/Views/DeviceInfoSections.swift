@@ -1,28 +1,28 @@
 import SwiftUI
 import UIKit
 
-/// v0.3.307：设备信息面板的**小块视图**集合。
+/// 设备信息面板的**小块视图**集合.
 ///
 /// **为什么要拆**（真机崩溃取证）：设备信息页原先在一个 `body` 里堆了 11 个
-/// `@ViewBuilder` 分组 + 一个 `Group`，编译出的嵌套泛型类型极深。真机崩溃日志
+/// `@ViewBuilder` 分组 + 一个 `Group`，编译出的嵌套泛型类型极深.真机崩溃日志
 /// （iOS 27 / LiveProcess-2026-09-11-163343.ips）显示主线程在
 /// `swift_getTypeByMangledName → decodeMangledType → decodeGenericArgs` 递归里
 /// 撞栈保护页（EXC_BAD_ACCESS / SIGILL，"Could not determine thread index for
-/// stack guard region"）——即 **Swift 运行时解析这个超深 `some View` 类型时栈溢出**。
+/// stack guard region"）——即 **Swift 运行时解析这个超深 `some View` 类型时栈溢出**.
 /// 触发点是 NavigationStack push 该页（`configurePreferredTransition` →
-/// `_preferenceValue` → `ViewBodyAccessor.updateBody` → 我们的 body）。
+/// `_preferenceValue` → `ViewBodyAccessor.updateBody` → 我们的 body）.
 ///
 /// 解法：把「行/分组」从**视图构造**改成**数据**（`[DeviceInfoSectionSpec]`），
-/// 每个分组只由本文件的独立 `View` 结构体渲染。这样页面 body 的类型深度恒定，
-/// 与字段多少无关；以后再加字段也不会再触发同类崩溃。
+/// 每个分组只由本文件的独立 `View` 结构体渲染.这样页面 body 的类型深度恒定，
+/// 与字段多少无关；以后再加字段也不会再触发同类崩溃.
 struct DeviceInfoRowSpec: Identifiable {
     let id: Int
     let label: String
     let value: String?
     /// 敏感字段（序列号/UDID/IMEI…）：全局小眼睛控制显隐 + 可复制
     let sensitive: Bool
-    /// v0.3.322：该行要打开的链接（如「保修期限」→ Apple 官方保修查询页）；
-    /// 有值时行尾显示「查询 ›」，点按交给页面用内置浏览器打开。
+    /// 该行要打开的链接（如「保修期限」→ Apple 官方保修查询页）；
+    /// 有值时行尾显示「查询 ›」，点按交给页面用内置浏览器打开.
     var link: String? = nil
 
     init(id: Int, label: String, value: String?, sensitive: Bool, link: String? = nil) {
@@ -120,7 +120,7 @@ struct DeviceInfoSectionCard: View {
     var onOpenLink: ((String) -> Void)? = nil
 
     var body: some View {
-        // v0.3.308：没有值的行直接不显示（此前一律渲染成「—」，整页出现大量空行）；
+        // 没有值的行直接不显示（此前一律渲染成「—」，整页出现大量空行）；
         // 没有值但有链接的行照样显示（如「保修期限 → 查询」）.
         let rows = section.rows.filter {
             ($0.value ?? "").isEmpty == false || ($0.link ?? "").isEmpty == false

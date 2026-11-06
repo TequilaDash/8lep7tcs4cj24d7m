@@ -58,17 +58,17 @@ final class GSAAuth {
         )
         sessionKey = Data(S.bytes(paddedTo: SRP6a.sizeN))
 
-        // 中间值日志：配合 Python 参考实现可精确复算定位（u 不依赖密码）。
+        // 中间值日志：配合 Python 参考实现可精确复算定位（u 不依赖密码）.
         //
         // ⚠️ 只打**前 8 位**做比对锚点，绝不打全文：
         //   K 是本次握手的会话密钥，可解 spd/et、可伪造 M1/M2；
-        //   x 含密码的 PBKDF2 派生信息，可离线爆破。
+        //   x 含密码的 PBKDF2 派生信息，可离线爆破.
         //   而 Documents/LoginLogs/login.log 有两个对外出口 ——
         //   SSH 的 `logs` 命令（SSHServerService.swift:470-474）与
-        //   SFTP 的 `/sandbox` 后端（根就是 Documents，SSHFileProvider.swift:242-254）。
-        //   打全文等于把会话密钥交给任何能登进 SSH/SFTP 的人。
+        //   SFTP 的 `/sandbox` 后端（根就是 Documents，SSHFileProvider.swift:242-254）.
+        //   打全文等于把会话密钥交给任何能登进 SSH/SFTP 的人.
         //   对照 SignedStoreAuthenticator.swift:313 的既定口径
-        //   「Log only shape/status, never body, credentials, signatures, cookie values」。
+        //   「Log only shape/status, never body, credentials, signatures, cookie values」.
         let head8: ([UInt8]) -> String = { $0.prefix(8).map { String(format: "%02x", $0) }.joined() }
         LoginLogger.shared.log("SRP 中间值(前8字节) x=\(head8(x)) u=\(head8(SRP6a.sha256(SRP6a.pad(publicKey.map { $0 }, to: SRP6a.sizeN) + serverPublicKey.map { $0 }))) S=\(head8(S.bytes(paddedTo: SRP6a.sizeN))) K=\(head8(K))", category: .appleID)
 
@@ -85,14 +85,14 @@ final class GSAAuth {
 
     func verifyServerVerificationMessage(_ serverProof: Data) -> Bool {
         guard let verificationMessage, let sessionKey, let publicKey, let serverPublicKey else { return false }
-        // ⚠️ M2 校验必须与 M1 **用同一个 K**。
+        // ⚠️ M2 校验必须与 M1 **用同一个 K**.
         //
         // M1（clientProof）用的是 `K`，而 SRP6a.swift:66-67 的契约写明
-        // 「hashSharedSecret = H(S) 只哈希一次，K 参数已是 H(S)，不得再哈希」。
+        // 「hashSharedSecret = H(S) 只哈希一次，K 参数已是 H(S)，不得再哈希」.
         // 这里 sessionKey 存的是 S（:59 `sessionKey = Data(S.bytes(...))`），
-        // 所以 K = SHA256(S) —— 只哈希一次，与原 clientProof 的 K 完全一致。
+        // 所以 K = SHA256(S) —— 只哈希一次，与原 clientProof 的 K 完全一致.
         // （历史缺陷：此处曾写成 SHA256(sessionKey)，即 SHA256(SHA256(S))，
-        //  与 M1 用的 K 不同 ⇒ M2 必然校验失败。）
+        //  与 M1 用的 K 不同 ⇒ M2 必然校验失败.）
         let K = SRP6a.sha256(sessionKey.map { $0 })
         let computed = SRP6a.serverProof(
             A: publicKey.map { $0 },
@@ -172,23 +172,23 @@ final class GSAAuth {
         return lines.joined(separator: " | ")
     }
 
-    /// hex 字符串 -> 字节串。空串 / 奇数长度 / 非 hex 字符一律返回 nil，绝不产出垃圾。
+    /// hex 字符串 -> 字节串.空串 / 奇数长度 / 非 hex 字符一律返回 nil，绝不产出垃圾.
     ///
-    /// v0.3.673 修的两处历史缺陷（都在 WSL 里用 Swift 6.1.3 实测复现过）：
+    /// 修的两处历史缺陷（都在 WSL 里用 Swift 6.1.3 实测复现过）：
     /// 1. 原先没有 `count % 2` 守卫 —— 奇数长度时 `hex.index(i, offsetBy: 2)` 越过 endIndex，
     ///    String.Index 越界是 **trap** 而不是返回 nil：实测 `"abc"` / `"_"` 直接
-    ///    `Fatal error: String index is out of bounds`，进程 SIGILL 退出 132。
-    ///    真机上表现就是「点登录闪退」。
+    ///    `Fatal error: String index is out of bounds`，进程 SIGILL 退出 132.
+    ///    真机上表现就是「点登录闪退」.
     /// 2. 原先只靠 `UInt8(_:radix:16)` 判非法 —— 它**接受前导正号**：
     ///    `UInt8("+1", radix: 16) == Some(1)`，于是 `"aa+1bb"` 被静默解成 `aa 01 bb`，
-    ///    产出一份「非 nil 的垃圾」（实测旧实现 old=aa01bb）。
+    ///    产出一份「非 nil 的垃圾」（实测旧实现 old=aa01bb）.
     ///    另注：项目里流传的「`UInt8("", radix: 16)` 返回 Optional(0)」在 Swift 6.1.3 上
-    ///    实测为 nil、未复现；但字符集守卫照样把 `_` 这类占位串挡在门外，不留死角。
+    ///    实测为 nil、未复现；但字符集守卫照样把 `_` 这类占位串挡在门外，不留死角.
     ///
     /// 口径对齐 IPADownloadCenter.swift:1745 `hexDecoded` 与 NBStoreClient.swift:1799 `hexByte`
-    /// （同一个 bug 的另外两个副本）：先查长度与字符集，再交给 `UInt8(_:radix:16)`。
+    /// （同一个 bug 的另外两个副本）：先查长度与字符集，再交给 `UInt8(_:radix:16)`.
     ///
-    /// 容忍空格/换行：服务端偶尔分行发 hex，与 `IPADownloadCenter.hexDecoded` 口径一致。
+    /// 容忍空格/换行：服务端偶尔分行发 hex，与 `IPADownloadCenter.hexDecoded` 口径一致.
     private static func hexToBytes(_ hex: String) -> [UInt8]? {
         let cleaned = hex.filter { !$0.isWhitespace }
         // 奇数长度必须先挡掉：否则下面的 `index(_:offsetBy:)` 会跨过 endIndex 直接 trap（实测 SIGILL）

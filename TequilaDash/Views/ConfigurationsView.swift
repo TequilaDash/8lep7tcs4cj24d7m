@@ -37,15 +37,14 @@ enum ConfigurationsStore {
     /// bad_query 沙盒扩展.与原版 Erosion 一致：消费后**一直持有、不释放**（进程生命周期）.
     /// 原版 `bq.grantAccess` 从不 release，之后所有写入都靠这个存活句柄；
     /// 我们旧实现探测后立即释放，导致真正写入时扩展已失效 → 「没有权限」.
-    /// 注意：此路径属于系统组（SystemGroup），不在 LiveContainer 访客容器扩展覆盖范围内，
     /// 故走的是真实 bad_query，与原版一致；不会误用「容器管理」专用的 LC 扩展.
     /// Swift 6 并发检查：`SandboxEscape` 非 Sendable，但它是无状态工具实例
-    /// （`consume` 只做 bad_query syscall，不写实例字段），进程内共享同一实例无风险。
+    /// （`consume` 只做 bad_query syscall，不写实例字段），进程内共享同一实例无风险.
     nonisolated(unsafe) private static let escape = SandboxEscape()
     /// Swift 6 并发检查：`heldHandle` 只在 `ensureAccess()` 首次成功时赋值一次，
-    /// 之后进程内只读（`probe()` 只判非 nil）。访问方分别来自主线程（探测/写入）与
+    /// 之后进程内只读（`probe()` 只判非 nil）.访问方分别来自主线程（探测/写入）与
     /// 备份队列（`backupZip`）；最坏并发情形是重复 consume 一次扩展，
-    /// 不破坏既有语义（原实现同样如此）。
+    /// 不破坏既有语义（原实现同样如此）.
     nonisolated(unsafe) private static var heldHandle: SandboxEscape.Handle?
 
     /// 确保持有配置目录的沙盒扩展（只消费一次，之后进程内一直持有）.

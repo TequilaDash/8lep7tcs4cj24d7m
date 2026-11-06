@@ -5,8 +5,6 @@ import Darwin
 /// KernelCache 下载服务 —— **IPSW Range 直拉方案**（v0.2.133）.
 ///
 /// 背景：lara 的 `fetchkcache` 依赖内核漏洞（dirty sheep + vn_fileredirect
-/// vnode 重定向），TequilaDash 是 LiveContainer 访客沙盒，无 exploit 能力，
-/// 无法照搬.替代方案（用户确认）：
 ///
 /// 1. 用 `hw.machine` 拿当前设备型号（如 iPhone13,1），`UIDevice` 拿系统版本；
 /// 2. 查 ipsw.me API 找到该版本对应 IPSW 的下载 URL；
@@ -19,7 +17,7 @@ import Darwin
 ///
 /// 纯网络、零权限、零漏洞，与 lara 从设备读到的 kernelcache 是同一份文件.
 /// `Sendable`（非 unchecked）：本类**没有任何存储属性**（`saveDirectory` 是计算属性，
-/// 下载过程全部用方法内局部变量），编译器可直接证明其可安全共享。
+/// 下载过程全部用方法内局部变量），编译器可直接证明其可安全共享.
 final class KernelCacheService: Sendable {
 
     static let shared = KernelCacheService()

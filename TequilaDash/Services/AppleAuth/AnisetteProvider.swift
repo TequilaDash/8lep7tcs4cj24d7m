@@ -9,11 +9,11 @@ import CryptoKit
 ///   直接走 `/v3/get_headers`.
 /// - 否则执行一次完整的 WebSocket 配给（provisioning）流程，把 `adiPb` 存入钥匙串后再取 headers.
 final class AnisetteProvider {
-    /// Swift 6 并发检查：本类型非 Sendable。可变字段（clientInfo / userAgent / mdLu /
+    /// Swift 6 并发检查：本类型非 Sendable.可变字段（clientInfo / userAgent / mdLu /
     /// deviceId / lastFailureStage）是**单次 anisette 流程内的临时状态**：由
-    /// `fetchClientInfo` / `provision` 写、同一流程内的 `makeAppleRequest` / `fail` 读。
+    /// `fetchClientInfo` / `provision` 写、同一流程内的 `makeAppleRequest` / `fail` 读.
     /// 现有调用方（AppleDeveloperAPI / AppleIDLoginSheet / IPAInstallService）均以
-    /// `await` 串行发起，不存在并发进入 —— 这是既有设计，本次迁移不改语义。
+    /// `await` 串行发起，不存在并发进入 —— 这是既有设计，本次迁移不改语义.
     nonisolated(unsafe) static let shared = AnisetteProvider()
 
     private let keychain = EscapeKeychain(service: "com.tequila.dash.memorylimit")
@@ -26,18 +26,18 @@ final class AnisetteProvider {
         return URLSession(configuration: config)
     }()
 
-    /// v0.3.662（task-13 发现9）：**把取数入口串行化**.
+    /// **把取数入口串行化**.
     ///
     /// 上面 :12-16 的注释原本断言「现有调用方均以 await 串行发起，不存在并发进入」——
     /// 该前提并不成立：`AppleDeveloperAPI` 的每个公开方法（fetchTeams / fetchAppIDs /
     /// fetchCertificates / submitSigningCertificate / revokeCertificate …）各自调用
-    /// `makeHeaders` → `getAnisetteDataWithFallback`，而 AppleIDLoginSheet 也会并发发起。
+    /// `makeHeaders` → `getAnisetteDataWithFallback`，而 AppleIDLoginSheet 也会并发发起.
     /// 这些调用共享同一份**无锁**可变状态（clientInfo / userAgent / mdLu / deviceId），
     /// 失败路径上的 `reset()` / `resetProvisioning()` 还会把它们清空 ——
     /// 交错时一方会读到另一方刚清掉的字段，`makeAppleRequest` 随即抛「缺少 client_info 字段」.
     ///
-    /// 这里用一把异步信号量把**整个取数流程**串起来，使「串行」由代码保证而不是靠调用方自觉。
-    /// 不改任何公开签名；等待上限与取数自身的超时预算对齐（避免自己也变成永久阻塞）。
+    /// 这里用一把异步信号量把**整个取数流程**串起来，使「串行」由代码保证而不是靠调用方自觉.
+    /// 不改任何公开签名；等待上限与取数自身的超时预算对齐（避免自己也变成永久阻塞）.
     private let fetchGate = AsyncGate()
 
     /// 极简异步互斥（FIFO 不在语义要求内，够用即可）.
@@ -47,9 +47,9 @@ final class AnisetteProvider {
         private var busy = false
         /// 单次等锁上限：比单次取数硬超时（35s）更长，确保等待者不会比取数本身先放弃.
         ///
-        /// v0.3.664（CI run 39128137548）：`NSLock.lock()` / `unlock()` 被 Foundation 标成
+        /// `NSLock.lock()` / `unlock()` 被 Foundation 标成
         /// `@available(*, noasync)` —— 在 async 函数里**直接调用**会编译失败
-        /// （"instance method 'lock' is unavailable from asynchronous contexts"）。
+        /// （"instance method 'lock' is unavailable from asynchronous contexts"）.
         /// 所以把加解锁收进同步 helper，async 侧只调用同步函数，语义不变.
         private func acquireIfFree() -> Bool {
             lock.lock()
@@ -78,17 +78,17 @@ final class AnisetteProvider {
     private var url: URL? { URL(string: UserDefaults.standard.string(forKey: "AnisetteServer") ?? "https://ani.stikstore.app") }
 
 
-    /// v0.3.310：把 `X-MMe-Client-Info` 里的客户端标识改写成 `com.apple.akd/1.0`.
+    /// 把 `X-MMe-Client-Info` 里的客户端标识改写成 `com.apple.akd/1.0`.
     ///
     /// **依据**（AltStore classic 2026-09-10 提交 c558994「fix(anisette): restore Apple ID
     /// sign-in rejected by Apple's servers」）：Apple 认证边缘现在对**任何**
     /// `X-MMe-Client-Info` 里标识为 `com.apple.dt.Xcode` 的登录请求直接返回 503
-    /// （发生在校验凭据之前，与账号无关）。修法就是把客户端标识改报成真正执行该请求的
-    /// 守护进程 `akd`。公共 anisette 服务多还在用 Xcode 形态，故这里统一改写。
+    /// （发生在校验凭据之前，与账号无关）.修法就是把客户端标识改报成真正执行该请求的
+    /// 守护进程 `akd`.公共 anisette 服务多还在用 Xcode 形态，故这里统一改写.
     ///
-    /// v0.3.613：**用户自定义优先**。依据 SideSign PR #5「Fix 2FA failing」（2026-10-13
+    /// **用户自定义优先**.依据 SideSign PR #5「Fix 2FA failing」（2026-10-13
     /// merged）—— GSA 开始指纹识别 adi 库，既有 anisette 服务器生成的 headers 被拒
-    /// （用户侧表现 `Code -80045`）；把 client info 换成 Android 形态可绕过。
+    /// （用户侧表现 `Code -80045`）；把 client info 换成 Android 形态可绕过.
     /// 判据会再变，故做成可编辑（设置 -> Anisette 服务器 -> 客户端标识），
     /// 与 SideStore 的 `customAnisetteClientInfo` 同款优先级（自定义 > 默认）.
     static func normalizedClientInfo(_ raw: String?) -> String {
@@ -112,14 +112,11 @@ final class AnisetteProvider {
 
     // MARK: - 服务器分类与顺序（对齐 SideInstaller 56ecbf823 / edb277cd1）
 
-    /// 已知运行 Apple macOS ADI 库的服务器主机（上游 macADIHosts）.
     static let macADIHosts: Set<String> = ["mac-ani.jkcoxson.com", "new.ani.sidestore.io"]
 
-    /// 已知运行 Apple Windows ADI 库的服务器主机（上游 windowsADIHosts）.
     static let windowsADIHosts: Set<String> = ["ani.jkcoxson.com", "win.ani.sidestore.io", "ani2.stikstore.app"]
 
     /// 服务器运行的 ADI 库："mac" / "windows" / "android"（上游 AnisetteServer.library）.
-    /// 已知主机命中；否则按地址子串判（上游按列表显示名判 "mac adi" / "windows"，
     /// 本仓内置列表条目是纯 URL、无显示名，退化为地址子串判据）；默认 android.
     static func adiLibrary(of address: String) -> String {
         let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,7 +130,6 @@ final class AnisetteProvider {
         return "android"
     }
 
-    /// 按「上报设备」计 Apple 的 503 拒绝次数（上游 AppleRefusals）：
     /// mac 库服务器上报 Mac，其余（windows/android）上报 Windows PC.
     nonisolated(unsafe) static var refusalByDevice: [String: Int] = [:]
 
@@ -146,7 +142,6 @@ final class AnisetteProvider {
 
     static func refusalCount(for address: String) -> Int { refusalByDevice[deviceOf(address)] ?? 0 }
 
-    /// 该地址上报的设备已被 Apple 拒绝 >=2 次（上游 rulesOut）.
     static func isRefusalRuledOut(_ address: String) -> Bool { refusalCount(for: address) >= 2 }
 
     /// 记录一次 Apple 拒绝.
@@ -158,7 +153,6 @@ final class AnisetteProvider {
 
     static func isRefusalError(_ error: Error) -> Bool { error.localizedDescription.contains("503") }
 
-    /// 剩余服务器（ordered 中 idx 之后）是否全部被拒（上游 endsSignIn 判据）.
     static func allRemainingRuledOut(after idx: Int, ordered: [String]) -> Bool {
         ordered.suffix(from: idx + 1).allSatisfy { isRefusalRuledOut($0) }
     }
@@ -174,7 +168,6 @@ final class AnisetteProvider {
         return a.lowercased()
     }
 
-    /// 服务器尝试顺序（上游 candidates）：pick 优先，随后同库（非 android）、
     /// windows、非 mac，mac 最后，全程去重.
     static func orderedCandidates(pick: String, servers: [String]) -> [String] {
         var seen = Set<String>()
@@ -214,7 +207,7 @@ final class AnisetteProvider {
     /// v0.2.119：只有 provisioning 阶段被拒才需要换 identifier；取票据失败换服务器即可.
     private var lastFailureStage: String?
 
-    // v0.3.260：本类不再服务于「App Store 下载」——该功能的 iTunes 认证已切
+    // 本类不再服务于「App Store 下载」——该功能的 iTunes 认证已切
     // SAP-only（对齐上游 ipatool abd86cb），认证请求不含 anisette 头.本类保留
     // 仅为「IPA 侧载」的机器标识共享（sharedMachineIdentifier/sharedAdiPb →
     // isideload/Rust 侧），v3 服务器流程仅在侧载场景被消费.
@@ -234,7 +227,6 @@ final class AnisetteProvider {
         clearMemoryCache()
         keychain.delete("identifier")
         keychain.delete("adiPb")
-        // 身份销毁：清除一库一身份的配对记录（上游 Slots：服务器不再认这份身份）.
         UserDefaults.standard.removeObject(forKey: "AnisetteIdentityServer")
         LoginLogger.shared.log("… AnisetteProvider 重置（identifier/adiPb 已清除）", category: .appleID)
     }
@@ -257,7 +249,6 @@ final class AnisetteProvider {
         mdLu = nil
         deviceId = nil
         keychain.delete("adiPb")
-        // 票据销毁：配对一并清除（上游 Slots：该服务器不再认这份身份）.
         UserDefaults.standard.removeObject(forKey: "AnisetteIdentityServer")
         LoginLogger.shared.log("… Anisette 票据作废（保留 identifier，仅重新 provision）", category: .appleID)
     }
@@ -287,12 +278,12 @@ final class AnisetteProvider {
         return AppleAPIError.customError(code: -22421, message: "Anisette \(stage)失败: \(detail)")
     }
 
-    /// v0.3.613：本机 Anisette 取数（ADI 引擎 + Unicorn AArch64 解释器）.
+    /// 本机 Anisette 取数（ADI 引擎 + Unicorn AArch64 解释器）.
     ///
     /// 与远程 `fetchAnisetteV3` 的差别：**不经任何 anisette 服务器** ——
     /// 直接把 `identifier` + `adiPb` 交给 C++ 层，由 Unicorn 在本进程内解释执行
-    /// ADI 引擎产出 headers。因此 machineID 不会因服务器侧变化而漂移
-    /// （MJorb 记过的坑：`.so` 拿不到 -> 回退远程 -> machineID 漂移 -> Apple ID 失效）。
+    /// ADI 引擎产出 headers.因此 machineID 不会因服务器侧变化而漂移
+    /// （MJorb 记过的坑：`.so` 拿不到 -> 回退远程 -> machineID 漂移 -> Apple ID 失效）.
     private func fetchAnisetteLocal() async throws -> AnisetteData {
         let mgr = OnDeviceAnisetteManager.shared
         guard let identifierStr = keychain.string(for: "identifier"),
@@ -309,7 +300,7 @@ final class AnisetteProvider {
         try? FileManager.default.createDirectory(
             at: mgr.provisioningDirectory, withIntermediateDirectories: true)
 
-        // v0.3.616：**身份组装与远程路径对齐**.
+        // **身份组装与远程路径对齐**.
         //
         // 审计发现（P1）：C 层 `get_anisette_headers_uc` 不输出 device-id / client-info，
         // 且 `X-Apple-I-MD-LU` 硬编码为「63 个 0 + 1」（anisette_base.h 的占位）；
@@ -347,7 +338,7 @@ final class AnisetteProvider {
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        // v0.3.724：**必须走 normalizedClientInfo**，与 :322（本机身份）/ :700/:712（远程解析）
+        // **必须走 normalizedClientInfo**，与 :322（本机身份）/ :700/:712（远程解析）
         // 保持同一口径. 此前这里发的是服务器原始值，于是「设置 → Anisette 服务器 →
         // 客户端标识」里用户填的自定义值（绕 Code -80045 的唯一手段）对
         // gsa lookup / midStartProvisioning / midFinishProvisioning **整条配给链不生效**，
@@ -371,14 +362,14 @@ final class AnisetteProvider {
     }
 
     func getAnisetteData(refresh: Bool = false) async throws -> AnisetteData {
-        // v0.3.613：本机 Anisette（ODA）接线；v0.3.616 修正开关判据.
+        // 本机 Anisette（ODA）接线；修正开关判据.
         //
         // `remoteFallbackReason` 的契约：**nil = 可以走本机**（开关开 + 引擎就绪），
         // 非 nil = 回退远程的原因. 因此这里只有 nil 才尝试本机 —— 旧实现在
         // `.ready` 时返回「尚未接线」文案，导致开关打开反而永远走远程.
         //
         // 本机路径依赖 C++ 层（OnDeviceAnisetteClient -> anisette_core_uc.cpp ->
-        // elf_loader_emulator.cpp -> Unicorn AArch64 解释器），见 OnDeviceAnisetteClient 顶部注释。
+        // elf_loader_emulator.cpp -> Unicorn AArch64 解释器），见 OnDeviceAnisetteClient 顶部注释.
         if let reason = OnDeviceAnisetteManager.shared.remoteFallbackReason {
             LoginLogger.shared.log("[本机Anisette] 回退远程：\(reason)", category: .appleID)
         } else if let local = try? await fetchAnisetteLocal() {
@@ -432,7 +423,6 @@ final class AnisetteProvider {
             next = ordered.count > 1 ? ordered[1] : servers[0]
         }
         UserDefaults.standard.set(next, forKey: "AnisetteServer")
-        // 换服务器必须重取 client_info / user_agent（上游 set_url 清 client_info 缓存判据：
         // 防 A 服务器的 client info 配到 B 服务器）；mdLu / deviceId 由 identifier 派生、
         // 跨服务器稳定，保留.
         clientInfo = nil
@@ -442,7 +432,6 @@ final class AnisetteProvider {
     }
 
     /// 下一服务器与当前身份同库且 adiPb 仍有效 → 保留身份直接重试
-    /// （上游判据：同一 ADI 库的身份互通，换同库服务器不重配、不换 identifier）.
     private func shouldKeepIdentity(for next: String?) -> Bool {
         guard let next,
               let paired = Self.pairingServer(),
@@ -466,7 +455,7 @@ final class AnisetteProvider {
     ///
     /// 取值依据：下面三条请求各自的显式 timeout 是 10s（client_info）/ 15s（get_headers）/
     /// 30s（WebSocket 与 gsa），最坏一次完整 provision ≈ 3~4 次串联，故 35s 是
-    /// 「正常流程一定跑得完、卡死一定抓得住」的折中。它**不改变**任何成功路径的语义.
+    /// 「正常流程一定跑得完、卡死一定抓得住」的折中.它**不改变**任何成功路径的语义.
     private static let attemptTimeout: TimeInterval = 35
 
     /// 单次尝试的硬超时包装：超时会抛 `AppleAPIError`，由调用方走既有的换服务器重试.
@@ -497,7 +486,7 @@ final class AnisetteProvider {
     }
 
     func getAnisetteDataWithFallback(refresh: Bool = false, maxAttempts: Int = 3) async throws -> AnisetteData {
-        // v0.3.662（task-13 发现9）：进入即抢占取数闸门，保证本流程专用的可变状态
+        // 进入即抢占取数闸门，保证本流程专用的可变状态
         // (clientInfo / userAgent / mdLu / deviceId / lastFailureStage) 同一时刻只有一个写者.
         // 上限 60s：比最长一次流程（3 次尝试 × 35s 硬超时，实际受 75s 总预算约束）留出余量，
         // 但又给了「死等」一个确定终点，不会把新调用者永久挂在锁上.
@@ -515,13 +504,11 @@ final class AnisetteProvider {
         var attempt = 0
         let servers = await MainActor.run { MemoryLimitSettings.anisetteServers }
         let ordered = Self.orderedCandidates(pick: originalServer, servers: servers)
-        // 本次流程的 503 按「上报设备」计数（上游 AppleRefusals 判据），进循环前清零.
         Self.clearRefusalLog()
         while attempt < maxAttempts {
             try Task.checkCancellation()
             let remaining = budget - Date().timeIntervalSince(started)
             guard remaining > 0 else { break }
-            // 跳过已被 Apple 拒绝两次的服务器（按上报设备计；上游 rulesOut）.
             if Self.isRefusalRuledOut(currentServer) {
                 attempt += 1
                 let elapsed = Date().timeIntervalSince(started)
@@ -531,13 +518,13 @@ final class AnisetteProvider {
                 continue
             }
             do {
-                // v0.3.662（task-13 发现12）：**给单次取数加真正的硬超时**.
+                // **给单次取数加真正的硬超时**.
                 //
                 // 旧实现只在 `await` **返回之后**才检查 budget（见下方 `elapsed < budget`），
                 // 于是「某一次 getAnisetteData 永不返回」时预算永远检查不到 ——
                 // 最典型的是 `startProvisioningSession` 的 `withCheckedThrowingContinuation`
                 // 只在 `receiveProvisioningMessages` 的 4 个分支里 resume，WebSocket 在握手后
-                // 不再发消息时那个 continuation 会**永久挂住**。而本函数上方注释承诺
+                // 不再发消息时那个 continuation 会**永久挂住**.而本函数上方注释承诺
                 // 「绝不把 UI 永久留在 loading」，旧代码做不到.
                 //
                 // 现在每次尝试都被一个独立的超时任务竞赛：超时即本任务抛错、
@@ -553,7 +540,6 @@ final class AnisetteProvider {
                 attempt += 1
                 let elapsed = Date().timeIntervalSince(started)
                 guard attempt < maxAttempts, elapsed < budget else { break }
-                // 按「上报设备」记录 Apple 的 503 拒绝（上游 AppleRefusals）：
                 // Apple 对同一上报设备一视同仁地拒，两次后该设备对应的服务器全跳过.
                 if Self.isRefusalError(error) {
                     Self.recordRefusal(for: currentServer)
@@ -574,7 +560,6 @@ final class AnisetteProvider {
                 }
                 if shouldKeepIdentity(for: next) {
                     // 下一服务器与当前身份同库：adiPb 仍可用，保留身份直接重试
-                    // （上游判据：同一 ADI 库的身份互通，换同库服务器不重配）.
                     clientInfo = nil
                     userAgent = nil
                     LoginLogger.shared.log("… 下一服务器同库，保留 adiPb 直接重试", category: .appleID)
@@ -766,7 +751,6 @@ final class AnisetteProvider {
         guard let identifier = keychain.string(for: "identifier") else {
             throw fail("provision", "provision 后读取 identifier 失败")
         }
-        // 先验证再入库（上游判据：配完先验证，烂服务器不会留下垃圾身份）.
         let headers = try await fetchAnisetteV3(identifier: identifier, adiPb: adiPb, allowReprovision: false)
         keychain.set(adiPb, for: "adiPb")
         // 一库一身份：记录当前服务器与这份 adiPb 的配对（同库服务器可复用该身份）.

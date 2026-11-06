@@ -10,7 +10,7 @@ import UIKit
 /// 前提：配对文件（Documents/pairingFile.plist）+ LocalDevVPN 已连接 + 目标 App
 /// 的签名带 get-task-allow（证书直装签名默认带）.
 /// `Sendable`（非 unchecked）：本类**没有任何存储属性**（`pairingPath` 是计算属性，
-/// 所有中间状态都是方法内局部变量 / FFI 句柄），编译器可直接证明其可安全共享。
+/// 所有中间状态都是方法内局部变量 / FFI 句柄），编译器可直接证明其可安全共享.
 final class JITEnableService: Sendable {
 
     static let shared = JITEnableService()
@@ -367,7 +367,6 @@ final class JITEnableService: Sendable {
 
     // MARK: - App 图标
 
-    /// 通过 SpringBoardServices 服务获取应用图标（与 StikDebug 同源）.
     /// 设备端按 Bundle ID 返回真实图标 PNG —— 对系统应用与第三方应用均有效.
     ///
     /// 为什么不用进程内私有 API `UIImage._applicationIconImageForBundleIdentifier:format:scale:`：
@@ -450,10 +449,10 @@ final class JITEnableService: Sendable {
         // iOS 数秒内就会挂起进程——若此时 attach/detach 流程还没跑完，
         // 目标应用会一直停在 SIGSTOP（黑屏无反应）.持有后台租约保证
         // Swift 6：JITBackgroundLease 已收敛主线程（@MainActor）；本方法可能在后台
-        // 线程跑，创建/释放需跳主线程。**若本方法本身就在主线程调用**，直接 `main.sync`
+        // 线程跑，创建/释放需跳主线程.**若本方法本身就在主线程调用**，直接 `main.sync`
         // 会死锁 —— 故先判 `Thread.isMainThread`：在主线程用 `MainActor.assumeIsolated`
         // 原地创建/释放，否则再 `DispatchQueue.main.sync` 跳过去（与 OnlineInstallService
-        // / LocalDevVPN 的 assumeIsolated 同款处理）。
+        // / LocalDevVPN 的 assumeIsolated 同款处理）.
         let keepAliveLease: JITBackgroundLease
         if Thread.isMainThread {
             keepAliveLease = MainActor.assumeIsolated { JITBackgroundLease() }

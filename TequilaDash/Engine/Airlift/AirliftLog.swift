@@ -5,7 +5,6 @@ import Foundation
 /// Rust/FFI 层会从**任意线程**回调 C 日志函数，故写入用锁保护，UI 侧按需取走.
 ///
 /// 命名说明：AirBeep 原类名 `AirBeepLog`；本仓统一放在 `Airlift/` 目录下，
-/// 故按目录前缀改名 `AirliftLog`，**语义与实现与上游一致**（见文件头「移植」约定）.
 final class AirliftLog: @unchecked Sendable {
     static let shared = AirliftLog()
 

@@ -1,6 +1,5 @@
 import Foundation
 
-/// A LiveContainer instance found among the device's installed apps, together
 /// with the guest apps it hosts inside its own Data container.
 struct LiveContainerInstance: Identifiable {
     let id = UUID()
@@ -9,7 +8,6 @@ struct LiveContainerInstance: Identifiable {
     let error: String?
 }
 
-/// A single app hosted inside LiveContainer, plus the metadata needed to
 /// render it (real display name + icon) and to invoke the Reclaim engine
 /// (a synthetic `InstalledApp` pointing at the guest's UUID container).
 struct LiveContainerGuest: Identifiable {
@@ -22,20 +20,16 @@ struct LiveContainerGuest: Identifiable {
     /// Real display name (CFBundleDisplayName → CFBundleName → `.app` folder
     /// name → UUID). This is what the row shows.
     let displayName: String
-    /// Path to the guest's UUID directory inside LiveContainer. This is what
     /// `ReclaimService` operates on as if it were a normal app container.
     let containerPath: String
     /// Raw bytes of the guest app icon (already decoded inside the sandbox
     /// extension so the UI does not need to reopen the container).
     let iconData: Data?
-    /// Display name of the LiveContainer instance that hosts this guest.
     let hostName: String
     /// True when this guest's data lives in the shared AppGroup container
-    /// (`<appGroup>/LiveContainer/Data/Application/<uuid>`), i.e. the app was
-    /// "converted"/shared by LiveContainer. Surfaced in the UI as a "共享" pill.
     let isShared: Bool
 
-    /// v0.3.529：该访客应用的 `.app` 包路径 ——
+    /// 该访客应用的 `.app` 包路径 ——
     /// `<LC Data container>/Documents/Applications/<name>.app`，
     /// 或 AppGroup 下的同款目录（共享/转换过的访客）.
     ///
@@ -78,18 +72,13 @@ struct LiveContainerGuest: Identifiable {
     }
 }
 
-/// Discovers apps installed *inside* LiveContainer — the "guest" apps that
-/// LiveContainer sideloads into its own Data container.
 ///
-/// Storage layout (LiveContainer source: LiveContainerSwiftUI/LCContainer.swift,
-/// LiveContainerSwiftUI/LCAppInfo.m):
 ///   <LC Data container>/Documents/Applications/<name>.app/Info.plist
 ///                                         └─ LCAppInfo.plist (LCDataUUID + LCContainers)
 ///   <LC Data container>/Documents/Data/Application/<UUID>/      (guest sandbox)
 ///                                       └─ LCContainerInfo.plist
 ///
 /// Historically the discovery logic tried to join the two halves via the
-/// `appIdentifier` field in `LCContainerInfo.plist`. That fails on some LiveContainer
 /// builds because they store the container UUID itself in that field. The fix is
 /// to drive the join from the `.app` side instead:
 ///
@@ -107,7 +96,6 @@ final class LiveContainerDiscovery {
     private let files = FileService()
     private let fm = FileManager.default
 
-    /// Bundle-id prefixes that identify a LiveContainer instance. Covers the
     /// primary app and the alternate instances (livecontainer2, livecontainer3…).
     private let prefixes = ["com.kdt.livecontainer"]
 
@@ -115,7 +103,6 @@ final class LiveContainerDiscovery {
         var hosts = installedApps.filter { app in
             prefixes.contains(where: { app.bundleIdentifier.lowercased().hasPrefix($0) })
         }
-        // When running *inside* LiveContainer with container extensions granted
         // by the host, the tunnel-based app list may not surface the LC host.
         // Synthesize a local host from the forwarded container root so discovery
         // (and thus Reclaim/LiveClean) still works without the tunnel.
@@ -154,7 +141,6 @@ final class LiveContainerDiscovery {
                     // guest containers through `.app/LCAppInfo.plist`.
                     for bundle in enumerateGuestBundles(root: appsRoot) {
                         var bundleUUIDs = bundle.dataUUIDs
-                        // Some LiveContainer versions name the `.app` directory
                         // after the UUID instead of the display name. In that
                         // case `LCAppInfo.plist` is missing and `dataUUIDs` is
                         // empty — try matching the `.app` folder name as a UUID.
@@ -206,7 +192,6 @@ final class LiveContainerDiscovery {
                     }
 
                     // Shared ("converted") guest containers live under the real
-                    // App Group: <appGroupPath>/LiveContainer/Data/Application/<folderName>.
                     // With the host-granted extension consumed, we can now reach
                     // this previously-inaccessible sandbox (class 14) and surface
                     // those apps for scanning / reclaim.
@@ -259,7 +244,6 @@ final class LiveContainerDiscovery {
             return LiveContainerInstance(host: host, guests: guests, error: nil)
         }
 
-        // The AppGroup shared container is visible to every LiveContainer instance,
         // so the same converted app may be enumerated once per host. Keep only one
         // representative and prefer the entry that has a real app name/icon.
         return dedupeSharedGuestsAcrossHosts(instances)
@@ -334,7 +318,6 @@ final class LiveContainerDiscovery {
         var bundles: [GuestBundle] = []
         for entry in entries where entry.isDirectory {
             let appPath = entry.path
-            // LiveContainer stores shared ("converted") guest `.app` bundles in
             // the AppGroup's Applications folder using the bare bundle id as the
             // folder name (no `.app` suffix), so accept any directory that
             // carries an Info.plist as a candidate app bundle.

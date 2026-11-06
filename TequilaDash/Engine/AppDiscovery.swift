@@ -13,14 +13,13 @@ struct InstalledApp: Identifiable, Hashable {
     /// "HiddenSystemApp", or nil. Used by the app list to split 全部 / 系统 / 三方.
     let applicationType: String?
     /// App Store 包的购买邮箱（iTunesMetadata 的 `appleId`，兜底
-    /// `downloadInfo.accountInfo.AppleID`）。**v0.3.364 修键名**：旧代码读的是
+    /// `downloadInfo.accountInfo.AppleID`）.**修键名**：旧代码读的是
     /// `apple-id`，真实键是 `appleId` —— 恒为 nil，所以应用板块永远判不出「共享」.
     /// nil 表示取不到邮箱（侧载/重签/系统应用，或元数据解析失败）.
     var iTunesAppleID: String? = nil
 
     /// instproxy 是否**存在** `iTunesMetadata`（存在即 App Store 下发包）.
     /// iOS 27 上该字段是 binary plist 字节，解析可能失败，所以存在性单独记一份.
-    /// 带默认值：避免破坏其它 Memberwise init 调用点（LiveContainerDiscovery/
     /// SupervisedHelpers/RestoreService 等不关注此字段）.
     var hasITunesMetadata: Bool = false
 
@@ -66,21 +65,20 @@ final class AppDiscovery {
         }
 
         // Cellular隧道支持（默认关）：开关开 + 当前无 Wi-Fi（蜂窝）时，建隧道前
-        // 先跑「关蜂窝」快捷指令、再有界等隧道就绪。开关关 / 有 Wi-Fi 时是 no-op。
+        // 先跑「关蜂窝」快捷指令、再有界等隧道就绪.开关关 / 有 Wi-Fi 时是 no-op.
         //
-        // v0.3.647 更新注释：原写「**不碰蜂窝开关**」已过时 ——
+        // 更新注释：原写「**不碰蜂窝开关**」已过时 ——
         // 蜂窝下回环 VPN 被 iOS 系统级限制，不关蜂窝必然 connect refused，
-        // 这正是用户长期反馈「蜂窝下连不上」的原因。现照 SideStore
-        // `CellularRefreshManager.turnOffDataIfNeeded` 补回关闭动作。
+        // `CellularRefreshManager.turnOffDataIfNeeded` 补回关闭动作.
         //
         // 返回值要用起来：蜂窝模式下它区分「等到了、但心跳仍失败」与「等待超时、根本没等到」——
-        // 两者的下一步动作不同，不能都笼统报「隧道不可达」。
+        // 两者的下一步动作不同，不能都笼统报「隧道不可达」.
         let tunnelReady = CellularTunnelManager.shared.prepareForTunnel()
 
         do {
             try tunnel.ensureHeartbeat()
         } catch {
-            // 如实报错：蜂窝模式下点明究竟是「没等到隧道」还是「隧道在、心跳失败」。
+            // 如实报错：蜂窝模式下点明究竟是「没等到隧道」还是「隧道在、心跳失败」.
             if CellularTunnelManager.shared.isCellularMode {
                 let reason = tunnelReady
                     ? "本地隧道已就绪但心跳失败（LocalDevVPN 可能已断开）"
@@ -114,7 +112,7 @@ final class AppDiscovery {
             // we keep them in the list (read-only) instead of dropping them.
             let container = (info["Container"] as? String) ?? ""
             let version = info["CFBundleShortVersionString"] as? String
-            // v0.3.364：App Store 包的两项元数据信号，供 AppTypeDetector 判正版/共享/越狱：
+            // App Store 包的两项元数据信号，供 AppTypeDetector 判正版/共享/越狱：
             //   - hasITunesMetadata：存在性（存在即 App Store 下发包）
             //   - iTunesAppleID：购买邮箱，真实键是 `appleId`（旧代码写的 `apple-id`
             //     恒为 nil，这正是「应用板块永远判不出共享」的根因）
@@ -134,12 +132,12 @@ final class AppDiscovery {
         return apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    /// 从 instproxy 的 `iTunesMetadata` 取 App Store 购买邮箱（v0.3.364）.
+    /// 从 instproxy 的 `iTunesMetadata` 取 App Store 购买邮箱.
     ///
     /// - iOS 27 真机实证：该字段以 **binary plist 字节** 返回（`b'bplist00'`），
-    ///   旧系统上直接是字典 —— 两种形态都要吃。
+    ///   旧系统上直接是字典 —— 两种形态都要吃.
     /// - 邮箱键：`appleId`（`photo.ipa` 的 iTunesMetadata.plist 实证），
-    ///   兜底 `com.apple.iTunesStore.downloadInfo.accountInfo.AppleID`。
+    ///   兜底 `com.apple.iTunesStore.downloadInfo.accountInfo.AppleID`.
     static func appleId(fromITunesMetadata metadata: Any?) -> String? {
         guard let metadata else { return nil }
         let meta: [String: Any]?
@@ -178,10 +176,10 @@ final class AppDiscovery {
 
     /// Remove the stored pairing file.
     ///
-    /// v0.3.673（task-7 发现4）：改成 throwing，把「没删掉」暴露出来。
+    /// 改成 throwing，把「没删掉」暴露出来.
     /// 建连进行中时 TunnelContext 会拒绝删除（返回 NO / -8），旧代码一律静默成功：
-    /// 界面显示已重置、实际配对文件还在、隧道还连着旧身份。
-    /// - Throws: 隧道正在建连时的 -8 错误，由调用方决定怎么提示。
+    /// 界面显示已重置、实际配对文件还在、隧道还连着旧身份.
+    /// - Throws: 隧道正在建连时的 -8 错误，由调用方决定怎么提示.
     func resetPairing() throws {
         try tunnel.resetPairingFile()
     }

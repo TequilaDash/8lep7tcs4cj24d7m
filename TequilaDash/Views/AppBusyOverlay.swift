@@ -11,7 +11,7 @@ import SwiftUI
 // 未迁移：CrashLogView / RingtonesView —— 它们**没有全屏黑幕层**，文案是次级样式
 //         且带投影，层级与排版都不同，强行并入会改观感（详见批 8-A 报告）.
 //
-// v0.3.721：新增 `style: .card` 档，把 DialerThemeView 与 PlistEditorView 两处**逐字同构**的
+// `style: .card` 档，把 DialerThemeView 与 PlistEditorView 两处**逐字同构**的
 //         浅色卡片遮罩收进来（系统背景 0.6 淡出 + AppSurface.card 实心卡片 + 14 圆角 +
 //         subheadline 次级标题）. 此前它与 `.scrim` 档是两套实现：本组件用黑幕 + 材质，
 //         那两处用系统背景 + 实心卡，视觉上一个是「压暗」一个是「蒙白」，不能混用.

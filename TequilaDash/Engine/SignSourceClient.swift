@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - 软件源错误枚举
 //
-// 文案见规格 §2.4（对齐牛蛙原文案，去掉「牛蛙助手」字样）。
+// 文案见规格 §2.4（对齐牛蛙原文案，去掉「牛蛙助手」字样）.
 
 enum SignSourceError: LocalizedError, Equatable {
     /// 源地址不是合法 URL / scheme 非 http(s)
@@ -46,19 +46,19 @@ enum SignSourceError: LocalizedError, Equatable {
 
 // MARK: - 软件源网络层
 
-/// 软件源（用户自定义第三方源）的**网络层**。
+/// 软件源（用户自定义第三方源）的**网络层**.
 ///
 /// 与 `NiuwaStoreClient`（牛蛙内置商店）**零关系**：
 /// · 本类 = 明文 GET + 用户输入的任意域名 + 可选 RSA 解密；
-/// · 彼类 = AES-256-GCM 加密 POST + 硬编码 api.ios222.com。
-/// ⚠️ 严禁把本类任何请求套进 `NiuwaStoreClient.postJSON` / `NiuwaCrypto`。
+/// · 彼类 = AES-256-GCM 加密 POST + 硬编码 api.ios222.com.
+/// ⚠️ 严禁把本类任何请求套进 `NiuwaStoreClient.postJSON` / `NiuwaCrypto`.
 ///
 /// 端点（规格 §0 / §2 / §5）：
 /// · E1 拉源 `GET {sourceURL}?udid={UDID}`
 /// · E2 解锁 `GET {unlockURL}?udid={UDID}&code={code}`
 /// · E3 取解锁码走系统 `openURL(payURL)`（属视图层，不在本层）
 ///
-/// 筛选与搜索是**本地**做的（不是服务端参数）——本层不处理。
+/// 筛选与搜索是**本地**做的（不是服务端参数）——本层不处理.
 enum SignSourceClient {
 
     /// 日志前缀（真机 grep 用）
@@ -66,11 +66,11 @@ enum SignSourceClient {
 
     // MARK: - 对外接口
 
-    /// E1 拉源：`GET {sourceURL}?udid={UDID}`。
+    /// E1 拉源：`GET {sourceURL}?udid={UDID}`.
     ///
     /// - 源 URL **约定不带 query**（模板是 `%@?udid=%@`）；若已带 query（用户粘贴了带参数的 URL），
-    ///   保留原 query 再 append `udid`。
-    /// - `udid` 取缓存；取不到时**仍发请求但省略该参数**（服务端行为未定，规格 §9 R3）。
+    ///   保留原 query 再 append `udid`.
+    /// - `udid` 取缓存；取不到时**仍发请求但省略该参数**（服务端行为未定，规格 §9 R3）.
     static func fetch(sourceURL: String) async throws -> SignSource {
         let udid = currentUDID()
         var extra: [URLQueryItem] = []
@@ -94,12 +94,12 @@ enum SignSourceClient {
         }
     }
 
-    /// E2 解锁校验：`GET {unlockURL}?udid={UDID}&code={code}`。
+    /// E2 解锁校验：`GET {unlockURL}?udid={UDID}&code={code}`.
     ///
-    /// - `code` **原样拼接、不做 URL 编码**（复刻牛蛙行为，规格 §5.1 / §9 R5）。
-    /// - 成功判据 = 响应体可解析为 JSON（不消费任何字段）。
-    /// - 成功后调用方负责**重拉 E1**（本函数不做刷新，规格 §5.3）。
-    /// - 两级 `unlockURL` 都为空 ⇒ 直接抛 `.unlockFailed`，不发请求（规格 §5.1）。
+    /// - `code` **原样拼接、不做 URL 编码**（复刻牛蛙行为，规格 §5.1 / §9 R5）.
+    /// - 成功判据 = 响应体可解析为 JSON（不消费任何字段）.
+    /// - 成功后调用方负责**重拉 E1**（本函数不做刷新，规格 §5.3）.
+    /// - 两级 `unlockURL` 都为空 ⇒ 直接抛 `.unlockFailed`，不发请求（规格 §5.1）.
     static func unlock(unlockURL: String, code: String) async throws {
         guard !code.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw SignSourceError.unlockFailed("解锁码不能为空")
@@ -133,7 +133,7 @@ enum SignSourceClient {
         // 成功：什么都不做（真正的状态在服务端，规格 §5.2）
     }
 
-    /// 响应体 → `SignSource`（明文直用 / RSA 信封自动识别）。抽出来便于单测与抓包期调试。
+    /// 响应体 → `SignSource`（明文直用 / RSA 信封自动识别）.抽出来便于单测与抓包期调试.
     ///
     /// 主流程见规格 §2.3：
     /// ① data → `[String: Any]`（失败 `.notJSON`）
@@ -144,7 +144,7 @@ enum SignSourceClient {
     /// ⑤ 归一化：空串 → nil（已在模型解码层做）、http→https、回填、继承
     /// ⑥ 解码后 apps 为空 ⇒ `.missingFields`
     ///
-    /// - Parameter origin: 用户输入的原始 sourceURL，用于源 JSON 缺 `sourceURL` 时回填。
+    /// - Parameter origin: 用户输入的原始 sourceURL，用于源 JSON 缺 `sourceURL` 时回填.
     static func parse(_ data: Data, origin: String) throws -> SignSource {
         // ① 顶层 JSON 对象
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
@@ -230,7 +230,7 @@ enum SignSourceClient {
         return URLSession(configuration: cfg)
     }()
 
-    /// GET 取原始响应体。非 2xx → `.http`；超时 → `.network("请求超时")`。
+    /// GET 取原始响应体.非 2xx → `.http`；超时 → `.network("请求超时")`.
     private static func getJSON(_ url: URL) async throws -> Data {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
@@ -251,8 +251,8 @@ enum SignSourceClient {
 
     // MARK: - UDID
 
-    /// 取本机 UDID（**只吃缓存、绝不建隧道**，规格 §6）。
-    /// 冷缓存 → 后台预热，本次请求省略 `udid` 参数（更诚实，不伪造设备标识）。
+    /// 取本机 UDID（**只吃缓存、绝不建隧道**，规格 §6）.
+    /// 冷缓存 → 后台预热，本次请求省略 `udid` 参数（更诚实，不伪造设备标识）.
     private static func currentUDID() -> String? {
         if let snap = LocalDeviceIdentity.cachedSnapshot(),
            let udid = snap.udid?.trimmingCharacters(in: .whitespaces), !udid.isEmpty {
@@ -264,7 +264,7 @@ enum SignSourceClient {
 
     // MARK: - 工具
 
-    /// 组 URL：校验 scheme 为 http(s)，保留原 query 再 append 额外参数。
+    /// 组 URL：校验 scheme 为 http(s)，保留原 query 再 append 额外参数.
     private static func makeURL(_ base: String, extraQuery: [URLQueryItem]) -> URL? {
         guard var comps = URLComponents(string: base.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return nil
@@ -278,7 +278,7 @@ enum SignSourceClient {
         return comps.url
     }
 
-    /// ATS：明文 http 一律升 https（照 `NiuwaStoreClient.normalizeAsset`，规格 §1.2）。
+    /// ATS：明文 http 一律升 https（照 `NiuwaStoreClient.normalizeAsset`，规格 §1.2）.
     private static func normalizeAsset(_ raw: String?) -> String? {
         guard var v = raw?.trimmingCharacters(in: .whitespaces), !v.isEmpty else { return nil }
         if v.hasPrefix("http://") {
@@ -287,7 +287,7 @@ enum SignSourceClient {
         return v
     }
 
-    /// 取值兜底：`String` / `NSNumber` → 非空 `String?`（照 `NiuwaStoreClient.string`）。
+    /// 取值兜底：`String` / `NSNumber` → 非空 `String?`（照 `NiuwaStoreClient.string`）.
     private static func string(_ v: Any?) -> String? {
         if let s = v as? String {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -2,7 +2,7 @@
 //  SSHServerService.swift
 //  TequilaDash
 //
-//  SSH 无线调试服务（v0.3.63）——路线 A：app 内嵌 Citadel（swift-nio-ssh）SSH 服务端.
+//  SSH 无线调试服务——路线 A：app 内嵌 Citadel（swift-nio-ssh）SSH 服务端.
 //  用途：电脑 `ssh TequilaDash@<手机IP> -p 2222` 无线连接设备，执行内置诊断命令，
 //  免去爱思导出日志的来回折腾.
 //
@@ -35,7 +35,7 @@ private final class LockedResultBox: @unchecked Sendable {
 /// （`TequilaDashApp.init` / 各 `View`）也都在主 actor；`server` 句柄仅在 start/stop
 /// 各自的单个 detached 任务内写入（start 的 guard server == nil 检查在主线程先行，
 /// stop 与 start 不会同时持有写窗口），非隔离的 `static execute` 只读共享状态做
-/// 诊断输出，不做写。
+/// 诊断输出，不做写.
 final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
     static let shared = SSHServerService()
 
@@ -59,7 +59,7 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
         // 存储属性必须全部先于 super.init() 初始化
         let savedPort = UserDefaults.standard.integer(forKey: "ssh.port")
         port = savedPort > 0 ? savedPort : Self.defaultPort
-        // v0.3.726 起密码默认随新品牌（TequilaDash）；老安装里存过的旧默认 escape 就地迁移，避免登录用户名突然对不上.
+        // 起密码默认随新品牌（TequilaDash）；老安装里存过的旧默认 escape 就地迁移，避免登录用户名突然对不上.
         var migratedName = UserDefaults.standard.string(forKey: "ssh.username") ?? "TequilaDash"
         if migratedName == "escape" { migratedName = "TequilaDash" }
         username = migratedName
@@ -152,9 +152,9 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
                 let hostKey = try Self.loadOrCreateHostKey()
                 let auth = PasswordAuthDelegate(username: username, password: password)
                 let exec = BuiltinCommandExecDelegate()
-                // SFTP 子系统（v0.3.63x）：把统一 FileProvider 接到 Citadel 的 SFTP v3 服务端。
+                // SFTP 子系统：把统一 FileProvider 接到 Citadel 的 SFTP v3 服务端.
                 // 注意： 认证不受影响 —— SFTP 只在**已通过 PasswordAuthDelegate 的会话**上开放，
-                //    不存在免密/匿名路径。文件域见 SSHFileProvider.swift。
+                //    不存在免密/匿名路径.文件域见 SSHFileProvider.swift.
                 let sftp = SFTPFileSystemDelegate(provider: SSHFileProviderFactory.makeDefault())
 
                 let server = try await Citadel.SSHServer.host(
@@ -189,14 +189,14 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
                 }
             } catch {
                 guard let self else { return }
-                // v0.3.662（task-13 发现15）：**关掉已绑定的 server，别让端口泄漏**.
+                // **关掉已绑定的 server，别让端口泄漏**.
                 //
                 // 走到这里的路径有两种：
                 //  a) Citadel.SSHServer.host(...) 本身抛错 —— 此时没有 server 可关；
                 //  b) host(...) 成功后，enableExec/enableSFTP、closeFuture.get() 或
                 //     MainActor.run 抛错 —— 此时 server 已绑定端口并且**仍然活着**，
                 //     旧代码只把 self.server 置 nil，既没 close 也没留给任何人持有，
-                //     端口被那个无人引用的 server 一直占着。用户再点「启动」会拿到
+                //     端口被那个无人引用的 server 一直占着.用户再点「启动」会拿到
                 //     「地址已被占用」，必须重启 App 才能恢复（与 :327 记录的实测事故同症状）.
                 let leaked = self.server
                 self.server = nil
@@ -220,7 +220,7 @@ final class SSHServerService: NSObject, ObservableObject, @unchecked Sendable {
                 if isCurrent {
                     self.server = nil
                     self.isRunning = false
-                    // v0.3.662（task-13 发现3）：只在**确认自己就是当前实例**时结束后台任务.
+                    // 只在**确认自己就是当前实例**时结束后台任务.
                     //
                     // 旧代码把 endBackgroundTaskIfNeeded() 放在 if 外面，于是只要有人调 stop()，
                     // 哪怕此时 server 已经是别人（start() 失败期间 self.server 被置 nil、或
@@ -339,39 +339,39 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
         // 忽略环境变量设置
     }
 
-    /// 单次 exec 回传的**硬上限**。
+    /// 单次 exec 回传的**硬上限**.
     ///
-    /// 为什么必须有：`stdoutPipe` 是**管道**，缓冲约 64KB。超过缓冲的部分，
-    /// 写端会阻塞到读端把管道排空为止 —— 而排空管道的 handler 跑在**同一个事件循环线程**上。
-    /// 于是写端把线程占住、读端永远没机会跑 ⇒ **死锁**。
+    /// 为什么必须有：`stdoutPipe` 是**管道**，缓冲约 64KB.超过缓冲的部分，
+    /// 写端会阻塞到读端把管道排空为止 —— 而排空管道的 handler 跑在**同一个事件循环线程**上.
+    /// 于是写端把线程占住、读端永远没机会跑 ⇒ **死锁**.
     ///
     /// 注意： 2026-10-05 实测事故：在设备上 `cat` 一个 10MB 文件，**SSH 服务被直接打死**
-    /// （端口从 OPEN 变成 Connection refused，只能重启 App 恢复）。
-    /// 当时 `catLimitBytes` 被设成了 0（无限制），所以没被 `cat` 自己的上限拦住。
+    /// （端口从 OPEN 变成 Connection refused，只能重启 App 恢复）.
+    /// 当时 `catLimitBytes` 被设成了 0（无限制），所以没被 `cat` 自己的上限拦住.
     ///
     /// 4MB 的取值依据：合法的最大用途是 `cap fs.read` 单块 1MB，base64 后约 1.4MB，
-    /// 留足余量。超过这个量级就该改成分块拉，而不是一次回传。
+    /// 留足余量.超过这个量级就该改成分块拉，而不是一次回传.
     static let maxResponseBytes = 4 << 20            // 4 MB
 
-    /// 分块大小。**必须远小于管道缓冲（约 64KB）**，否则单块就可能把管道写满。
+    /// 分块大小.**必须远小于管道缓冲（约 64KB）**，否则单块就可能把管道写满.
     private static let responseChunkBytes = 8 << 10  // 8 KB
 
     /// `devcert` 命令等待开发证书创建的硬上限（秒）—— 流程实测最多约 40 秒，
     /// 这里留足余量作**硬兜底**，防止 `sem.wait()` 在底层卡住时永久挂起 SSH 命令线程
-    /// （照 `I4AppFixService.writeTimeoutSeconds` 的超时写法）。
+    /// （照 `I4AppFixService.writeTimeoutSeconds` 的超时写法）.
     private static let devcertTimeoutSeconds: TimeInterval = 60
 
-    /// 把一段文本**分块**写进某个输出通道。
+    /// 把一段文本**分块**写进某个输出通道.
     ///
-    /// 为什么必须分块：`Pipe` 的缓冲约 64KB。超过缓冲的部分，写端会阻塞到读端把管道排空 ——
-    /// 而排空管道的 handler 跑在**同一个事件循环线程**上。
-    /// 写端把线程占住、读端永远没机会跑 ⇒ **死锁**（见 `maxResponseBytes` 的注释里的实测事故）。
+    /// 为什么必须分块：`Pipe` 的缓冲约 64KB.超过缓冲的部分，写端会阻塞到读端把管道排空 ——
+    /// 而排空管道的 handler 跑在**同一个事件循环线程**上.
+    /// 写端把线程占住、读端永远没机会跑 ⇒ **死锁**（见 `maxResponseBytes` 的注释里的实测事故）.
     ///
     /// 注意： **任何**往 `stdoutPipe` / `stderrPipe` 写输出的地方都必须走这个函数，
-    /// 不要直接 `pipe.fileHandleForWriting.write(...)`。
+    /// 不要直接 `pipe.fileHandleForWriting.write(...)`.
     /// 目前只有 stdout 在用（仓库里没有任何 stderr 写入），
     /// 但 Citadel 的 `ExecOutputHandler` 同时提供 `stderrPipe`，将来要分离 stderr 时
-    /// 直接用这个助手即可，不要再写一遍。
+    /// 直接用这个助手即可，不要再写一遍.
     private func writeChunked(_ text: String, to pipe: Pipe) async throws {
         let data = Data(text.utf8)
         var off = data.startIndex
@@ -389,7 +389,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
     func start(command: String, outputHandler: ExecOutputHandler) async throws -> ExecCommandContext {
         var output = Self.execute(command)
 
-        // 1) 硬截断。按**字符**累加而不是按字节切，避免把一个多字节 UTF-8 字符切成两半。
+        // 1) 硬截断.按**字符**累加而不是按字节切，避免把一个多字节 UTF-8 字符切成两半.
         var truncated = false
         if output.utf8.count > Self.maxResponseBytes {
             var kept = ""
@@ -438,49 +438,49 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             lines.append("  实测帧率: \(HighRefreshService.shared.measuredFPS) FPS")
             return lines.joined(separator: "\n")
         case "ddiprobe":
-            // ▸ 只读诊断：判定设备上到底挂没挂 DDI（Developer Disk Image）。
+            // ▸ 只读诊断：判定设备上到底挂没挂 DDI（Developer Disk Image）.
             //
             // 为什么需要：主页两个内置模块（locache / wifirefresh）走
-            // `app_service_connect_rsd` 时会出现 `ServiceNotFound`(21)。
+            // `app_service_connect_rsd` 时会出现 `ServiceNotFound`(21).
             //
             // 注意： 关于 `ServiceNotFound` 的成因，本项目先后写过两版**都已作废**：
-            //    ①「DDI 门控」（见 `CHANGELOG.md` `[0.3.462]`）；②「接错隧道」。
+            //    ①「DDI 门控」（见 `CHANGELOG.md` `[0.3.462]`）；②「接错隧道」.
             //    **事实（用户实测 + PC 侧交叉验证）**：`ServiceNotFound`(21) 是**设备侧的服务状态
             //    问题**，不是本 App 的缺陷 —— 该服务偶尔不可用，**重启手机即恢复**；
             //    与 DDI、与「用哪条隧道」都无关（PC 侧标准工具 `pymobiledevice3` 拿到的 RSD
-            //    服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**）。**原理未知。**
+            //    服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**）.**原理未知.**
             //    **本命令仍保留**：它回答的是「DDI 挂没挂」这个**独立**问题，
-            //    只是**不再用来解释 `ServiceNotFound`**。
-            // 本命令只回答一个问题：`image_mounter_copy_devices` 返回空还是非空。
+            //    只是**不再用来解释 `ServiceNotFound`**.
+            // 本命令只回答一个问题：`image_mounter_copy_devices` 返回空还是非空.
             //
-            // 注意： 只给 SSH 调试用。**不要挂到任何 UI 路径上** —— 它会真建 RSD 隧道，
-            //    而且它开的服务连接**每次只允许一条**。
-            // 安全约束全部落在 `DDIMountProbe` 头注释里（复用 AFC 串行队列 / 单连接 / 只读）。
+            // 注意： 只给 SSH 调试用.**不要挂到任何 UI 路径上** —— 它会真建 RSD 隧道，
+            //    而且它开的服务连接**每次只允许一条**.
+            // 安全约束全部落在 `DDIMountProbe` 头注释里（复用 AFC 串行队列 / 单连接 / 只读）.
             // 用法：ddiprobe   （同步阻塞执行，结束后直接读结果）
             return DDIMountProbe.runOnce()
         case "cdprobe":
             // ▸ 只读诊断：走「CoreDeviceProxy 隧道内的**第二个** RSD 握手」，
-            // dump CoreDevice 服务表并端到端跑一次 app_service_list_processes。
+            // dump CoreDevice 服务表并端到端跑一次 app_service_list_processes.
             //
             // 为什么需要：主页两个内置模块（locache / wifirefresh）与「进程管理」走
-            // `app_service_connect_rsd` 时会出现 `ServiceNotFound`(21)。
+            // `app_service_connect_rsd` 时会出现 `ServiceNotFound`(21).
             //
             // 注意： 关于 `ServiceNotFound` 的成因，本项目先后写过两版**都已作废**
-            //    （①「DDI 门控」；②「接错隧道」）。**事实（用户实测 + PC 侧交叉验证）**：
+            //    （①「DDI 门控」；②「接错隧道」）.**事实（用户实测 + PC 侧交叉验证）**：
             //    `ServiceNotFound`(21) 是**设备侧的服务状态问题**，不是本 App 的缺陷 ——
             //    该服务偶尔不可用，**重启手机即恢复**；与 DDI、与「用哪条隧道」都无关
             //    （PC 侧标准工具 `pymobiledevice3` 拿到的 RSD 服务表与我们**逐条一致**，
-            //    调同一个服务**同样失败**）。**原理未知。**
+            //    调同一个服务**同样失败**）.**原理未知.**
             // 仍然成立的一条：`RsdHandshake::connect` 是纯 HashMap 查表、查不到直接
-            // 报错、**无回退** ⇒ 失败时重试 3 次毫无意义。
+            // 报错、**无回退** ⇒ 失败时重试 3 次毫无意义.
             //
             // 本命令因此只回答一个工程问题：CoreDeviceProxy 隧道内的「第二个 RSD 握手」
             // 这条路在本仓**能不能**走通（上游 `tools/src/app_service.rs:69-85`），
-            // 并如实报告每一步的错误原文。
+            // 并如实报告每一步的错误原文.
             //
-            // 注意： 只给 SSH 调试用。**不要挂到任何 UI 路径上** —— 它会真建隧道 + 真开一条
-            //    app_service 连接（RSD 隧道并发铁律；v0.3.419/420 事故见 `MY-FAULTS.md` 缺陷 17）。
-            // 安全约束全部落在 `CDProbe` 头注释里（复用 AFC 串行队列 / 单连接 / 只读）。
+            // 注意： 只给 SSH 调试用.**不要挂到任何 UI 路径上** —— 它会真建隧道 + 真开一条
+            //    app_service 连接（RSD 隧道并发铁律；/420 事故见 `MY-FAULTS.md` 缺陷 17）.
+            // 安全约束全部落在 `CDProbe` 头注释里（复用 AFC 串行队列 / 单连接 / 只读）.
             // 用法：cdprobe   （同步阻塞执行，结束后直接读结果）
             return CDProbe.runOnce()
         case "modules":
@@ -493,7 +493,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let tail = all.suffix(max(1, min(n, 5000))).joined(separator: "\n")
             return tail.isEmpty ? "（登录日志为空）" : tail
         case "tunnellog":
-            // ▸ 隧道诊断日志（v0.3.723）.
+            // ▸ 隧道诊断日志.
             //
             // 与界面「隧道日志」页（Views/TunnelLogView.swift）读**同一份**数据：
             // LoginLogger 的 .tunnelCellular 分类 —— 不另开文件、不另开分类.
@@ -526,12 +526,12 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let sources: [(String, URL)] = [
                 ("run.log", dir.appendingPathComponent("run.log")),
                 ("data/stderr.log", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("stderr.log")),
-                // Go runtime 初始化阶段的 fatal/throw（fd 2 重定向产物，v0.3.74+）
+                // Go runtime 初始化阶段的 fatal/throw（fd 2 重定向产物，+）
                 ("data/go_stderr.log", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("go_stderr.log")),
-                // v0.3.76：Go 逐步打点（enter/args-set/error/panic）
+                // Go 逐步打点（enter/args-set/error/panic）
                 ("data/trace.txt", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("trace.txt")),
                 ("data/probe.txt", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("probe.txt")),
-                // v0.3.79 二分诊断标记
+                // 二分诊断标记
                 ("data/step1.done", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("step1.done")),
                 ("data/step2.done", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("step2.done")),
                 ("data/step3.done", ModuleService.shared.dataURL(for: bin.id).appendingPathComponent("step3.done")),
@@ -544,7 +544,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                 let all = s.components(separatedBy: "\n").filter { !$0.isEmpty }
                 let keep = min(max(n, 1), 200)
                 out.append("=== [\(bin.id)] \(label) 末尾 \(keep) 行 ===")
-                // 空文件也显式标注（v0.3.75：空/非空本身是关键判据）
+                // 空文件也显式标注（空/非空本身是关键判据）
                 out.append(all.isEmpty ? "（文件存在但为空）" : all.suffix(keep).joined(separator: "\n"))
             }
             return out.isEmpty ? "（暂无 \(bin.id) 运行日志）" : out.joined(separator: "\n")
@@ -586,7 +586,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             guard target.path.hasPrefix(docsStd + "/") else { return "[失败] 路径越界（仅限 Documents 内）" }
             guard let attr = try? FileManager.default.attributesOfItem(atPath: target.path),
                   let size = attr[.size] as? UInt64 else { return "不存在: \(rel)" }
-            // v0.3.434：上限改为**用户可配置**（「更多 → 设置 → 日志」，默认 1024KB，填 0 = 无限制）
+            // 上限改为**用户可配置**（「更多 → 设置 → 日志」，默认 1024KB，填 0 = 无限制）
             let catLimit = LogLimitSettings.catLimitBytes
             if catLimit < Int.max {                 // 无限制 → 跳过检查
                 guard size <= UInt64(catLimit) else {
@@ -596,7 +596,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             guard let s = try? String(contentsOf: target, encoding: .utf8) else { return "非 UTF-8 文本文件" }
             return s
                 case "invoke":
-            // v0.3.112 通用符号调用：任何二进制模块的任何导出符号都能调.
+            // 通用符号调用：任何二进制模块的任何导出符号都能调.
             // 此前硬编码的专用命令（模块名即符号名）已删除——那些是「模块的数据」，
             // 不该出现在引擎代码里.用法：invoke <符号名>
             guard parts.count >= 2 else {
@@ -617,7 +617,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                      + "   详情: runlog 25"
             }
 
-            // v0.3.120：与 start 路径对齐——stderr 重定向 + 崩溃探针（硬故障落盘）
+            // 与 start 路径对齐——stderr 重定向 + 崩溃探针（硬故障落盘）
             let goErr = dataDir.appendingPathComponent("go_stderr.log")
             let efd = open(goErr.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
             if efd >= 0 {
@@ -637,10 +637,10 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             return "\(symName): 已调用（数据目录以参数传入）\n入口=\(sym) 前16字节: \(codeHex)\n结果: \(resultText)\n下一步: runlog 查看模块日志；若闪退见 go_stderr.log 的 [uloader-crash] 行"
 
         case "store":
-            // v0.3.341：远程触发 App Store 下载（诊断/自测用）。
-            // 用法：store get <trackId> [email]   —— 不传 email 用当前下载账号。
+            // 远程触发 App Store 下载（诊断/自测用）.
+            // 用法：store get <trackId> [email]   —— 不传 email 用当前下载账号.
             // 走与界面「获取」完全相同的路径（IPADownloadCenter.startWithAppleID），
-            // 结果全部落在商店日志里，可用 `logs` 直接读回。
+            // 结果全部落在商店日志里，可用 `logs` 直接读回.
             guard parts.count >= 3, parts[1] == "get", let trackId = Int64(parts[2]) else {
                 return "用法: store get <trackId> [email]"
             }
@@ -666,7 +666,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             return "已触发下载 trackId=\(trackId)；用 logs 200 查看过程"
 
         case "devcert":
-            // v0.3.130：远程触发开发证书创建（诊断/自测用）.
+            // 远程触发开发证书创建（诊断/自测用）.
             // 流程：生成密钥+CSR → 提交 Apple →（7460 自动吊销重试）→ 轮询取证书.
             // execute 是同步函数 → 信号量等 Task 完成（整流程最多 ~40 秒）；
             // 等 `devcertTimeoutSeconds` 秒仍无结果即放弃等待（硬兜底，不静默）.
@@ -691,7 +691,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
         case "mlog":
             // 读模块数据目录下的任意文件.
             // 注意：不能用通用 cat —— 它基于 FileManager.documentDirectory，而模块数据目录
-            // 在 LC 下位于 NSHomeDirectory() 之下，两者不是同一棵树（v0.3.74 实锤）.
+            // 在 LC 下位于 NSHomeDirectory() 之下，两者不是同一棵树（ 实锤）.
             let binID = Self.firstBinaryModuleID()
             let dataDir = ModuleService.shared.dataURL(for: binID)
             let name = parts.count > 1 ? parts[1] : "log/log.log"
@@ -772,10 +772,10 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             let dir = ModuleService.shared.dataURL(for: id)
             let target = dir.appendingPathComponent(rel)
             // 防路径越界：标准化后必须仍在模块数据目录内
-            // v0.3.662（task-13 发现2）：hasPrefix 缺分隔符 —— 模块目录 `/x/com.foo` 与
+            // hasPrefix 缺分隔符 —— 模块目录 `/x/com.foo` 与
             // 兄弟目录 `/x/com.foo-evil` 前缀相同，`../com.foo-evil/secret.txt` 标准化后仍
-            // 满足旧判断，能读出模块目录之外的文件。同文件 :514/:542 与 SSHFileProvider:265
-            // 都是 `== dir || hasPrefix(dir + "/")` 的正确写法，这里是孤立疏漏。
+            // 满足旧判断，能读出模块目录之外的文件.同文件 :514/:542 与 SSHFileProvider:265
+            // 都是 `== dir || hasPrefix(dir + "/")` 的正确写法，这里是孤立疏漏.
             let dirPath = dir.standardizedFileURL.path
             let targetPath = target.standardizedFileURL.path
             guard targetPath == dirPath || targetPath.hasPrefix(dirPath + "/") else {
@@ -791,13 +791,13 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
             // 直接调一次宿主能力（排障用）：`cap <能力名> [JSON]`
             //
             // 与模块走的是**同一个** `HostCapabilityService.call`（所以也会进 `caplog`）——
-            // 有了它就能在 SSH 里逐个能力试，不用装模块、不用点界面。
+            // 有了它就能在 SSH 里逐个能力试，不用装模块、不用点界面.
             //
             // 例：cap host.version
             //     cap afc.list '{"path":"/DCIM"}'
             //     cap proc.list
             //
-            // 注意： 同步阻塞：有些能力会真的连设备，一次可能十几秒。
+            // 注意： 同步阻塞：有些能力会真的连设备，一次可能十几秒.
             guard parts.count > 1 else {
                 return "用法: cap <能力名> [JSON]\n"
                     + "例: cap host.version\n"
@@ -811,7 +811,7 @@ final class BuiltinCommandExecDelegate: ExecDelegate, @unchecked Sendable {
                                                           jsonArgs: argText.isEmpty ? "{}" : argText)
             return "rc=\(rc)\n\(result)"
         case "luaeval", "luaexec":
-            // v0.3.95：Lua 模块宿主（Rust+mlua，编进 App）.luaeval=表达式求值，luaexec=语句块.
+            // Lua 模块宿主（Rust+mlua，编进 App）.luaeval=表达式求值，luaexec=语句块.
             let code = String(raw.dropFirst(cmd.count)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !code.isEmpty else { return "用法: \(cmd) <lua 表达式/代码>" }
             let outPath = ModuleService.shared.dataURL(for: Self.firstBinaryModuleID())

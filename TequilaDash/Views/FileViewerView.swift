@@ -116,12 +116,12 @@ struct FileViewerView: View {
 
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是语义正确的隔离，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 @MainActor
 final class FileViewerViewModel: ObservableObject {
     static let maxEditableBytes = 512 * 1024
     /// Swift 6：`nonisolated` —— 它是不可变常量（`Int` 本身 Sendable），
-    /// 会被非隔离的类型判定函数读取（CI 实测 :245）。**不要**改成 `nonisolated(unsafe)`。
+    /// 会被非隔离的类型判定函数读取（CI 实测 :245）.**不要**改成 `nonisolated(unsafe)`.
     nonisolated static let maxTextBytes = 2 * 1024 * 1024
 
     @Published var isLoading = true
@@ -237,7 +237,7 @@ final class FileViewerViewModel: ObservableObject {
     }
 
     /// Swift 6：纯函数（参数进、返回值出，不读写实例状态）→ nonisolated，
-    /// 供 load() 的后台闭包在非主线程调用，避免 @MainActor 推断带来的新隔离错误。
+    /// 供 load() 的后台闭包在非主线程调用，避免 @MainActor 推断带来的新隔离错误.
     private nonisolated func resolve(mode: FileOpenMode, kind: FileContentKind, data: Data) -> FileOpenMode {
         if mode != .auto { return mode }
         // plist 默认交给结构化编辑器（可增删改键值，比纯文本好用）；
@@ -330,7 +330,7 @@ final class FileViewerViewModel: ObservableObject {
         }
     }
 
-    /// Swift 6：只做 FileManager 文件操作，不读写实例状态 → nonisolated（同 resolve）。
+    /// Swift 6：只做 FileManager 文件操作，不读写实例状态 → nonisolated（同 resolve）.
     ///
     /// `sourcePath` is mixed into the staged file name. Two unrelated containers can
     /// hold a same-named file (e.g. two `report.pdf`), and the preview directory is

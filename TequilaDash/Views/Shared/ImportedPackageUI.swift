@@ -4,7 +4,7 @@ import CryptoKit
 import ImageIO
 import Darwin   // dlopen / dlclose：诊断私有 CoreUI 取图卡在哪一步（见 assetCatalogFailureStep）
 
-// 共享转换 · 三个二级页（已导入 / 待修补 / 已修补）共用的小件与扫描入口。
+// 共享转换 · 三个二级页（已导入 / 待修补 / 已修补）共用的小件与扫描入口.
 //
 // 抽出来只为**少写三遍**，不改任何既有行为：
 //   · `ImportedPackageScanner`  —— 拿「本机已安装清单 + `Imports/` 磁盘现状」
@@ -14,14 +14,14 @@ import Darwin   // dlopen / dlclose：诊断私有 CoreUI 取图卡在哪一步�
 //   · `PackageChip`             —— 胶囊标签（画法复用 IPADownloadManagerView / ImportView 的 `chip`）
 //   · `ImportedPackage.Status` 的 `symbol` / `tint` —— 语义配色一律取 `AppTheme`
 
-/// 三个二级页共用的扫描入口。
+/// 三个二级页共用的扫描入口.
 enum ImportedPackageScanner {
 
-    /// 扫 `Imports/`，返回「已导入 / 已修补」两块。
+    /// 扫 `Imports/`，返回「已导入 / 已修补」两块.
     ///
     /// 「已安装」判定需要本机应用清单（`AppDiscovery`，依赖配对 / 隧道）；**查不到就传 nil**，
-    /// 列表只落「待修补 / 已修补」，`isInstalled` 保持 nil，绝不凭空断言已安装。
-    /// 扫描（判已安装时会解包读 bundleId）放后台，不卡主线程 —— 与 `ImportView.reloadPackages` 同型。
+    /// 列表只落「待修补 / 已修补」，`isInstalled` 保持 nil，绝不凭空断言已安装.
+    /// 扫描（判已安装时会解包读 bundleId）放后台，不卡主线程 —— 与 `ImportView.reloadPackages` 同型.
     static func scan() async -> ImportedPackageList.Listing {
         let installed: Set<String>? = await Task.detached(priority: .userInitiated) { () -> Set<String>? in
             do { return Set(try AppDiscovery().fetchInstalledApps().map(\.bundleIdentifier)) }
@@ -33,47 +33,47 @@ enum ImportedPackageScanner {
     }
 }
 
-/// 三个二级页共用的「删除安装包」入口。
+/// 三个二级页共用的「删除安装包」入口.
 ///
-/// 把该包在本机的**全部落点**删掉：原件、修补产物、以及 `Documents/Repaired/` 里的镜像副本。
+/// 把该包在本机的**全部落点**删掉：原件、修补产物、以及 `Documents/Repaired/` 里的镜像副本.
 /// 返回**真实结果**给调用方，由它按结果提示（不做「假成功」——见 `IPADownloadLibrary.RemoveResult`
-/// 的同一取向）。本仓「已导入」没有持久化台账，列表由 `ImportedPackageList.scanListing` **扫盘推导**
+/// 的同一取向）.本仓「已导入」没有持久化台账，列表由 `ImportedPackageList.scanListing` **扫盘推导**
 /// ⇒ 文件删掉即等于清单记录随之消失，无需另删一份台账；唯一需要单独清的是 `Documents/Repaired/`
 /// 那份镜像（它不在 `Imports/` 下，扫盘看不到）.
 ///
 /// 为什么不复用 `ImportedPackageMover.delete`：后者的落点只认 `originalPath`（原件），
 /// 「已修补」块的包常常没有原件（原件在安装成功后即删，或老平铺产物本就无原件路径）⇒ 它会直接
-/// 返回 `false`，删不掉。本组件按**包名**列举落点，新落点目录 / 老平铺两种形态都能覆盖.
+/// 返回 `false`，删不掉.本组件按**包名**列举落点，新落点目录 / 老平铺两种形态都能覆盖.
 ///
 /// 图标缓存不在此删：它是 Caches 下「按包 id 的 MD5 命名」的文件，删完文件后两页的 `loadIcons()`
-/// 会调 `ImportedPackageIconStore.pruneStaleIcons()` 统一清掉无主缓存（见该方法的判据）。
+/// 会调 `ImportedPackageIconStore.pruneStaleIcons()` 统一清掉无主缓存（见该方法的判据）.
 enum ImportedPackageDeleter {
 
-    /// 删除结果 —— 让调用方能给**真实**反馈，而不是无条件报「已删除」。
+    /// 删除结果 —— 让调用方能给**真实**反馈，而不是无条件报「已删除」.
     enum Result: Equatable {
-        /// 至少删掉了一处落点（文件 / 目录 / 镜像）。
+        /// 至少删掉了一处落点（文件 / 目录 / 镜像）.
         case removed
-        /// 磁盘上已找不到该包的任何落点（可能已被删）—— 视为「已不存在」，不算失败。
+        /// 磁盘上已找不到该包的任何落点（可能已被删）—— 视为「已不存在」，不算失败.
         case notFound
-        /// 有落点存在但删不掉（被占用 / 权限）—— 必须如实上报。
+        /// 有落点存在但删不掉（被占用 / 权限）—— 必须如实上报.
         case failed
     }
 
-    /// 删除该包的全部落点，返回实际结果。
+    /// 删除该包的全部落点，返回实际结果.
     static func delete(_ package: ImportedPackage) -> Result {
         let fm = FileManager.default
         let imports = ImportService.importsDirectory()
-        // 镜像落盘名与 `RepairedProductStore.leafName` 同口径（同一个 `sanitize`），否则清不到。
+        // 镜像落盘名与 `RepairedProductStore.leafName` 同口径（同一个 `sanitize`），否则清不到.
         let leaf = FileNameRules.sanitize("\(package.name).ipa") ?? "\(package.name).ipa"
         let targets = [
-            // 新落点：`Imports/<包名>/`（整目录，内含 original.ipa / repaired.ipa）。
+            // 新落点：`Imports/<包名>/`（整目录，内含 original.ipa / repaired.ipa）.
             imports.appendingPathComponent(package.name, isDirectory: true),
-            // 老平铺原件：`Imports/<包名>.ipa`。
+            // 老平铺原件：`Imports/<包名>.ipa`.
             imports.appendingPathComponent("\(package.name).ipa"),
-            // 老平铺产物仓库：`Imports/repaired/<包名>.ipa`。
+            // 老平铺产物仓库：`Imports/repaired/<包名>.ipa`.
             imports.appendingPathComponent("repaired", isDirectory: true)
                 .appendingPathComponent("\(package.name).ipa"),
-            // 「已修补」专属目录镜像：`Documents/Repaired/<包名>.ipa`。
+            // 「已修补」专属目录镜像：`Documents/Repaired/<包名>.ipa`.
             RepairedProductStore.directory().appendingPathComponent(leaf),
         ]
 
@@ -95,10 +95,10 @@ enum ImportedPackageDeleter {
     }
 }
 
-/// 无真图标时的首字母块（画法复用 `ImportView.monogram` / IPADownloadManagerView 的 monogram）。
+/// 无真图标时的首字母块（画法复用 `ImportView.monogram` / IPADownloadManagerView 的 monogram）.
 ///
 /// 它是 `ImportedPackageIconView` 的**回落项**：从包内读不出图标时用它，绝不显示空白或
-/// 加载失败样式的占位（字母块看着是有意设计）。
+/// 加载失败样式的占位（字母块看着是有意设计）.
 struct ImportedPackageMonogram: View {
     let name: String
     var size: CGFloat = 44
@@ -117,10 +117,10 @@ struct ImportedPackageMonogram: View {
     }
 }
 
-/// 胶囊标签（画法复用 `ImportView.chip`）。
+/// 胶囊标签（画法复用 `ImportView.chip`）.
 ///
 /// `horizontalPadding` 默认 6 —— 与既有三个二级页调用点一致，故不传即零变化；
-/// 部分商店页的胶囊口径为 5，显式传入即可，无需另写一份 `chip`。
+/// 部分商店页的胶囊口径为 5，显式传入即可，无需另写一份 `chip`.
 /// Step 3 批 6：改为共享 `SizePill` 的**薄封装**（`.tiny` 档 = `.caption2` + 6 / 1 + 12% 底）.
 /// `horizontalPadding` 参数名与默认 6 全部保留 ⇒ 既有调用点零改动、渲染与收敛前一致.
 struct PackageChip: View {
@@ -139,7 +139,7 @@ struct PackageChip: View {
 }
 
 extension ImportedPackage.Status {
-    /// 状态图标（语义对齐 `ImportView.ShareStage`：待修补 = clock / 已修补 = seal / 已安装 = check）。
+    /// 状态图标（语义对齐 `ImportView.ShareStage`：待修补 = clock / 已修补 = seal / 已安装 = check）.
     var symbol: String {
         switch self {
         case .awaitingRepair: return "clock"
@@ -148,11 +148,11 @@ extension ImportedPackage.Status {
         }
     }
 
-    /// 状态配色（一律取 `AppTheme` 语义色，自动适配明暗模式，不另造配色）。
+    /// 状态配色（一律取 `AppTheme` 语义色，自动适配明暗模式，不另造配色）.
     ///
     /// `.repaired` 与 `.installed` 共用 `AppTheme.success` 是**有意为之**，不是笔误：
     /// 这两个状态不会同页共存（「已导入」页的 status 只可能是 awaitingRepair / installed，
-    /// 「已修补」页的 status 恒为 repaired），故无需保留「青=已修补 / 绿=已安装」的视觉区分。
+    /// 「已修补」页的 status 恒为 repaired），故无需保留「青=已修补 / 绿=已安装」的视觉区分.
     /// 此前借用 `LocusTheme`（硬编码 sRGB、不随明暗模式自适应），浅色底上对比度不足.
     var tint: Color {
         switch self {
@@ -165,10 +165,10 @@ extension ImportedPackage.Status {
 
 // MARK: - 应用图标（缩略图 / 长按预览共用同一份）
 
-/// 列表行左侧的应用图标缩略图：有真图标就画，读不出回落首字母块。
+/// 列表行左侧的应用图标缩略图：有真图标就画，读不出回落首字母块.
 ///
 /// `url` 是 `ImportedPackageIconStore` 给出的 `file://` 地址；为空 / 读不出时回落
-/// `ImportedPackageMonogram`。缩略图与长按菜单里的「查看图标 / 提取图标」读的是**同一个地址**。
+/// `ImportedPackageMonogram`.缩略图与长按菜单里的「查看图标 / 提取图标」读的是**同一个地址**.
 struct ImportedPackageIconView: View {
     let name: String
     let url: String?
@@ -199,7 +199,7 @@ struct ImportedPackageIconView: View {
     }
 
     /// 直接读本地缓存文件（`file://` 路径）—— 图标只有几十 KB，主线程同步读即可，
-    /// 不走 `AsyncImage`（避免它对 `file` scheme 的额外不确定性）。
+    /// 不走 `AsyncImage`（避免它对 `file` scheme 的额外不确定性）.
     private func load() {
         guard let url, !url.isEmpty, let path = URL(string: url)?.path else {
             image = nil
@@ -210,7 +210,7 @@ struct ImportedPackageIconView: View {
 }
 
 /// 图标落盘缓存 —— 把 `ImportedPackageIconExtractor` 解出来的 PNG 落一份到 Caches，
-/// 对外只给 `file://` 地址。
+/// 对外只给 `file://` 地址.
 ///
 /// **为什么落文件而不是只留内存**：长按菜单的「查看图标 / 提取图标」复用仓库既有的 URL 取图链
 /// （`iconMenuItems` → `showIconPreview` / `IconExporter` → `PreviewImageLoader`），
@@ -222,8 +222,8 @@ struct ImportedPackageIconView: View {
 /// Caches 目录可被系统回收，丢了下次重新提取即可.
 ///
 /// 为什么要版本后缀：`iconURL` 命中即返回，若文件名只由包 id 决定，则**提取口径变更后**
-/// 旧口径的缓存永远覆盖不掉（v0.3.573 把散装取图从「首个命中」改为「按字节数取最大」、
-/// 本轮又从「字节数」改为「真实像素」，都是口径变更）。改一次 `cacheVersion`
+/// 旧口径的缓存永远覆盖不掉（把散装取图从「首个命中」改为「按字节数取最大」、
+/// 本轮又从「字节数」改为「真实像素」，都是口径变更）.改一次 `cacheVersion`
 /// 即让所有旧缓存文件名不再匹配而自然失效，`pruneStaleIcons` 会顺手清掉.
 enum ImportedPackageIconStore {
 
@@ -344,7 +344,7 @@ enum ImportedPackageIconStore {
             .joined()
     }
 
-    /// 缓存文件名 = `「包 id + 缓存版本」的 MD5` + `.png`。写入（`cachedFileURL`）与清理
+    /// 缓存文件名 = `「包 id + 缓存版本」的 MD5` + `.png`.写入（`cachedFileURL`）与清理
     /// （`pruneStaleIcons`）**必须**共用它，否则清理会误删刚写入的文件.
     private static func cacheFileName(for key: String) -> String {
         "\(digest(of: key + "@" + cacheVersion)).png"
@@ -355,18 +355,17 @@ enum ImportedPackageIconStore {
     }
 }
 
-/// 从 IPA（zip）里提取应用图标 PNG —— 本仓第一份「从 zip 取图标」的实现。
+/// 从 IPA（zip）里提取应用图标 PNG —— 本仓第一份「从 zip 取图标」的实现.
 ///
 /// 取图顺序：
 ///   0) **优先** `Payload/<App>.app/Assets.car` —— 现代 IPA 的高清图标只编在这里；
 ///   1) 散装 PNG：按 `Info.plist` 的图标声明名（`CFBundleIcons.CFBundlePrimaryIcon` /
 ///      顶层同名键）在 `Payload/<App>.app/` 下试 `@3x / @2x / 无后缀` 及 `~ipad / ~iphone`
 ///      设备变体，取命中里**像素最大**的一张；
-///   2) 兜底：app 包根目录（不含子目录）下像素最大的 PNG。
+///   2) 兜底：app 包根目录（不含子目录）下像素最大的 PNG.
 ///
-/// 口径与 `LiveContainerDiscovery.loadIconData` 一致（区别只是那边读**已解压目录**、
-/// 这里读 **zip 内的条目**）。比较用**真实像素**（ImageIO 解析），不用字节数 ——
-/// 同一套图标里字节数只是与像素**相关**，不是可靠度量。
+/// 这里读 **zip 内的条目**）.比较用**真实像素**（ImageIO 解析），不用字节数 ——
+/// 同一套图标里字节数只是与像素**相关**，不是可靠度量.
 ///
 /// 读不出（无声明、无散装 PNG、`Assets.car` 也取不到）返回 nil，由调用方回落首字母块 —— 不臆造.
 enum ImportedPackageIconExtractor {
@@ -382,7 +381,7 @@ enum ImportedPackageIconExtractor {
         let plist = try? PropertyListSerialization.propertyList(from: infoData, options: [], format: nil),
         let info = plist as? [String: Any] else { return nil }
 
-        // `Payload/<App>.app/` —— Info.plist 所在 app 包的目录前缀。
+        // `Payload/<App>.app/` —— Info.plist 所在 app 包的目录前缀.
         let appPrefix = String(infoName.dropLast("Info.plist".count))
 
         var declared: [String] = []
@@ -394,27 +393,27 @@ enum ImportedPackageIconExtractor {
         if let files = info["CFBundleIconFiles"] as? [String] { declared.append(contentsOf: files) }
         if let name = info["CFBundleIconName"] as? String { declared.append(name) }
 
-        // 0) 优先 Assets.car（现代 IPA 的 1024 图标在这里；散装 PNG 只是老系统兜底的小图）。
-        //    取不到返回 nil，**不改变**后面散装 PNG 的任何行为。
+        // 0) 优先 Assets.car（现代 IPA 的 1024 图标在这里；散装 PNG 只是老系统兜底的小图）.
+        //    取不到返回 nil，**不改变**后面散装 PNG 的任何行为.
         let catalogIcon = assetCatalogIcon(names: names, appPrefix: appPrefix, info: info, reader: reader)
 
-        // 1)+2) 散装 PNG（原逻辑，仅把「比大小」的口径从字节数改成像素）。
+        // 1)+2) 散装 PNG（原逻辑，仅把「比大小」的口径从字节数改成像素）.
         let scatteredIcon = scatteredIcon(names: names, appPrefix: appPrefix,
                                           declared: declared, reader: reader)
 
-        // 两路都拿到就取像素更大的；只有一路拿到就用那一路。car 取到的通常更大，
-        // 但若某包的散装 PNG 反而更大（异常包），也不让新逻辑把分辨率**降**下去。
+        // 两路都拿到就取像素更大的；只有一路拿到就用那一路.car 取到的通常更大，
+        // 但若某包的散装 PNG 反而更大（异常包），也不让新逻辑把分辨率**降**下去.
         if let catalogIcon, let scatteredIcon {
             return pixelCount(of: catalogIcon) >= pixelCount(of: scatteredIcon) ? catalogIcon : scatteredIcon
         }
         return catalogIcon ?? scatteredIcon
     }
 
-    /// 从 `Payload/<App>.app/Assets.car` 取最大的一档应用图标并重编码为 PNG。
+    /// 从 `Payload/<App>.app/Assets.car` 取最大的一档应用图标并重编码为 PNG.
     /// 取不到（无 car / 私有 CoreUI 不可用 / 解不出图）返回 nil —— 调用方原样回落散装 PNG.
     ///
     /// 三种结果都写 `LoginLogger`（`.shareConvert`）—— 这是**唯一能在真机验证私有 CoreUI 是否生效**
-    /// 的抓手：它失败时会静默回落到 120×120，用户仍看到糊图却毫无提示，只有日志能区分。
+    /// 的抓手：它失败时会静默回落到 120×120，用户仍看到糊图却毫无提示，只有日志能区分.
     private static func assetCatalogIcon(names: [String], appPrefix: String,
                                          info: [String: Any], reader: ZipReader) -> Data? {
         let carName = appPrefix + "Assets.car"
@@ -423,11 +422,11 @@ enum ImportedPackageIconExtractor {
             LoginLogger.shared.log("[图标] 无 Assets.car，回落散装 PNG（car=\(carName)）", category: .shareConvert)
             return nil
         }
-        // 图标名取声明（`CFBundleIconName` 即 car 内的 rendition 名，通常为 "AppIcon"）。
+        // 图标名取声明（`CFBundleIconName` 即 car 内的 rendition 名，通常为 "AppIcon"）.
         let iconName = ((info["CFBundleIcons"] as? [String: Any])?["CFBundlePrimaryIcon"] as? [String: Any])?["CFBundleIconName"] as? String
             ?? info["CFBundleIconName"] as? String
             ?? "AppIcon"
-        // `CUICatalog` 需要文件 URL，故先把 car 落到临时文件，用完即删。
+        // `CUICatalog` 需要文件 URL，故先把 car 落到临时文件，用完即删.
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("esc-icon-\(UUID().uuidString).car")
         guard (try? carData.write(to: tmp)) != nil else {
@@ -445,7 +444,7 @@ enum ImportedPackageIconExtractor {
         return png
     }
 
-    /// 私有 CoreUI 取图失败时，从 Swift 侧探出**卡在哪一步**（dlopen / NSClassFromString / 取图或重编码）。
+    /// 私有 CoreUI 取图失败时，从 Swift 侧探出**卡在哪一步**（dlopen / NSClassFromString / 取图或重编码）.
     ///
     /// 前两步与 `AssetCatalogIcon.m` 用的是同一对调用（同一路径的 dlopen、同一个类名），
     /// 结果必然一致；若两步都通过却仍返回 nil，则失败落在 ObjC 内部的 `imageWithName:` 取图
@@ -465,15 +464,15 @@ enum ImportedPackageIconExtractor {
     /// 散装 PNG 取图：先按声明名（含设备变体后缀）取像素最大的一张，找不到再退到 app 包根目录.
     private static func scatteredIcon(names: [String], appPrefix: String,
                                       declared: [String], reader: ZipReader) -> Data? {
-        // 1) 按声明名找条目（含常见设备变体后缀），取命中里**像素最大**的一张。
+        // 1) 按声明名找条目（含常见设备变体后缀），取命中里**像素最大**的一张.
         //    改动前：按 `entry.uncompressedSize`（压缩前字节数）取最大；改动后：按**真实像素**
-        //    （`pixelCount`，ImageIO 解析）取最大。**在现有真实样本上两者结果相同** ——
-        //    实测三个 IPA，改动前后都选中同一张（120×120 或 180×180）。故这次改动的价值是
-        //    **语义正确**（像素才是尺寸的可信度量，字节数只是与像素相关），**不是**分辨率提升。
-        //    只认 `CFBundleIcons`（不读 `CFBundleIcons~ipad`，避免挑到 iPad 专属画稿）。
-        //    后缀按 Apple 真实命名：`…@2x~ipad` / `…@3x~iphone`（`~ipad` 在 `@2x` **之后**）。
+        //    （`pixelCount`，ImageIO 解析）取最大.**在现有真实样本上两者结果相同** ——
+        //    实测三个 IPA，改动前后都选中同一张（120×120 或 180×180）.故这次改动的价值是
+        //    **语义正确**（像素才是尺寸的可信度量，字节数只是与像素相关），**不是**分辨率提升.
+        //    只认 `CFBundleIcons`（不读 `CFBundleIcons~ipad`，避免挑到 iPad 专属画稿）.
+        //    后缀按 Apple 真实命名：`…@2x~ipad` / `…@3x~iphone`（`~ipad` 在 `@2x` **之后**）.
         //    注意：`@2x~ipad` 虽能命中真实文件，但那个基础名只在 `CFBundleIcons~ipad` 里声明，
-        //    而本函数**有意不读**该键 ⇒ 该后缀在真实样本上**实际未被用到**（列出只为命名完整）。
+        //    而本函数**有意不读**该键 ⇒ 该后缀在真实样本上**实际未被用到**（列出只为命名完整）.
         let suffixes = ["@3x", "@2x", "", "@3x~ipad", "@2x~ipad", "~ipad", "@3x~iphone", "@2x~iphone", "~iphone"]
         var declaredBest: (score: Int, data: Data)?
         for name in declared where !name.isEmpty {
@@ -489,7 +488,7 @@ enum ImportedPackageIconExtractor {
         }
         if let declaredBest { return declaredBest.data }
 
-        // 2) 兜底：app 包根目录（不含子目录）下像素最大的 PNG。
+        // 2) 兜底：app 包根目录（不含子目录）下像素最大的 PNG.
         let pngs = names.filter { name in
             guard name.hasPrefix(appPrefix), name.lowercased().hasSuffix(".png") else { return false }
             return !name.dropFirst(appPrefix.count).contains("/")
@@ -512,14 +511,14 @@ enum ImportedPackageIconExtractor {
         return pixels > 0 ? pixels : fallbackBytes
     }
 
-    /// PNG 的真实像素（`w*h`）。解不出返回 0.
+    /// PNG 的真实像素（`w*h`）.解不出返回 0.
     private static func pixelCount(of data: Data) -> Int {
         guard let size = pixelSize(of: data) else { return 0 }
         return size.width * size.height
     }
 
-    /// PNG 的真实宽高（像素）。用 ImageIO 解析，**不按固定偏移读** —— Apple 的 PNG 是
-    /// CgBI 格式（`IHDR` 前多一个 `CgBI` chunk），偏移 16 处的字节不是宽高。解不出返回 nil.
+    /// PNG 的真实宽高（像素）.用 ImageIO 解析，**不按固定偏移读** —— Apple 的 PNG 是
+    /// CgBI 格式（`IHDR` 前多一个 `CgBI` chunk），偏移 16 处的字节不是宽高.解不出返回 nil.
     private static func pixelSize(of data: Data) -> (width: Int, height: Int)? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

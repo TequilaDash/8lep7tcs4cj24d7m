@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 /// Thin wrapper around the shared document picker for pairing files.
 ///
 /// The actual mechanism lives in `SharedDocumentPicker` so every file import in
-/// the app routes through one code path (and the LiveContainer import bug is fixed
 /// in exactly one place). This keeps the previous `pairingFilePicker(...)` API.
 struct PairingFilePickerModifier: ViewModifier {
     @Binding var isPresented: Bool

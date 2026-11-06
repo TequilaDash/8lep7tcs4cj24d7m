@@ -2,13 +2,13 @@
 //  GestaltEditors.swift
 //  bad_query
 //
-//  从 TequilaDash/Views/GestaltView.swift 拆出（原文件 1087 行、12 个顶层声明）。
-//  拆分原因：三个编辑视图与主视图无耦合，独立成文件，主文件只保留 GestaltView 本体。
-//  本文件装三个编辑视图：AdvancedGestaltEditor / ValueEditor / AddCacheExtraFieldEditor。
+//  从 TequilaDash/Views/GestaltView.swift 拆出（原文件 1087 行、12 个顶层声明）.
+//  拆分原因：三个编辑视图与主视图无耦合，独立成文件，主文件只保留 GestaltView 本体.
+//  本文件装三个编辑视图：AdvancedGestaltEditor / ValueEditor / AddCacheExtraFieldEditor.
 //  它们只引用 GestaltModels.swift 的模型类型与 BQMobileGestaltModel，不触碰 GestaltView 成员，
-//  因此内部 private 成员（cacheExtraKeys / filtered / saveValue 等）原样保留、无需改动。
+//  因此内部 private 成员（cacheExtraKeys / filtered / saveValue 等）原样保留、无需改动.
 //  纯搬迁、零逻辑改动：成员逐行字节原样，未改任何函数体、注释、空行或字符串；
-//  import 与原文件一致（只有 import SwiftUI），未增删。
+//  import 与原文件一致（只有 import SwiftUI），未增删.
 //
 
 import SwiftUI

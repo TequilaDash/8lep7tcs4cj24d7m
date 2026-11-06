@@ -3,17 +3,14 @@ import Foundation
 /// 配置导入服务（汉化移植自 SideInstaller 的「配对 → 安装到应用」）.
 ///
 /// 把当前配对文件（Documents/pairingFile.plist）写入设备上已安装的
-/// 「支持列表」应用的容器 Documents 目录（如 SideStore 的
-/// ALTPairingFile.mobiledevicepairing、Feather/StikDebug 的 pairingFile.plist），
 /// 让这些应用能直接使用 TequilaDash 的配对身份连上同一台设备.
 ///
 /// 传输链路与 JIT / 虚拟定位完全一致：LocalDevVPN 隧道（RPPairing）→
 /// house_arrest + AFC.不涉及原版 SideInstaller 的 LocalNetworkAuthorization
 /// （NWBrowser/NWListener 本地网络权限探测）——那是它在生成配对文件时用来
-/// 请求权限的，LiveContainer guest 等嵌入环境拿不到该权限；我们只做「写入」，
 /// 用已有配对文件 + 系统 VPN 隧道，天然绕开这个 LC 兼容性问题.
 /// `Sendable`（非 unchecked）：本类**没有任何存储属性**（`pairingPath` 是计算属性），
-/// 编译器可直接证明其可安全跨隔离域共享。
+/// 编译器可直接证明其可安全跨隔离域共享.
 final class PairingInstallService: Sendable {
 
     static let shared = PairingInstallService()
@@ -25,7 +22,6 @@ final class PairingInstallService: Sendable {
     struct PairingTargetApp: Identifiable, Equatable {
         let name: String
         let remoteRelativePath: String
-        /// 限制匹配 bundle id 包含该字符串（区分 App Store 版与侧载版 StikDebug）.
         let bundleIDContains: String?
 
         var id: String { name }
@@ -134,7 +130,7 @@ final class PairingInstallService: Sendable {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "配对安装")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -185,7 +181,6 @@ final class PairingInstallService: Sendable {
 
     // MARK: - 扫描支持的应用
 
-    /// 通过安装代理列出已安装应用，匹配支持表（按显示名，侧载版 StikDebug
     /// 走 bundle id 分支），保持表顺序.
     func scanTargets() throws -> [InstalledTarget] {
         var tunnel = try createTunnel()

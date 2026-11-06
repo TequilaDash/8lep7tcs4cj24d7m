@@ -2,7 +2,7 @@
 //  BinaryModuleRunner.swift
 //  TequilaDash
 //
-//  二进制模块运行器（v0.3.66）——模块规范 v1.1 "binary" 类型：
+//  二进制模块运行器——模块规范 v1.1 "binary" 类型：
 //   - 模块 zip 内带 iOS arm64 可执行文件（bin/<name>）
 //   - 导入/启用/应用启动时自动后台拉起（autoStart），无需手动点击
 //   - posix_spawn 启动、stdout/stderr 重定向到模块日志、kill 停止
@@ -16,7 +16,7 @@ import UIKit
 @MainActor
 final class BinaryModuleRunner: ObservableObject {
     static let shared = BinaryModuleRunner()
-    /// v0.3.141：用户态加载器禁用开关 —— 本环境（LC/iOS 26+）手动映射的代码页
+    /// 用户态加载器禁用开关 —— 本环境（LC/iOS 26+）手动映射的代码页
     /// 执行时必被 AMFI 终止（真机两次闪退实锤：真证书签名失败 → uloader 映射
     /// "成功" → 调 OpenListMain → 几秒后闪退）.签名链路修好后走 dlopen，此路径
     /// 只剩必崩价值；代码保留仅为回滚能力.
@@ -35,7 +35,7 @@ final class BinaryModuleRunner: ObservableObject {
             guard ModuleService.shared.isEnabled(id: module.id),
                   let bin = module.binary,
                   bin.autoStart == true else { continue }
-            // v0.3.481：能力/版本不满足的模块**不启动** —— 它跑起来也只会失败，
+            // 能力/版本不满足的模块**不启动** —— 它跑起来也只会失败，
             // 而在启动期炸掉（Go 侧 log.Fatal → os.Exit）会连宿主一起带走.
             let issues = module.blockingIssues
             if !issues.isEmpty {
@@ -80,7 +80,7 @@ final class BinaryModuleRunner: ObservableObject {
         }
     }
     /// 通用入口发现：扫描模块 dylib 的符号表，找第一个 "*Main" 结尾的已定义符号.
-    /// 这样引擎不需要知道任何模块的符号名（v0.3.112：彻底消除模块名硬编码）.
+    /// 这样引擎不需要知道任何模块的符号名（彻底消除模块名硬编码）.
     nonisolated static func discoverEntrySymbol(moduleDir: URL, logFile: URL) -> String? {
         guard let dylib = findDylib(moduleDir: moduleDir) else { return nil }
         var buf = [CChar](repeating: 0, count: 4096)
@@ -109,7 +109,7 @@ final class BinaryModuleRunner: ObservableObject {
             setError(module.id, "端口 \(port) 已被占用——服务可能已在运行")
             return
         }
-        // 数据目录可写性门禁（v0.3.74 闪退根修）：
+        // 数据目录可写性门禁（ 闪退根修）：
         // 模块 bootstrap 在目录不可写时走 log.Fatalf → os.Exit → 连宿主一起杀.
         // 这里先建目录 + 写探针，失败就放弃启动并把原因报给 UI（宿主永不死）.
         do {
@@ -123,12 +123,12 @@ final class BinaryModuleRunner: ObservableObject {
             setError(module.id, msg)
             return
         }
-        // v0.3.195：App 重装/LiveContainer 容器 UUID 变化后，config.json 残留旧容器
+        // App 重装/LiveContainer 容器 UUID 变化后，config.json 残留旧容器
         // 绝对路径 → Go 启动 mkdir 旧路径 fail → log.Fatal → os.Exit 杀宿主（真机闪退实锤）.
         // 在启动前按 DefaultConfig 语义重写 4 个路径字段（temp/bleve/data.db/log）.
         ModuleService.repairContainerMigratedConfig(moduleId: module.id, dataDir: dataDir)
         do {
-            // v0.3.112：入口符号通用化——优先 module.json 的 binary.entrySymbol，
+            // 入口符号通用化——优先 module.json 的 binary.entrySymbol，
             // 否则自动扫描 dylib 符号表里 "*Main" 结尾的导出（引擎零模块耦合）
             let entrySymbol = bin.entrySymbol
                 ?? (Self.discoverEntrySymbol(moduleDir: ModuleService.shared.installURL(for: module.id), logFile: logFile) ?? "Main")
@@ -156,7 +156,7 @@ final class BinaryModuleRunner: ObservableObject {
         print("[Binary][\(module.id)] 已停止 pid=\(pid)")
     }
 
-    /// v0.3.163：桥 action 成功后宿主侧状态收口——把模块标记为已停止并落日志.
+    /// 桥 action 成功后宿主侧状态收口——把模块标记为已停止并落日志.
     /// 由执行桥 action 的 UI 在成功后调用（action.marksStopped == true 时）.
     func markStopped(module: EscapeModule) {
         let wasInProcess = inProcessModules.remove(module.id) != nil
@@ -167,7 +167,7 @@ final class BinaryModuleRunner: ObservableObject {
         }
     }
 
-    /// v0.3.159：通用桥调用——按 action 声明解析实参并调用模块导出符号.
+    /// 通用桥调用——按 action 声明解析实参并调用模块导出符号.
     /// 符号签名按 args 数量分派：0 → fn()；1 → fn(a)；2 → fn(a, b)（C.int 返回）.
     /// 参数来源（args 元素）：randomPassword=生成 8 位随机密码（去易混淆字符），
     /// dataDir=模块数据目录路径，moduleDir=模块安装目录路径，"str:xxx"=字面量.
@@ -231,7 +231,7 @@ final class BinaryModuleRunner: ObservableObject {
             UIApplication.shared.open(url)
         }
     }
-// MARK: 进程内启动（方案 A：单一 Go runtime，v0.3.73）
+// MARK: 进程内启动（方案 A：单一 Go runtime，）
     /// 启动二进制模块（双形态统一入口）：
     /// ① 模块目录带 bin/*.dylib（可拆卸 zip 安装）→ dlopen + dlsym
     /// ② 否则 RTLD_DEFAULT 找内置静态符号（openlist_embed 构建形态）
@@ -240,7 +240,7 @@ final class BinaryModuleRunner: ObservableObject {
     /// fd 2 重定向到 data/go_stderr.log 抓 Go runtime 临终输出；8MB 大栈 pthread 承载入口.
     /// 常驻保存用户态加载的镜像句柄（不卸载：Go runtime 必须存活）
     /// nonisolated：本类标注了 @MainActor，静态存储属性默认随类隔离，而
-    /// `cacheUloaderImage` 是 nonisolated（Go 启动在后台线程）—— 必须能在非主线程取到锁。
+    /// `cacheUloaderImage` 是 nonisolated（Go 启动在后台线程）—— 必须能在非主线程取到锁.
     /// 这里用 `nonisolated` 而非 `nonisolated(unsafe)`：`NSLock` 自身线程安全且是
     /// 不可变引用（Sendable），去掉隔离标注即安全，无需 unsafe 承诺.
     nonisolated private static let uloaderLock = NSLock()
@@ -273,7 +273,7 @@ final class BinaryModuleRunner: ObservableObject {
             if let h = dlopen(dylibURL.path, RTLD_NOW | RTLD_GLOBAL) {
                 handle = h
             } else {
-                // v0.3.119：dlopen 必被 dyld 库校验拒绝（LC 同环境实测：ldid/zsign
+                // dlopen 必被 dyld 库校验拒绝（LC 同环境实测：ldid/zsign
                 // 签名都报 code signature invalid）→ 直接走用户态加载器（匿名内存
                 // 方案，无需有效签名——见 uloader.c 注释）.重签步骤已删.
                 reSignErrorText = dlerror().map { String(cString: $0) } ?? "未知错误"
@@ -291,9 +291,9 @@ final class BinaryModuleRunner: ObservableObject {
                     appendLog(logFile, "[host] dylib 缺少 \(entrySymbol) 导出")
                 }
             } else {
-            // v0.3.122：真证书路径（SideStore 信任链）——有开发证书时先签后 dlopen.
+            // 真证书路径（SideStore 信任链）——有开发证书时先签后 dlopen.
             // 真证书与 App 同 TeamID → 库验证通过 → 文件映射有效（本环境唯一活路）.
-            // v0.3.163：不做自动签发——Apple 新签发证书与主程序（LC/侧载工具所持）
+            // 不做自动签发——Apple 新签发证书与主程序（LC/侧载工具所持）
             // serial 必然不同，真机实锤 iOS 27 beta 要求 dlopen 库签名证书与主程序
             // **同款**（serial 级，identifier 已由 useMainIdent 保证）.自动签发只会
             // 覆盖用户导入的同款 p12，把可用状态打成不可用（162 真机教训）.
@@ -301,7 +301,7 @@ final class BinaryModuleRunner: ObservableObject {
                     appendLog(logFile, "[host] 开发证书可用 → 真证书签名")
                     let signDbg = logFile.deletingLastPathComponent()
                         .appendingPathComponent("data").appendingPathComponent("go_sign_debug.log")
-                    // v0.3.143: 就地签名原始文件（内核实锤 code signature invalid errno=1，
+                    // 就地签名原始文件（内核实锤 code signature invalid errno=1，
                     // 疑点集中在 rebuildToNewFile 产物——其已签输出曾连 zsign 自身都解析失败）.
                     // 就地失败再退回 rebuild 副本路径.
                     var signURL = dylibURL
@@ -327,12 +327,12 @@ final class BinaryModuleRunner: ObservableObject {
                     }
                 }
                 if handle == nil, !Self.uloaderEnabled {
-                    // v0.3.141：必崩兜底已封 —— 给明确指引代替闪退
+                    // 必崩兜底已封 —— 给明确指引代替闪退
                     uloaderErrorText = "模块无法安全加载: dlopen 被系统拒绝且真证书签名失败. 模块签名需与主程序同款证书（serial 一致），请在「更多 → 证书管理」导入 LC/SideStore 正在使用的 p12"
                     appendLog(logFile, "[host] 用户态加载器已禁用(v0.3.141): \(uloaderErrorText!)")
                 }
                 if handle == nil, Self.uloaderEnabled {
-                // v0.3.108：dlopen 被 dyld 库校验拦下（ad-hoc 无 CMS blob 在 dyld 层必拒）→
+                // dlopen 被 dyld 库校验拦下（ad-hoc 无 CMS blob 在 dyld 层必拒）→
                 // 改用自研用户态 Mach-O 加载器（移植自 Nyxian kxld）：自己 mmap + rebase + bind，
                 // 完全绕开 dyld——这是 LC / Nyxian 加载访客代码的方式.
                 let target = dylibURL
@@ -365,7 +365,7 @@ final class BinaryModuleRunner: ObservableObject {
             }
         }
         guard let fnSym = sym else {
-            // v0.3.110：文案改为**动态报真实原因**（旧文案静态枚举"未内置/无 dylib"，
+            // 文案改为**动态报真实原因**（旧文案静态枚举"未内置/无 dylib"，
             // 而实际 dylib 就在模块目录里、是加载被拒——误导排查方向）
             var parts: [String] = []
             if let dylibURL = Self.findDylib(moduleDir: moduleDir) {
@@ -385,7 +385,7 @@ final class BinaryModuleRunner: ObservableObject {
             parts.append("本 App 未内置 \(moduleId) 的 \(entrySymbol)")
             throw BinaryModuleError.spawnFailed(parts.joined(separator: "\n"))
         }
-        // v0.3.481：把宿主能力函数表交给模块（可选导出；老模块没有这个符号是正常的）
+        // 把宿主能力函数表交给模块（可选导出；老模块没有这个符号是正常的）
         handoffHostCapabilities(dataDir: dataDir, moduleDir: moduleDir, logFile: logFile)
         // 数据目录以 strdup C 字符串 + 函数符号一起打包成线程上下文
         guard let dirC = strdup(dataDir.path) else {
@@ -406,7 +406,7 @@ final class BinaryModuleRunner: ObservableObject {
         }
     }
 
-    /// v0.3.481：把宿主能力函数表交给模块可选的 `escape_module_init`.
+    /// 把宿主能力函数表交给模块可选的 `escape_module_init`.
     ///
     /// ## 为什么是「加载时传函数表」而不是让模块 `dlsym` 宿主符号
     /// 主可执行文件的符号**不保证**对 `dlsym(RTLD_DEFAULT)` 可见（本仓库自己就是
@@ -456,7 +456,7 @@ final class BinaryModuleRunner: ObservableObject {
         if cachedBinaryModuleHandle == nil { cachedBinaryModuleHandle = h }
         handleLock.unlock()
     }
-    /// v0.3.662（task-13 发现5）：**加锁**取已缓存句柄的快照.
+    /// **加锁**取已缓存句柄的快照.
     ///
     /// 为什么单独抽一个：`resolveBinaryModuleSymbol` 跑在 SSH/NIO 线程，
     /// 而 `cacheBinaryModuleHandle` 由后台建连线程写入；裸读 `cachedBinaryModuleHandle`
@@ -467,7 +467,7 @@ final class BinaryModuleRunner: ObservableObject {
         return cachedBinaryModuleHandle
     }
 
-    /// v0.3.158：解析进程内模块的桥接导出符号（停止/重置密码等）
+    /// 解析进程内模块的桥接导出符号（停止/重置密码等）
     /// 优先已加载 dylib 句柄 → 内置静态（RTLD_DEFAULT）.
     nonisolated static func resolveBridgeSymbol(_ name: String) -> UnsafeMutableRawPointer? {
         handleLock.lock()
@@ -495,16 +495,16 @@ final class BinaryModuleRunner: ObservableObject {
                 if let s = dlsym(h, name) { return s }
                 note("dlopen 成功但无符号 \(name)")
             } else {
-                // v0.3.115：dlopen 被 dyld 库校验拒绝 → 走自研用户态加载器（绕开 dyld）
+                // dlopen 被 dyld 库校验拒绝 → 走自研用户态加载器（绕开 dyld）
                 let err0 = dlerror().map { String(cString: $0) } ?? "?"
                 note("dlopen 失败：\(err0.suffix(400))")
                 Self.appendDiag(logFile, "\n=== [ext] dlopen#1 失败 ===\n\(err0)\n")
-                // v0.3.122：真证书路径（SideStore 信任链）
+                // 真证书路径（SideStore 信任链）
                 if DeveloperCertStore.shared.hasCert, DeveloperCertStore.shared.jitFreeMode {
                     note("开发证书可用 → 真证书签名")
                     let signDbg = logFile.deletingLastPathComponent()
                         .appendingPathComponent("data").appendingPathComponent("go_sign_debug.log")
-                    // v0.3.143: 就地签名原始文件，失败退回 rebuild 副本（同 startBinaryModule）
+                    // 就地签名原始文件，失败退回 rebuild 副本（同 startBinaryModule）
                     var signURL = dylib
                     var signOk = DeveloperCertStore.shared.signDylib(path: signURL.path, bundleId: moduleId, debugLog: signDbg, useMainIdent: true)
                     if !signOk {
@@ -530,13 +530,13 @@ final class BinaryModuleRunner: ObservableObject {
                         note("真证书签名失败")
                     }
                 }
-                // v0.3.141：uloader 禁用开关（本环境映射代码页执行必被 AMFI 终止 → 必崩）
+                // uloader 禁用开关（本环境映射代码页执行必被 AMFI 终止 → 必崩）
                 guard Self.uloaderEnabled else {
                     note("用户态加载器已禁用(v0.3.141): dlopen 被拒且真证书签名失败. 模块签名需与主程序同款证书（serial 一致），请在证书管理导入 LC/SideStore 正在使用的 p12")
                     return dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)   // RTLD_DEFAULT：内置静态
                 }
-                // v0.3.119：匿名内存方案下 uloader 不需要有效签名——直接加载原始文件
-                // （v0.3.118 实测：zsign 重签 + 全新 vnode，签名登记仍 EPERM → AMFI
+                // 匿名内存方案下 uloader 不需要有效签名——直接加载原始文件
+                // （实测：zsign 重签 + 全新 vnode，签名登记仍 EPERM → AMFI
                 //  拒的是 blob 本身，重签无意义）
                 let target = dylib
                 var errBuf = [CChar](repeating: 0, count: 512)
@@ -644,7 +644,7 @@ private extension DateFormatter {
 // MARK: 通用二进制模块进程入口（C 函数指针，供 pthread_create 使用）
 // ctx = strdup 出来的数据目录 C 字符串；线程长期存活（服务阻塞），故不 free.
 // 数据目录必须走参数：Go 在 runtime 初始化时已快照 environ，事后 setenv 对
-// os.Getenv 不可见（v0.3.78 闪退根因）.
+// os.Getenv 不可见（ 闪退根因）.
 // MARK: 通用二进制模块进程入口（C 函数指针，供 pthread_create 使用）
 /// 通用二进制模块入口函数 C 签名（Go: func Main(dataDirC *C.char) C.int）
 private typealias BinaryEntryFn = @convention(c) (UnsafeMutablePointer<CChar>?) -> Int32

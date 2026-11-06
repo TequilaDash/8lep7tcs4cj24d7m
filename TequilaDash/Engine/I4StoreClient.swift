@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// v0.3.298：爱思手机端（AsTools.app）接口客户端 —— 逆向成果的落地实现
+/// 爱思手机端（AsTools.app）接口客户端 —— 逆向成果的落地实现
 ///
 /// 【完整证据链】
 /// - 协议与参数：`217.ipa` 内 `HotJs/*/main.jsbundle`（React Native 明文 JS）
@@ -16,11 +16,11 @@ import Security
 ///   · appId = 2891，appKey = `961eb17e9820405783050223fdf94d53`
 /// - 关键词表探测：裸请求一律返回 `{"appstatus":0,"appmsg":"游戏未开放，暂无信息"}`；
 ///   走签名后 `getSpecialList.xhtml` 返回真实 JSON（专题 id 3283「掌上自习室」等），
-///   证明公钥、填充方式与报文形态均正确。
+///   证明公钥、填充方式与报文形态均正确.
 ///
 /// 安装通道（与爱思手机端同一条系统调用）：
 ///   `itms-services://?action=download-manifest&url=<plist>`，plist 字段来自 `appinfo.xhtml`
-///   的 `plist` / `plist_s`（`onlyshare == 1` 用 plist，否则 plist_s），IPA 托管在 dl.i4.cn。
+///   的 `plist` / `plist_s`（`onlyshare == 1` 用 plist，否则 plist_s），IPA 托管在 dl.i4.cn.
 enum I4StoreClient {
 
     // MARK: - 常量（逆向取得）
@@ -118,7 +118,7 @@ enum I4StoreClient {
     ///
     /// 1024-bit 单段上限 = 128 - 11 = 117 字节；超长时按 117 字节切分，
     /// 每段密文（128 字节）依次拼接后整体 base64（与爱思 `Crypto.rsa` 同为分段实现，
-    /// 因为其 commonParams 序列化后必然超过单段上限）。
+    /// 因为其 commonParams 序列化后必然超过单段上限）.
     static func rsaEncrypt(_ plain: Data) throws -> String {
         let key = try publicKey()
         let blockSize = SecKeyGetBlockSize(key)          // 128

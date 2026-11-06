@@ -103,7 +103,7 @@ struct IncreaseMemoryView: View {
                 // v0.2.120：`.idle` 曾与 `.loading` 渲染成同一个转圈，
                 // "没发起请求"被误认为"正在加载".现在明确区分.
                 HStack {
-                    // 硬规则 1：不用黄色感叹号。原为 exclamationmark.circle + .orange。
+                    // 硬规则 1：不用黄色感叹号.原为 exclamationmark.circle + .orange.
                     Image(systemName: "info.circle").foregroundStyle(AppTheme.pending)
                     Text("尚未加载团队")
                         .foregroundStyle(.secondary)
@@ -114,16 +114,16 @@ struct IncreaseMemoryView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
-                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                // 会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
                 if AppSessionExpiredCard.isSessionExpiredMessage(message) {
                     AppSessionExpiredCard(message: message, retry: { Task { await ctrl.reload() } })
                 } else {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: message, retry: { Task { await ctrl.reload() } })
                 }
             case .loaded:
                 if ctrl.teams.isEmpty {
-                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态，非错误态）。
+                    // 裸 Text 空态 → 统一三态组件 AppStateSection（空列表态，非错误态）.
                     AppStateSection(state: .empty("账号下没有可用团队",
                                                   message: "登录的 Apple ID 名下还没有开发者团队，创建后重新加载即可.",
                                                   icon: "person.2.slash"), wrapsSection: false)
@@ -159,16 +159,16 @@ struct IncreaseMemoryView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载 App 列表…", level: .block)
             case .failed(let message):
-                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                // 会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
                 if AppSessionExpiredCard.isSessionExpiredMessage(message) {
                     AppSessionExpiredCard(message: message, retry: { Task { await ctrl.loadAppIDs() } })
                 } else {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: "加载失败：\(message)", retry: { Task { await ctrl.loadAppIDs() } })
                 }
             case .loaded:
                 if ctrl.apps.isEmpty {
-                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）。
+                    // 裸 Text 空态 → 统一三态组件 AppStateSection（空列表态）.
                     AppStateSection(state: .empty("该团队下没有 App ID",
                                                   message: "在 Apple Developer 后台为这个团队创建 App ID 后重新加载.",
                                                   icon: "tray.full"), wrapsSection: false)

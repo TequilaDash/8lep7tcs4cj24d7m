@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 全局 toast —— **自动消失**，避免各页面各写一份、漏清除导致「toast 一直停在屏幕上」。
+/// 全局 toast —— **自动消失**，避免各页面各写一份、漏清除导致「toast 一直停在屏幕上」.
 ///
-/// 用法：任意页面写 `ToastCenter.shared.show("已安装")`，并在该页面的最外层加 `.toastHost()`。
+/// 用法：任意页面写 `ToastCenter.shared.show("已安装")`，并在该页面的最外层加 `.toastHost()`.
 @MainActor
 final class ToastCenter: ObservableObject {
 

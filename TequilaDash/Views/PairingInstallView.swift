@@ -2,8 +2,6 @@ import SwiftUI
 
 /// 配置导入（汉化移植自 SideInstaller 的「配对 → 安装到应用」）.
 ///
-/// 扫描设备上已安装的支持列表应用（SideStore / LiveContainer / Feather /
-/// StikDebug 等），把当前配对文件写入它们的容器，让这些应用复用同一份
 /// 配对身份.链路为 LocalDevVPN 隧道 + house_arrest，不依赖本地网络权限.
 struct PairingInstallView: View {
     @State private var targets: [PairingInstallService.InstalledTarget] = []
@@ -42,7 +40,7 @@ struct PairingInstallView: View {
                 .padding(.vertical, 6)
             }
 
-            // v0.3.251: 配对引导独立卡片板块, 不再挤在标题卡里
+            // 配对引导独立卡片板块, 不再挤在标题卡里
             if !pairingFileExists {
                 Section {
                     PairingGuideCard(showsBackground: false, note: "把配对写入其它侧载工具的前提：本机已导入配对文件.")

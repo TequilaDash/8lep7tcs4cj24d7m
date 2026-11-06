@@ -13,10 +13,10 @@ private enum MainTab: Hashable {
 /// 主页（空间回收 + 应用管理 + 模块 + 百宝箱卡片入口）/ Gestalt / 更多.
 /// MoreView（原 More 页）保留备份/关于/设置等次要入口.
 ///
-/// v0.3.441：Gestalt 不再占底部 tab，改从「主页 → 百宝箱」进入。
+/// v0.3.441：Gestalt 不再占底部 tab，改从「主页 → 百宝箱」进入.
 /// 原因：底部只有两栏（主页 / 更多）比三栏干净，且 Gestalt 属于低频的进阶功能，
-/// 塞进底部会稀释主页/更多这两个高频入口。删除后 `.gestalt` 已无任何引用，
-/// `GestaltView` 改为 push 到主页的导航栈上（见 HomeView 的 navigationDestination）。
+/// 塞进底部会稀释主页/更多这两个高频入口.删除后 `.gestalt` 已无任何引用，
+/// `GestaltView` 改为 push 到主页的导航栈上（见 HomeView 的 navigationDestination）.
 struct RootView: View {
     @StateObject private var viewModel = AppListViewModel()
     @AppStorage("HasAcknowledgedLimits") private var hasAcknowledgedLimits = false
@@ -43,9 +43,9 @@ struct RootView: View {
 
             NavigationStack {
                 MoreView(appList: viewModel, onResetPairing: {
-                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除，返回 -8）。
+                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除，返回 -8）.
                     // 这个闭包是 throwing 的：失败原因由设置页（SettingsForm）接住并弹窗，
-                    // 这里只负责「成功之后跳到主页」，避免「跳到主页但什么都没重置」。
+                    // 这里只负责「成功之后跳到主页」，避免「跳到主页但什么都没重置」.
                     try viewModel.resetPairing()
                     selectedTab = .home
                 })
@@ -79,7 +79,7 @@ struct RootView: View {
             CellularGlitchModalView(request: request)
         }
         // v0.3.481：模块原生二级界面 —— 用 fullScreenCover 而不是 push/sheet，
-        // 目的是**完全盖住 TabView**（用户看到的底部导航栏是模块自己的，不是 App 默认底栏）。
+        // 目的是**完全盖住 TabView**（用户看到的底部导航栏是模块自己的，不是 App 默认底栏）.
         // 顶栏常驻「返回上一级 / 主页」两个出口（见 ModuleHostShell）.
         .fullScreenCover(item: Binding(
             get: { moduleUIRouter.active },
@@ -93,17 +93,17 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .escSelectHomeTab)) { _ in
             selectedTab = .home
         }
-        // AirDrop /「用其他应用打开」兜底：`.ipa` 交给共享转换。
-        // LC 下安全作用域 URL 可能读不了 → `handleOpenURL` 内部降级到「请手动从文件选择」。
+        // AirDrop /「用其他应用打开」兜底：`.ipa` 交给共享转换.
+        // LC 下安全作用域 URL 可能读不了 → `handleOpenURL` 内部降级到「请手动从文件选择」.
         .onOpenURL { url in
             ImportService.handleOpenURL(url, fallbackToPicker: {
                 selectedTab = .more
                 ToastCenter.shared.show("请到 更多 → 应用安装 → 共享转换 里手动选择文件")
             }, completion: { r in
                 // D4：导入成功时把 record **交接**给「共享转换」页（挂起值，等它挂载 / 回前台后
-                // 一次性消费，见 `PendingImportHandoff`）。以前这里只切 tab + 弹 toast，record 被就地
+                // 一次性消费，见 `PendingImportHandoff`）.以前这里只切 tab + 弹 toast，record 被就地
                 // 丢弃 ⇒ 用户只能去点「扫描新文件」，那会把同一个包**再复制一份**（重复包 +
-                // 第一条 record 永久丢失）。**只接上记录，不自动修补 / 安装**，三步确认语义不变。
+                // 第一条 record 永久丢失）.**只接上记录，不自动修补 / 安装**，三步确认语义不变.
                 if r.status == .ok, let rec = r.record {
                     PendingImportHandoff.post(rec)
                 }
@@ -163,7 +163,7 @@ struct SetupStep: View {
 
 /// Settings form embedded in the Settings tab.
 struct SettingsForm: View {
-    /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）。
+    /// 重置配对文件.会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）.
     var onResetPairing: () throws -> Void
     @StateObject private var memorySettings = MemoryLimitSettings.shared
     /// 「Apple ID 账户」入口行的状态文案.
@@ -199,6 +199,9 @@ struct SettingsForm: View {
     @StateObject private var logLimit = LogLimitSettings.shared
     @State private var fileLimitText = ""
     @State private var catLimitText = ""
+    /// 「重置数据」：确认弹窗 + 进行中标记.
+    @State private var showResetDataConfirm = false
+    @State private var isResettingData = false
 
     var body: some View {
         Form {
@@ -261,12 +264,12 @@ struct SettingsForm: View {
                 }
             }
 
-            // 隧道方式三选一（LocalDevVPN / Shadowrocket / 内置隧道）。
-            // 放在「本地隧道」设备 IP 之前：先选隧道方式，再填对端 IP。
+            // 隧道方式三选一（LocalDevVPN / Shadowrocket / 内置隧道）.
+            // 放在「本地隧道」设备 IP 之前：先选隧道方式，再填对端 IP.
             TunnelPickerView()
 
             // v0.3.741：用户要求一级页只留入口 —— 开关与全部配置搬进二级页
-            // （CellularSupportView：总开关 / 快捷指令名 / 基础延时 / 引导示范）。
+            // （CellularSupportView：总开关 / 快捷指令名 / 基础延时 / 引导示范）.
             Section(header: Text("蜂窝网络"),
                     footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复).点进去可以开关、改快捷指令名与等待时间.")) {
                 NavigationLink {
@@ -304,24 +307,24 @@ struct SettingsForm: View {
                 }
 
                 Button("重置配对文件", role: .destructive) {
-                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（返回 -8）。
-                    // 旧代码不看结果，用户以为已重置而配对文件仍在、隧道仍是旧身份。
+                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（返回 -8）.
+                    // 旧代码不看结果，用户以为已重置而配对文件仍在、隧道仍是旧身份.
                     // onResetPairing 现在是 throwing 的，失败原因在这里接住交给下方 alert 展示；
-                    // 成功后的界面跳转由 RootView 的闭包负责（本结构体没有 appList 引用）。
+                    // 成功后的界面跳转由 RootView 的闭包负责（本结构体没有 appList 引用）.
                     do {
                         try onResetPairing()
                     } catch {
                         // 失败原因交给下方 .alert("重置配对文件失败") 展示；
-                        // 成功路径由 RootView 闭包负责跳回主页。
+                        // 成功路径由 RootView 闭包负责跳回主页.
                         resetPairingError = error.localizedDescription
                     }
                 }
             }
 
-            // v0.3.438：日志上限（单位 MB）+ 一键清空。
+            // v0.3.438：日志上限（单位 MB）+ 一键清空.
             //  · 位置按用户要求挪到「配对文件」下方（原先在 Form 最顶，用户反馈不协调）；
             //  · 不再显示 "= 1024 KB" 之类的换算数值；
-            //  · 输入框**允许留空**（留空 = 默认值，不会强行回填文本）。
+            //  · 输入框**允许留空**（留空 = 默认值，不会强行回填文本）.
             Section(header: Text("日志"),
                     footer: Text("单位 MB.填 0 = 无限制；留空 = 默认 \(LogLimitSettings.defaultMB) MB.")) {
                 HStack {
@@ -332,8 +335,8 @@ struct SettingsForm: View {
                         .multilineTextAlignment(.trailing)
                         .frame(width: 80)
                         .onChange(of: fileLimitText) { _, newValue in
-                            // 留空 / 非法 → 用默认值；填 0 → 无限制。
-                            // 刻意**不回写文本**，否则用户永远清不空输入框。
+                            // 留空 / 非法 → 用默认值；填 0 → 无限制.
+                            // 刻意**不回写文本**，否则用户永远清不空输入框.
                             logLimit.maxFileMB = LogLimitSettings.normalizedMB(from: newValue)
                         }
                     Text("MB").foregroundStyle(.secondary)
@@ -382,6 +385,20 @@ struct SettingsForm: View {
                     }
             }
 
+            Section(header: Text("数据"), footer: Text("清除本应用在本机写入的账号、证书、Anisette、隧道与偏好等数据，不改动其它应用与设备上的内容.")) {
+                Button("重置数据", role: .destructive) {
+                    AppHaptics.tap()
+                    showResetDataConfirm = true
+                }
+                .disabled(isResettingData)
+                if isResettingData {
+                    HStack {
+                        ProgressView()
+                        Text("正在清理…").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Section(header: Text("关于")) {
                 Text(Self.aboutLine)
                     .font(.footnote)
@@ -401,9 +418,9 @@ struct SettingsForm: View {
             }
         }
         .sheet(isPresented: $showLoginLog) {
-            // 这个入口就是「登录日志」（页面标题「登录诊断日志」）→ 只显示 AppleID 登录/认证引擎那一类。
+            // 这个入口就是「登录日志」（页面标题「登录诊断日志」）→ 只显示 AppleID 登录/认证引擎那一类.
             // 此前传的是无参 `LoginLogView()`，而 `categories == nil` 会走 `fullLog()`（**全量不过滤**），
-            // 于是商店 / 证书 / 侧载各板块的日志全都串到这一页里（用户实测指正）。
+            // 于是商店 / 证书 / 侧载各板块的日志全都串到这一页里（用户实测指正）.
             LoginLogView(categories: [.appleID])
         }
         .alert("证书创建失败", isPresented: Binding(
@@ -427,15 +444,25 @@ struct SettingsForm: View {
         } message: {
             Text("当前没有可导出的 pairingFile.plist.请先导入或生成配对文件.")
         }
-        // v0.3.438：把当前日志上限填进输入框。
+        // v0.3.438：把当前日志上限填进输入框.
         // 值**等于默认值**时显示为空（占位符里就是默认值），这样用户能真正把输入框清空，
-        // 而不是一取消输入状态就被强行回填成 "1"。
+        // 而不是一取消输入状态就被强行回填成 "1".
         .onAppear {
             fileLimitText = logLimit.maxFileMB == LogLimitSettings.defaultMB
                 ? "" : "\(logLimit.maxFileMB)"
             catLimitText = logLimit.maxCatMB == LogLimitSettings.defaultMB
                 ? "" : "\(logLimit.maxCatMB)"
         }
+        // 重置数据的确认弹窗.文案与动作都抽出去写，内联 Binding 会把整条修饰链的类型检查推到超时.
+        .alert("重置数据", isPresented: $showResetDataConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确认", role: .destructive) {
+                runAppDataReset()
+            }
+        } message: {
+            Text("继续会清空当前应用数据,包括账号登录态、证书、Anisette 身份、偏好设置与本应用写入的文件缓存.已导出的设备备份不会被删除.此操作无法撤销.")
+        }
+        .toastHost()
     }
 
     /// v0.3.122：创建开发证书（错误不再吞掉——弹窗展示，1100 提示重新登录）
@@ -452,15 +479,27 @@ struct SettingsForm: View {
         }
     }
 
-    /// 重置配对文件失败弹窗的绑定。
+    /// 重置配对文件失败弹窗的绑定.
     /// v0.3.674：原先内联写成 `.alert(_:isPresented: Binding(get:set:))`，
     /// 叠在整条 SettingsForm 修饰链上会把类型检查推到超时（CI: "the compiler is unable to
-    /// type-check this expression in reasonable time"）。抽成计算属性后每段表达式独立求解。
+    /// type-check this expression in reasonable time"）.抽成计算属性后每段表达式独立求解.
     private var resetPairingAlert: Binding<Bool> {
         Binding(
             get: { resetPairingError != nil },
             set: { if !$0 { resetPairingError = nil } }
         )
+    }
+
+    /// 执行「重置数据」：文件遍历量级不确定，放后台任务，完成后再回主线程提示.
+    private func runAppDataReset() {
+        guard !isResettingData else { return }
+        isResettingData = true
+        Task {
+            let summary = await AppDataResetService.reset()
+            isResettingData = false
+            ToastCenter.shared.show("已重置数据,偏好 \(summary.defaultsKeysRemoved) 项,文件 \(summary.filesRemoved) 项")
+            LoginLogger.shared.log("[重置数据] 完成：偏好 \(summary.defaultsKeysRemoved) 项、钥匙串 \(summary.keychainItemsRemoved) 项、文件 \(summary.filesRemoved) 项、\(summary.bytesRemoved) 字节")
+        }
     }
 
     private static var aboutLine: String {

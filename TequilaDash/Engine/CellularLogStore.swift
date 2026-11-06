@@ -2,7 +2,7 @@
 //  CellularLogStore.swift
 //  TequilaDash
 //
-//  v0.3.756：蜂窝开关运行日志（环形缓冲 200 条，CellularLogView 读取）.
+//  蜂窝开关运行日志（环形缓冲 200 条，CellularLogView 读取）.
 //  同时镜像进 LoginLogger（category .tunnelCellular），SSH 侧同样可查.
 //
 
@@ -31,7 +31,7 @@ final class CellularLogStore: ObservableObject, @unchecked Sendable {
 
     private init() {}
 
-    /// 同文去重窗口（v0.3.757）：10 秒内逐字相同的日志只记首条 ——
+    /// 同文去重窗口：10 秒内逐字相同的日志只记首条 ——
     /// 建隧道调用点有 28 处，闸门类文案会反复命中，不去重会把 200 条环形刷穿.
     private static let dedupeWindow: TimeInterval = 10
 

@@ -15,10 +15,10 @@ struct GestaltView: View {
     @State private var shareTarget: ShareTarget?
     @State private var backupError: String?
     @State private var showRespring = false
-    // v0.3.179：编辑/备份 分栏（从 GestaltEdit 1.2.1 移植的备份库）
+    // 编辑/备份 分栏（从 GestaltEdit 1.2.1 移植的备份库）
     @State private var gestaltPane: GestaltPane = .edit
     @State private var backupFiles: [URL] = []
-    /// v0.3.181：Apply 前自动备份的短提示
+    /// Apply 前自动备份的短提示
     @State private var applyBackupToast: String?
     /// 明暗模式：toast 胶囊投影走 `AppShadow.raised`，需显式传入.
     @Environment(\.colorScheme) private var colorScheme
@@ -30,8 +30,8 @@ struct GestaltView: View {
     }
 
     var body: some View {
-        // v0.3.189：彻底重构——删除 Picker 控件（v0.3.184 VStack 顶置被骂丑；
-        // v0.3.187 大标题+safeAreaInset 闪退；v0.3.188 toolbar principal 仍不满意）.
+        // 彻底重构——删除 Picker 控件（VStack 顶置被骂丑；
+        // 大标题+safeAreaInset 闪退；toolbar principal 仍不满意）.
         // "编辑/备份"切换改为 toolbar Menu 按钮（点开切换），导航栏与模块板块
         // 一致：大标题 + Leading 齿轮 + Trailing Menu + ellipsis 菜单，
         // List 内只有内容，**屏幕上不再有任何 segmented control**.
@@ -75,7 +75,7 @@ struct GestaltView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                // v0.3.189：编辑/备份切换——Menu 按钮（取代 v0.3.179 picker），
+                // 编辑/备份切换——Menu 按钮（取代 picker），
                 // 显示当前 pane 名称 + chevron 下拉，**屏幕上不再有 Picker 控件**.
                 Menu {
                     ForEach(GestaltPane.allCases) { pane in
@@ -124,7 +124,7 @@ struct GestaltView: View {
                 model.shouldRespring = false
             }
         }
-        // v0.3.189：编辑/备份切换由 toolbar Menu 触发（取代 v0.3.184 picker 路径），
+        // 编辑/备份切换由 toolbar Menu 触发（取代 picker 路径），
         // 此处监听 gestaltPane 改变以刷新 backupFiles.
         .onChange(of: gestaltPane) { _, pane in
             if pane == .backup { backupFiles = model.backupFiles() }
@@ -138,8 +138,8 @@ struct GestaltView: View {
             if let msg = applyBackupToast {
                 VStack {
                     Spacer()
-                    // v0.3.183：白卡风 toast（iOS 标准 secondarySystemBackground + 细边框 + 阴影），
-                    // 取代 v0.3.181 的黑底胶囊（与上方白卡片风格冲突突兀）.
+                    // 白卡风 toast（iOS 标准 secondarySystemBackground + 细边框 + 阴影），
+                    // 取代 的黑底胶囊（与上方白卡片风格冲突突兀）.
                     Text(msg)
                         .font(.footnote)
                         .foregroundStyle(.primary)
@@ -169,7 +169,7 @@ struct GestaltView: View {
         .sheet(isPresented: $logPresented) {
             NavigationStack {
                 // `model.log` 本身就是逐行数组、且是 @Published（有新行会自动刷新），直接交给共享视图；
-                // 引擎没有「清空日志」的接口 → 不传 onClear（工具栏就不会出现清除按钮）。
+                // 引擎没有「清空日志」的接口 → 不传 onClear（工具栏就不会出现清除按钮）.
                 LogConsoleView(
                     lines: model.log,
                     title: "诊断日志",
@@ -199,7 +199,7 @@ struct GestaltView: View {
         }
     }
 
-    /// v0.3.179：编辑分栏（原 Gestalt 板块内容 + Nugget 灵动岛）
+    /// 编辑分栏（原 Gestalt 板块内容 + Nugget 灵动岛）
     private var editPane: some View {
         Group {
             mhaStatusSection
@@ -224,7 +224,7 @@ struct GestaltView: View {
                     loadedSections
                 }
 
-            // v0.3.179：灵动岛 Nugget 备用启用（GestaltEdit 1.2.1 同款键）
+            // 灵动岛 Nugget 备用启用（GestaltEdit 1.2.1 同款键）
             Section {
                 Toggle(isOn: model.keyBinding(["YlEtTtHlNesRBMal1CqRaA"])) {
                     Label("启用灵动岛能力 (Nugget)", systemImage: "circle.dashed")
@@ -238,8 +238,8 @@ struct GestaltView: View {
     }
 
     // MARK: - 编辑/备份切换
-    // v0.3.189：删除 v0.3.179 的 gestaltPanePicker 函数——Picker 控件（VStack 顶置 / segmented）
-    // 在 v0.3.184~188 多轮反复尝试都失败（丑/闪退/不被接受），现改用 toolbar Menu
+    // 删除 的 gestaltPanePicker 函数——Picker 控件（VStack 顶置 / segmented）
+    // 在 ~188 多轮反复尝试都失败（丑/闪退/不被接受），现改用 toolbar Menu
     // 按钮（在 body .toolbar 内）.gestaltPane 的 onChange 监听移到 body 内 List 修饰符.
 
     /// 备份分栏：时间戳备份 + 备份列表（恢复/删除）
@@ -403,7 +403,7 @@ struct GestaltView: View {
             // Apply / Revert
             Section {
                 Button {
-                    // v0.3.181：Apply 前自动备份当前 MobileGestalt 到时间戳文件
+                    // Apply 前自动备份当前 MobileGestalt 到时间戳文件
                     if let url = model.createBackupNow() {
                         applyBackupToast = "已自动备份：\(url.lastPathComponent)"
                         backupFiles = model.backupFiles()
@@ -613,9 +613,9 @@ struct GestaltView: View {
 
     private func warningRow(title: String, text: String) -> some View {
         HStack(spacing: 12) {
-            // 硬规则 1：不用黄色感叹号。这里原本是 info.circle + .yellow，
-            // 与同文件 :288 注释「图标用 bolt.slash（不用黄色感叹号，项目铁律）」自相矛盾。
-            // 改用 AppTheme.warning（系统语义色，明暗自适应，规则 6）+ info.circle（非感叹号）。
+            // 硬规则 1：不用黄色感叹号.这里原本是 info.circle + .yellow，
+            // 与同文件 :288 注释「图标用 bolt.slash（不用黄色感叹号，项目铁律）」自相矛盾.
+            // 改用 AppTheme.warning（系统语义色，明暗自适应，规则 6）+ info.circle（非感叹号）.
             Image(systemName: "info.circle")
                 .foregroundStyle(AppTheme.warning)
             VStack(alignment: .leading, spacing: 2) {

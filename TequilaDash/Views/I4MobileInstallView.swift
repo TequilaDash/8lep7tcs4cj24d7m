@@ -10,29 +10,29 @@ private struct I4MobileDeviceBox<T>: @unchecked Sendable { let value: T }
 ///
 /// ## 这个页面是什么
 /// 爱思 PC 端的「安装爱思移动端」会往设备推一个「爱思助手移动端」App，并弹出一个对话框
-/// （设备信息 + 安装状态 + 「开启高级功能」按钮）。本页复刻该对话框的**界面结构**：
+/// （设备信息 + 安装状态 + 「开启高级功能」按钮）.本页复刻该对话框的**界面结构**：
 ///   1. 设备信息卡（机型 / 容量·颜色 / 序列号 / 系统版本，取自 `DeviceInfoService`）；
 ///   2. 状态区（尚未开始 / 正在安装 / 安装成功 / 安装未完成）；
 ///   3. 动作按钮（开始安装 / 开启高级功能）.
 ///
 /// ## 视觉语言（本轮按 TRApp 实测重做）
 /// 按 `逆向_TRApp的UI.md` + 本轮新解出的 `Assets.car` 实测值重建视觉：品牌深藏青渐变 hero、
-/// SF Rounded 字体、等宽数字、连续圆角、inset-grouped 分段、SF Symbol 分层渲染、触觉反馈。
+/// SF Rounded 字体、等宽数字、连续圆角、inset-grouped 分段、SF Symbol 分层渲染、触觉反馈.
 /// 逐条映射见 `实现_TRApp风格落地爱思移动端页.md` §②.
 ///
 /// ## 诚实边界（装之前必须让用户看到）
 /// 「爱思移动端」是一组伪装成笔记/工具类的 iOS App（React Native 马甲包，bundle id 如
-/// `com.ownbook.notes` / `rn.notes.best`）。爱思 PC 安装包里内嵌的 3 个 IPA（`217` / `220` / `photo`）
+/// `com.ownbook.notes` / `rn.notes.best`）.爱思 PC 安装包里内嵌的 3 个 IPA（`217` / `220` / `photo`）
 /// 是 **FairPlay 加密包（`cryptid=1`）**，安装时必须递交 sinf（解密授权）；本仓取**包内自带**的 sinf
-/// 覆盖回包内再装（现取路实测取不到，见 `I4MobileInstallService` 文件头）。包内 sinf 属**原始购买者**
-/// 而非爱思共享账号 ⇒ 即便装上，也可能在启动时 `fairplayOpen()` 失败而闪退（即 `-42112` 一类）。
+/// 覆盖回包内再装（现取路实测取不到，见 `I4MobileInstallService` 文件头）.包内 sinf 属**原始购买者**
+/// 而非爱思共享账号 ⇒ 即便装上，也可能在启动时 `fairplayOpen()` 失败而闪退（即 `-42112` 一类）.
 /// ⇒ 本页是**界面移植**，默认**不含可用安装后端**（`installAction == nil`），状态区如实标注.
 ///
 /// ## 「开启高级功能」的去向（2026-10-11 再更正）
 /// 用户原话：「爱思「开启高级功能」你没做好而且这个是单独一个功能」⇒ 该功能已从本对话框**拆出去**，
-/// 做成百宝箱里的**独立入口**（百宝箱 → 「开启高级功能」，见 `I4AdvancedView` / `I4PairingService`）。
+/// 做成百宝箱里的**独立入口**（百宝箱 → 「开启高级功能」，见 `I4AdvancedView` / `I4PairingService`）.
 /// 本页 `.succeeded` 态的那个按钮现在**只负责 push 到那个独立页**，不再弹任何「尚未实现」的窗
-/// （旧版弹的是一句写死的免责声明，与「安装成功」自相矛盾 —— 用户截图 IMG_6873）。
+/// （旧版弹的是一句写死的免责声明，与「安装成功」自相矛盾 —— 用户截图 IMG_6873）.
 /// 真实现（读设备身份 → 构造授权标记 → 经 house_arrest 写进载体沙盒 → 读回校验，并如实说明
 /// pair.config / RTD.cfg 构造不出）全部落在 `I4PairingService` 里.
 ///
@@ -56,7 +56,7 @@ struct I4MobileInstallView: View {
     @State private var errorText: String?
     @State private var stage: Stage = .idle
     /// 「开启高级功能」独立页的 push 开关 —— 该功能已从本对话框**拆出去**做成独立入口
-    /// （用户原话「这个是单独一个功能」）。本按钮现在只把它 push 出来，真实现见
+    /// （用户原话「这个是单独一个功能」）.本按钮现在只把它 push 出来，真实现见
     /// `I4AdvancedView` / `I4PairingService`（本页不再弹任何「尚未实现」的窗）.
     @State private var showAdvanced = false
 
@@ -160,11 +160,11 @@ struct I4MobileInstallView: View {
 
     // MARK: - 顶部头部（品牌图标块，不内嵌第三方图片）
 
-    /// 页面头部：品牌图标块 + 标题 + 副标题 + 信息胶囊（**不是全宽方块 banner**）。
+    /// 页面头部：品牌图标块 + 标题 + 副标题 + 信息胶囊（**不是全宽方块 banner**）.
     ///
-    /// v0.3.xxx：用户反馈「banner 是方块状的，不喜欢这种方块」⇒ 去掉全宽深藏青渐变实心 banner，
-    /// 深色品牌色只保留在**紧凑的连续圆角图标块**（`AppBrandTile`）里。爱思 logo 是第三方商标，
-    /// 用 SF Symbol + 圆角色块占位，不盗图。
+    /// 用户反馈「banner 是方块状的，不喜欢这种方块」⇒ 去掉全宽深藏青渐变实心 banner，
+    /// 深色品牌色只保留在**紧凑的连续圆角图标块**（`AppBrandTile`）里.爱思 logo 是第三方商标，
+    /// 用 SF Symbol + 圆角色块占位，不盗图.
     private var brandHeader: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
@@ -220,12 +220,12 @@ struct I4MobileInstallView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 硬规则 5：设置类信息行一律全宽 + 发丝分隔，不套 16 圆角卡片（与 HomeView.cleanupSection 同款）。
-            // 原先这里是 .appCard(padding: 0)，把全宽信息行塞进了圆角卡片。
+            // 硬规则 5：设置类信息行一律全宽 + 发丝分隔，不套 16 圆角卡片（与 HomeView.cleanupSection 同款）.
+            // 原先这里是 .appCard(padding: 0)，把全宽信息行塞进了圆角卡片.
         }
     }
 
-    /// 容量 + 机身颜色（爱思显示「512GB 黑色」）。颜色名只在有实证映射时才翻译；
+    /// 容量 + 机身颜色（爱思显示「512GB 黑色」）.颜色名只在有实证映射时才翻译；
     /// 无映射时如实显示原始颜色代码，不编造颜色表（口径同 DeviceInfoView.capacityColorText）.
     private func capacityColorText(_ info: DeviceInfoModel) -> String? {
         guard info.storageTotalGB > 0 else { return nil }
@@ -577,7 +577,7 @@ struct I4MobileInstallView: View {
     /// 本页**专属**下载管理入口（列表 + 安装 + 删除），只列「安装爱思移动端」页自己
     /// 下载 / 导入的 IPA.
     ///
-    /// v0.3.xxx：**不再**复用 `IPADownloadManagerView()`。那个视图读的是**共享下载台账**
+    /// **不再**复用 `IPADownloadManagerView()`.那个视图读的是**共享下载台账**
     /// （`Documents/AppStoreDownloads` + `Documents/ipa_downloads.json`），本页的 IPA 落
     /// `Caches/I4MobileIPA/` 且不进台账 ⇒ 台账里全是 AppStore / 免登录商店 / 软件源的东西
     /// （用户原话：「AppStore商店下载的东西进入我'安装爱思移动端'的下载管理列表干什么

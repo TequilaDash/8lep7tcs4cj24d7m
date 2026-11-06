@@ -2,9 +2,9 @@ import SwiftUI
 
 /// The "More" hub gathers secondary destinations that don't need their own
 /// bottom-tab slots. Features are organized into logical sections for better
-/// discoverability (v0.3.29: 22 features → 7 categorized sections).
+/// discoverability (: 22 features → 7 categorized sections).
 ///
-/// v0.3.xxx：按巨魔录音机（TRApp）设计语言重做，与主页 `HomeView` **统一观感**
+/// 按巨魔录音机（TRApp）设计语言重做，与主页 `HomeView` **统一观感**
 /// （原为 `List .insetGrouped` + `MoreCard`）：
 /// - **页边距 20**（`AppTheme.pageInset`，原 16）；**大标题**走系统 `.large`（34pt bold）.
 /// - **功能入口改 inset-grouped 卡片分组**（分段标题 + 连续圆角卡片），行 =
@@ -16,7 +16,7 @@ import SwiftUI
 /// - 图标 `.hierarchical` 分层渲染；工具栏动作补触觉 `AppHaptics.tap()`.
 /// - **布局**：分段标题统一用 `AppSectionHeader`（组级模块色竖条 + 主标题）；「设备工具」6 项平级工具
 ///   改用 **2 列卡片网格**（`AppCardGrid` + `AppGridTile`，布局 B），其余分组仍走全宽行（布局 A）.
-///   v0.3.721：网格瓦片补 `tinted: true`，与 `HomeView` 的「设备与系统」网格同款（此前用素卡底，
+///   网格瓦片补 `tinted: true`，与 `HomeView` 的「设备与系统」网格同款（此前用素卡底，
 ///   同为 2 列网格却与主页观感不一致）.
 ///
 /// ⚠️ 仅改样式：`isVisible(_:)` 热补丁过滤、`NavigationLazyView(item.destination)` 懒加载、
@@ -24,7 +24,7 @@ import SwiftUI
 struct MoreView: View {
     @ObservedObject private var hotfix = HotfixService.shared
     @ObservedObject var appList: AppListViewModel
-    /// 重置配对文件。会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）.
+    /// 重置配对文件.会抛错（建连进行中时 TunnelContext 拒绝删除，返回 -8）.
     var onResetPairing: () throws -> Void
     @State private var showSettings = false
     @State private var showTunnelLog = false
@@ -53,7 +53,7 @@ struct MoreView: View {
         !hotfix.isFeatureHidden(item.id)
     }
 
-    /// 分组定义（v0.3.29：22 个功能 → 7 个逻辑分区）.
+    /// 分组定义（22 个功能 → 7 个逻辑分区）.
     /// 每项 =（分段标题, 分段 SF Symbol, 脚注, **是否网格**, 组级模块色, 条目）.
     ///
     /// `isGrid` 显式写在分组定义里，不再靠「标题字符串属于某个集合」反查 —— 改标题不会静默退回
@@ -61,7 +61,7 @@ struct MoreView: View {
     private var sections: [(header: String, symbol: String, footer: String?, isGrid: Bool,
                             tint: Color, items: [MoreItem])] {
         [
-            // v0.3.412：漏洞利用 —— 置顶的普通导航行，点进去是二级选择页。
+            // 漏洞利用 —— 置顶的普通导航行，点进去是二级选择页.
             ("漏洞利用", "ladybug.fill", nil, false, AppModule.advanced.tint, [
                 MoreItem("exploit", "ladybug.fill", "漏洞利用",
                          "选择使用的漏洞利用",
@@ -193,7 +193,7 @@ struct MoreView: View {
             .padding(.bottom, 32)
         }
         .scrollContentBackground(.hidden)
-        // v0.3.xxx：与 `HomeView` 同为一级 tab 根视图，页面底统一走 `AppTheme.surfaceBase`
+        // 与 `HomeView` 同为一级 tab 根视图，页面底统一走 `AppTheme.surfaceBase`
         // （原先取 `Color(.systemBackground)`，两个 tab 之间切换时底色会跳）.
         .background(AppTheme.surfaceBase)
         .navigationTitle("更多")
@@ -292,10 +292,10 @@ struct MoreView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // 硬规则 5：设置类列表用**全宽行 + 发丝分隔**，不套 16 圆角卡片。
+                    // 硬规则 5：设置类列表用**全宽行 + 发丝分隔**，不套 16 圆角卡片.
                     // 原先这里 .appCard(padding: 0) 把全宽行塞进了卡片，与规则冲突；
-                    // TreasureBoxView.swift:252-259 早已改成全宽，本处对齐它。
-                    // 行内自带 padding(.horizontal, 14)，分隔线用 AppHairline 全宽。
+                    // TreasureBoxView.swift:252-259 早已改成全宽，本处对齐它.
+                    // 行内自带 padding(.horizontal, 14)，分隔线用 AppHairline 全宽.
                 }
                 if let footer = section.footer {
                     Text(footer)
@@ -312,7 +312,7 @@ struct MoreView: View {
     /// 规则 5 的全宽行语言里，分隔线应当整行贯通（原先 `padding(.leading, 56)` 是给卡片内行用的
     /// 缩进线，本页行已脱离卡片）—— 见 `TreasureBoxView.swift:273-274` 同款.
     ///
-    /// v0.3.xxx：删掉上一版残留的「左缩进对齐到图标底右侧（图标 30 + 间距 12 + 左内边距 14 = 56）」
+    /// 删掉上一版残留的「左缩进对齐到图标底右侧（图标 30 + 间距 12 + 左内边距 14 = 56）」
     /// 描述 —— 该公式自改成全宽起就与代码矛盾，Step 3 方案「不足 11」点名.
     private var rowDivider: some View {
         AppHairline()

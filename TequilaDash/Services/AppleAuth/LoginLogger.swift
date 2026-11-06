@@ -3,75 +3,75 @@ import Foundation
 /// 登录诊断日志：把 Apple 认证引擎每一步的关键事件（请求/响应/错误）记录到
 /// `Documents/LoginLogs/login.log`，支持在登录界面查看、复制与导出分享，便于排查
 /// Anisette / GrandSlam 握手失败的真实原因.
-/// `@unchecked Sendable`：本类是全项目（含后台隧道 / Rust 回调线程）共用的日志器。
+/// `@unchecked Sendable`：本类是全项目（含后台隧道 / Rust 回调线程）共用的日志器.
 /// 唯一可变状态 `buffer` 的每次读写都在 `lock`（`NSLock`）保护下
 /// （`log` / `clear` / `fullLog` / `recentLines` 四个入口全部持锁），
-/// 因此跨隔离域共享引用是安全的——复用类内已有的锁。
+/// 因此跨隔离域共享引用是安全的——复用类内已有的锁.
 final class LoginLogger: @unchecked Sendable {
     static let shared = LoginLogger()
 
-    /// v0.3.307：日志**按板块分类**，各板块只读自己那一类，不再互相串台.
+    /// 日志**按板块分类**，各板块只读自己那一类，不再互相串台.
     ///
     /// 之前所有模块共用一个缓冲区、共用一个日志页，导致 AppStore 商店的日志板块里
-    /// 混着证书管理 / IPA 侧载 / 爱思源 等其它板块的输出（用户实测指正）。
-    /// 现在每条日志带一个分类；`recentLines(_:category:)` 只取该分类的行。
-    /// 未显式传分类的调用一律归入 `.general`（老代码不受影响）。
+    /// 混着证书管理 / IPA 侧载 / 爱思源 等其它板块的输出（用户实测指正）.
+    /// 现在每条日志带一个分类；`recentLines(_:category:)` 只取该分类的行.
+    /// 未显式传分类的调用一律归入 `.general`（老代码不受影响）.
     enum Category: String, CaseIterable {
         case general = "通用"
         /// **AppStore 商店**（主页商店：登录 / 获取 / 下载 / 安装 / 账号管理）
-        /// —— v0.3.311：原「更多 → AppStore 下载」板块已整体移除，AppStore 只剩这一个板块
+        /// —— ：原「更多 → AppStore 下载」板块已整体移除，AppStore 只剩这一个板块
         case appStore = "AppStore"
-        /// **下载**（下载链路：启动 / 进度 / 落盘 / 注入 sinf / 安装 / 失败 / 重试 / 暂停 / 取消）。
+        /// **下载**（下载链路：启动 / 进度 / 落盘 / 注入 sinf / 安装 / 失败 / 重试 / 暂停 / 取消）.
         ///
         /// 为什么必须从 `.appStore` 拆出：下载链路（`IPADownloadCenter` / `IPADownloadActionsSheet` /
         /// 商店页与详情页的许可获取）此前全写 `.appStore`，于是「AppStore 日志」页里混着下载记录，
-        /// 两边都过滤不干净。拆开后下载管理页（右上角日志入口）只读这一类，与商店日志互不串台。
+        /// 两边都过滤不干净.拆开后下载管理页（右上角日志入口）只读这一类，与商店日志互不串台.
         ///
         /// 中文名与既有分类无前缀歧义：`category(of:)` 取行首方括号内容后用 `Set.contains`
-        /// **精确等值**匹配（非 `hasPrefix`），且「下载」与「通用 / AppStore / 软件源」等互不相同。
+        /// **精确等值**匹配（非 `hasPrefix`），且「下载」与「通用 / AppStore / 软件源」等互不相同.
         case download = "下载"
-        /// **AppleID 登录 / 认证引擎**（SAP / GrandSlam / Anisette / 会话）。
+        /// **AppleID 登录 / 认证引擎**（SAP / GrandSlam / Anisette / 会话）.
         ///
         /// 为什么必须和 `.appStore` 拆开：这个分类此前被**两个板块共用** ——
         /// ① AppleID 登录/认证引擎（`Services/AppleAuth/` 的 SAP / GrandSlam / Anisette / 会话），
-        /// ② AppStore 商店业务（商品页 / 版本历史 / 三方 API / 下载安装，全仓 100+ 处）。
+        /// ② AppStore 商店业务（商品页 / 版本历史 / 三方 API / 下载安装，全仓 100+ 处）.
         /// 结果就是「登录诊断日志」页里混着商店业务日志、商店页里混着登录握手日志，
-        /// 两边都过滤不干净（用户实测指正）。拆开后各页只读自己那一类。
+        /// 两边都过滤不干净（用户实测指正）.拆开后各页只读自己那一类.
         case appleID = "AppleID 登录"
         case i4Store = "爱思源"
         case sideload = "侧载签名"
         case certificate = "证书管理"
-        /// **共享转换**（导入他人分享的 IPA → 修补 → 安装）。
+        /// **共享转换**（导入他人分享的 IPA → 修补 → 安装）.
         ///
         /// 为什么必须从 `.appStore` 拆出：共享转换整条链（`ImportService` / `RepairService`）
         /// 此前全部写 `.appStore`，于是「AppStore 日志」页里混着导入 / 修补 / 安装的记录，
-        /// 两边都过滤不干净。拆开后共享转换页（`ImportView` 右上角日志按钮）只读这一类，
-        /// 与商店日志互不串台。
+        /// 两边都过滤不干净.拆开后共享转换页（`ImportView` 右上角日志按钮）只读这一类，
+        /// 与商店日志互不串台.
         case shareConvert = "共享转换"
-        /// **软件源**（用户自定义第三方源：拉源 / 解析 / RSA 解密 / 图标 / 解锁 / 源清单增删）。
+        /// **软件源**（用户自定义第三方源：拉源 / 解析 / RSA 解密 / 图标 / 解锁 / 源清单增删）.
         ///
         /// 为什么必须从 `.appStore` 拆出：整条软件源链路（`SignSourceClient` / `SignSourceRSA` /
         /// `SignSourceStore` / 软件源视图）此前全写 `.appStore`，于是「AppStore 日志」页里混着
-        /// 拉源 / 解析 / 解锁的记录（用户实测指正：「三方软件源的日志」不该出现在 AppStore 板块）。
-        /// 拆开后软件源页（左上角日志入口）只读这一类，与商店日志互不串台。
+        /// 拉源 / 解析 / 解锁的记录（用户实测指正：「三方软件源的日志」不该出现在 AppStore 板块）.
+        /// 拆开后软件源页（左上角日志入口）只读这一类，与商店日志互不串台.
         ///
         /// 中文名与既有分类无前缀歧义：`category(of:)` 取行首方括号内容后用 `Set.contains`
-        /// **精确等值**匹配（非 `hasPrefix`），且「软件源」与「爱思源 / 共享转换 / 通用」互不相同。
+        /// **精确等值**匹配（非 `hasPrefix`），且「软件源」与「爱思源 / 共享转换 / 通用」互不相同.
         case signSource = "软件源"
-        /// **爱思应用修复**（读设备现有 `i4tool2.acc` / 构造 8 键 plist / AFC 写入 / 读回校验）。
+        /// **爱思应用修复**（读设备现有 `i4tool2.acc` / 构造 8 键 plist / AFC 写入 / 读回校验）.
         ///
         /// 为什么独立成板块：它与 `.i4Store`（爱思源下载）是两回事 —— 这条链**不联网、不下载**，
-        /// 只读写设备上的一个文件，混进「爱思源」板块会让排障时两边互相干扰。
-        /// 中文名与既有分类无前缀歧义：`category(of:)` 用精确等值匹配，「爱思修复」与「爱思源」互不相同。
+        /// 只读写设备上的一个文件，混进「爱思源」板块会让排障时两边互相干扰.
+        /// 中文名与既有分类无前缀歧义：`category(of:)` 用精确等值匹配，「爱思修复」与「爱思源」互不相同.
         case i4Fix = "爱思修复"
-        /// **隧道与蜂窝**（LocalDevVPN 建连 / 多候选拨号 / 心跳 / 蜂窝快捷指令 / 诊断）。
+        /// **隧道与蜂窝**（LocalDevVPN 建连 / 多候选拨号 / 心跳 / 蜂窝快捷指令 / 诊断）.
         ///
         /// 为什么必须独立：这一段是全仓最**难排障**的链路 —— 失败原因分散在
         /// Rust 侧 dial 日志、心跳 marco/polo、蜂窝快捷指令三步里，此前全写 `.general`，
-        /// 于是「连接诊断」页看不出任何有用信息，只能在几千行通用日志里翻。
-        /// 用户实测指正：隧道问题必须能单独导出给他看。
+        /// 于是「连接诊断」页看不出任何有用信息，只能在几千行通用日志里翻.
+        /// 用户实测指正：隧道问题必须能单独导出给他看.
         ///
-        /// 中文名与既有分类无前缀歧义：「隧道蜂窝」与「通用 / AppleID 登录 / 下载」互不相同。
+        /// 中文名与既有分类无前缀歧义：「隧道蜂窝」与「通用 / AppleID 登录 / 下载」互不相同.
         case tunnelCellular = "隧道蜂窝"
     }
 
@@ -81,17 +81,16 @@ final class LoginLogger: @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    /// 串行化**文件追加**（`appendToFile`）—— 保证一次追加是原子的。
+    /// 串行化**文件追加**（`appendToFile`）—— 保证一次追加是原子的.
     ///
     /// 为什么不复用上面的 `lock`：追加要落盘，而 `lock` 被日志页 **2s 轮询**的
-    /// `recentLines` / `fullLog` 频繁获取；两者共用一把锁会让轮询被磁盘 I/O 拖住。
-    /// 独立成锁后，文件写与缓冲读互不阻塞，粒度也保持最小（只覆盖一次追加）。
-    /// 顺带：即使将来有人在持 `lock` 时调 `appendToFile`，也不会自锁。
+    /// `recentLines` / `fullLog` 频繁获取；两者共用一把锁会让轮询被磁盘 I/O 拖住.
+    /// 独立成锁后，文件写与缓冲读互不阻塞，粒度也保持最小（只覆盖一次追加）.
+    /// 顺带：即使将来有人在持 `lock` 时调 `appendToFile`，也不会自锁.
     private let fileLock = NSLock()
     private var buffer: [Entry] = []
     private let maxBufferLines = 500
 
-    /// 日志文件位置（App 沙盒 Documents 内，LiveContainer 中同样可写、可被文件浏览器访问）.
     var logFileURL: URL {
         URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Documents/LoginLogs")
@@ -107,7 +106,7 @@ final class LoginLogger: @unchecked Sendable {
     }
 
     func log(_ message: String, category: Category = .general) {
-        // v0.3.310：分类写进行首 —— 这样**文件里的历史日志**也能按板块过滤
+        // 分类写进行首 —— 这样**文件里的历史日志**也能按板块过滤
         // （此前分类只在内存条目里，重启后按分类读文件读不到 → 板块日志页空白）
         let line = "[\(Self.timestamp())][\(category.rawValue)] \(message)"
         lock.lock()
@@ -134,7 +133,7 @@ final class LoginLogger: @unchecked Sendable {
     /// 把 AppStore / AppleID / 爱思源 / 侧载 / 证书 / 通用 的历史一并清空，与「不混在一起」相悖.
     /// 无参 `clear()`（全局清空）保持不变，与本接口并存.
     ///
-    /// 磁盘侧**可**按分类清除：`log(_:category:)` 从 v0.3.310 起把分类写进行首
+    /// 磁盘侧**可**按分类清除：`log(_:category:)` 从 起把分类写进行首
     /// （`[HH:mm:ss.SSS][分类] 正文`），逐行用 `category(of:)` 反推分类即可，不靠字符串猜测.
     func clear(categories: Set<Category>) {
         guard !categories.isEmpty else { return }
@@ -153,7 +152,7 @@ final class LoginLogger: @unchecked Sendable {
               let text = String(data: data, encoding: .utf8) else { return }
         let kept = text.components(separatedBy: "\n").filter { line in
             guard !line.isEmpty else { return false }
-            // 无法判类（如 v0.3.310 之前无分类前缀的历史行）→ 保守保留，绝不误删.
+            // 无法判类（如 之前无分类前缀的历史行）→ 保守保留，绝不误删.
             guard let raw = Self.category(of: line) else { return true }
             return !wanted.contains(raw)
         }
@@ -177,7 +176,7 @@ final class LoginLogger: @unchecked Sendable {
         return merged.joined(separator: "\n")
     }
 
-    /// 最近 n 行（纯内存读取，v0.3.268 供状态板块 2s 轮询实时展示登录过程）.
+    /// 最近 n 行（纯内存读取，供状态板块 2s 轮询实时展示登录过程）.
     func recentLines(_ n: Int) -> [String] {
         lock.lock()
         defer { lock.unlock() }
@@ -185,18 +184,18 @@ final class LoginLogger: @unchecked Sendable {
         return buffer.suffix(n).map(\.line)
     }
 
-    /// 只取指定分类的最近 n 行（板块日志隔离）。
+    /// 只取指定分类的最近 n 行（板块日志隔离）.
     ///
     /// **必须读文件，不能只读内存缓冲**（本轮修正 —— 之前只读 `buffer`，是个真实缺陷）：
     /// `buffer` 是**全 App 共享**的、上限只有 `maxBufferLines`（500）行，而商店业务
     /// （`.appStore`，100+ 个写入点）一次下载就能把它刷满 ⇒ 低频分类（如 `.appleID`）
-    /// 会被**整批挤出缓冲** ⇒ 「登录诊断日志」页会几乎空白。
-    /// 本文件从 v0.3.310 起就把分类写进了**行首**（`[HH:mm:ss.SSS][分类] 正文`），
+    /// 会被**整批挤出缓冲** ⇒ 「登录诊断日志」页会几乎空白.
+    /// 本文件从 起就把分类写进了**行首**（`[HH:mm:ss.SSS][分类] 正文`），
     /// 当时注释写的就是「这样**文件里的历史日志**也能按板块过滤」——
-    /// 但 `logText` / `recentLines` 都只读内存，**那个意图一直没被实现**；这里把它补上。
+    /// 但 `logText` / `recentLines` 都只读内存，**那个意图一直没被实现**；这里把它补上.
     ///
     /// 性能：本方法被四个日志页 **2s 轮询**调用，所以文件**只读尾部**（见 `tailLines`），
-    /// 不整文件读。
+    /// 不整文件读.
     func recentLines(_ n: Int, categories: [Category]) -> [String] {
         guard n > 0 else { return [] }
         let wanted = Set(categories.map(\.rawValue))
@@ -206,9 +205,9 @@ final class LoginLogger: @unchecked Sendable {
         lock.unlock()
 
         // 顺序 = 时间顺序（**最新的在最后**）：文件尾部（旧的在前）→ 再补上内存里
-        // 还没落盘的行（正常为空；只有写文件失败时才可能非空，那时它本来就是最新的）。
+        // 还没落盘的行（正常为空；只有写文件失败时才可能非空，那时它本来就是最新的）.
         // 注意： 不要照 `fullLog()` 的 `mem + 文件` 顺序 —— 那是「最新的一块在最前」，
-        // 日志页会把最后一行当作最新去自动滚底，顺序反了就会停在**最旧**的一行上。
+        // 日志页会把最后一行当作最新去自动滚底，顺序反了就会停在**最旧**的一行上.
         var all = tailLines()
         let inFile = Set(all)
         all.append(contentsOf: mem.filter { !inFile.contains($0) })
@@ -216,11 +215,11 @@ final class LoginLogger: @unchecked Sendable {
         return Array(all.filter { Self.category(of: $0).map(wanted.contains) ?? false }.suffix(n))
     }
 
-    /// 读日志文件**尾部**并拆行（时间顺序，最新的在最后）。
+    /// 读日志文件**尾部**并拆行（时间顺序，最新的在最后）.
     ///
     /// 为什么只读尾部：调用方（日志页）是 2s 轮询，而文件上限默认 1024KB
-    /// （`LogLimitSettings.fileLimitBytes`，可配、可关）—— 每次整文件读 + 解码是白烧。
-    /// 512KB 约等于 2000+ 行，与 `LogConsoleView.maxRenderedLines` 同量级，够用。
+    /// （`LogLimitSettings.fileLimitBytes`，可配、可关）—— 每次整文件读 + 解码是白烧.
+    /// 512KB 约等于 2000+ 行，与 `LogConsoleView.maxRenderedLines` 同量级，够用.
     private func tailLines() -> [String] {
         let cap = 512 * 1024
         guard let handle = try? FileHandle(forReadingFrom: logFileURL) else { return [] }
@@ -233,7 +232,7 @@ final class LoginLogger: @unchecked Sendable {
         if offset > 0 {
             // 从任意字节偏移开始读，首行必然被截断 —— 而且**必须**从换行字节处切开：
             // 日志正文是中文（多字节 UTF-8），若从某个字符的中间字节开始解码，
-            // 整个解码会直接失败（一行都拿不到）。
+            // 整个解码会直接失败（一行都拿不到）.
             guard let newline = data.firstIndex(of: 0x0A) else { return [] }
             data = data[data.index(after: newline)...]
         }
@@ -241,11 +240,11 @@ final class LoginLogger: @unchecked Sendable {
         return text.components(separatedBy: "\n").filter { !$0.isEmpty }
     }
 
-    /// 从一行日志里取出**分类的 rawValue**。
+    /// 从一行日志里取出**分类的 rawValue**.
     ///
     /// 行格式（见 `log(_:category:)`）：`[HH:mm:ss.SSS][分类] 正文`
-    /// ⇒ 取**第二个**方括号里的内容。时间戳里不含 `]`，所以「找第一个 `]` 再找下一个 `[`」是安全的。
-    /// 注意匹配的是 `rawValue`（中文，如 `"AppleID 登录"`），**不是** case 名。
+    /// ⇒ 取**第二个**方括号里的内容.时间戳里不含 `]`，所以「找第一个 `]` 再找下一个 `[`」是安全的.
+    /// 注意匹配的是 `rawValue`（中文，如 `"AppleID 登录"`），**不是** case 名.
     private static func category(of line: String) -> String? {
         guard line.hasPrefix("["), let firstClose = line.firstIndex(of: "]") else { return nil }
         let afterFirst = line.index(after: firstClose)
@@ -255,7 +254,7 @@ final class LoginLogger: @unchecked Sendable {
         return String(rest[rest.startIndex..<secondClose])
     }
 
-    /// v0.3.307：日志页文本。传 categories 则只显示这些分类（板块隔离）；
+    /// 日志页文本.传 categories 则只显示这些分类（板块隔离）；
     /// 不传则返回合并文件的全量日志（导出/全局排查用）.
     func logText(categories: [Category]? = nil) -> String {
         guard let categories else { return fullLog() }
@@ -265,15 +264,15 @@ final class LoginLogger: @unchecked Sendable {
     private func appendToFile(_ line: String) {
         guard let data = (line + "\n").data(using: .utf8) else { return }
         // 一次追加必须原子：无锁时两个线程会各自 seekToEnd 到同一偏移再写，
-        // 后写者覆盖先写者，或两条日志的字节互相交错（用户实测的日志串行错乱）。
+        // 后写者覆盖先写者，或两条日志的字节互相交错（用户实测的日志串行错乱）.
         // 锁只覆盖「检查 / 截断 / 打开句柄 / seek / write」这一小段，不含 `log()` 的
-        // 缓冲写入与 `print`，所以不会拖慢高频写日志路径。
+        // 缓冲写入与 `print`，所以不会拖慢高频写日志路径.
         fileLock.lock()
         defer { fileLock.unlock() }
         if FileManager.default.fileExists(atPath: logFileURL.path) {
-            // v0.3.434：超过用户设定的上限时**滚动截断**（保留最新部分），
-            // 避免日志文件无限增长（此前实测涨到 683KB）。
-            // 上限可在「更多 → 设置 → 日志」里改，默认 1024KB，**填 0 = 无限制**。
+            // 超过用户设定的上限时**滚动截断**（保留最新部分），
+            // 避免日志文件无限增长（此前实测涨到 683KB）.
+            // 上限可在「更多 → 设置 → 日志」里改，默认 1024KB，**填 0 = 无限制**.
             let limit = LogLimitSettings.fileLimitBytes
             if limit < Int.max,                       // 无限制 → 不截断
                let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path),
@@ -291,9 +290,9 @@ final class LoginLogger: @unchecked Sendable {
         }
     }
 
-    /// 把日志文件截到 `limit` 字节 —— **保留后半段**（即最新的日志）。
+    /// 把日志文件截到 `limit` 字节 —— **保留后半段**（即最新的日志）.
     ///
-    /// 从换行处切开，避免留下半行。
+    /// 从换行处切开，避免留下半行.
     private func trimFile(to limit: Int) {
         guard let data = try? Data(contentsOf: logFileURL), data.count > limit else { return }
         let tail = data.suffix(limit)

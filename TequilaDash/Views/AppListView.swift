@@ -12,9 +12,9 @@ private enum AppListScope: String, CaseIterable, Identifiable {
 /// View model for the app picker.
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是语义正确的隔离，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 /// 后台重活方法（loadIcons / loadAppTypes）相应标 `nonisolated`，
-/// discovery 在主线程取好后以参数传入（后台闭包不能直读 MainActor 存储属性）。
+/// discovery 在主线程取好后以参数传入（后台闭包不能直读 MainActor 存储属性）.
 @MainActor
 final class AppListViewModel: ObservableObject {
     @Published var apps: [InstalledApp] = []
@@ -26,7 +26,7 @@ final class AppListViewModel: ObservableObject {
     @Published var needsTunnelPending = false
     @Published var icons: [String: UIImage] = [:]
     @Published var uninstallStatus: String?
-    /// v0.3.181：应用类型（AppStore/企业/AdHoc/开发/未知），key=bundleID.
+    /// 应用类型（AppStore/企业/AdHoc/开发/未知），key=bundleID.
     @Published var appTypes: [String: AppType] = [:]
 
     private let discovery = AppDiscovery()
@@ -113,20 +113,20 @@ final class AppListViewModel: ObservableObject {
         }
     }
 
-    /// v0.3.184：拉取设备的 provisioning profiles（misagent）并结合 installation_proxy 已拿到的
+    /// 拉取设备的 provisioning profiles（misagent）并结合 installation_proxy 已拿到的
     /// applicationType/iTunesAppleID，构建每个 app 的 AppType 映射.
     /// 判定规则见 `AppTypeDetector.detect`.
     ///
-    /// v0.3.369：**元数据输入改用与文档浏览同源的带属性 Lookup**
+    /// **元数据输入改用与文档浏览同源的带属性 Lookup**
     /// （`FileSharingService.listAppsWithFileSharing()` →
-    /// Rust FFI `installation_proxy_lookup_apps`）。此前这里只有
+    /// Rust FFI `installation_proxy_lookup_apps`）.此前这里只有
     /// `AppDiscovery.getAllAppsInfo()`（`installation_proxy_get_apps`，**不带**
     /// ReturnAttributes）来的数据，而该调用**不返回 `iTunesMetadata`** ——
-    /// 于是 `appleId` / `hasITunesMetadata` 恒为空，共享正版只能落成苹果正版。
+    /// 于是 `appleId` / `hasITunesMetadata` 恒为空，共享正版只能落成苹果正版.
     ///
-    /// v0.3.376：这条依赖加 20 秒硬超时（原因见下），避免「appTypes 恒空 → 三方胶囊消失」.
+    /// 这条依赖加 20 秒硬超时（原因见下），避免「appTypes 恒空 → 三方胶囊消失」.
     ///
-    /// **v0.3.378：改成两版判定，主数据源回到 `get_apps` 快路径**.
+    /// **：改成两版判定，主数据源回到 `get_apps` 快路径**.
     /// 真机 16:29 日志实证：带属性 Lookup 3 次并发、20 秒一个字节不回；而同一次会话里
     /// `get_apps` + profile **2.5 秒**就判完 333 个应用（16:29:41.895 → :44.395）——
     /// 通道是好的，是 Lookup 命令卡死. 所以：
@@ -135,28 +135,28 @@ final class AppListViewModel: ObservableObject {
     ///     补上 appleId / 正版存在性后再精修一次，共享正版才不会退化成苹果正版.
     /// 两版都写日志（`类型判定完成（第一版/第二版…）`），下次一眼能看出走到哪.
     ///
-    /// **v0.3.401（回归修复）**：`FileSharingService.listAppsWithFileSharing(timeout:)`
+    /// ****：`FileSharingService.listAppsWithFileSharing(timeout:)`
     /// 的主路径重新是带属性 Lookup，所以**第一版就带着购买邮箱**（`appleId`/`isGenuine`），
-    /// 共享正版在第一版即判准；第二版通常命中单飞缓存（幂等回填）。若主路径降级到
-    /// `get_apps`（无 `iTunesMetadata`），购买邮箱缺失 → `AppTypeDetector` v0.3.401
+    /// 共享正版在第一版即判准；第二版通常命中单飞缓存（幂等回填）.若主路径降级到
+    /// `get_apps`（无 `iTunesMetadata`），购买邮箱缺失 → `AppTypeDetector`
     /// 会给出「未识别」，**不会再误判成「苹果正版」**.
     /// Swift 6：标 `nonisolated`（后台重活；appTypes 只在主队列闭包里写，
     /// 方法体不读其它 MainActor 状态——appleID 用 nonisolated 静态方法直读 keychain）.
     nonisolated private func loadAppTypes(for apps: [InstalledApp]) {
         let ids = apps.map { $0.bundleIdentifier }
         LoginLogger.shared.log("[应用管理] 类型判定开始：\(ids.count) 个应用")
-        // v0.3.184：当前 Apple ID 用于区分正版 vs 共享（来自 AppStore 登录态）.
+        // 当前 Apple ID 用于区分正版 vs 共享（来自 AppStore 登录态）.
         // 为空时 .appStorePersonal / .appStoreShared 退化为 .appStore.
-        // v0.3.185：改用 nonisolated 直读 keychain（本方法在后台队列执行，
+        // 改用 nonisolated 直读 keychain（本方法在后台队列执行，
         // 直接读 MainActor 隔离的 MemoryLimitSettings.shared.appleID 会编译报错）.
         let currentAppleID = MemoryLimitSettings.currentAppleIDDirect()
-        // v0.3.192：misagent 全量拉取 + 解析可能产生大内存峰值（每 profile 数十 KB，
+        // misagent 全量拉取 + 解析可能产生大内存峰值（每 profile 数十 KB，
         // 设备上可能有 20+ 个），用 .utility 低优先级队列 + autoreleasepool 包裹，
         // 避免在 reload 高频触发时抢占线程导致卡顿/内存压力；与主流程解耦.
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            // v0.3.378：主数据源改回 **`get_apps` 快路径**。真机日志实证：
+            // 主数据源改回 **`get_apps` 快路径**.真机日志实证：
             // 带属性 Lookup 会 20 秒一个字节不回（3 次并发全挂），而同一会话里
-            // `get_apps` + profile 2.5 秒就判完 333 个应用（16:29:41.895 → :44.395）。
+            // `get_apps` + profile 2.5 秒就判完 333 个应用（16:29:41.895 → :44.395）.
             // 带属性 Lookup 降级为下面的「可选增强」（独立 15 秒、失败就不补）.
             let fast: [FileSharingApp]
             switch FileSharingService.listAppsWithFileSharing(timeout: 20) {
@@ -170,11 +170,11 @@ final class AppListViewModel: ObservableObject {
                 fast = []
                 LoginLogger.shared.log("[应用管理] get_apps 快路径超时；改用 apps + profile 继续判定")
             }
-            // v0.3.190：两条隧道必须**顺序串行**调用——fetchSideloadedApps（installation_proxy）
+            // 两条隧道必须**顺序串行**调用——fetchSideloadedApps（installation_proxy）
             // 与 fetchAllProfiles（misagent）各自 createTunnel，若并发握手会死锁闪退
-            // （v0.3.187 曾在 fetchSideloadedApps 内部嵌套调 fetchAllProfiles = 双隧道并发，
+            // （曾在 fetchSideloadedApps 内部嵌套调 fetchAllProfiles = 双隧道并发，
             //  是真机连续闪退元凶）. 现在顺序执行，前一条 defer 释放后才建下一条.
-            // v0.3.192：整个 fetch+解析包 autoreleasepool——CMS blob Data / plist 解析
+            // 整个 fetch+解析包 autoreleasepool——CMS blob Data / plist 解析
             // 的自动释放对象在每次 reload 后立即回收，防长时间运行内存累积.
             // autoreleasepool(invoking:) 返回闭包结果，避免"let 在闭包内赋值"编译错误.
             let (sideloaded, allProfiles): (
@@ -192,9 +192,9 @@ final class AppListViewModel: ObservableObject {
                 entMap[s.bundleID] = s.entitlements
             }
             // 以 appId（application-identifier）匹配 profile 顶层 ProvisionsAllDevices
-            // v0.3.192【闪退修复】：设备上同一 App 重签/多次安装会留下多个指向同一
+            // 【闪退修复】：设备上同一 App 重签/多次安装会留下多个指向同一
             // application-identifier 的 profile → Dictionary(uniqueKeysWithValues:)
-            // 遇重复 key 直接 fatalError 崩溃（v0.3.187~191 真机闪退真凶）.
+            // 遇重复 key 直接 fatalError 崩溃（~191 真机闪退真凶）.
             // 改用 uniquingKeysWith 保留首个.
             let profileByAppId = Dictionary(
                 allProfiles.map { ($0.appId, $0) },
@@ -206,7 +206,7 @@ final class AppListViewModel: ObservableObject {
                       let profile = profileByAppId[appId] else { continue }
                 provisionsAllDevicesMap[s.bundleID] = profile.provisionsAllDevices
             }
-            // ===== v0.3.378：两版判定（第一版立即上屏，第二版用可选增强精修）=====
+            // ===== ：两版判定（第一版立即上屏，第二版用可选增强精修）=====
             // 增强结果（可能为空 = 没取到/超时，此时按「没有账号/存在性信息」判）
             var enhanced: [FileSharingApp] = []
 
@@ -214,9 +214,9 @@ final class AppListViewModel: ObservableObject {
             func judge() -> [String: AppType] {
                 var appTypeMap: [String: String] = [:]
                 var iTunesIDMap: [String: String] = [:]
-                // v0.3.367：**必须把「存在 iTunesMetadata」这一事实也传下去**。
+                // **必须把「存在 iTunesMetadata」这一事实也传下去**.
                 // 原来只传了购买邮箱，而没有元数据的包会被判成非 App Store 下发；
-                // 叠加「已装应用读不到包内 sinf（加密状态未知）」，App Store 应用会全被判成越狱版。
+                // 叠加「已装应用读不到包内 sinf（加密状态未知）」，App Store 应用会全被判成越狱版.
                 var hasMetadataMap: [String: Bool] = [:]
                 for app in fast {
                     // parseAppDict 缺 ApplicationType 时填 "Unknown"，视同未拿到，留给兜底
@@ -245,7 +245,7 @@ final class AppListViewModel: ObservableObject {
                         hasMetadataMap[app.bundleIdentifier] = app.hasITunesMetadata
                     }
                 }
-                // v0.3.190：从 misagent 拉的 mobileprovision 顶层 ProvisionsAllDevices 匹配，
+                // 从 misagent 拉的 mobileprovision 顶层 ProvisionsAllDevices 匹配，
                 // 企业判定唯一权威字段（Apple TN3125）——已在上面按 appId 构建 provisionsAllDevicesMap.
                 var resolved: [String: AppType] = [:]
                 for id in ids {
@@ -265,7 +265,7 @@ final class AppListViewModel: ObservableObject {
             // Swift 6：原来这里是局部函数 `publish(_:_:)`，它捕获非 Sendable 的 `self`，
             // 报 "capture of 'self' with non-Sendable type 'AppListViewModel?' in an
             // isolated local function"（DispatchQueue 的 @preconcurrency @Sendable 只把普通
-            // 捕获降级成警告，不覆盖「隔离的局部函数」这条错误）。展开成与本文件其它处一致的
+            // 捕获降级成警告，不覆盖「隔离的局部函数」这条错误）.展开成与本文件其它处一致的
             // 「主队列 hop + self? 弱引用」写法，语义不变（`judge()` 仍在后台队列先算好）.
 
             // 第一版：get_apps + profile —— 立即上屏，**不等**可选增强
@@ -279,7 +279,7 @@ final class AppListViewModel: ObservableObject {
             }
 
             // 第二版：可选增强（带属性 Lookup，独立 15 秒，失败就不补）
-            // v0.3.379：额度 8s→15s（后台可选、不阻塞首屏；单飞保证同一时刻只有一条在飞）；
+            // 额度 8s→15s（后台可选、不阻塞首屏；单飞保证同一时刻只有一条在飞）；
             // 额度统一在 FileSharingService.lookupAppAttributes 的默认参数里定义，调用方不再传值.
             enhanced = FileSharingService.lookupAppAttributes()
             if enhanced.isEmpty {
@@ -321,11 +321,11 @@ final class AppListViewModel: ObservableObject {
         try importPairingFile(contents)
     }
 
-    /// 重置配对文件（删除 Documents/pairingFile.plist 并清空应用列表）。
+    /// 重置配对文件（删除 Documents/pairingFile.plist 并清空应用列表）.
     ///
-    /// v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 会拒绝删除（返回 NO / -8）。
-    /// 旧代码把它当成功 —— 清空列表再 reload，用户看到「已重置」但配对文件仍在、隧道仍是旧身份。
-    /// 现在改成 throwing：失败时**不动 UI 状态**，由调用方决定怎么提示。
+    /// 建连进行中时 TunnelContext 会拒绝删除（返回 NO / -8）.
+    /// 旧代码把它当成功 —— 清空列表再 reload，用户看到「已重置」但配对文件仍在、隧道仍是旧身份.
+    /// 现在改成 throwing：失败时**不动 UI 状态**，由调用方决定怎么提示.
     func resetPairing() throws {
         try discovery.resetPairing()
         apps = []
@@ -354,7 +354,7 @@ final class AppListViewModel: ObservableObject {
     /// are collected and surfaced in `uninstallStatus` once the batch
     /// completes — we keep going rather than aborting, so the user gets
     /// partial progress even when one bundle id rejects.
-    // Swift 6：completion 会被后台队列闭包捕获（:394），必须标 @Sendable（CI 实测）。
+    // Swift 6：completion 会被后台队列闭包捕获（:394），必须标 @Sendable（CI 实测）.
     func uninstallBatch(_ targets: [InstalledApp],
                         completion: @escaping @Sendable ([InstalledApp], [(InstalledApp, Error)]) -> Void) {
         guard canUninstall else {
@@ -429,7 +429,7 @@ struct AppListView: View {
                     }
                 }
 
-                // v0.3.245：配对文件缺失引导统一走 PairingGuideCard（独立卡片板块，
+                // 配对文件缺失引导统一走 PairingGuideCard（独立卡片板块，
                 // 图标块+标题+描述+钥匙导航行，与其余功能页同一视觉）
                 if viewModel.needsPairing {
                     Section {
@@ -517,9 +517,9 @@ struct AppListView: View {
                     }
                 }
             }
-        // v0.3.626：补上 listStyle。
+        // 补上 listStyle.
         // 全仓 65 处 listStyle 无一例外都是 .insetGrouped，只有本文件与 AppDetailView 没写 ——
-        // 结果是这两页的 List 走系统默认样式，与其余 59 个页面观感不一致。
+        // 结果是这两页的 List 走系统默认样式，与其余 59 个页面观感不一致.
         .listStyle(.insetGrouped)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索应用")
         .avoidSearchZoom()
@@ -657,8 +657,8 @@ struct AppListView: View {
 
     private enum RowMode { case normal, select(isSelected: Bool) }
 
-    /// 应用行。v0.3.634 起改用公共组件 `AppRow`（原先手写在 6 个页面各一份）。
-    /// 系统标记 / 类型徽章走 `badge`，选中圈走 `selection`。
+    /// 应用行.起改用公共组件 `AppRow`（原先手写在 6 个页面各一份）.
+    /// 系统标记 / 类型徽章走 `badge`，选中圈走 `selection`.
     private func appRow(_ app: InstalledApp, mode: RowMode) -> some View {
         let selection: Bool? = {
             if case let .select(checked) = mode { return checked }
@@ -670,7 +670,7 @@ struct AppListView: View {
                     // Step 3 批 6-B：本处有意**不**收编到 `SizePill`，理由是复刻不了而不是漏改：
                     // 底色是系统语义填充 `tertiarySystemFill`，无法用「tint + opacity」精确还原
                     // （浅色 / 深色都会略偏，且随对比度设置变化）；字体 `AppFont.captionEmphasis`
-                    // 是 `.caption` + rounded + semibold，也不落在 `.tiny` 档的 `.caption2` 上。
+                    // 是 `.caption` + rounded + semibold，也不落在 `.tiny` 档的 `.caption2` 上.
                     // 强改等于引入像素差异，故保持手写；待设计口径明确后再单独一轮处理.
                     Text("系统")
                         .font(AppFont.captionEmphasis)

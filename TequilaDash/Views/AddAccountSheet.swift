@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Apple ID 登录（v0.3.323：Asspp 分叉的**本地 SAP 签名**方案重写）。
+/// Apple ID 登录（Asspp 分叉的**本地 SAP 签名**方案重写）.
 ///
-/// 与 v0.3.312 删掉的那版的最大区别：**不需要 anisette、不需要任何第三方服务器**。
+/// 与 删掉的那版的最大区别：**不需要 anisette、不需要任何第三方服务器**.
 /// 登录请求由本地 Unicorn TCI 解释执行 Apple 自己的 x86 CommerceKit 来签名
 /// （`SAPAssets/` 由构建期脚本放进 bundle），因此也不会被 Apple 认证边缘按
-/// 第三方客户端标识软拒绝。
+/// 第三方客户端标识软拒绝.
 ///
 /// 交互：邮箱 + 密码 → 若开了双重认证，Apple 会返回「需要验证码」，此时展开验证码输入框，
-/// 同一份凭据带上验证码重试一次即可（SAP 协议本身如此，不是失败重试）。
+/// 同一份凭据带上验证码重试一次即可（SAP 协议本身如此，不是失败重试）.
 struct AddAccountSheet: View {
 
     /// 重登模式：填了邮箱就只补验证码，账号/密码用已保存的（标题与副标题显示「来源」）
@@ -75,8 +75,8 @@ struct AddAccountSheet: View {
 
                 if let errorText {
                     Section {
-                        // v0.3.630：改走统一错误行（原先是裸红字 footnote，
-                        // 与全仓其它页面的灰字/橙字各不一致）。
+                        // 改走统一错误行（原先是裸红字 footnote，
+                        // 与全仓其它页面的灰字/橙字各不一致）.
                         AppErrorRow(message: errorText)
                     }
                 }

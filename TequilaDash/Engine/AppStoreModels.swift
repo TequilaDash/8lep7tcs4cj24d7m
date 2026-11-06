@@ -1,7 +1,7 @@
 import Foundation
 
-/// v0.3.295：AppStore 商店数据模型
-/// 数据来源全部为 Apple 公开接口（iTunes Search / Lookup / 官方榜单 RSS），无需认证。
+/// AppStore 商店数据模型
+/// 数据来源全部为 Apple 公开接口（iTunes Search / Lookup / 官方榜单 RSS），无需认证.
 struct AppStoreItem: Identifiable, Hashable {
     var id: String                 // trackId
     var name: String               // 应用名
@@ -58,12 +58,12 @@ struct AppStoreItem: Identifiable, Hashable {
 
 /// 应用历史版本条目
 ///
-/// 两个来源（v0.3.335 起双通道）：
+/// 两个来源（双通道）：
 /// 1. **账号通道**（优先，需已登录 Apple ID）：`VersionFinder` 拿全量版本身份
-///    （`softwareVersionExternalIdentifiers`），逐条 `VersionLookup` 取版本号与日期。
-///    这条路走的是 App Store 下载协议，**任何区域都有数据**。
+///    （`softwareVersionExternalIdentifiers`），逐条 `VersionLookup` 取版本号与日期.
+///    这条路走的是 App Store 下载协议，**任何区域都有数据**.
 /// 2. **商品页通道**（回退，免登录）：抓 `apps.apple.com/{cc}/app/id{id}` 内嵌的
-///    `versionHistory` shelf —— 只有部分区域/部分应用有，所以此前非国区经常是空的。
+///    `versionHistory` shelf —— 只有部分区域/部分应用有，所以此前非国区经常是空的.
 struct AppStoreVersion: Identifiable, Hashable {
     /// 版本号（如 8.0.78）
     var version: String
@@ -75,15 +75,15 @@ struct AppStoreVersion: Identifiable, Hashable {
     var externalVersionID: String?
     /// 账号通道直接给出的发布日期
     var dateValue: Date?
-    /// 安装包大小（字节）。三方目录（bilin）会带 `size` 字段，账号通道不带。
+    /// 安装包大小（字节）.三方目录（bilin）会带 `size` 字段，账号通道不带.
     ///
     /// 给默认值：`AppStoreVersion` 有多处构造点（账号通道 / 商品页通道 / 三方目录），
-    /// 只有三方目录这一路拿得到大小，其余不传即可，不必逐个改。
+    /// 只有三方目录这一路拿得到大小，其余不传即可，不必逐个改.
     var sizeBytes: Int64? = nil
 
     var id: String { externalVersionID ?? version }
 
-    /// 展示用大小（`613.1 MB`）。没有数据时不显示，不编造。
+    /// 展示用大小（`613.1 MB`）.没有数据时不显示，不编造.
     var sizeText: String? {
         guard let sizeBytes, sizeBytes > 0 else { return nil }
         return IPADownloadLibrary.sizeText(sizeBytes)

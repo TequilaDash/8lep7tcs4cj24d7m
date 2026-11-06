@@ -165,11 +165,11 @@ struct ReclaimTabView: View {
                 Text(vm.progressText)
                     .foregroundStyle(.secondary)
             }
-            // v0.3.642：修「渲染空字符串」。
+            // 修「渲染空字符串」.
             //
             // 原写法 `Text(searchText.isEmpty ? "" : "没有匹配 …")` —— 搜索词为空时
-            // 渲染**空字符串**，用户看到一行空白（既无内容也无提示）。
-            // 现在按两种情况分别给文案：有搜索词 → 提示换关键词；无搜索词 → 说明真的没有可清理项。
+            // 渲染**空字符串**，用户看到一行空白（既无内容也无提示）.
+            // 现在按两种情况分别给文案：有搜索词 → 提示换关键词；无搜索词 → 说明真的没有可清理项.
             if visible.isEmpty && !vm.isScanning {
                 if searchText.isEmpty {
                     AppStateSection(state: .empty("没有可清理的应用",
@@ -240,10 +240,10 @@ struct ReclaimTabView: View {
         }
     }
 
-    /// 应用行。v0.3.645 起改用公共组件 `AppRow`（原先手写，与另外 5 处重复）。
+    /// 应用行.起改用公共组件 `AppRow`（原先手写，与另外 5 处重复）.
     ///
     /// 选中圈走 `selection`（未进入选择模式时传 nil，不显示），
-    /// 「可回收大小」胶囊走 `trailing`。
+    /// 「可回收大小」胶囊走 `trailing`.
     private func rankRow(_ row: ReclaimAppRank, selected: Bool) -> some View {
         AppRow(icon: appList.icons[row.app.bundleIdentifier],
                title: row.app.name,

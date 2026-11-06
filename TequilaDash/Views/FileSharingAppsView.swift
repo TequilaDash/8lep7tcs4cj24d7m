@@ -1,29 +1,29 @@
 import SwiftUI
 import UIKit
 
-/// v0.3.208：文档共享应用列表（iDescriptor InstalledApps 文件共享过滤移植）.
+/// 文档共享应用列表（iDescriptor InstalledApps 文件共享过滤移植）.
 /// 区分可浏览（UIFileSharingEnabled=true）与不可浏览；点击可浏览项进入文件树.
-/// v0.3.219：真实 App 图标（SpringBoardServices）+ 模块板块风格顶栏（.large + searchable）.
+/// 真实 App 图标（SpringBoardServices）+ 模块板块风格顶栏（.large + searchable）.
 struct FileSharingAppsView: View {
     @State private var apps: [FileSharingApp] = []
     @State private var icons: [String: UIImage] = [:]
     @State private var loading = true
     @State private var errorText: String?
     @State private var filterEnabledOnly = true
-    /// v0.3.364：类型筛选（nil = 全部，默认不分类）
+    /// 类型筛选（nil = 全部，默认不分类）
     @State private var typeFilter: FileSharingTypeClass?
     @State private var searchText: String = ""
-    /// v0.3.364：渐进式类型标签——首屏不等 profile，后台算完一批回填一批
+    /// 渐进式类型标签——首屏不等 profile，后台算完一批回填一批
     @State private var appTypes: [String: AppType] = [:]
     @State private var typesSettled = false
-    /// v0.3.705：类型判定降级项（profile 通道读失败时非空），只用于一行提示.
+    /// 类型判定降级项（profile 通道读失败时非空），只用于一行提示.
     @State private var typeContextIssues: [String] = []
-    /// v0.3.270：Documents 容器大小（bundleId → 字节，后台懒算回填）
+    /// Documents 容器大小（bundleId → 字节，后台懒算回填）
     @State private var docSizes: [String: Int64] = [:]
     @State private var computingDocs: Set<String> = []
-    /// v0.3.291：安装来源详情弹窗（取代已失效的 Archive 深读）
+    /// 安装来源详情弹窗（取代已失效的 Archive 深读）
     @State private var detailApp: FileSharingApp?
-    /// v0.3.292：图标批量选择导出（原实现只能「全部导出」——改为可多选/全选后导出）
+    /// 图标批量选择导出（原实现只能「全部导出」——改为可多选/全选后导出）
     @State private var selectingIcons = false
     @State private var selectedIcons: Set<String> = []
     @State private var exportingIcons = false
@@ -36,8 +36,8 @@ struct FileSharingAppsView: View {
                     }
                 } else if let err = errorText {
                     Section {
-                        // v0.3.683：区块级错误行统一到 AppErrorRow.
-                        // v0.3.378：超时/失败态下必须能一键重来
+                        // 区块级错误行统一到 AppErrorRow.
+                        // 超时/失败态下必须能一键重来
                         //（用户实测反馈：只有「读取超时」没有重试入口 = 完全用不了）
                         AppErrorRow(message: err, retry: { Task { await load() } })
                     }
@@ -51,7 +51,7 @@ struct FileSharingAppsView: View {
                             }
                         }
                         if !typeContextIssues.isEmpty {
-                            // v0.3.705：profile 通道读失败时类型标签会偏保守，只陈述事实.
+                            // profile 通道读失败时类型标签会偏保守，只陈述事实.
                             Label("有 \(typeContextIssues.count) 项判定降级, 类型标签可能偏保守.", systemImage: "info.circle")
                                 .font(AppFont.footnote)
                                 .foregroundStyle(AppTheme.pending)
@@ -67,13 +67,13 @@ struct FileSharingAppsView: View {
                 }
             }
             .listStyle(.insetGrouped)   // v0.3.214：参考模块板块样式
-            // v0.3.378：超时/失败后下拉即可重试（与错误行上的「重试」按钮成对）
+            // 超时/失败后下拉即可重试（与错误行上的「重试」按钮成对）
             .refreshable { await load() }
-            // v0.3.292：图标批量选择模式
+            // 图标批量选择模式
             .environment(\.editMode, .constant(selectingIcons ? .active : .inactive))
         .navigationTitle("文档浏览")
         .navigationBarTitleDisplayMode(.large)  // v0.3.212：参考模块板块顶栏样式
-        // v0.3.289：displayMode .always → .automatic——always 时搜索框常驻悬浮，
+        // displayMode .always → .automatic——always 时搜索框常驻悬浮，
         // 列表首行会被压在搜索框下面（用户截图实锤「显示不全」）；automatic 随滚动收起.
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索应用")
         .avoidSearchZoom()
@@ -115,7 +115,7 @@ struct FileSharingAppsView: View {
             }
         }
         .autocorrectionDisabled()
-        // v0.3.291：安装来源详情
+        // 安装来源详情
         .sheet(item: $detailApp) { app in
             NavigationStack {
                 appleIdDetailSheet(app)
@@ -129,15 +129,15 @@ struct FileSharingAppsView: View {
         .toastHost()
         .task {
             await load()
-            // v0.3.288：不再自动跑 AFC 递归算文档大小——v0.3.284 起由 Lookup 的
+            // 不再自动跑 AFC 递归算文档大小——起由 Lookup 的
             // DynamicDiskUsage 一次返回（原实现每 App 开 house_arrest 隧道 + 全树
             // 遍历，20 个 App 时列表长时间「计算中」，用户实测卡顿）.
         }
-        // v0.3.270：切换「仅显示文件共享应用」/搜索结果变化时补算新出现项的文档大小
+        // 切换「仅显示文件共享应用」/搜索结果变化时补算新出现项的文档大小
 
     }
 
-    /// v0.3.364：三个条件取交集——文件共享开关 ∩ 类型筛选 ∩ 搜索
+    /// 三个条件取交集——文件共享开关 ∩ 类型筛选 ∩ 搜索
     private var filtered: [FileSharingApp] {
         var list = apps
         if filterEnabledOnly { list = list.filter { $0.supportsFileSharing } }
@@ -154,7 +154,7 @@ struct FileSharingAppsView: View {
     @ViewBuilder
     private func appRow(_ app: FileSharingApp) -> some View {
         Group {
-            // v0.3.292：选择模式下禁用导航，避免与多选冲突
+            // 选择模式下禁用导航，避免与多选冲突
             if app.supportsFileSharing && !selectingIcons {
                 NavigationLink {
                     AppFileBrowserView(bundleId: app.bundleId, appName: app.name)
@@ -168,7 +168,7 @@ struct FileSharingAppsView: View {
         .tag(app.bundleId)
     }
 
-    /// v0.3.292：图标批量导出——选中的项（原为固定「全部导出」）
+    /// 图标批量导出——选中的项（原为固定「全部导出」）
     private func exportSelectedIcons() {
         guard !exportingIcons else { return }
         let targets = apps.filter { selectedIcons.contains($0.bundleId) }
@@ -217,24 +217,24 @@ struct FileSharingAppsView: View {
         HStack(spacing: 12) {
             appIcon(app.bundleId)
             VStack(alignment: .leading, spacing: 4) {
-                // v0.3.363：标题允许换行不截断（2 行）
+                // 标题允许换行不截断（2 行）
                 Text(app.name)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                // v0.3.363：bundleId 去掉 lineLimit(1)，改为可换行（用户要求「可换行但不能显示不全」）
+                // bundleId 去掉 lineLimit(1)，改为可换行（用户要求「可换行但不能显示不全」）
                 Text(app.bundleId)
                     .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                // v0.3.364：类型文案统一为爱思五类（苹果正版/共享正版/个人签名/
+                // 类型文案统一为爱思五类（苹果正版/共享正版/个人签名/
                 // 企业签名/系统，算不出=未识别），由 FileSharingTypeClass 单点映射；
-                // 所有胶囊都可点开「安装来源」详情（此前只有 AppleID 胶囊能点）。
+                // 所有胶囊都可点开「安装来源」详情（此前只有 AppleID 胶囊能点）.
                 HStack(spacing: 5) {
                     tappableCapsule(typeLabel(app), tint: typeTint(app), app: app)
                     appleIdCapsule(app)
                 }
-                // v0.3.363：尺寸拆成两行，给每个胶囊整行宽度 → 文本 2 行换行，不出现省略号
+                // 尺寸拆成两行，给每个胶囊整行宽度 → 文本 2 行换行，不出现省略号
                 HStack(spacing: 5) {
                     if !app.version.isEmpty {
                         tappableCapsule("v\(app.version)", tint: AppTheme.accent, app: app)
@@ -256,7 +256,7 @@ struct FileSharingAppsView: View {
         }
     }
 
-    /// v0.3.364：类型归类——**判定与文案全部交给 FileSharingTypeClass**（唯一映射点）.
+    /// 类型归类——**判定与文案全部交给 FileSharingTypeClass**（唯一映射点）.
     /// nil = 类型还没算出来（后台渐进加载中），UI 显示占位、不做判断.
     private func typeClass(_ app: FileSharingApp) -> FileSharingTypeClass? {
         FileSharingTypeClass.resolve(
@@ -266,13 +266,13 @@ struct FileSharingAppsView: View {
         )
     }
 
-    /// v0.3.364：类型显示文案（爱思五类：苹果正版 / 共享正版 / 个人签名 / 企业签名 / 系统）.
+    /// 类型显示文案（爱思五类：苹果正版 / 共享正版 / 个人签名 / 企业签名 / 系统）.
     /// 未算出来 → 「识别中」占位，算完（含算不出）→ 收敛到「未识别」.
     private func typeLabel(_ app: FileSharingApp) -> String {
         typeClass(app)?.rawValue ?? "识别中"
     }
 
-    /// v0.3.364：类型胶囊配色——正版品牌蓝 / 共享紫 / 个人签名绿 / 企业签名橙 / 越狱版状态橙 / 系统灰.
+    /// 类型胶囊配色——正版品牌蓝 / 共享紫 / 个人签名绿 / 企业签名橙 / 越狱版状态橙 / 系统灰.
     private func typeTint(_ app: FileSharingApp) -> Color {
         guard let type = typeClass(app) else { return .secondary }   // 识别中 → 灰
         switch type {
@@ -286,22 +286,22 @@ struct FileSharingAppsView: View {
         }
     }
 
-    /// v0.3.291：Apple ID 胶囊——直接显示 instproxy 返回的真实账号邮箱
-    /// （iTunesMetadata → downloadInfo.accountInfo.AppleID）；无则按爱思显示 "-"。
-    /// 点击弹出详情（账号 / DSID / 购买时间 / 签名来源）。
+    /// Apple ID 胶囊——直接显示 instproxy 返回的真实账号邮箱
+    /// （iTunesMetadata → downloadInfo.accountInfo.AppleID）；无则按爱思显示 "-".
+    /// 点击弹出详情（账号 / DSID / 购买时间 / 签名来源）.
     private func appleIdCapsule(_ app: FileSharingApp) -> some View {
         let text = app.appleId ?? "-"
         let tint: Color = app.appleId != nil ? .purple : .gray
         return tappableCapsule(text, tint: tint, app: app)
     }
 
-    /// v0.3.363：胶囊视觉（文本可换行到 2 行，不截断）
+    /// 胶囊视觉（文本可换行到 2 行，不截断）
     private func capsuleLabel(_ text: String, tint: Color) -> some View {
         // Step 3 批 6-C：手写胶囊收编到共享 `SizePill` 的 `.compact` 档（caption2 + 6 / 2）；
         // 字重原为 `.medium`（`.compact` 档默认是 `.semibold`），用 `weight` 覆盖；底色 12% 与档位默认一致.
         // 注意：`.multilineTextAlignment(.center)` / `.lineLimit(2)` /
         // `.fixedSize(horizontal: false, vertical: true)` 三个修饰符必须留在调用处 ——
-        // 它们是 v0.3.363「长文本被压成竖排」老 bug 的修复，顺序与语义一字不动.
+        // 它们是 「长文本被压成竖排」老 bug 的修复，顺序与语义一字不动.
         SizePill(text: text,
                  tint: tint,
                  level: .compact,
@@ -311,7 +311,7 @@ struct FileSharingAppsView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// v0.3.363：可点击胶囊——点任意胶囊都打开同一个「安装来源」详情
+    /// 可点击胶囊——点任意胶囊都打开同一个「安装来源」详情
     /// （最小改法：每个胶囊各自 Button，不把整行包成 Button，避免吃掉
     ///  NavigationLink 进入箭头 / 滑动手势）.
     private func tappableCapsule(_ text: String, tint: Color, app: FileSharingApp) -> some View {
@@ -323,8 +323,8 @@ struct FileSharingAppsView: View {
         .buttonStyle(.borderless)
     }
 
-    /// v0.3.291：安装来源详情。（原 Archive 深读通道在 iOS 27 已失效——
-    /// instproxy Archive 返回 UnknownCommand，真机实证。）
+    /// 安装来源详情.（原 Archive 深读通道在 iOS 27 已失效——
+    /// instproxy Archive 返回 UnknownCommand，真机实证.）
     private func appleIdDetailSheet(_ app: FileSharingApp) -> some View {
         List {
             Section("安装来源") {
@@ -362,7 +362,7 @@ struct FileSharingAppsView: View {
     }
 
     private func docCapsuleText(_ app: FileSharingApp) -> String {
-        // v0.3.271：优先 Browse 返回的 DynamicDiskUsage（一次请求即得）；缺失才走
+        // 优先 Browse 返回的 DynamicDiskUsage（一次请求即得）；缺失才走
         // house_arrest AFC 递归懒算.
         if let size = app.docSize ?? docSizes[app.bundleId] {
             return "文档 \(FileSharingService.formatMB(size))"
@@ -373,7 +373,7 @@ struct FileSharingAppsView: View {
         return "文档 —"
     }
 
-    /// v0.3.271：后台逐 App 计算 Documents 容器大小——仅对 Browse 未返回
+    /// 后台逐 App 计算 Documents 容器大小——仅对 Browse 未返回
     /// DynamicDiskUsage 的项兜底（Browse 已返回的项不再重复开隧道）.
     ///
     /// 注意： **当前没有任何调用点（死代码），已被「本机容器直读」取代** —— 保留是历史证据，要用得先接上.
@@ -381,7 +381,7 @@ struct FileSharingAppsView: View {
     ///   而微信 / 游戏这类恰恰没开 → 那条路**永远量不到它们**；
     /// · 现在文档大小改由 `DeviceSlimService.startDocSizePass` 的**本机沙盒扩展 + 递归求和**
     ///   通道量（消费 `containerPath`，不需要应用配合、也不需要额外隧道）.
-    /// · 与下方 `loadTypes` 的 v0.3.401 说明一致（那里也点明本函数是死代码）.
+    /// · 与下方 `loadTypes` 的 说明一致（那里也点明本函数是死代码）.
     private func computeDocumentSizes() {
         let targets = filtered.filter { $0.supportsFileSharing && $0.docSize == nil && docSizes[$0.bundleId] == nil && !computingDocs.contains($0.bundleId) }
         guard !targets.isEmpty else { return }
@@ -400,12 +400,12 @@ struct FileSharingAppsView: View {
         }
     }
 
-    /// v0.3.364：首屏只等 instproxy 一次 Lookup（名称/标识/大小/Apple ID…），
+    /// 首屏只等 instproxy 一次 Lookup（名称/标识/大小/Apple ID…），
     /// **不等 profile**；类型标签交给 loadTypes() 后台渐进补齐.
     ///
-    /// v0.3.376：**20 秒硬超时**——此前 `defer { loading = false }` 只有在函数返回
+    /// **20 秒硬超时**——此前 `defer { loading = false }` 只有在函数返回
     /// 时才执行，而 FFI 全程无超时（见 FileSharingService.listAppsWithFileSharing
-    /// (timeout:) 注释），设备/隧道一不应答就永远停在「正在读取已装应用…」。
+    /// (timeout:) 注释），设备/隧道一不应答就永远停在「正在读取已装应用…」.
     /// 现在超时即收口：解除 loading、给最短提示「读取超时」、并把类型占位收敛
     ///（typesSettled = true，不留「识别中」）.
     /// 注：若被放弃的那次读取随后真的返回，下面的 .ok 分支仍会照常填列表
@@ -435,22 +435,22 @@ struct FileSharingAppsView: View {
         }
     }
 
-    /// v0.3.364：**渐进式**类型补齐——首屏返回后，后台拉一次 profile 快照
+    /// **渐进式**类型补齐——首屏返回后，后台拉一次 profile 快照
     /// （fetchAppTypeContext 内部两条隧道串行、各自释放），再分批判定并回填
-    /// `appTypes`（每批算完即刷 @State，不必等全部算完）。
+    /// `appTypes`（每批算完即刷 @State，不必等全部算完）.
     /// 全部跑完 → typesSettled = true，未判定者收敛到「未识别」，不会停在占位.
     ///
-    /// v0.3.378：顺序改成「先可选增强、再判定」，理由：
+    /// 顺序改成「先可选增强、再判定」，理由：
     ///   - 主列表已改走 `get_apps` 快路径（不带大小/账号字段），而这五个胶囊的
     ///     大小与账号只能来自带属性的 `Lookup`；
     ///   - 增强独立 15 秒、失败就不补（大小胶囊保持「—」），**不影响首屏**
-    ///     （列表在 load() 返回时就已渲染）；v0.3.379 由 8 秒提到 15 秒（后台可选、
+    ///     （列表在 load() 返回时就已渲染）；由 8 秒提到 15 秒（后台可选、
     ///     不阻塞首屏，且单飞保证同一时刻只有一条在飞）；
     ///   - 先补元数据再判定，共享正版/苹果正版才判得准（isGenuine/appleId 是判据）.
     ///
-    /// v0.3.401（回归修复）：主列表 `listAppsWithFileSharing(timeout:)` 的主路径重新是
+    /// 主列表 `listAppsWithFileSharing(timeout:)` 的主路径重新是
     /// 带属性 Lookup，**列表本身就带回 `appleId`**，故类型判定不再依赖这次增强；
-    /// 增强通常命中单飞缓存（不另发命令）。大小胶囊（appSize/docSize）**已不再由该命令
+    /// 增强通常命中单飞缓存（不另发命令）.大小胶囊（appSize/docSize）**已不再由该命令
     /// 返回**（Rust attrs 已去掉磁盘占用类字段），文档大小的 AFC 兜底实现虽在
     /// （`computeDocumentsSize` + 本文件的 `computeDocumentSizes()`），但**后者当前
     /// 没有任何调用点**（死代码），要用得先接上.
@@ -516,7 +516,7 @@ struct FileSharingAppsView: View {
         }
     }
 
-    /// v0.3.219：后台批量拉真实 App 图标（SpringBoardServices，AppDiscovery 同源）
+    /// 后台批量拉真实 App 图标（SpringBoardServices，AppDiscovery 同源）
     private func loadIcons() {
         let ids = apps.map { $0.bundleId }
         guard !ids.isEmpty else { return }

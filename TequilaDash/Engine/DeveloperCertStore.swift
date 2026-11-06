@@ -2,7 +2,7 @@
 //  DeveloperCertStore.swift
 //  TequilaDash
 //
-//  v0.3.122：开发证书获取与存储（SideStore/AltSign 同款流程）
+//  开发证书获取与存储（SideStore/AltSign 同款流程）
 //  Apple ID 登录态 → 本机生成 RSA2048 私钥 + CSR（zsign/OpenSSL）→
 //  developerservices2 提交 CSR → 存 cert/key PEM → zsign 真证书签名 dylib.
 //  真证书签名与 App 同 TeamID → 库验证通过 → dlopen 直接可用.
@@ -11,10 +11,10 @@
 import Foundation
 
 final class DeveloperCertStore: ObservableObject {
-    /// Swift 6 并发检查：本类型非 Sendable。`@Published` 的**写**全部收敛在
+    /// Swift 6 并发检查：本类型非 Sendable.`@Published` 的**写**全部收敛在
     /// `MainActor.run` 内（见 `createCertificateWithStoredAccount` 等异步方法）；
     /// 其余调用点（BinaryModuleRunner 的后台线程）只读 `hasCert` / `jitFreeMode`
-    /// 两个 Bool —— 无并发写，`shared` 共享无风险。
+    /// 两个 Bool —— 无并发写，`shared` 共享无风险.
     nonisolated(unsafe) static let shared = DeveloperCertStore()
 
     /// 证书文件目录：Documents/DeveloperCert/
@@ -48,10 +48,9 @@ final class DeveloperCertStore: ObservableObject {
         revokeWhitelist = UserDefaults.standard.string(forKey: "certs.revokeWhitelist") ?? ""
     }
 
-    // MARK: - CSR 生成（zsign/OpenSSL，SideStore CertificatesManager.generateCSR 同款）
 
     /// 本机生成 RSA2048 私钥 + CSR；返回 (CSR PEM, 私钥 PEM).
-    /// v0.3.140：私钥不再立即落盘 —— 由 createCertificate 在配对验证通过后统一写入，
+    /// 私钥不再立即落盘 —— 由 createCertificate 在配对验证通过后统一写入，
     /// 避免提交失败（1100/7460 等）时 keyURL 被新私钥污染（certURL 还是旧证书 → 错位）.
     func generateKeyAndCSR() throws -> (csrPem: String, keyPem: String) {
         var csrPtr: UnsafeMutablePointer<CChar>?
@@ -137,13 +136,12 @@ final class DeveloperCertStore: ObservableObject {
             let before = try await AppleDeveloperAPI.fetchCertificates(team: team, session: session)
             let knownSerials = Set(before.map { $0.serialNumber })
             // 3) 本机密钥 + CSR（完整 PEM，含头尾——Apple 端点要求原样提交）.
-            //    私钥暂存内存，配对验证通过后才落盘（v0.3.140 防错位）.
+            //    私钥暂存内存，配对验证通过后才落盘（防错位）.
             let (csrPem, pendingKeyPem) = try generateKeyAndCSR()
             // 4) 提交 Apple（异步受理：响应只含 certRequest 元数据，无证书内容）.
-            //    7460（证书数上限，免费账号常见）→ SideStore 同款：吊销全部旧证书后重试一次.
             //    （被吊销的旧证书所属工具下次使用时会自动重建自己的证书，属正常行为）
             // Swift 6：`UIDevice` 在 iOS 26 SDK 里是 `@MainActor` 类型，本方法是非隔离
-            // async 上下文，必须显式 `await` 才能读它（取值语义不变）。
+            // async 上下文，必须显式 `await` 才能读它（取值语义不变）.
             let machineName = await UIDevice.current.name
             var certDER: Data
             do {
@@ -151,7 +149,7 @@ final class DeveloperCertStore: ObservableObject {
                     team: team, csrPEM: csrPem, machineName: machineName, session: session)
             } catch let err as AppleAPIError {
                 if case .customError(let code, _) = err, code == 7460 {
-                    // v0.3.131：走统一撤销接口（受「自动撤销证书」开关与白名单管控）
+                    // 走统一撤销接口（受「自动撤销证书」开关与白名单管控）
                     let (revoked, blocked) = await revokeAllForModuleLoading(
                         team: team, session: session)
                     guard !blocked, revoked > 0 else {
@@ -173,7 +171,7 @@ final class DeveloperCertStore: ObservableObject {
                 for attempt in 1...10 {
                     try await Task.sleep(nanoseconds: 2_000_000_000)
                     let list = try await AppleDeveloperAPI.fetchCertificates(team: team, session: session)
-                    // v0.3.140：候选逐张验证与本机私钥配对 —— Apple 异步签发有延迟，
+                    // 候选逐张验证与本机私钥配对 —— Apple 异步签发有延迟，
                     // 历史失败提交的 CSR 可能此刻才被签发，不配对的直接跳过.
                     let candidates = list.filter { !knownSerials.contains($0.serialNumber) && $0.certContent != nil }
                     for cand in candidates {
@@ -221,7 +219,7 @@ final class DeveloperCertStore: ObservableObject {
 
     // MARK: - 真证书签名
 
-    /// v0.3.157：本地签名证书摘要（UI 展示用）——serial 尾号；读取失败给占位.
+    /// 本地签名证书摘要（UI 展示用）——serial 尾号；读取失败给占位.
     var localCertSummary: String {
         guard hasCert,
               let certData = try? Data(contentsOf: certURL) else {
@@ -239,9 +237,9 @@ final class DeveloperCertStore: ObservableObject {
 
     /// 对 dylib 就地做真证书签名.返回 true = 签名成功.
     /// 诊断日志（zsign 全部输出 + 分步结果）落盘 dataDir/go_sign_debug.log.
-    /// v0.3.152：签名前对比"主程序叶子证书 serial"与"当前证书 serial"——
+    /// 签名前对比"主程序叶子证书 serial"与"当前证书 serial"——
     /// 150/151 真机实锤主程序用 LC 导入的旧证书（能过校验），新证书签的 dylib 被拒.
-    /// v0.3.156：useMainIdent=true 时签名 identifier 用主程序 CD 的 identifier.
+    /// useMainIdent=true 时签名 identifier 用主程序 CD 的 identifier.
     /// 最终根因：iOS 27 beta AMFI 要求 dlopen 库的 identifier 与主程序一致
     /// （真机实锤：com.tequila.alist 被拒，主程序 ident 通过 dlopen）.
     func signDylib(path: String, bundleId: String, debugLog: URL? = nil,
@@ -267,7 +265,7 @@ final class DeveloperCertStore: ObservableObject {
                 }
             }
         }
-        // v0.3.152 serial 同源诊断：主程序（能过校验的基准）vs 当前签名证书
+        // serial 同源诊断：主程序（能过校验的基准）vs 当前签名证书
         let mainSerial = UnsafeMutablePointer<CChar>.allocate(capacity: 96)
         defer { mainSerial.deallocate() }
         let curSerial = UnsafeMutablePointer<CChar>.allocate(capacity: 96)
@@ -289,7 +287,7 @@ final class DeveloperCertStore: ObservableObject {
                 LoginLogger.shared.log("[完成] 证书同源 serial=\(cs.suffix(12))")
             }
         }
-        // v0.3.140 前置配对校验：历史错位（证书对应旧私钥）在此给出明确指引，不让 zsign 模糊失败
+        // 前置配对校验：历史错位（证书对应旧私钥）在此给出明确指引，不让 zsign 模糊失败
         let paired = certData.withUnsafeBytes { cbuf -> Int32 in
             keyData.withUnsafeBytes { kbuf -> Int32 in
                 guard let cp = cbuf.baseAddress?.assumingMemoryBound(to: CChar.self),
@@ -316,7 +314,7 @@ final class DeveloperCertStore: ObservableObject {
         return rc == 0
     }
 
-    /// v0.3.155：删除本地已导入/已签发的签名证书（LC 同款删除功能）.
+    /// 删除本地已导入/已签发的签名证书（LC 同款删除功能）.
     /// 仅清除本地 cert/key 文件（签名功能随之不可用），不向 Apple 吊销——
     /// Apple 侧证书状态不受影响（仍占账号名额，需要腾名额请用吊销）.
     func removeLocalCert() -> (ok: Bool, message: String) {
@@ -336,7 +334,7 @@ final class DeveloperCertStore: ObservableObject {
         }
     }
 
-    /// v0.3.749：从磁盘上的证书/私钥文件重算发布状态——导入与删除路径自身已同步
+    /// 从磁盘上的证书/私钥文件重算发布状态——导入与删除路径自身已同步
     /// @Published，本方法供页面「刷新」把证书目录被外部改动或进程内状态漂移重新拉齐.
     /// 主线程调用（与 importP12 / removeLocalCert 同约定）.
     func reloadFromDisk() {
@@ -347,8 +345,7 @@ final class DeveloperCertStore: ObservableObject {
         teamId = (team?.isEmpty == false) ? team : nil
     }
 
-    /// v0.3.152：导入 p12（同源证书方案）——解析 PKCS12 提取 cert/key PEM，
-    /// 配对校验通过后覆盖落盘.用于导入与主程序（LC/SideStore 签发）相同的证书.
+    /// 导入 p12（同源证书方案）——解析 PKCS12 提取 cert/key PEM，
     func importP12(data: Data, password: String) -> (ok: Bool, message: String) {
         var certPemOut: UnsafeMutablePointer<CChar>? = nil
         var keyPemOut: UnsafeMutablePointer<CChar>? = nil
@@ -400,16 +397,13 @@ final class DeveloperCertStore: ObservableObject {
         }
     }
 
-    /// 统一撤销接口：自动撤销开关（默认关——防止误吊销 SideStore 在用证书）
     @Published var autoRevokeEnabled: Bool {
         didSet { UserDefaults.standard.set(autoRevokeEnabled, forKey: "certs.autoRevokeEnabled") }
     }
-    /// 白名单（仅支持一个）：证书名包含该字符串则不吊销（如 "SideStore"）
     @Published var revokeWhitelist: String {
         didSet { UserDefaults.standard.set(revokeWhitelist, forKey: "certs.revokeWhitelist") }
     }
 
-    /// 统一撤销调用点：吊销团队下全部开发证书（白名单与 SideStore/AltStore 标识放行）.
     /// 返回 (吊销数, 是否被开关拦下).未开自动撤销 → 输出日志并拦下（调用方自行提示）.
     @discardableResult
     func revokeAllForModuleLoading(team: DeveloperTeam,

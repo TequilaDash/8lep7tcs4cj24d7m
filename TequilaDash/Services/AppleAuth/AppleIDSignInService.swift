@@ -1,6 +1,5 @@
 import Foundation
 
-/// The App Store SAP flow is separate from AltStore/GrandSlam developer authentication.
 enum AppleIDSignInService {
     /// Initialize the persisted identity first, then use the exact same GUID as purchase/download.
     static func sapGUID() -> String {

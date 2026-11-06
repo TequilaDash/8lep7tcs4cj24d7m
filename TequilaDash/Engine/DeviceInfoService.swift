@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-/// v0.3.208：设备信息（照搬 iDescriptor 完整字段清单）.
+/// 设备信息（照搬 iDescriptor 完整字段清单）.
 /// 数据源：lockdown 整棵字典（一次 GetValue）+ com.apple.disk_usage 域 +
 /// AFC device_info + DiagnosticsRelay mobilegestalt + sysctl 本机.
 struct DeviceInfoModel {
@@ -20,15 +20,15 @@ struct DeviceInfoModel {
     var systemVersion: String      // iOS 26.x
     var productionDevice: String?  // ProductionSOC bool → "是/否"
     var jailbroken: Bool?           // 本进程内是否观测到越狱痕迹
-    /// v0.3.711（R4）：越狱检测失败的原因（nil = 检测成功，此时 `jailbroken` 才可信）.
-    /// v0.3.723：改为本进程内痕迹探测后不再有失败分支，恒为 nil；字段保留以免改动下游取值面。
+    /// 越狱检测失败的原因（nil = 检测成功，此时 `jailbroken` 才可信）.
+    /// 改为本进程内痕迹探测后不再有失败分支，恒为 nil；字段保留以免改动下游取值面.
     var jailbrokenError: String?
     var deviceName: String?         // lockdown DeviceName
     var deviceColor: String?         // lockdown DeviceColor
     var wiFiAddress: String?         // lockdown WiFiAddress
     var ethernetAddress: String?     // lockdown EthernetAddress
     var bluetoothAddress: String?    // lockdown BluetoothAddress
-    // 序列号/隐私敏感（v0.3.208：统一小眼睛+长按复制）
+    // 序列号/隐私敏感（统一小眼睛+长按复制）
     var serialNumber: String?        // lockdown SerialNumber
     var imei: String?                // lockdown InternationalMobileEquipmentIdentity
     var imei2: String?               // lockdown InternationalMobileEquipmentIdentity2
@@ -48,7 +48,7 @@ struct DeviceInfoModel {
     // CPU/内存
     var cpuCount: Int
     var memoryMB: Int
-    // v0.3.285：移植爱思设备信息面板字段（逆向 i4Tools idm_info.dll 的 255 项键名清单）
+    // 移植爱思设备信息面板字段（逆向 i4Tools idm_info.dll 的 255 项键名清单）
     // 电池（com.apple.mobile.iTunes + com.apple.mobile.battery 域）
     var designCapacity: Int?            // DesignCapacity（mAh）
     var maxCapacity: Int?               // AppleRawMaxCapacity -> MaxCapacity（实际容量）
@@ -81,11 +81,11 @@ struct DeviceInfoModel {
     var hasBattery: Bool?               // HasBattery
     // 功能支持（DeviceSupports* 全部键）
     var supportedFeatures: [String] = []
-    // v0.3.291：lockdown 全量键值（与爱思设备信息页同源同量——爱思缓存的
+    // lockdown 全量键值（与爱思设备信息页同源同量——爱思缓存的
     // <序列号>_info.txt 即lockdown GetValue 全量字典；此前只挑了部分键，
     // 故检测项远少于爱思）
     var allValues: [(String, String)] = []
-    // v0.3.294：对齐爱思「设备详情」的派生子项（机型规格来自 DeviceCatalog）
+    // 对齐爱思「设备详情」的派生子项（机型规格来自 DeviceCatalog）
     var releaseDate: String?          // 上市日期
     var cpuName: String?              // CPU 类型（Apple A16）
     var cpuFrequency: String?         // CPU 频率
@@ -104,7 +104,7 @@ struct DeviceInfoModel {
     var carrier1: String?             // eSIM 卡1 运营商
     var carrier2: String?             // eSIM 卡2 运营商
     var wirelessBoardSerial: String?  // Wi-Fi 序列号
-    // v0.3.305：设备树（IODeviceTree /product 节点）+ AppleSmartBattery 实测通道补齐
+    // 设备树（IODeviceTree /product 节点）+ AppleSmartBattery 实测通道补齐
     // （iOS 27 的 com.apple.mobile.iTunes 域已无零部件序列号，只能从设备树按节点名查）
     var panelSerial: String?          // 屏幕序列号（product.raw-panel-serial-number）
     var ambientLightSerial: String?   // 环境光序列号（product.ambient-light-sensor-serial-num）
@@ -124,7 +124,7 @@ struct DeviceInfoModel {
     var simsAreEmbedded: Bool?        // 是否全 eSIM（SIM1/SIM2IsEmbedded）
     /// 设备树/电池节点是否读成功（用于 UI 区分「系统未提供」与「读取失败」）
     var enrichAvailable: Bool = false
-    // v0.3.322：对齐爱思设备信息首屏的三项检测
+    // 对齐爱思设备信息首屏的三项检测
     /// 激活锁（ID 锁）：`com.apple.fmip` → `IsAssociated`
     var activationLockEnabled: Bool?
     /// iCloud 是否已登录：`com.apple.mobile.data_sync` 的 AccountNames 里含 `iCloud`
@@ -133,17 +133,17 @@ struct DeviceInfoModel {
     var crashLogCount: Int?
     /// 读崩溃日志失败的原因（nil = 读取成功，此时 `crashLogCount` 才可信）.
     ///
-    /// v0.3.661：**「0 次」与「读不到」必须能区分** —— 前者是设备真的没有 panic，
-    /// 后者是没配对文件 / VPN 没开 / 服务不可用 / 列目录失败。原先两者都是 `nil`，
-    /// UI 一律显示「—」，用户无从判断该去修哪一步（这就是「错误折叠」）。
-    /// v0.3.711（R3）：lockdown 整棵字典读取/解析失败的原因（nil = 读取成功，此时 `raw` 才可信）.
+    /// **「0 次」与「读不到」必须能区分** —— 前者是设备真的没有 panic，
+    /// 后者是没配对文件 / VPN 没开 / 服务不可用 / 列目录失败.原先两者都是 `nil`，
+    /// UI 一律显示「—」，用户无从判断该去修哪一步（这就是「错误折叠」）.
+    /// lockdown 整棵字典读取/解析失败的原因（nil = 读取成功，此时 `raw` 才可信）.
     var lockdownError: String?
     var crashLogCountError: String?
     var raw: [String: Any] = [:]
 }
 
 enum DeviceInfoService {
-    /// v0.3.291：lockdown 字典 → 扁平键值对（嵌套字典/数组转字符串），按 key 排序.
+    /// lockdown 字典 → 扁平键值对（嵌套字典/数组转字符串），按 key 排序.
     static func flatten(_ dict: [String: Any]) -> [(String, String)] {
         dict.compactMap { key, value -> (String, String)? in
             let text: String
@@ -190,29 +190,29 @@ enum DeviceInfoService {
 
         // 隧道拿 lockdown 整棵字典（核心数据）
         //
-        // v0.3.621：**整个 collectFull 只建一条隧道**。
+        // **整个 collectFull 只建一条隧道**.
         // 原先下面 10 处各自调 makeTunnel()，每处都是「读配对文件 + 3 次 RSD 握手重试 +
         // CellularTunnelManager.prepareForTunnel」⇒ 一次刷新 10 条完整 RSD 隧道；
-        // 且第一条失败（如 VPN 没开）时后面 9 条仍各跑 3 次重试，失败场景 UI 长时间无响应。
+        // 且第一条失败（如 VPN 没开）时后面 9 条仍各跑 3 次重试，失败场景 UI 长时间无响应.
         // 现在建一条，把 adapter/handshake 传给各 lockdown 变体；建不起来就整体降级为空，
-        // 不再重复尝试。
+        // 不再重复尝试.
         var sharedTunnel: TunnelHandles? = try? Self.makeTunnel()
         defer { sharedTunnel?.free() }
         let sharedAdapter = sharedTunnel?.adapter
         let sharedHandshake = sharedTunnel?.handshake
 
-        // v0.3.711（R3）：lockdown 整棵字典读失败要留原因。原先 try? ?? [:] 让
+        // lockdown 整棵字典读失败要留原因.原先 try? ?? [:] 让
         // 「隧道没建起来 / 解析崩了」与「设备返回的就是空」同值，下游 iCloudSignedIn 之类
-        // 由「字典非空」推出的结论会直接把失败显示成「未开启」。
+        // 由「字典非空」推出的结论会直接把失败显示成「未开启」.
         var lockdown: [String: Any] = [:]
         var lockdownError: String?
         do { lockdown = try Self.lockdownFullDictOrFallback(sharedAdapter, sharedHandshake) }
         catch { lockdownError = error.localizedDescription }
         let region = Self.parseRegion(lockdown["RegionInfo"] as? String)
-        // v0.3.711（R4）：区分「确实未越狱」与「读不到」—— 原先 try? 把三种失败折成 nil，
-        // 界面显示「未越狱」，与「就是没越狱」同值。
-        // v0.3.723：检测手段换成沙盒内痕迹探测后不存在「读不到」这一态（见 jailbrokenTrace 注释），
-        // 因此 error 恒为 nil；保留字段是为了不动下游取值面与界面分支。
+        // 区分「确实未越狱」与「读不到」—— 原先 try? 把三种失败折成 nil，
+        // 界面显示「未越狱」，与「就是没越狱」同值.
+        // 检测手段换成沙盒内痕迹探测后不存在「读不到」这一态（见 jailbrokenTrace 注释），
+        // 因此 error 恒为 nil；保留字段是为了不动下游取值面与界面分支.
         let isJailbroken: Bool? = (Self.jailbrokenTrace() != nil)
         let jailbrokenError: String? = nil
         let productionSOC = lockdown["ProductionSOC"] as? Bool
@@ -220,22 +220,22 @@ enum DeviceInfoService {
         // MobileGestalt（iOS ≥17.4 已被 Apple 废弃 → 基本恒为 nil，仅留作老系统回退）
         let (mgUniqueChip, mgMLB, mgBaseband) = (try? Self.mobilegestaltKeys()) ?? (nil, nil, nil)
 
-        // v0.3.308：这些值在 iOS 27 上**lockdown 根字典里就有**，此前误走已废弃的
+        // 这些值在 iOS 27 上**lockdown 根字典里就有**，此前误走已废弃的
         // MobileGestalt / 已残缺的 iTunes 域，导致设备信息里出现一片「—」.
         let mlbFromLockdown = lockdown["MLBSerialNumber"] as? String
         let basebandSerialFromLockdown = stringOf(lockdown["BasebandSerialNumber"])
         let basebandVersionFromLockdown = lockdown["BasebandVersion"] as? String
         let basebandStatusFromLockdown = stringOf(lockdown["BasebandStatus"])
 
-        // v0.3.305：设备树 + 电池节点补全（单条隧道内查多个节点；失败不影响其它字段）
+        // 设备树 + 电池节点补全（单条隧道内查多个节点；失败不影响其它字段）
         let enrich: DeviceEnrichInfo? = try? DeviceEnrichService.fetch()
 
-        // v0.3.285：爱思同款域采集（逆向 idm_info.dll 得出的域清单）
+        // 爱思同款域采集（逆向 idm_info.dll 得出的域清单）
         let itunes = (try? Self.lockdownDomainDictOrFallback("com.apple.mobile.iTunes", sharedAdapter, sharedHandshake)) ?? [:]
         let batteryDomain = (try? Self.lockdownDomainDictOrFallback("com.apple.mobile.battery", sharedAdapter, sharedHandshake)) ?? [:]
         let chaperone = (try? Self.lockdownDomainDictOrFallback("com.apple.mobile.chaperone", sharedAdapter, sharedHandshake)) ?? [:]
 
-        // v0.3.322：激活锁 / iCloud（键与爱思 idm_info.dll 的 ios_check_fmip / ios_check_iCloud 同源）
+        // 激活锁 / iCloud（键与爱思 idm_info.dll 的 ios_check_fmip / ios_check_iCloud 同源）
         // · 激活锁 = `com.apple.fmip` → `IsAssociated`（真机实测 false = 未开启，与爱思一致）
         // · iCloud = `com.apple.mobile.data_sync` 的 Bookmarks/Calendars/Contacts/Notes 里
         //   `AccountNames` 含 "iCloud"（真机实测本机四项都有 iCloud，与爱思「已开启」一致）
@@ -253,9 +253,9 @@ enum DeviceInfoService {
                 }
             }
         }
-        // v0.3.662：crashReportCount 改为 throws（原来 try? 把「读不到」折成 nil，
-        // 与「0 条」在界面上都是「—」）。
-        // v0.3.661：**同时保留失败原因**，让 UI 能说清「是没读到」还是「就是 0 次」。
+        // crashReportCount 改为 throws（原来 try? 把「读不到」折成 nil，
+        // 与「0 条」在界面上都是「—」）.
+        // **同时保留失败原因**，让 UI 能说清「是没读到」还是「就是 0 次」.
         var crashCount: Int? = nil
         var crashCountError: String? = nil
         do {
@@ -303,7 +303,7 @@ enum DeviceInfoService {
             totalSystem = (du["TotalSystemCapacity"] as? Int).map(Int64.init)
         }
 
-        // v0.3.294：爱思「设备详情」派生子项（机型规格查 DeviceCatalog 公开规格表）
+        // 爱思「设备详情」派生子项（机型规格查 DeviceCatalog 公开规格表）
         let spec = DeviceCatalog.spec(machine)
         func carrierOf(_ imsi: String?) -> String? {
             guard let imsi, imsi.count >= 5 else { return nil }
@@ -370,7 +370,7 @@ enum DeviceInfoService {
             fdrSealingStatus: stringOf(itunes["FDRSealingStatus"]),
             internalBuild: boolOf(itunes["InternalBuild"]),
             configNumber: stringOf(itunes["ConfigNumber"]),
-            // v0.3.305：iOS 27 的 iTunes 域已无这些键 → 改从设备树 product 节点取
+            // iOS 27 的 iTunes 域已无这些键 → 改从设备树 product 节点取
             coverglassSerial: enrich?.coverglassSerial,
             lunaFlexSerial: itunes["LunaFlexSerialNumber"] as? String,
             mesaSerial: itunes["MesaSerialNumber"] as? String,
@@ -429,10 +429,10 @@ enum DeviceInfoService {
         )
     }
 
-    /// v0.3.308：**「地区」= 本机语言+区域设置**（如 `zh-Hans_JP`），与「销售地区」是两回事.
+    /// **「地区」= 本机语言+区域设置**（如 `zh-Hans_JP`），与「销售地区」是两回事.
     ///
     /// 爱思的「地区」显示的也是这种 `语言_区域` 串（如 zh-Hans_JP），而「销售地区」是
-    /// `RegionInfo`（LL/A → 美国/销售渠道）。此前两者都取 RegionInfo，等于同一项显示两遍；
+    /// `RegionInfo`（LL/A → 美国/销售渠道）.此前两者都取 RegionInfo，等于同一项显示两遍；
     /// 且 lockdown 在 iOS 27 已不返回 `Locale`/`UserLocale`（实测为 nil），
     /// 用设备侧的区域 API 拼出来才是设备当前真实设置.
     static func userLocaleIdentifier() -> String? {
@@ -471,14 +471,14 @@ enum DeviceInfoService {
         }
         var pairingFile: OpaquePointer?
         if let e = pairingPath().withCString({ rp_pairing_file_read($0, &pairingFile) }) {
-            // v0.3.641：不再吞掉 FFI 错误对象。
+            // 不再吞掉 FFI 错误对象.
             //
-            // 原实现拿到 `e` 就丢：既不读 `e->message`、也不 `idevice_error_free(e)`。
+            // 原实现拿到 `e` 就丢：既不读 `e->message`、也不 `idevice_error_free(e)`.
             // 后果有二：
             //   1. 配对文件格式不对 / 损坏时，用户与日志都只看到「读取配对文件失败」六个字，
             //      拿不到 Rust 侧的真实原因（是缺 DeviceCertificate？还是 plist 解析失败？）；
-            //   2. **每次失败泄漏一个 IdeviceFfiError**。
-            // 对照：AFCService.swift:42-49 与 IPAInstallService.swift:213-219 都会提取 message 并 free。
+            //   2. **每次失败泄漏一个 IdeviceFfiError**.
+            // 对照：AFCService.swift:42-49 与 IPAInstallService.swift:213-219 都会提取 message 并 free.
             let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
             let code = Int(e.pointee.code)
             idevice_error_free(e)
@@ -497,17 +497,17 @@ enum DeviceInfoService {
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
         let deviceIP = LocalDevVPN.connectIP
-        // v0.3.637：必须校验 inet_pton 返回值。
+        // 必须校验 inet_pton 返回值.
         //
-        // 原实现是 `let _ = ...` 丢弃返回值。而 `sockaddr_in()` 全 0 初始化，
+        // 原实现是 `let _ = ...` 丢弃返回值.而 `sockaddr_in()` 全 0 初始化，
         // inet_pton 失败时**不写入** sin_addr ⇒ 隧道会去连 **0.0.0.0:49152**
-        // （必然失败），而错误只报「创建隧道失败」，用户完全看不出是 IP 写错了。
+        // （必然失败），而错误只报「创建隧道失败」，用户完全看不出是 IP 写错了.
         //
         // 触发入口：设置页「设备 IP」是自由文本，用户填 `10.7.0.1/32`、
-        // `10.7.0`、中文全角句点 `10.7.0。1` 等都会中招。
+        // `10.7.0`、中文全角句点 `10.7.0.1` 等都会中招.
         //
         // 对照：AFCService.swift:81-84 与 IPAInstallService.swift:937-940 都有这个 guard，
-        // 唯独本文件漏了（19 份 createTunnel 实现里只有这一份）。
+        // 唯独本文件漏了（19 份 createTunnel 实现里只有这一份）.
         let parseResult = deviceIP.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
         guard parseResult == 1 else {
             throw NSError(domain: "DeviceInfo", code: -7,
@@ -528,13 +528,13 @@ enum DeviceInfoService {
                 }
             }
             if let e {
-                // v0.3.661：**不再吞掉 tunnel_create_rppairing 的错误对象**。
+                // **不再吞掉 tunnel_create_rppairing 的错误对象**.
                 //
                 // 旧实现只判 `e != nil` 就丢：既读不到 `e->message`（连不上 49152 /
                 // 配对文件与设备不匹配 / 握手中断 三种原因全被压成同一句「创建隧道失败」），
                 // 也**不调用 idevice_error_free** ⇒ 每次失败泄漏一个 IdeviceFfiError，
-                // 而本函数一轮最多走 3 次、collectFull 里又会被多处调用。
-                // 与同文件上方「读配对文件」分支（v0.3.641 已修）保持同一写法.
+                // 而本函数一轮最多走 3 次、collectFull 里又会被多处调用.
+                // 与同文件上方「读配对文件」分支（已修）保持同一写法.
                 let message = DeviceErrorText.cleaned(e.pointee.message) ?? ""
                 let code = Int(e.pointee.code)
                 idevice_error_free(e)
@@ -595,8 +595,8 @@ enum DeviceInfoService {
         return try Self.dictFromPlist(node)
     }
 
-    /// v0.3.322：读 lockdown 的**单个键**（`lockdownd_get_value` 的 key 参数此前恒传 nil）。
-    /// 有些域整域读是空的，但单键有值 —— 例如 `com.apple.fmip` → `IsAssociated`。
+    /// 读 lockdown 的**单个键**（`lockdownd_get_value` 的 key 参数此前恒传 nil）.
+    /// 有些域整域读是空的，但单键有值 —— 例如 `com.apple.fmip` → `IsAssociated`.
     static func lockdownValue(domain: String, key: String) throws -> Any? {
         var tunnel = try makeTunnel()
         defer { tunnel.free() }
@@ -630,15 +630,15 @@ enum DeviceInfoService {
             from: Data(bytes: binPtr, count: Int(binLen)), options: [], format: nil)
     }
 
-    // MARK: - 复用同一条隧道的变体（v0.3.621）
+    // MARK: - 复用同一条隧道的变体
     //
     // 原先 collectFull 里 10 处 `try? Self.lockdownXxx()` 各自调 makeTunnel()，
-    // 每次都是「读配对文件 + 3 次 RSD 握手重试 + CellularTunnelManager.prepareForTunnel」。
+    // 每次都是「读配对文件 + 3 次 RSD 握手重试 + CellularTunnelManager.prepareForTunnel」.
     // 一次设备信息刷新 = 10 条完整 RSD 隧道；而且第一条失败（比如 VPN 没开）时，
-    // 后面 9 条仍各自完整跑 3 次重试 ⇒ 失败场景 UI 长时间无响应。
+    // 后面 9 条仍各自完整跑 3 次重试 ⇒ 失败场景 UI 长时间无响应.
     //
-    // 下面这组变体把已建好的隧道句柄传进来，让 collectFull 全程只用一条。
-    // 语义与对应的自建隧道版本完全一致，只是不再自己建/释放隧道。
+    // 下面这组变体把已建好的隧道句柄传进来，让 collectFull 全程只用一条.
+    // 语义与对应的自建隧道版本完全一致，只是不再自己建/释放隧道.
 
     /// 用已建好的隧道读整棵 lockdown 根字典
     static func lockdownFullDict(adapter: OpaquePointer, handshake: OpaquePointer) throws -> [String: Any] {
@@ -705,13 +705,13 @@ enum DeviceInfoService {
             from: Data(bytes: binPtr, count: Int(binLen)), options: [], format: nil)
     }
 
-    // MARK: - 共享隧道入口的兜底包装（v0.3.621）
+    // MARK: - 共享隧道入口的兜底包装
     //
     // 隧道没建起来时（sharedAdapter/sharedHandshake 为 nil），这些包装直接抛错，
     // 让调用方的 `try?` 拿到 nil —— 与原先「各自建隧道、失败返回 nil」的行为一致，
-    // 只是不再重复尝试建隧道。
+    // 只是不再重复尝试建隧道.
 
-    /// v0.3.752：真机 UDID（lockdown `UniqueDeviceID`，`00008101-…` 形）.
+    /// 真机 UDID（lockdown `UniqueDeviceID`，`00008101-…` 形）.
     /// 8220 取证结论：RP 配对记录 identifier 是 UUID 形配对标识，签名/设备注册
     /// 必须用这里的真 UDID；隧道不可用等场景返回 nil，由调用方回退.
     static func trueDeviceUDID() -> String? {
@@ -751,9 +751,9 @@ enum DeviceInfoService {
         return try lockdownValue(domain: domain, key: key, adapter: adapter, handshake: handshake)
     }
 
-    /// v0.3.711（R3）：改成 throws —— 两条失败路径（plist_to_bin 失败 / 反序列化失败）原先都返回 `[:]`，
-    /// 与「设备上这个域确实是空的」完全同值，调用方无法区分「读到了空域」和「读到了但解析崩了」。
-    /// 现在失败即抛错，由上层 do/catch 记出原因（与 crashLogCountError 同型）。
+    /// 改成 throws —— 两条失败路径（plist_to_bin 失败 / 反序列化失败）原先都返回 `[:]`，
+    /// 与「设备上这个域确实是空的」完全同值，调用方无法区分「读到了空域」和「读到了但解析崩了」.
+    /// 现在失败即抛错，由上层 do/catch 记出原因（与 crashLogCountError 同型）.
     private static func dictFromPlist(_ node: plist_t) throws -> [String: Any] {
         var binPtr: UnsafeMutablePointer<CChar>?
         var binLen: UInt32 = 0
@@ -773,7 +773,7 @@ enum DeviceInfoService {
 
     /// 本进程内可观测的越狱痕迹（命中返回第一条路径，未命中返回 nil）.
     ///
-    /// v0.3.723：原实现是 `afc_client_connect_rsd` + `afc_list_directory(afc, "/bin")`
+    /// 原实现是 `afc_client_connect_rsd` + `afc_list_directory(afc, "/bin")`
     /// （注释自称移植 iDescriptor utils.rs:497-502）. 那条用法成立的前提是
     /// **PC 侧 / 已越狱上下文拿到的 root AFC**；本 App 经 RSD 连到的是
     /// **按 App 沙盒限定**的 AFC 服务（`idevice/src/services/afc/mod.rs:685` 的
@@ -848,7 +848,7 @@ enum DeviceInfoService {
         return String(cString: buf)
     }
 
-    /// hw.machine → 中文机型名（v0.3.294：改走 DeviceCatalog 规格表，
+    /// hw.machine → 中文机型名（改走 DeviceCatalog 规格表，
     /// 修正此前表里缺 `iPhone15,4`（真机机型，会被退化成「iPhone 15,4」）
     /// 以及误填 `iPhone16,3/16,4`（Apple 无此标识）的问题）
     static func friendlyModel(_ machine: String) -> String {

@@ -14,7 +14,7 @@ final class CrashLogService {
 
     /// Swift 6 并发检查：本类型非 Sendable，但没有可变实例状态 ——
     /// 只有一条串行队列 `queue` 与计算属性 `pairingPath`，隧道/客户端句柄都是方法内局部量，
-    /// 且所有 FFI 操作都在这条串行队列上执行。实例本身线程安全，`shared` 共享无风险。
+    /// 且所有 FFI 操作都在这条串行队列上执行.实例本身线程安全，`shared` 共享无风险.
     nonisolated(unsafe) static let shared = CrashLogService()
     private init() {}
 
@@ -77,7 +77,7 @@ final class CrashLogService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "读取崩溃日志")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -150,8 +150,8 @@ final class CrashLogService {
         throw lastError ?? makeError("连接崩溃日志服务失败")
     }
 
-    /// ▸ v0.3.490：把 crashreport AFC 会话开放给宿主能力层
-    /// （根 = `/var/mobile/Library/Logs/CrashReporter`）。
+    /// ▸ ：把 crashreport AFC 会话开放给宿主能力层
+    /// （根 = `/var/mobile/Library/Logs/CrashReporter`）.
     ///
     /// ## 为什么要开
     /// `afc.*` 能力要支持**多个根**，而每个根是一条**不同的服务会话**：
@@ -159,10 +159,10 @@ final class CrashLogService {
     /// · `com.apple.crashreportcopymobile` 的根是 CrashReporter
     ///
     /// 后者只有本服务知道怎么连（`crash_report_client_connect_rsd` → `to_afc`），
-    /// 所以把会话借出去比在能力层重写一遍连接逻辑更稳。
+    /// 所以把会话借出去比在能力层重写一遍连接逻辑更稳.
     ///
     /// 注意： 与 `afc.list/read/...` 的 `root: "crash"` 对应；调用方拿到的 `path`
-    /// 是**相对 CrashReporter 根**的。
+    /// 是**相对 CrashReporter 根**的.
     func withAfc<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
         try syncOnQueue { try withAfcClient { try body($0) } }
     }
@@ -181,7 +181,6 @@ final class CrashLogService {
     // MARK: - 列表 / 拉取 / 删除（AFC 视图）
 
     /// 崩溃日志判据：`.ips` 及系统已同步形态 `.ips.synced` / `.ips.ca.synced`
-    /// （上游 Xrash 66 份真机样本中 52 份是 synced 形态，只认 `.ips` 会漏掉大多数）.
     static func isCrashLogName(_ name: String) -> Bool {
         let lower = name.lowercased()
         return lower.hasSuffix(".ips")
@@ -202,15 +201,15 @@ final class CrashLogService {
         }
     }
 
-    /// 设备信息首屏「崩溃日志」的次数。
+    /// 设备信息首屏「崩溃日志」的次数.
     ///
-    /// **口径 = 系统崩溃（panic）次数**，即 CrashReporter 根目录下的 `panic-full-*`。
+    /// **口径 = 系统崩溃（panic）次数**，即 CrashReporter 根目录下的 `panic-full-*`.
     /// 依据：爱思 9.0 的崩溃处理字符串全部围绕 `/panic-full-`（`panicString` /
     /// `crashJson` / `diagnosis`），且真机 iPhone15,4 / iOS 27 上它的首屏显示 **0 次**；
     /// 而该机根目录里除 panic 外还有 30 多个 `.ips`（大多是
     /// `*.diskwrites_resource-*` 磁盘写入诊断、`WiFiLQMMetrics-*` 网络指标、
     /// `JetsamEvent-*` 内存事件与若干 App 崩溃报告）——按"所有 .ips"数会得到 30+，
-    /// 与爱思对不上。若以后要单独展示 App 崩溃，用 `appCrashReportCount()`。
+    /// 与爱思对不上.若以后要单独展示 App 崩溃，用 `appCrashReportCount()`.
     func crashReportCount() throws -> Int {
         let entries = try list()
         return entries.filter { !$0.isDirectory && $0.name.lowercased().hasPrefix("panic-full") }.count
@@ -247,7 +246,7 @@ final class CrashLogService {
             var buffer: UnsafeMutablePointer<UInt8>?
             var got = 0
             if let ffiError = afc_file_read(handle, &buffer, chunkSize, &got) {
-                // v0.3.673：**先释放已读缓冲再抛**. Rust 侧 afc_file_read 在错误路径
+                // **先释放已读缓冲再抛**. Rust 侧 afc_file_read 在错误路径
                 // 不写 *data（buffer 仍为 nil），所以这里只需把上一轮残留清掉；
                 // 旧实现在 throw 之后才注册 defer，失败路径直接跳过释放.
                 if let buffer, got > 0 { afc_file_read_data_free(buffer, got) }
@@ -259,7 +258,7 @@ final class CrashLogService {
                 if let buffer { afc_file_read_data_free(buffer, 0) }
                 break
             }
-            // v0.3.673：**每块读完立即释放**. 旧写法把 defer 写在循环体内 ——
+            // **每块读完立即释放**. 旧写法把 defer 写在循环体内 ——
             // defer 到函数返回才执行，于是每读一块就多压 1MB 不释放，
             // 导出大日志（几十 MB）时内存线性膨胀.
             result.append(Data(bytes: buffer, count: got))
@@ -297,7 +296,7 @@ final class CrashLogService {
 
     /// 导出目录（TequilaDash 自己 Documents 下的 CrashLogs 文件夹，文件 App 可见）.
     ///
-    /// v0.3.673：**建目录失败不再被折成成功**. 旧实现 `try? createDirectory` 之后
+    /// **建目录失败不再被折成成功**. 旧实现 `try? createDirectory` 之后
     /// 照样把路径返回，于是"目录建不出来"要等到写第一个文件才炸，
     /// 而且错误信息变成一句与原因无关的写文件失败. 现在直接抛，原因留在调用方.
     static func exportDirectory() throws -> String {
@@ -319,7 +318,7 @@ final class CrashLogService {
     func export(entries: [Entry], progress: ((Int, Int) -> Void)? = nil) throws -> [String] {
         try syncOnQueue {
             try withAfcClient { afc in
-                // v0.3.673：**目录先建、失败即报**（旧实现把建目录失败吞掉，见 exportDirectory）.
+                // **目录先建、失败即报**（旧实现把建目录失败吞掉，见 exportDirectory）.
                 let dir = try Self.exportDirectory()
                 var exported: [String] = []
                 do {
@@ -327,14 +326,14 @@ final class CrashLogService {
                         let data = try pullInternal(client: afc, path: entry.path)
                         let safeName = entry.path.replacingOccurrences(of: "/", with: "_")
                         let target = URL(fileURLWithPath: dir).appendingPathComponent(safeName)
-                        // v0.3.673：**原子写**. 旧的非原子写在空间不足/中途失败时
+                        // **原子写**. 旧的非原子写在空间不足/中途失败时
                         // 会留下一个截断的 .ips，看起来像"导出成功的日志".
                         try data.write(to: target, options: .atomic)
                         exported.append(target.path)
                         progress?(index + 1, entries.count)
                     }
                 } catch {
-                    // v0.3.673：**批失败即清场**. 旧实现抛错时已导出的文件留在
+                    // **批失败即清场**. 旧实现抛错时已导出的文件留在
                     // CrashLogs 目录里，界面只报"导出失败"，用户无法分辨哪些是完整的.
                     for path in exported { try? FileManager.default.removeItem(atPath: path) }
                     throw error
@@ -349,7 +348,7 @@ final class CrashLogService {
         try syncOnQueue {
             try withAfcClient { afc in
                 var failed = 0
-                // v0.3.673：**失败原因不再丢**. 旧实现只数个数，真实原因
+                // **失败原因不再丢**. 旧实现只数个数，真实原因
                 // （Afc(PermDenied) / ObjectNotFound / 连接已断）被直接丢弃，
                 // 用户看到"失败 N 个"却没有任何可反馈的线索.
                 var failureReasons: [String] = []

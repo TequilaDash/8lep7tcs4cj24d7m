@@ -14,20 +14,20 @@ import Foundation
 /// `pack.cloudURL` = 该包的下载直链：内置三包指向模块仓库 `AmorCool/module-esc` 的 `edge` Release
 /// （见 `P3_爱思助手_逆向/_简报/实现_模块仓库托管IPA.md` ④，下载后 md5 已核）；自定义包体 = 用户自填地址.
 ///
-/// > 历史：v4 曾有第二条云端「爱思云端」（`app4.i4.cn/getipaformobiledevice.xhtml`）。
+/// > 历史：v4 曾有第二条云端「爱思云端」（`app4.i4.cn/getipaformobiledevice.xhtml`）.
 /// > 该接口经 Python 直连实测恒回 `{"code":1,"msg":"exception"}`，穷举 key / 算法 / 填充 /
 /// > 编码 / 参数 / UA / 域名 / pcver **全矩阵 0 命中** ⇒ **后端侧问题，App 侧无法修**，
-/// > 用户决定删除。相关实现（`I4CloudResolver` / `I4CloudResolverImpl` / `UnavailableI4CloudResolver`）
+/// > 用户决定删除.相关实现（`I4CloudResolver` / `I4CloudResolverImpl` / `UnavailableI4CloudResolver`）
 /// > 已整块移除，见 `P4_全能签逆向/_简报/实现_删爱思云端与仓库云端自选包体.md`.
 ///
 /// ## 移植的是什么（v7：sinf 来源改回包内自带）
 /// 爱思 PC 端「安装爱思移动端」的真实做法是：解压内嵌 IPA（libzip）→ 往包里**写一份 sinf**
 /// 覆盖 `Payload/<X>.app/SC_Info/<exe>.sinf`（核心函数 `addSinfToZip()`，VA `0x1407dd6b0`，
 /// 路径模板 `Payload/%1/SC_Info/%2.sinf`）→ 重打包 → `idm_app.dll` 再从包里**读回**
-/// 这份 sinf 作 `ApplicationSINF` 交 installd。即「**装的就是包里那份 sinf**」。
+/// 这份 sinf 作 `ApplicationSINF` 交 installd.即「**装的就是包里那份 sinf**」.
 /// 爱思写进包里的那份来自 Apple 服务端（`MZFinance` 响应 `songList[].sinfs[0]`）；
 /// 但本 App 侧两条现取路**实测都取不到**（见下），故本服务**只用包内自带那份**——
-/// 与爱思「装包内 sinf」的落地形态一致。
+/// 与爱思「装包内 sinf」的落地形态一致.
 ///
 /// ## 自动选包（v6：移植爱思「按 iOS 版本瀑布降级选一个包」）
 /// 爱思选包不是随机挑，而是按设备 iOS 版本瀑布降级（函数 `0x1401db840`，见
@@ -39,7 +39,7 @@ import Foundation
 ///
 /// ## 为什么 sinf 只取包内自带（实测，v7 修正）
 /// v2~v6 走「向服务端现取 sinf」的单一路径（`NBStoreClient.packageByVersion`），
-/// 取不到即抛 `serverSinfUnavailable` —— 真机报「安装失败」即由此而来。实测三包：
+/// 取不到即抛 `serverSinfUnavailable` —— 真机报「安装失败」即由此而来.实测三包：
 ///   · NB `nb9527_getAppHistoryList`（appID=包内 itemId、appVerId=包内
 ///     softwareVersionExternalIdentifier）⇒ 三包**全 `code=7 未获取到数据`**；
 ///     `nb9527_searchOffSaleApp` 按 bundleID / 中文名搜 ⇒ **0 命中**.
@@ -57,24 +57,24 @@ import Foundation
 /// ## 实现（照爱思）
 /// 复制 IPA 到临时目录（**绝不改缓存原件**）→ `PackageSINFWriter.injectAllPaths`
 /// 把 sinf 写进副本的 `SC_Info/*.sinf` → `IPAInstallService.installWithSINF` 装那份副本
-/// （同一份 sinf 同时作为 `ApplicationSINF` 递交，与爱思「写进包再读回」等价）。
+/// （同一份 sinf 同时作为 `ApplicationSINF` 递交，与爱思「写进包再读回」等价）.
 ///
 /// ## 诚实边界（写进返回值，不只在注释里）
 /// - 包内自带 sinf 的 `schi.name` 属**原始购买者**（实测 `217`=李 明 / `220`=小 敏 /
-///   `photo`=chongwei stven），**不是**爱思共享账号 `share_appleid003@163.com`。
+///   `photo`=chongwei stven），**不是**爱思共享账号 `share_appleid003@163.com`.
 ///   因 sinf 绑「服务端账号 + 内容密钥」而非设备硬件（见 `RepairService` 文件头），
 ///   把它递给 installd **可能**装得上、也**可能**装上后启动期 FairPlay 校验失败而闪退；
 ///   本服务只做安装、不验证启动 ⇒ 由 `Report.launchVerified`（恒 `false`）与
-///   `mayCrashAtLaunch` 如实暴露这一风险，不夸大也不隐瞒。
+///   `mayCrashAtLaunch` 如实暴露这一风险，不夸大也不隐瞒.
 /// - `Report.sinfSource` 恒为 `"bundle"`；`sinfAccountName` / `sinfAccountUser` 由 `schi`
-///   解析得出（让用户看到「这是谁的授权」）。
+///   解析得出（让用户看到「这是谁的授权」）.
 /// - 日志走 `onLog` 闭包（不直接写 `LoginLogger`）；调用方可转发到
-///   `LoginLogger.shared.log(_:category: .i4Fix)`。
+///   `LoginLogger.shared.log(_:category: .i4Fix)`.
 ///
 /// ## 为什么是 `enum` + `static`（而非单例）
 /// 底层 `IPAInstallService.shared`（`@unchecked Sendable`）与 `AppDiscovery` 各自管着 RSD
 /// 串行队列；本服务自身**没有任何可变状态**，用 `static` 方法即可，避免引入需要
-/// `nonisolated(unsafe)` 的非 Sendable 单例（Swift 6 严格并发）。调用方负责把阻塞调用放到后台线程.
+/// `nonisolated(unsafe)` 的非 Sendable 单例（Swift 6 严格并发）.调用方负责把阻塞调用放到后台线程.
 enum I4MobileInstallService {
 
     // MARK: - 常量
@@ -170,7 +170,7 @@ enum I4MobileInstallService {
     /// 只有 `.warehouse` 一条：仓库云端 —— 本模块仓库 `AmorCool/module-esc` 的 `edge` Release 直链
     /// （内置包 `pack.cloudURL`；自定义包体为用户自填地址）.
     ///
-    /// > 历史：v4 曾有 `.i4`「爱思云端」（需设备 UDID、由服务端按包解析地址）。该接口后端实测不可用，
+    /// > 历史：v4 曾有 `.i4`「爱思云端」（需设备 UDID、由服务端按包解析地址）.该接口后端实测不可用，
     /// > 用户决定删除，`.i4` 随之移除.
     enum CloudSource: String, Sendable {
         case warehouse
@@ -258,7 +258,7 @@ enum I4MobileInstallService {
         let launchVerified: Bool
         /// 启动风险提示：**恒为 `true`** —— 本服务从不验证启动，安装成功也不等于能启动
         /// （sinf 与包体不匹配、设备未授权等情况都会「装上了但一点就闪退」）.
-        /// v0.3.660 审计 M-4：原实现是 `mayCrashAtLaunch = (confirmed == false)`，
+        /// 审计 M-4：原实现是 `mayCrashAtLaunch = (confirmed == false)`，
         /// 把「没回读到 App」当成了「会闪退」，方向反了 ——
         /// 真装上了（`confirmed == true`）时反而给 `false`，等于给出**虚假的安心信号**；
         /// 「安装存疑」应由 `installedConfirmed == false` 独立表达，不要塞进这个字段.
@@ -333,7 +333,7 @@ enum I4MobileInstallService {
 
     /// 该包的 IPA 是否**已缓存且写完**（下载 / 导入落盘结束才算）.
     ///
-    /// 判定三层（修 v0.3.660 审计 C 项：以前只判「文件在且有字节」，
+    /// 判定三层（修 审计 C 项：以前只判「文件在且有字节」，
     /// 下到一半的 IPA 也被当成已缓存，于是跳过下载、直接拿去安装 ⇒ 安装失败而界面显示「已缓存」）：
     ///
     /// ① 文件必须存在且非空，否则 `false`.
@@ -500,7 +500,7 @@ enum I4MobileInstallService {
     /// 删除某个包的缓存 IPA（清理用）.
     ///
     /// 完成标记一并删除：否则「删包 → 重下写一半」时，旧标记会被当成这份半截包的完成凭证.
-    /// 标记删不掉时抛 `cacheWriteFailed`（v0.3.660 审计第三轮 R2）：以前是 `try?` 静默吞掉，
+    /// 标记删不掉时抛 `cacheWriteFailed`（审计第三轮 R2）：以前是 `try?` 静默吞掉，
     /// 于是「包删了、标记还在」，下一次下载中断留下的半截包可能被旧标记放行.
     static func removeCachedIPA(_ pack: Pack) throws {
         let url = cachedIPAURL(for: pack)
@@ -951,9 +951,9 @@ enum I4MobileInstallService {
 
     /// 安装**所有已缓存**的包（跳过未缓存的，**不**抛 `packResourceMissing`）.
     ///
-    /// 为什么需要它：`installAll` 依次装内置三包，**只要有一个没下载就整条链失败**。
+    /// 为什么需要它：`installAll` 依次装内置三包，**只要有一个没下载就整条链失败**.
     /// 用户实测：只缓存了 `220.ipa`，点「开始安装」却报「缓存里没有 217.ipa」——
-    /// 已缓存的 220 反而一个都没装上。主按钮要的是「把本页**已经下好的**包装上」，
+    /// 已缓存的 220 反而一个都没装上.主按钮要的是「把本页**已经下好的**包装上」，
     /// 故这里只遍历**缓存目录里确实存在**的包（内置 + 自定义，见 `allPacks`）.
     ///
     /// - Throws: 一个都没缓存时抛 `noCachedPack`（如实告诉用户先去下载 / 导入）；
@@ -1178,10 +1178,10 @@ enum I4MobileInstallService {
 
     /// 读设备已装 App 的 bundle id 集合（best-effort；读不到返回空集合，不抛错）.
     ///
-    /// ⚠️ 返回**空集合**有两种含义，调用方无法区分（v0.3.660 审计 M-7）：
+    /// ⚠️ 返回**空集合**有两种含义，调用方无法区分（审计 M-7）：
     ///   ① 设备上真没装任何 App；
-    ///   ② 读失败（instproxy 不可用 / 隧道断）。
-    /// 二者被折叠成同一个 `Set<String>()`。当前唯一消费方 `autoPick` 只用它判
+    ///   ② 读失败（instproxy 不可用 / 隧道断）.
+    /// 二者被折叠成同一个 `Set<String>()`.当前唯一消费方 `autoPick` 只用它判
     ///   `contains("com.ownbook.notes")`，而 ① 档（305）在本仓无包体、必然回落，
     ///   所以**选包结果不受影响**，只有 `trace` 文案可能多一句「按爱思做法跳过」.
     ///   若将来 ① 档补了包体，这里必须改成返回 `Set<String>?` 以区分「读失败」，
@@ -1234,8 +1234,8 @@ enum I4MobileInstallService {
     ///
     /// ## 结构（TLV 块式）
     /// 顶层：`{4B 大端总长}` + `"sinf"` + 块序列；每块 `{4B 大端块长}{4B tag}{body}`
-    /// （**块长含 8 字节头**；前 4 字节是**长度**不是固定魔数）。顶层块为
-    /// `frma / schm / schi / sign`。`schi` 的 body 同样是**裸子块序列**，其中：
+    /// （**块长含 8 字节头**；前 4 字节是**长度**不是固定魔数）.顶层块为
+    /// `frma / schm / schi / sign`.`schi` 的 body 同样是**裸子块序列**，其中：
     ///   · `user`：4 字节账号标识；`crdt`：4 字节凭据标识；`name`：UTF-8 定长、NUL 补齐.
     /// 实测（本仓 `Resources/I4Mobile/` 三包）：`217 → 李 明 / 0xab6d95d8`，
     /// `220 → 小 敏 / 0xa775eea7`，`photo → chongwei stven / 0xab5c9f49`.
@@ -1326,7 +1326,7 @@ enum I4MobileInstallService {
                                     before: DeviceProbe, after: DeviceProbe,
                                     installFailed: Bool) -> Report {
         // 安装后回读确认（探测失败 = nil，不当成「没装上」）.
-        // A 项（v0.3.660 审计补）：只看 `after` 是不够的.
+        // A 项（审计补）：只看 `after` 是不够的.
         //   · 覆盖安装（upgrade）时，`after` 里那个版本可能就是**旧的**那个 —— 装没装成看不出来；
         //   · 更糟：设备上本来就装着同名 App、而本次安装其实失败了（例如根本没走 upgrade 分支
         //     就被 installd 拒了），`after` 仍然「有版本」=> 报「已安装」，把失败记成成功.

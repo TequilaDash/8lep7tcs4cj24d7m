@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 「Apple ID 账户」二级管理页（v0.3.745 账户体系重做）.
+/// 「Apple ID 账户」二级管理页（账户体系重做）.
 ///
 /// 多账户保持 + 一键切换当前账户 + 添加（复用 AppleIDLoginSheet 真实认证）+
 /// 退出单个/全部.IPA 侧载、证书、商店链等消费方全部跟随「当前账户」.
@@ -10,14 +10,14 @@ struct AppleUserAccountsView: View {
     @State private var showSignOutAllConfirm = false
     /// 待确认移除的账户.
     @State private var pendingRemove: AppleUserAccount?
-    /// v0.3.749：当前账户右滑「注册设备」（SideStore 式预注册手动入口）.
+    /// 当前账户右滑「注册设备」（SideStore 式预注册手动入口）.
     @State private var deviceWorking = false
     @State private var deviceResult: DeviceRegistrationResult?
     @State private var reloginAccount: AppleUserAccount?
     @State private var signOutOptions = AppleAccountSignOutOptions()
     /// 二次确认对话框（防 Form 整行误触直接删户）.
     @State private var confirmRemove = false
-    /// v0.3.756：列表身份代数——移除/退出 sheet 关闭后 +1，强制 List 重建，
+    /// 列表身份代数——移除/退出 sheet 关闭后 +1，强制 List 重建，
     /// 兜底 destructive swipe + sheet 组合的幽灵行渲染缺陷（台账数据从未变过，纯显示层）.
     @State private var listEpoch = 0
 
@@ -167,7 +167,7 @@ struct AppleUserAccountsView: View {
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    // v0.3.749：保险起见给手动注册入口——预注册在登录/切户时已尽力
+                    // 保险起见给手动注册入口——预注册在登录/切户时已尽力
                     // 做过，这里再点一次是幂等的（Rust 侧命中已注册直接返回）.
                     Button {
                         startDeviceRegistration()
@@ -179,7 +179,7 @@ struct AppleUserAccountsView: View {
                 }
             } else {
                 Button {
-                    // v0.3.746：未登录时的页内入口保留（此时右上角菜单也被隐藏），
+                    // 未登录时的页内入口保留（此时右上角菜单也被隐藏），
                     // 已登录后去掉这行——添加入口只留右上角菜单，页面不再重复.
                     showAddSheet = true
                 } label: {
@@ -250,7 +250,7 @@ struct AppleUserAccountsView: View {
             } label: {
                 Label("重新登录", systemImage: "person.badge.key")
             }
-            // v0.3.756：不再用 destructive 角色——destructive swipe + sheet 组合
+            // 不再用 destructive 角色——destructive swipe + sheet 组合
             // 在 List 上有幽灵行渲染缺陷（用户实测「没点移除账户却被隐藏」），
             // 普通按钮 + danger 着色外观完全一致，且不触发该缺陷.
             Button {
@@ -263,7 +263,7 @@ struct AppleUserAccountsView: View {
         }
     }
 
-    // MARK: - 注册设备（v0.3.749，SideStore 式预注册的手动入口）
+    // MARK: - 注册设备（SideStore 式预注册的手动入口）
 
     private func startDeviceRegistration() {
         guard !deviceWorking else { return }

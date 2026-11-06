@@ -2,7 +2,6 @@ import SwiftUI
 
 /// 崩溃分析的多页容器：摘要 / 线程 / 镜像 / 经典全文 / 原文.
 ///
-/// 「经典全文」= 上游 `CrashTextRenderer` 的 `.crash` 版式，已符号化的字段直接复用；
 /// 「原文」= 文件原始文本（现有预览口径不变）.
 struct CrashReportAnalysisView: View {
     let report: Report
@@ -62,8 +61,7 @@ struct CrashReportAnalysisView: View {
         }
     }
 
-    /// 导出：上游 `ReportRenderer` 的三个 public 入口此前零调用点，
-    /// 解析出来的结构化结果只能看、拿不走。这里把 markdown 摘要与
+    /// 解析出来的结构化结果只能看、拿不走.这里把 markdown 摘要与
     /// 符号化 JSON 接到系统分享，原文仍由 `rawText` 负责.
     private var shareMenu: some View {
         Menu {

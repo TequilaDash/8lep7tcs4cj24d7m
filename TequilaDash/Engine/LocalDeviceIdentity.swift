@@ -1,35 +1,34 @@
 import Foundation
 
-/// 本机设备身份 —— 读序列号 / UDID / 机型，供 App Store 相关链路使用。
+/// 本机设备身份 —— 读序列号 / UDID / 机型，供 App Store 相关链路使用.
 ///
-/// ## v0.3.402 改准：这条链路的**真正用途**只剩一个日志字段
+/// ## 改准：这条链路的**真正用途**只剩一个日志字段
 ///
-/// 旧注释（v0.3.301）的说法是：Apple 的 `volumeStoreDownloadProduct` / `redownload`
+/// 旧注释的说法是：Apple 的 `volumeStoreDownloadProduct` / `redownload`
 /// 请求体里只有 `guid` 与 `serialNumber` 能标识"请求来自哪台设备"，必须传本机真序列号，
 /// Apple 才能关联到**本机的 FairPlay 证书**、生成对本机有效的 `sinf` ——
-/// 这是"下载加密包也能直接安装"的唯一前提。
+/// 这是"下载加密包也能直接安装"的唯一前提.
 ///
-/// **这个结论已在 v0.3.334 被真机实测推翻并回退**，本文件按代码事实改写：
+/// **这个结论已在 被真机实测推翻并回退**，本文件按代码事实改写：
 ///   · 三个请求构造器里的 `serialNumber` 现在**全部写死 `"0"`**：
-///     `StoreDownloadEndpoint+Fetch.swift:290`、`VersionFinder.swift:158`、`VersionLookup.swift:146`。
-///     （真机实测 v0.3.331：带本机真序列号时 volumeStore 回空包、redownload 回 HTTP 500，
-///     链路根本走不下去；上游 ipatool / Asspp 也都是发 `"0"`。）
+///     `StoreDownloadEndpoint+Fetch.swift:290`、`VersionFinder.swift:158`、`VersionLookup.swift:146`.
+///     （真机实测 ：带本机真序列号时 volumeStore 回空包、redownload 回 HTTP 500，
 ///   · 于是 `Configuration.deviceSerialNumber` 在整个 vendor 里**只被读 1 次**：
-///     `Download.swift:123` 的一行日志（`serialNumber=\(...)`）。**它不进任何请求。**
+///     `Download.swift:123` 的一行日志（`serialNumber=\(...)`）.**它不进任何请求.**
 ///   · `fairPlayCertificate` / `fairPlayDeviceType` 这两个字段**全工程只写不读**
-///     → v0.3.402 直接删除（连同读它们所需的第二次隧道）。
+///     → 直接删除（连同读它们所需的第二次隧道）.
 ///
 /// ## 因此本类型的定位
 ///
-/// 「本机身份」的**进程内缓存读取**。读一次要建 RSD 隧道，真机实测**秒级**
+/// 「本机身份」的**进程内缓存读取**.读一次要建 RSD 隧道，真机实测**秒级**
 /// （旁证：CHANGELOG 0.3.25x「此前在主线程同步建隧道会冻住设置页数秒」），
 /// 所以：
 ///   · **绝不能放在下载启动这类关键路径上同步调用** —— 下载链路现在只调
 ///     `warmUpInBackground()` + `applyIfCached()`（两者都不等待隧道）；
 ///   · 一个 App 生命周期**只真正读一次**，之后全部走缓存；
-///   · 读取通道收敛为**一次**隧道：只取 lockdown 根字典。
-///     （v0.3.402 之前还会为上面两个没人读的 FairPlay 字段**再建一次**
-///      `com.apple.mobile.iTunes` 域的隧道 —— 纯浪费。）
+///   · 读取通道收敛为**一次**隧道：只取 lockdown 根字典.
+///     （之前还会为上面两个没人读的 FairPlay 字段**再建一次**
+///      `com.apple.mobile.iTunes` 域的隧道 —— 纯浪费.）
 enum LocalDeviceIdentity {
 
     struct Snapshot {
@@ -39,20 +38,20 @@ enum LocalDeviceIdentity {
 
         /// 是否拿到了可用的本机身份
         ///
-        /// v0.3.554：判据从「序列号非空」改成「序列号**且** UDID 都非空」。
+        /// 判据从「序列号非空」改成「序列号**且** UDID 都非空」.
         /// 旧判据让一个拼错的键（`UniqueDeviceIdentifier`）藏了很久 ——
         /// 序列号读得到就把快照写进缓存，`udid` 是 nil 也没人管，
-        /// 直到 NB 链路因为缺 UDID 报 `no-udid` 才暴露。
-        /// 身份快照的用途就是给下游取 UDID，只判序列号等于没校验。
+        /// 直到 NB 链路因为缺 UDID 报 `no-udid` 才暴露.
+        /// 身份快照的用途就是给下游取 UDID，只判序列号等于没校验.
         var isUsable: Bool {
             !(serialNumber ?? "").isEmpty && !(udid ?? "").isEmpty
         }
 
         var summary: String {
             let sn = serialNumber ?? "-"
-            // 这里必须显示**下载实际会用的** guid。
+            // 这里必须显示**下载实际会用的** guid.
             // 曾经显示的是从 UDID 派生的值（iOS 27 不给 UniqueDeviceIdentifier → 恒 `-`），
-            // 与真正发出去的 `Configuration.deviceIdentifier` 不是同一个数，排查时误导。
+            // 与真正发出去的 `Configuration.deviceIdentifier` 不是同一个数，排查时误导.
             let actual = Configuration.deviceIdentifier
             let shown = actual.isEmpty ? "-" : String(actual.prefix(12)) + "…"
             return "序列号 \(sn) · guid \(shown) · \(productType ?? "-")"
@@ -61,39 +60,39 @@ enum LocalDeviceIdentity {
 
     // MARK: - 进程内缓存
 
-    /// 读一次要建隧道（秒级），所以整个 App 生命周期只真正读一次。
+    /// 读一次要建隧道（秒级），所以整个 App 生命周期只真正读一次.
     ///
     /// 用 `NSLock` 而不是 `actor`：这里全是**同步** API（调用点 `load()` / `applyIfCached()`
-    /// 都在同步上下文里），`actor` 满足不了。与 `AppStoreDownloadStore` 同款做法。
+    /// 都在同步上下文里），`actor` 满足不了.与 `AppStoreDownloadStore` 同款做法.
     private static let cacheLock = NSLock()
     /// Swift 6 并发检查：`cached` / `prefetching` 的**全部**读写都在上面的 `cacheLock` 内
     /// （见 `cachedSnapshot` / `invalidate` / `warmUpInBackground` / `loadIntoCache`），
-    /// 因此这两个静态变量本身线程安全。
+    /// 因此这两个静态变量本身线程安全.
     nonisolated(unsafe) private static var cached: Snapshot?
     /// 是否已经有一次**后台预取**在跑 —— 防止「连点两次下载」时并发建两轮隧道.
     /// （同上：读写均在 `cacheLock` 内）
     nonisolated(unsafe) private static var prefetching = false
 
-    /// 缓存里的身份（**绝不建隧道**）；冷缓存返回 nil。
+    /// 缓存里的身份（**绝不建隧道**）；冷缓存返回 nil.
     static func cachedSnapshot() -> Snapshot? {
         cacheLock.lock(); defer { cacheLock.unlock() }
         return cached
     }
 
-    /// 手动失效（换设备 / 重连隧道 / 用户重置设备标识之后用）。
+    /// 手动失效（换设备 / 重连隧道 / 用户重置设备标识之后用）.
     static func invalidate() {
         cacheLock.lock(); defer { cacheLock.unlock() }
         cached = nil
         prefetching = false
     }
 
-    /// 后台预热：把隧道建在**不阻塞任何人的地方**。
+    /// 后台预热：把隧道建在**不阻塞任何人的地方**.
     ///
     /// 下载链路启动时调它一次 —— 首次下载因此**不等待**设备 IO；
-    /// 之后 `load()` / `applyIfCached()` 全部命中缓存。
+    /// 之后 `load()` / `applyIfCached()` 全部命中缓存.
     ///
     /// **它绝不写 `Configuration.deviceSerialNumber`**：那个写只发生在调用方自己的任务里
-    /// （见 `applyIfCached()` 的注释——跨线程写这个 `String` 全局量是有竞争的）。
+    /// （见 `applyIfCached()` 的注释——跨线程写这个 `String` 全局量是有竞争的）.
     static func warmUpInBackground() {
         cacheLock.lock()
         // 已缓存、或已有一轮预取在跑 → 不重复建隧道（连点两次下载时尤其重要）
@@ -110,9 +109,9 @@ enum LocalDeviceIdentity {
 
     // MARK: - 读取
 
-    /// 读本机身份并写入进程内缓存 —— **唯一真正建隧道的入口**。
+    /// 读本机身份并写入进程内缓存 —— **唯一真正建隧道的入口**.
     ///
-    /// 不抛错：任何一步失败都返回已拿到的部分，让调用方继续（并靠日志暴露问题）。
+    /// 不抛错：任何一步失败都返回已拿到的部分，让调用方继续（并靠日志暴露问题）.
     private static func loadIntoCache() -> Snapshot {
         if let hit = cachedSnapshot() { return hit }
 
@@ -120,13 +119,13 @@ enum LocalDeviceIdentity {
         var s = Snapshot()
         if let root = try? DeviceInfoService.lockdownFullDict() {
             s.serialNumber = root["SerialNumber"] as? String
-            // v0.3.554 修：这里原写作 `UniqueDeviceIdentifier`（多一个 `ifier`），
+            // 这里原写作 `UniqueDeviceIdentifier`（多一个 `ifier`），
             // 而 lockdown 根字典里的真实键名是 **`UniqueDeviceID`**
-            // （同一仓的 `DeviceInfoService.swift:299` 用的就是正确拼写）。
+            // （同一仓的 `DeviceInfoService.swift:299` 用的就是正确拼写）.
             // 写错键 → `as? String` 静默返回 nil → `udid` 恒为 nil →
-            // NB 链路一律报 `no-udid`「本机设备身份未就绪」。
+            // NB 链路一律报 `no-udid`「本机设备身份未就绪」.
             // 之所以一直没被发现：`isUsable` 只看 `serialNumber`，序列号读得到，
-            // 快照就被写进了缓存，把「udid 是 nil」这个事实盖住了。
+            // 快照就被写进了缓存，把「udid 是 nil」这个事实盖住了.
             s.udid = root["UniqueDeviceID"] as? String
             s.productType = root["ProductType"] as? String
         }
@@ -138,37 +137,37 @@ enum LocalDeviceIdentity {
 
         cacheLock.lock()
         // 读失败（隧道没起来等）**不写缓存** —— 免得把一次偶发失败固化一整个 App 生命周期；
-        // 下次下载会再在后台试一次（与 v0.3.402 之前「每次下载都读」的自愈行为一致）。
+        // 下次下载会再在后台试一次（与 之前「每次下载都读」的自愈行为一致）.
         if s.isUsable { cached = s }
         prefetching = false
         cacheLock.unlock()
         return s
     }
 
-    /// 读取本机身份（缓存命中 → 0 成本；未命中 → **会建隧道，秒级**）。
+    /// 读取本机身份（缓存命中 → 0 成本；未命中 → **会建隧道，秒级**）.
     ///
     /// 注意： 不要在下载启动这类关键路径上同步调用 —— 那里要用
-    /// `warmUpInBackground()` + `applyIfCached()`。
+    /// `warmUpInBackground()` + `applyIfCached()`.
     static func load() -> Snapshot {
         loadIntoCache()
     }
 
     /// 只在**缓存已热**时把序列号同步补进 `Configuration.deviceSerialNumber`
-    /// （0 成本、不建隧道）。缓存冷 → 返回 nil，**什么都不做**。
+    /// （0 成本、不建隧道）.缓存冷 → 返回 nil，**什么都不做**.
     ///
     /// 为什么不用后台任务去写这个全局量：vendor 会在**下载任务**里读它
     /// （`Download.swift:123` 的那行日志），后台写 + 下载任务读是一对无保护的跨线程读写
-    /// （`String` 非原子，retain/release 会有竞争）。这里由调用方在**自己的任务里**写，
-    /// 写与读天然有序 —— 与 v0.3.402 之前 `apply()` 的行为等价，只是不再阻塞。
+    /// （`String` 非原子，retain/release 会有竞争）.这里由调用方在**自己的任务里**写，
+    /// 写与读天然有序 —— 与 之前 `apply()` 的行为等价，只是不再阻塞.
     ///
     /// 后果：**首次下载**（缓存还冷）那次的日志里 `serialNumber=` 会是默认的 `0`；
-    /// 第二次起由本函数补上真值。这个字段不进请求，所以只影响可读性。
-    /// 写 `Configuration.deviceSerialNumber` 的串行锁（v0.3.743）.
+    /// 第二次起由本函数补上真值.这个字段不进请求，所以只影响可读性.
+    /// 写 `Configuration.deviceSerialNumber` 的串行锁.
     ///
     /// 为什么需要：这个全局 `String` 由 vendor 在**下载任务**里读，而我们这边每条下载链
-    /// 都会在**自己的任务**里写。单条链没问题，但两条下载并发（或一条下载 + 一次已购拉取）
+    /// 都会在**自己的任务**里写.单条链没问题，但两条下载并发（或一条下载 + 一次已购拉取）
     /// 就是两个线程同时给同一个 Swift `String` 赋值 —— 非原子、retain/release 会互相踩，
-    /// 踩坏之后任意一次释放都会跳到无效地址。真机崩溃报告
+    /// 踩坏之后任意一次释放都会跳到无效地址.真机崩溃报告
     /// （LiveProcess-2026-11-01-225359：PC=0、协作线程、崩溃点落在「下载链路启动」之后、
     /// 「账号租约已获得」之前）就是这种形状.
     /// 加锁只让写入串行，不引入等待窗口（临界区就是一次字符串赋值）.

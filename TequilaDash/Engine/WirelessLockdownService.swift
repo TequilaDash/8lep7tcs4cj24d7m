@@ -4,25 +4,21 @@ import Foundation
 //  WirelessLockdownService.swift
 //  TequilaDash
 //
-//  v0.3.240：局域网 Wi-Fi 配对连接 +（当年的）Wi-Fi 射频开关。
 //  通过 RSD 隧道 lockdownd 会话向 `com.apple.mobile.wireless_lockdown` domain 写值：
 //  - EnableWifiConnections 允许局域网 Wi-Fi 配对连接（iDescriptor 同款）
 //
-//  v0.3.243：修复「读取配对文件失败：failed to parse raw pairing file from bytes」。
 //  本 App 的 pairingFile.plist 是远程配对文件（RpPairingFile），经典 IdevicePairingFile
 //  需要 USB 配对字段，解析必然失败；且 RSD 隧道（lockdownd_connect_rsd）本来就无
-//  StartSession 步骤——隧道自身即信任边界。现在 connect_rsd → set_value，
-//  与 DeviceInfoService/BatteryHealthService/DeviceControlService 同款。
+//  StartSession 步骤——隧道自身即信任边界.现在 connect_rsd → set_value，
+//  与 DeviceInfoService/BatteryHealthService/DeviceControlService 同款.
 //
-//  v0.3.245：EnableWifiConnections 增加 GetValue 状态读回；修复 UI 从未赋值导致的弹回。
 //
-//  v0.3.328：**移除监督（Supervision）与 Wi-Fi 射频开关**。
 //  ① 射频开关原来走 MCInstall `SetWiFiPowerState`，而该命令必须先在**同一连接内
 //     Escalate**（用监督身份做 PKCS7 签名）才不被设备拒（否则 14005
-//     `Unable to set Wi-Fi power`）。既然坚持不走监督那套，`setWifiPower` /
-//     `supervise` / `verifySupervisionChannel` / `supervisionCertIfEnabled` 全部删除。
+//     `Unable to set Wi-Fi power`）.既然坚持不走监督那套，`setWifiPower` /
+//     `supervise` / `verifySupervisionChannel` / `supervisionCertIfEnabled` 全部删除.
 //  ② 本文件保留：lockdown Set/Get（wireless_lockdown 域，`EnableWifiConnections`）
-//     与 MCInstall `GetProfileList`（描述文件列表，不需要监督身份）。
+//     与 MCInstall `GetProfileList`（描述文件列表，不需要监督身份）.
 //
 
 enum WirelessLockdownService {
@@ -195,7 +191,6 @@ enum WirelessLockdownService {
     }
 
     /// lockdown SetValue（domain: com.apple.mobile.wireless_lockdown）
-    /// v0.3.243：不再尝试 lockdownd_start_session——见文件头说明.
     private static func setValue(_ key: String, value: Bool, tunnel: Tunnel) throws {
         let client = try lockdownClient(tunnel)
         defer { lockdownd_client_free(client) }
@@ -236,7 +231,6 @@ enum WirelessLockdownService {
         else {
             throw makeError("解析 \(key) 值失败")
         }
-        // v0.3.247：plist_to_bin 的产出必须用 plist_mem_free 释放（此前每次读值都泄漏）
         defer { plist_mem_free(UnsafeMutableRawPointer(binPtr)) }
 
         guard let obj = try? PropertyListSerialization.propertyList(
@@ -252,7 +246,6 @@ enum WirelessLockdownService {
 
     // MARK: - 公开操作（串行执行；一次操作只建一条隧道）
 
-    // MARK: - 描述文件列表（MCInstall GetProfileList，v0.3.252）
 
     /// GetProfileList 里单个描述文件的元数据
     struct ManagedProfile {

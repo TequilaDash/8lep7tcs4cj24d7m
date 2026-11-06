@@ -2,8 +2,6 @@
 //  CellularGlitchCoordinator.swift
 //  TequilaDash
 //
-//  v0.3.760：蜂窝卡点协调器（Gnoix performCellularGlitchHandshake + CellularGlitchStep 同职责移植）.
-//  v0.3.763：取消立即生效（epoch 令牌）+ 毫秒级响应（删全部秒级固定等待）+ 网络恢复自动收卡.
 //
 
 import Foundation
@@ -16,22 +14,15 @@ struct CellularGlitchError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// 蜂窝卡点协调器 —— Gnoix「Glitch Protocol / 卡点时序」的移植版.
 ///
 /// 纯蜂窝（无 Wi-Fi）时 iOS 会让本机配对/回环通路休眠，misagent 等依赖
-/// RSD 隧道的操作建不起隧道。Gnoix 的解法：
 /// 关掉蜂窝触发 iOS 底层路由表重建，在断网瞬间的窗口内抢建隧道执行注入；
 /// 窗口期建立的通路在蜂窝恢复后仍可用（真机实测），App 退后台后失效需再卡点.
 ///
-/// 时序（v0.3.763 事件驱动版）：
-/// 1. 蜂窝在线 → 自动关（私有 API，被拒照常继续 —— Gnoix 同款）；
 /// 2. 等 NWPathMonitor 感知「断网」（100ms 切片轮询，毫秒级推进）；
 ///    自动关没断就交给用户手动关（弹窗指引）；
-/// 3. 断网瞬间 = 路由重置窗口 → **立即**执行操作（v0.3.763 删除 Gnoix 固定 1.2s 时隙）；
 /// 4. 操作完成即显示就绪卡并尝试恢复蜂窝；**检测到网络恢复即自动收卡**
-///    （Gnoix「自动返回」同款，事件驱动非定时）.
 ///
-/// 取消语义（v0.3.763）：「cancel()」推进 epoch 令牌，所有在飞的等待/轮询
 /// 在下一个 ≤100ms 切片内中止，弹卡立即消失、已关掉的蜂窝立即恢复.
 final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     static let shared = CellularGlitchCoordinator()
@@ -47,7 +38,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     }
 
     /// 弹窗请求（Identifiable 供 RootView 的 .sheet(item:)）.
-    /// v0.3.762：快捷指令方案删除 —— 卡点弹窗只有「继续等手动关蜂窝」一条路，无二选按钮.
     struct ModalRequest: Identifiable {
         let id = UUID()
         let label: String
@@ -76,7 +66,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     /// 出口的「恢复蜂窝 + 自动收卡」任务（下一次 begin 会取消它，连续操作复用窗口）.
     private var restoreTask: Task<Void, Never>?
 
-    // MARK: - epoch 取消令牌（v0.3.763：取消立即生效的核心）
 
     private let epochLock = NSLock()
     private var epochValue = 0
@@ -88,8 +77,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         epochValue += 1
         let value = epochValue
         epochLock.unlock()
-        // epoch 推进 = 旧流程作废：立即广播唤醒蜂窝事件等待者（v0.3.773 事件驱动改造，
-        // 取代 v0.3.763 的 100ms 轮询观察 shouldAbort；取消即刻生效，不残留任何等待）.
         CellularNetworkChecker.shared.cancelWait()
         return value
     }
@@ -121,7 +108,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// 被动待发页专用踢脚（v0.3.774）：页面挂在「等待 LocalDevVPN 隧道」时，让它走与主动操作
     /// **完全相同**的一条卡点链，而不是永远等着别人去建隧道.
     ///
     /// 真机缺陷（2026-11-06 用户图一，4G 下「空间回收」整页永久待发）：卡点只由引擎里的 RSD
@@ -168,9 +154,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     @discardableResult
     func beginLoopbackGate(label: String) -> Bool {
         let checker = CellularNetworkChecker.shared
-        // v0.3.761：Wi-Fi 判定改 BSD 接口快照（en* 持有地址才算），utun 场景不再误判.
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return false }
-        // v0.3.771（重做）：门只信「通路真的建着」—— TunnelGate.isReady 只被硬证据置真
         // （断网窗口内操作真实成功 / utun 对端可达）；直连端口探测不再参与判定：探测连得上
         // RSD 端口 ≠ 隧道能用（LC 实测假阳性，门放行后建隧道失败，卡点兜底被跳过）.
         if TunnelGate.isReady { return false }
@@ -234,7 +218,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     func awaitLoopbackGate(label: String) async -> LoopbackGateVerdict {
         let checker = CellularNetworkChecker.shared
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return .notNeeded }
-        // v0.3.773（凭证定版）门只认「真有一条活隧道」：TunnelGate.isReady 由
         // ① 门内/窗内真实建链成功、② probeOnce 探到 utun 对端可达 两种硬证据置真，
         // 蜂窝切换时 probeOnce 立即清假.凭证在 → 放行；凭证不在 → 卡点弹窗（关蜂窝
         // 让 NE 在断网窗口重建 utun，主地址 10.7.0.1 兜底建链）.
@@ -271,7 +254,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         return .opened
     }
 
-    /// 门核心：弹卡 → 自动关 → 等断网（8s）→ 手动（900s）。
+    /// 门核心：弹卡 → 自动关 → 等断网（8s）→ 手动（900s）.
     /// 全部等待都挂 epoch 中止令牌 —— cancel() 后所有切片在 ≤100ms 内退出.
     private func gateOutcome(label: String, epoch: Int) async -> (down: Bool, cancelled: Bool) {
         let checker = CellularNetworkChecker.shared
@@ -307,7 +290,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
 
     /// 通用门·出口（与 begin/await 配对，调用方用 defer 保证执行）.
     /// 完成即收尾：立即尝试恢复蜂窝（私有 API），显示就绪卡；
-    /// 检测到网络恢复即自动收卡（Gnoix「自动返回」同款，事件驱动非定时）.
     func endLoopbackGate() {
         gateLock.lock()
         gateBusy = false
@@ -389,11 +371,9 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             routeResetFired = false
             modalRequest = ModalRequest(label: label)
         }
-        // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.（v0.3.761：接口快照判定）
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi {
             return try await action()
         }
-        // ①b v0.3.771（重做）：通路真的建着 ⇒ 不弹卡直接执行（置真只认硬证据）.
         if TunnelGate.isReady {
             return try await action()
         }
@@ -401,7 +381,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         if !checker.isNetworkConnectedNow {
             return try await runInWindow(label: label, epoch: epoch, action: action)
         }
-        // ③ 蜂窝在线：自动关（私有 API，被拒照常继续 —— Gnoix 同款）.
         await setPhase(.waitingDisconnect(reason: "正在自动关闭「蜂窝网络」…"))
         _ = await manager.turnOffDataIfNeeded(
             shouldAbort: { [weak self] in self?.isCancelled(epoch) ?? true })
@@ -433,10 +412,16 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     private func runInWindow<T>(label: String, epoch: Int, action: @escaping @Sendable () async throws -> T) async throws -> T {
         await MainActor.run { routeResetFired = true }
         await setPhase(.injecting(label: label))
+        // 断网窗口内先主动把隧道建起来再执行操作：只探不建会把整段窗口浪费在
+        // 一次注定失败的连接上（蜂窝刚关，隧道还没人拉起）.
+        let broughtUp = await CellularTunnelManager.shared.bringUpTunnel()
+        TunnelDiagnostics.note("蜂窝通路", broughtUp
+            ? "断网窗口内主动建链就绪，继续执行" + label
+            : "断网窗口内主动建链未就绪，仍执行" + label + "，失败则回到卡点提示")
         do {
             let value = try await action()
-            // v0.3.771（重做）：断网窗口内操作真实成功 = 通路真实建立的最强证据，在此置真 ——
-            // 蜂窝恢复后门据此放行不再二次卡点（Gnoix 对齐：关一次蜂窝，之后蜂窝下直接用）.
+            // 断网窗口内操作真实成功 = 通路真实建立的最强证据，在此置真：
+            // 蜂窝恢复后门据此放行，不再二次卡点.
             TunnelGate.setReady(true)
             TunnelDiagnostics.note("蜂窝通路", "断网窗口内操作成功，通路已真实建立，蜂窝恢复后不再卡点")
             if !isCancelled(epoch) {

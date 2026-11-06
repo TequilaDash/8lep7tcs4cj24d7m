@@ -2,15 +2,15 @@
 //  DeveloperModeService.swift
 //  TequilaDash
 //
-//  v0.3.328：开发者模式（Developer Mode）检测 + 开启。
+//  开发者模式（Developer Mode）检测 + 开启.
 //  参考 iDescriptor（src/service_manager.rs）：
 //    · 状态：lockdown `get_value("DeveloperModeStatus", "com.apple.security.mac.amfi")`
-//      —— 与「激活锁」同理，这个域必须**按 key 读**，整域读是空的。
+//      —— 与「激活锁」同理，这个域必须**按 key 读**，整域读是空的.
 //    · 开启：RSD 的 amfi 服务（com.apple.amfi.lockdown）：
 //        action 0 = reveal_developer_mode_option_in_ui（让「设置」里出现开关）
 //        action 1 = enable_developer_mode（真正打开）
 //  注意： **关闭没有接口**：amfi 只有 0/1/2/3/4 五个 action（无 disable），
-//     关闭只能去设备「设置 → 隐私与安全性 → 开发者模式」手动关。
+//     关闭只能去设备「设置 → 隐私与安全性 → 开发者模式」手动关.
 //
 import Foundation
 
@@ -118,7 +118,7 @@ enum DeveloperModeService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "开发者模式")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }

@@ -70,10 +70,10 @@ struct AFCBrowserView: View {
                     // 隧道没就绪时不把「目录为空」当结论——列表还没真读过.
                     EmptyView()
                 } else if let errorMessage {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow（info.circle + AppTheme.pending + 重试按钮）.
+                    // 区块级错误行统一到 AppErrorRow（info.circle + AppTheme.pending + 重试按钮）.
                     AppErrorRow(message: errorMessage, retry: { reload() })
                 } else if entries.isEmpty {
-                    // v0.3.678：空态统一到 InfoActionCard（此前是裸 Text + .secondary，属全仓 4 套空态写法里最不规范的一种）.
+                    // 空态统一到 InfoActionCard（此前是裸 Text + .secondary，属全仓 4 套空态写法里最不规范的一种）.
                     InfoActionCard(icon: "folder",
                                    title: "目录为空",
                                    message: "这个目录下没有文件或子目录.可以返回上一级，或换一个目录看看.")
@@ -187,7 +187,7 @@ struct AFCBrowserView: View {
                 } header: {
                     Text("目标目录（当前：\(currentPath)）")
                 }
-                // v0.3.677：空态改用统一组件 AppStateSection（原为裸 Text）。
+                // 空态改用统一组件 AppStateSection（原为裸 Text）.
                 if entries.filter(\.isDirectory).isEmpty && parentPath == nil {
                     AppStateSection(state: .empty("没有可移动的目标目录",
                                                   message: "当前目录下没有子目录，也无法回到上一级.",
@@ -354,7 +354,7 @@ struct AFCBrowserView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let data = try service.readFile(entry.path)
-                // P0-1：设备返回的名字不可信，含路径分隔符会写到 downloadDir 之外。
+                // P0-1：设备返回的名字不可信，含路径分隔符会写到 downloadDir 之外.
                 guard let safeName = FileNameRules.sanitize(entry.name) else {
                     DispatchQueue.main.async {
                         loading = false

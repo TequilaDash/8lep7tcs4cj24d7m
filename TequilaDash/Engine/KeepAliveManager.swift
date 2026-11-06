@@ -15,7 +15,7 @@ import Foundation
 /// `@unchecked Sendable`：可变状态（`player` / `timer` / `forced`）只在主线程写——
 /// 三个调用点分别是 `TequilaDashApp.init`（`App` 为主 actor）、`RootView`（`View`）、
 /// `SpoofSession`（`@MainActor` 类），以及 `NotificationCenter` 注册的 `queue: .main`
-/// 回调（主队列）。跨线程不存在并发写。
+/// 回调（主队列）.跨线程不存在并发写.
 final class KeepAliveManager: @unchecked Sendable {
     static let shared = KeepAliveManager()
 
@@ -94,7 +94,6 @@ final class KeepAliveManager: @unchecked Sendable {
     /// 生成 0.5 秒「非零」静音 WAV（8000 Hz 16-bit 单声道 PCM）.
     /// 数据填振幅 ±1（≈ -90 dBFS）+ 播放音量 0.01 → 实际约 -190 dBFS，
     /// 人耳完全不可闻；但 PCM 非全零，避免某些 iOS 版本把纯静音会话
-    /// 判定为 idle 并回收（StikDebug PR #432 实锤的坑，会导致保活失效）.
     private static func silentWAV() throws -> Data {
         let sr = 8000, samples = Int(Double(sr) * 0.5)
         var w = Data("RIFF".utf8)

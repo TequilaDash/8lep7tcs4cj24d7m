@@ -88,7 +88,7 @@ struct PiPKeepAliveView: View {
                     .tint(.primary)
                 }
 
-                // v0.3.59：悬浮窗高度调节（原版 UISlider 方案，修 SwiftUI Slider 闪退）
+                // 悬浮窗高度调节（原版 UISlider 方案，修 SwiftUI Slider 闪退）
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("悬浮窗高度")
@@ -112,14 +112,14 @@ struct PiPKeepAliveView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 if let err = service.lastError {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow.
+                    // 区块级错误行统一到 AppErrorRow.
                     AppErrorRow(message: err)
                 }
             } header: {
                 Text("说明")
             }
 
-            // v0.3.51：全局高刷（移植 GlobalRefresh 帧率方案）
+            // 全局高刷（移植 GlobalRefresh 帧率方案）
             Section {
                 Toggle(isOn: Binding(
                     get: { highRefresh.isRunning },

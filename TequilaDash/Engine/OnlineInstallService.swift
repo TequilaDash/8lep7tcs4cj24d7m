@@ -2,41 +2,41 @@ import Foundation
 import UIKit
 import SwiftUI
 
-/// v0.3.379：在线安装（OTA / `itms-services`）—— 把本地已下载的 IPA 交给系统安装。
+/// 在线安装（OTA / `itms-services`）—— 把本地已下载的 IPA 交给系统安装.
 ///
 /// ## 机制（ipa-re 逆向牛蛙 `NiuWaCore`，照做）
 /// 1. **IPA 由设备本机 HTTP 服务器发**：`GET /package.ipa`（带 `Accept-Ranges`，
 ///    支持断点续传）→ `IPALocalHTTPServer`，监听 `0.0.0.0:<随机端口>`，
 ///    包地址默认用**局域网 IP**（`http://<LAN-IP>:<port>/package.ipa`），
-///    取不到 LAN IP 才回落 `127.0.0.1`。
+///    取不到 LAN IP 才回落 `127.0.0.1`.
 /// 2. **manifest.plist 必须托管在 HTTPS**（iOS 7.1 起不收 http 清单，自签证书也不认）
-///    → `ManifestPublisher`（用户自带 HTTPS 地址优先；没填才走匿名免账号 paste 候选）。
-/// 3. 打开 `itms-services://?action=download-manifest&url=<清单地址>`，由系统拉清单 + 装包。
+///    → `ManifestPublisher`（用户自带 HTTPS 地址优先；没填才走匿名免账号 paste 候选）.
+/// 3. 打开 `itms-services://?action=download-manifest&url=<清单地址>`，由系统拉清单 + 装包.
 ///
 /// ## 与「覆盖安装」的关系
 /// 覆盖安装走 AFC + `installation_proxy`（`IPADownloadCenter.installLocal` →
-/// `AppStoreInstallService.installLocalIPA`），是**另一条通道**，本文件一行都不碰。
+/// `AppStoreInstallService.installLocalIPA`），是**另一条通道**，本文件一行都不碰.
 ///
 /// ## 前提
-/// · OTA 只要求：清单在 HTTPS、安装包签名有效、且本设备/账号对该应用有许可。
+/// · OTA 只要求：清单在 HTTPS、安装包签名有效、且本设备/账号对该应用有许可.
 /// · **是否 FairPlay 加密（`cryptid=1`）不影响 OTA 通道本身**：App Store 自己的安装
-///   走的就是 itms-services，同类工具也在装 App Store 下载的加密包。
+///   走的就是 itms-services，同类工具也在装 App Store 下载的加密包.
 ///   注意： 曾据「加密包装不了」的说法在 `prepare` 里提前拦截 —— 该假设**无证据，已撤回**，
-///   现在加密包照常走完整链路（只记一条非阻断日志）。别再把这条当规则写回来。
+///   现在加密包照常走完整链路（只记一条非阻断日志）.别再把这条当规则写回来.
 enum OnlineInstallService {
 
-    /// 是否已接入真实实现（UI 的「未接入」标记由它驱动）。
+    /// 是否已接入真实实现（UI 的「未接入」标记由它驱动）.
     static let isImplemented = true
 
-    /// 本机服务器保活时长：iOS 点了「安装」才会来拉包，打开清单后不能立刻关。
+    /// 本机服务器保活时长：iOS 点了「安装」才会来拉包，打开清单后不能立刻关.
     private static let serverLifetime: TimeInterval = 15 * 60
 
-    /// v0.3.396（B 项）：「系统没来拉包」的判定窗口（一次性看门狗）。
+    /// 「系统没来拉包」的判定窗口（一次性看门狗）.
     private static let noBytesWindow: TimeInterval = 60
 
     /// 等待清单发布回调的上限（秒）—— 发布链内部每个请求已由
     /// `ManifestPublisher.performTimeoutSeconds` 兜底，这里再给整体等待加一道**硬上限**，
-    /// 防止 `semaphore.wait()` 永久挂住调用线程（照 `I4AppFixService.writeOnceWithTimeout`）。
+    /// 防止 `semaphore.wait()` 永久挂住调用线程（照 `I4AppFixService.writeOnceWithTimeout`）.
     private static let publishTimeoutSeconds: TimeInterval = 120
 
     enum OnlineInstallError: Error, LocalizedError {
@@ -73,16 +73,16 @@ enum OnlineInstallService {
 
     // MARK: - 入口
 
-    /// 在线安装入口。
+    /// 在线安装入口.
     ///
     /// - Parameters:
     ///   - ipaURL: **本地已下载 IPA 的文件 URL**（`file://…`，由下载管理传入）；
-    ///             只有在本地文件缺失时才退回传远端 `http(s)` 直链（跳过本机服务器）。
+    ///             只有在本地文件缺失时才退回传远端 `http(s)` 直链（跳过本机服务器）.
     ///   - bundleId: 目标应用标识（本地包读不到 Info.plist 时兜底）
     ///   - alternatePackageURL: 台账里的远端 `https` 直链，作为清单里的备选 `software-package`
-    ///   - logCategory: 本次安装所有日志写入的板块分类。**默认 `.appStore`** —— App Store 板块
+    ///   - logCategory: 本次安装所有日志写入的板块分类.**默认 `.appStore`** —— App Store 板块
     ///     的既有调用方行为不变；共享转换（`.shareConvert`）等板块显式传入自己的分类，
-    ///     免得这些步骤写进 App Store 日志、用户在共享转换的日志页里看不到。
+    ///     免得这些步骤写进 App Store 日志、用户在共享转换的日志页里看不到.
     ///   - completion: 主线程回调（Swift 6：标 @Sendable 以跨调度队列传递；
     ///     方法内部所有回调都经 DispatchQueue.main.async 触发，行为不变）
     static func install(ipaURL: URL?,
@@ -116,22 +116,22 @@ enum OnlineInstallService {
                 return
             }
 
-            // 打开清单后不马上关服务器：iOS 用户点「安装」才会来拉 IPA。
+            // 打开清单后不马上关服务器：iOS 用户点「安装」才会来拉 IPA.
             if prepared.localFile != nil {
                 IPALocalHTTPServer.shared.stop(after: serverLifetime)
                 LoginLogger.shared.log("[在线安装] 本机服务器将在 \(Int(serverLifetime / 60)) 分钟后自动关闭",
                                        category: logCategory)
             }
-            // v0.3.388：进度会话同样在保活到期时收尾。
-            // 注意： 这只是「我们的观测窗口结束了」，**不是「系统装完了」** —— 系统安装阶段不可观测。
+            // 进度会话同样在保活到期时收尾.
+            // 注意： 这只是「我们的观测窗口结束了」，**不是「系统装完了」** —— 系统安装阶段不可观测.
             OnlineInstallProgress.shared.scheduleIdleReset(after: serverLifetime)
 
             DispatchQueue.main.async {
                 open(manifestURL: manifestURL, logCategory: logCategory, completion: completion)
-                // v0.3.396（B 项）：清单已发起 → 挂一次性「系统没来拉包」看门狗。
+                // 清单已发起 → 挂一次性「系统没来拉包」看门狗.
                 // 只在**经本机服务器发包**（localFile != nil）时挂：远端直链路径我们一个字节都量不到，
                 // 那里挂这个看门狗会在 60 秒时误报「系统未开始下载」，反而是假信号 —— 那条路径的
-                // 兜底交给 `OnlineInstallProgress` 的 3 分钟 `.installing` 窗口。
+                // 兜底交给 `OnlineInstallProgress` 的 3 分钟 `.installing` 窗口.
                 if prepared.localFile != nil { armNoBytesWatchdog(logCategory: logCategory) }
             }
         }
@@ -139,21 +139,21 @@ enum OnlineInstallService {
 
     // MARK: - 看门狗（B 项）
 
-    /// v0.3.396（B 项）：**一次性**「系统没来拉包」看门狗 —— 必须在主线程调。
+    /// **一次性**「系统没来拉包」看门狗 —— 必须在主线程调.
     ///
     /// 现象：设备上已装同一版本、或系统直接拒装时，`itms-services` 会走完（`open` 受理成功），
-    /// 但系统**一个字节都不会来拉** → 进度环停在 0% 转圈，而唯一的收尾是 15 分钟保活到期。
-    /// 用户看到的就是「一直卡在在线安装圆圈」。
+    /// 但系统**一个字节都不会来拉** → 进度环停在 0% 转圈，而唯一的收尾是 15 分钟保活到期.
+    /// 用户看到的就是「一直卡在在线安装圆圈」.
     ///
     /// 判定：发起后 `noBytesWindow`（60 秒）内已发字节始终为 0 → 判「系统未开始下载」→
-    /// `reset()` + 短提示。**只 `asyncAfter` 一次**（不是轮询）；60 秒内只要来过任何字节，
-    /// 到期时这道判定就静默作废（不会 reset、不会提示）。
+    /// `reset()` + 短提示.**只 `asyncAfter` 一次**（不是轮询）；60 秒内只要来过任何字节，
+    /// 到期时这道判定就静默作废（不会 reset、不会提示）.
     ///
     /// 两道守卫（读的都是主线程状态）：
     /// · `sessionToken == token` —— 期间又发起了新 OTA（`begin` 会涨会话号）→ 这次判定作废，
     ///   否则同一个包连点两次时，第一次留下的看门狗会把**第二次**的进度环误收掉；
     /// · `stage != .idle && sentBytes == 0` —— 期间已被别的路径（手动点环 / 传输完成进入系统安装）
-    ///   清空或推进 → 不作声、不重复提示。`reset()` 本身不涨会话号，所以这道状态守卫是第二层。
+    ///   清空或推进 → 不作声、不重复提示.`reset()` 本身不涨会话号，所以这道状态守卫是第二层.
     private static func armNoBytesWatchdog(logCategory: LoginLogger.Category) {
         let token = OnlineInstallProgress.shared.sessionToken
         DispatchQueue.main.asyncAfter(deadline: .now() + noBytesWindow) {
@@ -164,7 +164,7 @@ enum OnlineInstallService {
                                    category: logCategory)
             progress.reset()
             // `ToastCenter` 是 `@MainActor` 类；本方法是非隔离静态方法，这里按全仓既有写法
-            // 显式切回主 actor（`Task { @MainActor in }`），不依赖 `DispatchQueue.main` 闭包的隔离推断。
+            // 显式切回主 actor（`Task { @MainActor in }`），不依赖 `DispatchQueue.main` 闭包的隔离推断.
             Task { @MainActor in ToastCenter.shared.show("系统未开始下载") }
         }
     }
@@ -222,11 +222,11 @@ enum OnlineInstallService {
 
             switch inspection.encryption {
             case .encrypted:
-                // 只记录、不拦截：OTA 通道本身不检查 FairPlay；能否安装取决于签名有效性与许可。
+                // 只记录、不拦截：OTA 通道本身不检查 FairPlay；能否安装取决于签名有效性与许可.
                 LoginLogger.shared.log("[在线安装] 包信息：FairPlay 加密（cryptid=\(inspection.cryptid)），不拦截",
                                        category: logCategory)
             case .unknown:
-                // 读不出加密状态**不等于**未加密 —— 只记事实，不下「明文」结论。
+                // 读不出加密状态**不等于**未加密 —— 只记事实，不下「明文」结论.
                 LoginLogger.shared.log("[在线安装] 包信息：加密状态未知（主二进制读不出），不拦截",
                                        category: logCategory)
             case .plaintext:
@@ -249,8 +249,8 @@ enum OnlineInstallService {
         // 起本机服务器（放最后：此前的检查失败都不会留下服务器）
         var packageURL = ipaURL.absoluteString
         if let localFile {
-            // v0.3.388：进度回调先挂上（在服务器队列上触发 → 载体自己 hop 回主线程）。
-            // 系统来拉包的每一个字节都会经过这里，这是我们**唯一**能测到 OTA 进度的来源。
+            // 进度回调先挂上（在服务器队列上触发 → 载体自己 hop 回主线程）.
+            // 系统来拉包的每一个字节都会经过这里，这是我们**唯一**能测到 OTA 进度的来源.
             IPALocalHTTPServer.shared.onProgress = { sent, total in
                 OnlineInstallProgress.shared.update(sent: sent, total: total)
             }
@@ -346,7 +346,7 @@ enum OnlineInstallService {
             // 兜底 1：内置 WebView（InAppBrowserView）里再跳一次
             // `UIApplication.open` 的 completion 由系统在**主队列**回调，但闭包本身不是
             // `@MainActor` 隔离的 → 用 `assumeIsolated` 同步进入主 actor（不做异步跳转，
-            // 行为与原来一致）。
+            // 行为与原来一致）.
             MainActor.assumeIsolated { presentBrowserFallback(itmsURL, logCategory: logCategory) }
             // 兜底 2：复制清单链接，让用户去 Safari 打开
             UIPasteboard.general.string = manifestURL
@@ -358,9 +358,9 @@ enum OnlineInstallService {
         }
     }
 
-    /// 在 App 内置浏览器里再尝试一次（部分 iOS 版本会拦 App 内的 itms-services）。
+    /// 在 App 内置浏览器里再尝试一次（部分 iOS 版本会拦 App 内的 itms-services）.
     /// `@MainActor`：本方法全程驱动 UIKit（取顶层控制器 / present），必须与
-    /// `topViewController()` 同在主 actor 上。
+    /// `topViewController()` 同在主 actor 上.
     @MainActor
     private static func presentBrowserFallback(_ url: URL, logCategory: LoginLogger.Category) {
         guard let top = topViewController() else {
@@ -375,7 +375,7 @@ enum OnlineInstallService {
 
     /// `@MainActor`：`UIWindowScene.windows` 是主 actor 隔离属性，在非隔离上下文里
     /// 连 key path 都拼不出来（Swift 6 报 "cannot form key path to main actor-isolated
-    /// property 'windows'"）；本方法只服务于上面的主 actor 展示路径，收敛到主 actor 即可。
+    /// property 'windows'"）；本方法只服务于上面的主 actor 展示路径，收敛到主 actor 即可.
     @MainActor
     private static func topViewController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }

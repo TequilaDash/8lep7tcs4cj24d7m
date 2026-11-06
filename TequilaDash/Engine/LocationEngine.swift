@@ -20,7 +20,7 @@ enum LocationEngineError: LocalizedError {
     /// 设备服务表里没有定位通道，与「隧道通了但握手失败」区分开，
     /// 避免用户看到泛化的超时/远端错误.
     ///
-    /// **预留**：当前不由预检返回（预检已降级为纯诊断）。等真机实测确认我们实际走的
+    /// **预留**：当前不由预检返回（预检已降级为纯诊断）.等真机实测确认我们实际走的
     /// 入口服务（dtservicehub 还是 remoteserver）后，再决定是否启用硬门槛.
     case channelUnavailable
 
@@ -58,8 +58,8 @@ enum LocationEngine {
     private static let queue = DispatchQueue(label: "com.tequila.location", qos: .userInitiated)
 
     /// Swift 6 并发检查：下面四个 FFI 句柄的**全部读写都在串行队列 `queue` 上** ——
-    /// 公开入口 `set` / `clear` 一律 `queue.sync` 进入，其余 `*Locked` 私有方法只由它们调用。
-    /// （`isSessionActive` 是对 `locationSimulation` 的跨线程只读，属既有行为，未改。）
+    /// 公开入口 `set` / `clear` 一律 `queue.sync` 进入，其余 `*Locked` 私有方法只由它们调用.
+    /// （`isSessionActive` 是对 `locationSimulation` 的跨线程只读，属既有行为，未改.）
     nonisolated(unsafe) private static var adapter: OpaquePointer?
     nonisolated(unsafe) private static var handshake: OpaquePointer?
     nonisolated(unsafe) private static var remoteServer: OpaquePointer?
@@ -100,7 +100,7 @@ enum LocationEngine {
 
     private static let statusLock = NSLock()
     /// Swift 6 并发检查：`storedChannelStatus` 的**全部**读写都在上面的 `statusLock` 内
-    /// （见 `channelStatus` getter 与 `setChannelStatus`），本身线程安全。
+    /// （见 `channelStatus` getter 与 `setChannelStatus`），本身线程安全.
     nonisolated(unsafe) private static var storedChannelStatus: ChannelStatus = .unknown
 
     /// 最近一次通道预检结果（跨线程读取安全）.
@@ -134,23 +134,23 @@ enum LocationEngine {
         return result
     }
 
-    /// v0.3.254：结束设备侧 locationd —— **走 RSD 隧道**（app_service 枚举进程 + 发信号）.
+    /// 结束设备侧 locationd —— **走 RSD 隧道**（app_service 枚举进程 + 发信号）.
     ///
     /// 方向修正：设备**没有越狱**，App 在沙盒里本地 kill 守护进程必被拒
-    /// （v0.3.253 的 setuid 提权方案作废——把「有越狱」当前提是搞错了）。
+    /// （的 setuid 提权方案作废——把「有越狱」当前提是搞错了）.
     /// 「进程管理」页结束设备进程用的就是这套 FFI（app_service_list_processes +
     /// app_service_send_signal），这里直接复用：枚举进程 → 找 locationd → SIGKILL.
     ///
     /// 注意： **服务不可用时的行为**（2026-09-19 更正）：`ServiceNotFound`(21) 是**设备侧的服务
-    /// 状态问题**，不是本 App 的缺陷 —— 该服务偶尔不可用，**重启手机即恢复**（用户实测）。
+    /// 状态问题**，不是本 App 的缺陷 —— 该服务偶尔不可用，**重启手机即恢复**（用户实测）.
     /// 与 DDI、与「用哪条隧道」都无关（PC 侧 `pymobiledevice3` 交叉验证：服务表逐条一致、
-    /// 调同一个服务同样失败）。**原理未知。**
+    /// 调同一个服务同样失败）.**原理未知.**
     /// 此时 `listProcesses()` 会抛错 ⇒ 本方法返回 `false`；**重试没有意义**
-    /// （`RsdHandshake::connect` 无回退），**重启手机即可恢复**。
+    /// （`RsdHandshake::connect` 无回退），**重启手机即可恢复**.
     ///
-    /// v0.3.599：`listProcesses()` 内部已改为「先查服务表再选路」——`app_service` 不在表里时
+    /// `listProcesses()` 内部已改为「先查服务表再选路」——`app_service` 不在表里时
     /// 自动走 DVT 回退，且 DVT 通道下 `executablePath` 只含 execname（如 `locationd`，
-    /// **不带 `/` 前缀**）。故这里改用 `displayName` 匹配（两条通道下都等于末段名）。
+    /// **不带 `/` 前缀**）.故这里改用 `displayName` 匹配（两条通道下都等于末段名）.
     @discardableResult
     static func killLocationd() -> Bool {
         guard let entries = try? ProcessManagerService.shared.listProcesses() else { return false }
@@ -207,7 +207,7 @@ enum LocationEngine {
     }
 
     /// 建立 隧道→RemoteXPC→DVT 定位模拟会话（不动设备状态）.
-    /// v0.3.245：从 setLocked 抽出——clear 在无活动会话时也要能建会话下发清除
+    /// 从 setLocked 抽出——clear 在无活动会话时也要能建会话下发清除
     /// （App 重启后内存句柄为空，但设备 locationd 里可能残留上次注入的模拟坐标）.
     private static func connectLocked(pairingPath: String, deviceIP: String) -> Int32 {
         // 蜂窝隧道支持（默认关）：开关开 + 当前无 Wi-Fi 时，建隧道前有界等本地隧道就绪，
@@ -275,7 +275,7 @@ enum LocationEngine {
 
         // 定位通道预检：**只诊断、不拦截**；依据 = crate `RsdService::rsd_service_name()`
         // 返回 dtservicehub，但**尚未真机实测**，而反方旁证（牛蛙 / iAnyGo 家族）指向
-        // remoteserver —— 故不做硬门槛，避免赌坏现有可用路径。无论可用与否都继续握手.
+        // remoteserver —— 故不做硬门槛，避免赌坏现有可用路径.无论可用与否都继续握手.
         if let handshakeHandle = handshake {
             preflightChannelLocked(handshakeHandle)
         }
@@ -297,7 +297,7 @@ enum LocationEngine {
     }
 
     /// 定位通道预检（**只诊断、不拦截**）：查 RSD 握手自带的服务表里有没有 dtservicehub，
-    /// 并把 port / remoteXPC 写进日志，供判断方案二到底该走哪个入口。
+    /// 并把 port / remoteXPC 写进日志，供判断方案二到底该走哪个入口.
     /// 不做硬门槛：结论尚未真机实测，且反方旁证指向 remoteserver，拦错会打断现有可用路径.
     /// 必须挂在本条已成型的隧道上，绝不另开（同 hostname 并发建隧道会互抢）.
     private static func preflightChannelLocked(_ handshake: OpaquePointer) {
@@ -328,7 +328,7 @@ enum LocationEngine {
     }
 
     private static func clearLocked() -> Int32 {
-        // v0.3.245 修复「清除模拟定位失败」：旧实现在无活动会话时直接报错——
+        // 修复「清除模拟定位失败」：旧实现在无活动会话时直接报错——
         // App 重启后内存句柄必为空，一点清除就失败，而设备侧残留的模拟定位
         // 恰恰需要经 DVT 会话才能清掉（pmd3 `location clear` 同款：新建会话再
         // clear）.现在无会话时先建会话再清除；新建会话后清除报错按成功处理

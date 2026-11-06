@@ -1,18 +1,18 @@
 import Foundation
 
-/// 全 App 统一的**日期 / 时间展示工具**（纯 Foundation，无 UI 依赖）。
+/// 全 App 统一的**日期 / 时间展示工具**（纯 Foundation，无 UI 依赖）.
 ///
 /// ## 为什么要有它
 /// 此前各页面各自 `new DateFormatter`，口径不一；更有几处把后端返回的 **ISO8601 原始串**
-/// 直接塞进界面（用户截图里出现 `2026-09-13T16:59:22+08:00`）。本工具把「解析 + 格式化」
-/// 收拢到一处，并统一为两种展示口径（见 `Style`）。
+/// 直接塞进界面（用户截图里出现 `2026-09-13T16:59:22+08:00`）.本工具把「解析 + 格式化」
+/// 收拢到一处，并统一为两种展示口径（见 `Style`）.
 ///
 /// ## 铁律
 /// · **解析失败返回 `nil`** —— 绝不把原始串回退到界面上（宁可少显示一行，也不显示机器串）.
 /// · 展示一律用**设备本地时区**，与下载列表（`MM-dd HH:mm`）等既有页面一致.
 enum DateText {
 
-    /// 展示口径。
+    /// 展示口径.
     enum Style {
         /// `MM-dd HH:mm` —— 紧凑格式，全 App 默认（下载列表 / 图标清理 / 软件源胶囊同款）.
         case compact
@@ -58,7 +58,7 @@ enum DateText {
     }
 
     /// 直接格式化一个**已有 `Date`**（不经解析）—— 供「数据源本身就是 `Date`」的展示点收敛到本工具
-    /// （版本历史 / 收藏栏等原先各自持有 `DateFormatter`）。与 `string(from:style:)` 口径完全一致.
+    /// （版本历史 / 收藏栏等原先各自持有 `DateFormatter`）.与 `string(from:style:)` 口径完全一致.
     static func string(from date: Date, style: Style = .compact) -> String {
         formatter(for: style).string(from: date)
     }
@@ -67,11 +67,11 @@ enum DateText {
 
     // ## 为什么用 `nonisolated(unsafe)` 缓存，而不是每次新建
     //
-    // `DateFormatter` / `ISO8601DateFormatter` 的**构造很贵**（要建 locale / calendar / ICU 数据）。
+    // `DateFormatter` / `ISO8601DateFormatter` 的**构造很贵**（要建 locale / calendar / ICU 数据）.
     // 此前把它们写成「按需构造的计算属性」是为了过 Swift 6 严格并发，代价是**每次调用都新建**：
     // 源 App 列表页（`SignSourceAppListView`，逐行调用）在 34 / 3911 / 28026 行的源上，
     // 每行要新建 2 个 `ISO8601DateFormatter` + 1 个 `DateFormatter` —— 逐行开销（实测见
-    // `P4_全能签逆向/_impl/修复_日期性能回退.md`）。
+    // `P4_全能签逆向/_impl/修复_日期性能回退.md`）.
     //
     // ## 为什么这样是并发安全的（不是随手 `unsafe`）
     // · 这些是 **`let`**：只在首次访问时构造一次，此后**永不重新赋值**；
@@ -79,15 +79,15 @@ enum DateText {
     //   从不修改 `dateFormat` / `locale` / `formatOptions`（grep 本文件即可确认）；
     // · 对**已配置完成、不再修改**的 formatter 做**并发只读**是受支持的用法：
     //   `DateFormatter` 自 iOS 7 / macOS 10.9 起即为线程安全；`ISO8601DateFormatter` 同样
-    //   在配置后无可变状态，`date(from:)` / `string(from:)` 内部不写回实例。
-    // ⇒ 多线程同时调用只是「并发读同一个不可变对象」，无数据竞争。
+    //   在配置后无可变状态，`date(from:)` / `string(from:)` 内部不写回实例.
+    // ⇒ 多线程同时调用只是「并发读同一个不可变对象」，无数据竞争.
     //
     // ## 为什么不用 `@MainActor` 缓存
     // 已 grep 全部 13 个调用点：其中 `AppStoreModels.dateText` 经 `NBStoreClient.versionList`
     // （`enum` 的 nonisolated `async static func`）在**后台线程**上调用 ⇒ `@MainActor` 会把
-    // 该非主线程路径一并要求隔离，属改对外 API 语义，不可取。故用 `nonisolated(unsafe)` 保持
-    // 对外 API（`date(from:)` / `string(from:style:)`）的 nonisolated 签名完全不变。
-    // 与本仓既有先例同款：`AFCService.swift:16`、`AppStoreService.swift:332`。
+    // 该非主线程路径一并要求隔离，属改对外 API 语义，不可取.故用 `nonisolated(unsafe)` 保持
+    // 对外 API（`date(from:)` / `string(from:style:)`）的 nonisolated 签名完全不变.
+    // 与本仓既有先例同款：`AFCService.swift:16`、`AppStoreService.swift:332`.
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

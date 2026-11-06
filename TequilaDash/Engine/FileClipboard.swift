@@ -10,7 +10,7 @@ import UIKit
 final class FileClipboard: ObservableObject {
     /// Swift 6 并发检查：本类型非 Sendable，但可变状态只有 `payload`，且只在主线程读写
     /// （写入来自文件浏览器 UI 动作；唯一的后台调用点 `FileBrowserViewModel.paste`
-    /// 也把 `clear()` 放在 `MainActor.run` 内）。因此 `shared` 共享无风险。
+    /// 也把 `clear()` 放在 `MainActor.run` 内）.因此 `shared` 共享无风险.
     nonisolated(unsafe) static let shared = FileClipboard()
 
     enum Mode {
@@ -66,8 +66,8 @@ final class FileClipboard: ObservableObject {
 /// appears over Apps, detail, and the file browser.
 final class CopyFeedback: ObservableObject {
     /// Swift 6 并发检查：本类型非 Sendable，但 `message` / `hideWork` 只在主线程读写 ——
-    /// `show(_:)` 由 UI 调用，延迟清理用的是 `DispatchQueue.main.asyncAfter`。
-    /// 因此 `shared` 共享无风险。
+    /// `show(_:)` 由 UI 调用，延迟清理用的是 `DispatchQueue.main.asyncAfter`.
+    /// 因此 `shared` 共享无风险.
     nonisolated(unsafe) static let shared = CopyFeedback()
 
     @Published private(set) var message: String?

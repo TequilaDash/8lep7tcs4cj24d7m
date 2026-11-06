@@ -1,25 +1,25 @@
-// 从 TequilaDash/Views/I4StoreFreeView.swift 拆出（原文件 1316 行）：行渲染 / 安装动作 / 顶层下载函数体量过大，按职责拆到本文件；纯搬迁、零逻辑改动。
+// 从 TequilaDash/Views/I4StoreFreeView.swift 拆出（原文件 1316 行）：行渲染 / 安装动作 / 顶层下载函数体量过大，按职责拆到本文件；纯搬迁、零逻辑改动.
 
 import SwiftUI
 
 extension I4StoreFreeView {
 
-    /// NB 源的结果行。
+    /// NB 源的结果行.
     ///
     /// NB 接口只回 `url` + `sinfs`，**没有名称、图标、版本号**，所以这一行展示的是
     /// 「trackId + 直链是否拿到」，而不是仿照前两源做一张有图有字的卡片 ——
-    /// 没有的数据不硬凑。
+    /// 没有的数据不硬凑.
     ///
-    /// v0.3.538：**左侧整块可点进详情页**（对齐另外两个免登录来源）。
+    /// **左侧整块可点进详情页**（对齐另外两个免登录来源）.
     /// 详情页里列历史版本（走 bilin 目录），每个版本单独取包 ——
-    /// 这才对得上「NB 助手能选历史版本下载」的形态。
+    /// 这才对得上「NB 助手能选历史版本下载」的形态.
     func nbRow(trackID: String, package: NBStoreClient.NBPackage) -> some View {
         HStack(alignment: .center, spacing: 12) {
             NavigationLink {
-                // v0.3.549：改走**五参数**构造 —— 原来这里是旧的 `(trackID:country:displayName:)`
+                // 改走**五参数**构造 —— 原来这里是旧的 `(trackID:country:displayName:)`
                 // 三参数版，与 `nbRankRow` 的调用形态不一致（同一个类型两种调法，
-                // 详情页里 `offSale` 永远取到默认的 false → 从这条路径进去取包会走错 method）。
-                // `offSale` 跟着当前筛选走，与列表行保持同一个口径。
+                // 详情页里 `offSale` 永远取到默认的 false → 从这条路径进去取包会走错 method）.
+                // `offSale` 跟着当前筛选走，与列表行保持同一个口径.
                 NBStoreDetailView(trackID: trackID,
                                   country: regionRaw,
                                   displayName: nil,
@@ -59,7 +59,7 @@ extension I4StoreFreeView {
         .padding(.vertical, 3)
     }
 
-    /// **下架应用**的结果行（v0.3.549）.
+    /// **下架应用**的结果行.
     ///
     /// 与 `nbRankRow`（Apple 榜单/搜索行）的区别：数据来自 NB 的下架库
     /// （`nb9527_searchOffSaleApp`），字段也就跟着 NB 的 `DXSTOffSaleAppModel` 走 ——
@@ -108,10 +108,10 @@ extension I4StoreFreeView {
             }
             .buttonStyle(.plain)
 
-            // v0.3.596：取包期间先显示「获取中…」——`installOffSale` 要先 `await` 取包
+            // 取包期间先显示「获取中…」——`installOffSale` 要先 `await` 取包
             // （实测 1.7s ~ 14s，见 `offSaleFetchingID` 注释），这段原先**没有任何反馈**，
-            // 用户看到的就是「点了获取没反应」。取到包后任务一建，`trailingControl`
-            // 自己会切成下载进度控件，故这里只覆盖「取包中」这一小段。
+            // 用户看到的就是「点了获取没反应」.取到包后任务一建，`trailingControl`
+            // 自己会切成下载进度控件，故这里只覆盖「取包中」这一小段.
             if offSaleFetchingID == app.id {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -119,10 +119,10 @@ extension I4StoreFreeView {
                 }
                 .fixedSize()
             } else {
-                // v0.3.549：`bundleId` 传 **nil**，与 `startNBDownload`（它以 `bundleId: nil` 建任务）
+                // `bundleId` 传 **nil**，与 `startNBDownload`（它以 `bundleId: nil` 建任务）
                 // 保持同一口径 —— `activeJob(bundleId:name:)` 在「行有 bundleId、任务没有」时
-                // 会直接判不等，进度控件就永远挂不上这一行（用户看到的是「点了获取，行里没反应」）。
-                // 传 nil 则退化成按**名字**匹配，与任务侧对得上。
+                // 会直接判不等，进度控件就永远挂不上这一行（用户看到的是「点了获取，行里没反应」）.
+                // 传 nil 则退化成按**名字**匹配，与任务侧对得上.
                 trailingControl(name: app.displayName, bundleId: nil) {
                     Task { await installOffSale(app) }
                 }
@@ -139,20 +139,20 @@ extension I4StoreFreeView {
 
     /// 下架行「获取」：取包 → 交给统一下载中心.
     ///
-    /// v0.3.556 起这里只吃 `searchOffSaleApp` 每条记录里内嵌的 `appStoreData`（包直链 + sinf）。
-    /// v0.3.586：那个字段**不是每条都有**（实测 10 条里 6 条没有），旧代码对它们直接失败，
-    /// 就是「NB 源无论什么下架 App 都下载获取不了」的根因。现在交给
-    /// `NBStoreClient.offSalePackage(from:country:)`：内嵌包缺失时自动回退 `getAppHistoryList`。
+    /// 起这里只吃 `searchOffSaleApp` 每条记录里内嵌的 `appStoreData`（包直链 + sinf）.
+    /// 那个字段**不是每条都有**（实测 10 条里 6 条没有），旧代码对它们直接失败，
+    /// 就是「NB 源无论什么下架 App 都下载获取不了」的根因.现在交给
+    /// `NBStoreClient.offSalePackage(from:country:)`：内嵌包缺失时自动回退 `getAppHistoryList`.
     ///
-    /// v0.3.587：界面**只给用户看得懂的话**，不再显示 `未获取到数据（7）` 这种内部码。
-    /// - 回 `nil` = NB 库里没有这条记录的可用 iOS 包 → `PackageFailure.notInLibrary.userMessage`。
-    /// - 抛错（网络/服务端临时故障）→ 「请稍后重试」，原始 error 进日志（`[NB源]` 前缀）。
+    /// 界面**只给用户看得懂的话**，不再显示 `未获取到数据（7）` 这种内部码.
+    /// - 回 `nil` = NB 库里没有这条记录的可用 iOS 包 → `PackageFailure.notInLibrary.userMessage`.
+    /// - 抛错（网络/服务端临时故障）→ 「请稍后重试」，原始 error 进日志（`[NB源]` 前缀）.
     ///
-    /// v0.3.592：取包走 `offSalePackage` 的**版本回退** —— 最新版 `code=7` 时自动换旧版本；
-    /// 回退命中时给一行轻提示（`已回退到 vX.Y.Z.`），静默回退、不刷屏。
+    /// 取包走 `offSalePackage` 的**版本回退** —— 最新版 `code=7` 时自动换旧版本；
+    /// 回退命中时给一行轻提示（`已回退到 vX.Y.Z.`），静默回退、不刷屏.
     ///
-    /// v0.3.596：取包期间给这一行挂「获取中…」菊花（`offSaleFetchingID`）—— 取包发生在
-    /// `startNBDownload` **之前**，原先这段没有任何视觉反馈，用户报「点了获取没有反应」。
+    /// 取包期间给这一行挂「获取中…」菊花（`offSaleFetchingID`）—— 取包发生在
+    /// `startNBDownload` **之前**，原先这段没有任何视觉反馈，用户报「点了获取没有反应」.
     @MainActor
     private func installOffSale(_ app: NBStoreClient.OffSaleApp) async {
         offSaleFetchingID = app.id
@@ -160,11 +160,11 @@ extension I4StoreFreeView {
         do {
             guard let pkg = try await NBStoreClient.offSalePackage(from: app, country: regionRaw) else {
                 // 文案与详情页共用同一份（`PackageFailure.userMessage`）—— 一处改、两处一致，
-                // 明确回答「为什么一直修复不了」并给出可走的替代源（v0.3.591）.
+                // 明确回答「为什么一直修复不了」并给出可走的替代源.
                 ToastCenter.shared.show(NBStoreClient.PackageFailure.notInLibrary.userMessage)
                 return
             }
-            // v0.3.592：若走了版本回退（最新版取不到、换了旧版本命中），提示一次 —— 静默回退，
+            // 若走了版本回退（最新版取不到、换了旧版本命中），提示一次 —— 静默回退，
             // 只在成功时给一行轻提示，不刷屏.
             if pkg.fellBack {
                 let v = (pkg.displayVersion?.isEmpty == false) ? pkg.displayVersion! : nil
@@ -186,7 +186,7 @@ extension I4StoreFreeView {
 
     // MARK: - 行
 
-    /// NB 源榜单 / 搜索结果的卡片行（v0.3.540）.
+    /// NB 源榜单 / 搜索结果的卡片行.
     ///
     /// 与 `nbRow`（裸 trackId 那行）的差别：这一行**有 Apple 给的元数据**
     /// （图标 / 名字 / 开发者 / 分类 / 价格），所以按前两源同款排版渲染，
@@ -198,7 +198,7 @@ extension I4StoreFreeView {
         HStack(alignment: .center, spacing: 12) {
             NavigationLink {
                 // 进 NB 详情页可以选历史版本（版本列表走 bilin 目录，与 AppleID 商店同一份）.
-                // v0.3.545：把图标和上架/下架状态一起带进去 —— 详情页据此选取包链路，
+                // 把图标和上架/下架状态一起带进去 —— 详情页据此选取包链路，
                 // 并且在 lookup 回来之前就能先显示图标与名字（少一次白屏）.
                 NBStoreDetailView(trackID: item.trackID,
                                   country: regionRaw,
@@ -246,9 +246,9 @@ extension I4StoreFreeView {
             }
             .buttonStyle(.plain)
 
-            // v0.3.549：与下架行同因 —— `startNBDownload` 建任务时 `bundleId` 是 nil，
+            // 与下架行同因 —— `startNBDownload` 建任务时 `bundleId` 是 nil，
             // 而这一行以前传的是 `item.bundleID`，`activeJob` 在「行有、任务没有」时直接判不等
-            // → 行内不显示下载进度 / 暂停按钮。改传 nil，退化成按名字匹配。
+            // → 行内不显示下载进度 / 暂停按钮.改传 nil，退化成按名字匹配.
             trailingControl(name: item.name, bundleId: nil) {
                 Task { await installViaNBRank(item) }
             }
@@ -280,10 +280,10 @@ extension I4StoreFreeView {
     @MainActor
     private func installViaNBRank(_ item: NBStoreRankClient.RankItem) async {
         do {
-            // v0.3.556：这里只走**上架**通道（`getAppHistoryList`）。
+            // 这里只走**上架**通道（`getAppHistoryList`）.
             // 下架态已经不摆榜单了（榜单来自 Apple RSS，里面没有下架应用），
             // 下架应用一律从搜索结果取包 —— 原来的下架分支是死代码，
-            // 而且它调的 `getOffSaleAppHistoryList` 已被证明取不到包，删掉。
+            // 而且它调的 `getOffSaleAppHistoryList` 已被证明取不到包，删掉.
             let pkg = try await NBStoreClient.package(appID: item.trackID,
                                                       bundleID: item.bundleID ?? "",
                                                       country: regionRaw)
@@ -295,16 +295,16 @@ extension I4StoreFreeView {
                                   name: item.name, version: nil, iconURL: item.icon)
         } catch {
             // 统一走 `packageFailure`：`code=7` 的两种情形给用户看得懂的话，
-            // 其余错误才回落 `localizedDescription`。绝不把 `（7）` 这类内部码弹给用户。
+            // 其余错误才回落 `localizedDescription`.绝不把 `（7）` 这类内部码弹给用户.
             let text = NBStoreClient.packageFailure(from: error)?.userMessage
                 ?? "NB 取包失败：\(error.localizedDescription)"
             ToastCenter.shared.show(text)
         }
     }
 
-    /// 左侧（图标 + 文案）整块可点进**应用详情**，右侧仍是原有的下载/进度控件。
+    /// 左侧（图标 + 文案）整块可点进**应用详情**，右侧仍是原有的下载/进度控件.
     ///
-    /// v0.3.540：`nbMode` 参数**删掉**了。NB 源的搜索/榜单结果现在有自己的行
+    /// `nbMode` 参数**删掉**了.NB 源的搜索/榜单结果现在有自己的行
     /// （`nbRankRow`，数据来自 Apple），不再借用爱思的候选列表走 NB 取包 ——
     /// 这个方法回归成**纯爱思行**，一个参数、一种行为.
     func row(_ app: I4PCStoreClient.I4App) -> some View {
@@ -323,9 +323,9 @@ extension I4StoreFreeView {
                     .frame(width: 54, height: 54)
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
 
-                    // v0.3.367：信息列不再被右侧进度控件挤扁 ——
+                    // 信息列不再被右侧进度控件挤扁 ——
                     // 胶囊固定单行（`.fixedSize()`），一行放不下就**整体换到下一行**（`ChipFlow`），
-                    // 简介与名称允许换行但不截断。用户要求「可以换行显示但不能显示不全」。
+                    // 简介与名称允许换行但不截断.用户要求「可以换行显示但不能显示不全」.
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.name).font(.subheadline.weight(.medium)).lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -346,22 +346,22 @@ extension I4StoreFreeView {
             trailingControl(name: app.name, bundleId: app.bundleId) { install(app) }
         }
         .padding(.vertical, 3)
-        // v0.3.399：长按弹「查看图标 / 提取图标」。
-        // v0.3.403：菜单内容改走 `ImagePreviewSupport.swift` 的共用实现（四处一份）；
+        // 长按弹「查看图标 / 提取图标」.
+        // 菜单内容改走 `ImagePreviewSupport.swift` 的共用实现（四处一份）；
         // 挂载点从左侧那条 `NavigationLink` **挪到整行** —— AppleID 列表是整行可长按，
-        // 爱思源原来只有左半块（右半块的下载控件压上去不出菜单），位置口径也对齐。
+        // 爱思源原来只有左半块（右半块的下载控件压上去不出菜单），位置口径也对齐.
         .contextMenu {
             iconMenuItems(iconURL: app.icon, fileNameBase: app.bundleId ?? app.name) {
-                // v0.3.408：图数组由 `showIconPreview` 写进 target
+                // 图数组由 `showIconPreview` 写进 target
                 showIconPreview(app.icon, target: $previewTarget)
             }
         }
     }
 
-    /// 右侧控件：有任务 → 进度 + 暂停 / 删除；没有 → 一枚「获取」（v0.3.408 前叫「安装」）。
+    /// 右侧控件：有任务 → 进度 + 暂停 / 删除；没有 → 一枚「获取」（前叫「安装」）.
     ///
-    /// v0.3.406：参数从「爱思应用」改成裸字段（`name` / `bundleId`），好让**牛蛙行**共用
-    /// 同一份 —— 两个来源的行右侧长得一模一样，不留第二套。
+    /// 参数从「爱思应用」改成裸字段（`name` / `bundleId`），好让**牛蛙行**共用
+    /// 同一份 —— 两个来源的行右侧长得一模一样，不留第二套.
     @ViewBuilder
     private func trailingControl(name: String,
                                  bundleId: String?,
@@ -389,7 +389,7 @@ extension I4StoreFreeView {
                 .disabled(!job.canPause)
                 Button {
                     // 按**实际结果**提示：台账只读 / 文件被占用时删除被拒，不能默默当成功
-                    // （口径同 `IPADownloadManagerView.reportRemoval`）。
+                    // （口径同 `IPADownloadManagerView.reportRemoval`）.
                     if let result = center.cancel(job.id) {
                         switch result {
                         case .removed:
@@ -400,7 +400,7 @@ extension I4StoreFreeView {
                             ToastCenter.shared.show("未删除安装包：文件无法删除（可能被占用）")
                         }
                     } else {
-                        // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作。
+                        // `nil` = 还没有落地文件（任务还在下载）→ 只是取消，没有删除动作.
                         ToastCenter.shared.show("已取消下载")
                     }
                 } label: {
@@ -415,10 +415,10 @@ extension I4StoreFreeView {
             Button {
                 action()
             } label: {
-                // v0.3.408：文案「安装」→「获取」（用户要求）。
+                // 文案「安装」→「获取」（用户要求）.
                 // 只改**发起获取**这一个动作的文案 —— 这一列里的「暂停 / 删除」是**不同语义**
-                // （对已存在的任务操作），一字不动；正在跑的任务显示的是 `job.displayStage`。
-                // 同理没动 AppleID 商店那边的按钮（用户说的是免登录/牛蛙这处）。
+                // （对已存在的任务操作），一字不动；正在跑的任务显示的是 `job.displayStage`.
+                // 同理没动 AppleID 商店那边的按钮（用户说的是免登录/牛蛙这处）.
                 Text("获取")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
@@ -438,14 +438,14 @@ extension I4StoreFreeView {
         return out
     }
 
-    // MARK: - 行（牛蛙源，v0.3.382）
+    // MARK: - 行（牛蛙源，）
 
     /// 牛蛙源的行：与爱思行同款排版（图标 + 名称 + 胶囊 + 简介），
-    /// 右侧与爱思行共用 `trailingControl(...)`（获取 / 进度 / 暂停 / 删除）。
+    /// 右侧与爱思行共用 `trailingControl(...)`（获取 / 进度 / 暂停 / 删除）.
     ///
-    /// v0.3.406：**左侧整块可点进 `NiuwaStoreDetailView`**（此前牛蛙源没有详情页）；
-    /// 右侧原来的「获取直链」改成真正的下载动作（v0.3.408 起按钮文案为「获取」）——
-    /// 先取直链再交给 `IPADownloadCenter`。
+    /// **左侧整块可点进 `NiuwaStoreDetailView`**（此前牛蛙源没有详情页）；
+    /// 右侧原来的「获取直链」改成真正的下载动作（按钮文案为「获取」）——
+    /// 先取直链再交给 `IPADownloadCenter`.
     func row(_ app: NiuwaStoreClient.NiuwaApp) -> some View {
         HStack(alignment: .center, spacing: 12) {
             NavigationLink {
@@ -480,7 +480,7 @@ extension I4StoreFreeView {
             }
 
             // 取直链是一次网络往返（爱思那边搜索响应里就带 ipaURL，牛蛙要单打一发）——
-            // 这一步的等待要看得见，不能按下去什么都没发生。
+            // 这一步的等待要看得见，不能按下去什么都没发生.
             if niuwaFetching == app.bundleId {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -498,13 +498,13 @@ extension I4StoreFreeView {
             }
         }
         .padding(.vertical, 3)
-        // v0.3.399：牛蛙行也要有图标菜单（v0.3.406 起牛蛙有自己的详情页，这里仍然保留 ——
-        // 列表里长按就能取图标，不必先进详情）。
-        // v0.3.403：菜单项与爱思行、AppleID 两处**共用** `iconMenuItems(...)`（单份定义），
-        // 挂载点同样提到整行（原来只有左半块）。
+        // 牛蛙行也要有图标菜单（牛蛙有自己的详情页，这里仍然保留 ——
+        // 列表里长按就能取图标，不必先进详情）.
+        // 菜单项与爱思行、AppleID 两处**共用** `iconMenuItems(...)`（单份定义），
+        // 挂载点同样提到整行（原来只有左半块）.
         .contextMenu {
             iconMenuItems(iconURL: app.iconURL, fileNameBase: app.bundleId) {
-                // v0.3.408：图数组由 `showIconPreview` 写进 target
+                // 图数组由 `showIconPreview` 写进 target
                 showIconPreview(app.iconURL, target: $previewTarget)
             }
         }
@@ -531,16 +531,16 @@ extension I4StoreFreeView {
                                            version: app.version,
                                            iconURL: app.icon,
                                            remoteURL: ipaURL.absoluteString)
-        // v0.3.658（task-3 D6）：只要个数 ⇒ 用目录列举，别再走 items()（会逐条开 IPA 包）。
+        // 只要个数 ⇒ 用目录列举，别再走 items()（会逐条开 IPA 包）.
         downloadedCount = IPADownloadLibrary.shared.downloadedFileCount
     }
 
-    // MARK: - v0.3.414 NB 源（按 App Store ID 取包）
+    // MARK: - NB 源（按 App Store ID 取包）
 
-    /// 从用户输入里取出 App Store trackId。
+    /// 从用户输入里取出 App Store trackId.
     ///
     /// 三种写法都认：纯数字 `6451407032`、`id6451407032`、
-    /// 完整链接 `https://apps.apple.com/cn/app/xxx/id6451407032`。
+    /// 完整链接 `https://apps.apple.com/cn/app/xxx/id6451407032`.
     private func nbParseTrackID(_ raw: String) -> String? {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
@@ -551,11 +551,11 @@ extension I4StoreFreeView {
         return digits.isEmpty ? nil : String(digits)
     }
 
-    /// 只在输入**确实是 ID 或链接**时返回 trackId；纯关键词（含空格/字母）返回 nil。
+    /// 只在输入**确实是 ID 或链接**时返回 trackId；纯关键词（含空格/字母）返回 nil.
     ///
     /// 与 `nbParseTrackID` 的差别：那个是「尽力解析」，链接里抽不到数字也返回 nil；
-    /// 这个是「判定输入类型」，用来决定 NB 源该走取包还是走搜索。
-    /// 注意「Reddit」这种纯字母词不能被当成 ID —— 所以这里要求全数字，或带 `apple.com`。
+    /// 这个是「判定输入类型」，用来决定 NB 源该走取包还是走搜索.
+    /// 注意「Reddit」这种纯字母词不能被当成 ID —— 所以这里要求全数字，或带 `apple.com`.
     func nbParseTrackIDOnly(_ raw: String) -> String? {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
@@ -564,7 +564,7 @@ extension I4StoreFreeView {
         return nbParseTrackID(s)
     }
 
-    /// NB 源取包：输入 → trackId → 取直链与 sinf。
+    /// NB 源取包：输入 → trackId → 取直链与 sinf.
     @MainActor
     func runNBFetch(_ raw: String) async {
         nbPackage = nil
@@ -580,7 +580,7 @@ extension I4StoreFreeView {
             nbPackage = try await NBStoreClient.package(appID: tid, country: regionRaw)
             if nbPackage == nil { errorText = "该应用没有可用的安装包" }
         } catch {
-            // 同 `installOffSale`：`code=7` 走 `packageFailure` 的面向用户文案，不外泄内部码。
+            // 同 `installOffSale`：`code=7` 走 `packageFailure` 的面向用户文案，不外泄内部码.
             errorText = NBStoreClient.packageFailure(from: error)?.userMessage
                 ?? "NB 源取包失败：\(error.localizedDescription)"
         }
@@ -589,16 +589,16 @@ extension I4StoreFreeView {
     }
 }
 
-// MARK: - v0.3.414 NB 源：取直链 → 交给统一下载中心
+// MARK: - NB 源：取直链 → 交给统一下载中心
 
-/// NB 源的下载入口。与 `startNiuwaDownload` 同构：
-/// NB 下发的同样是 **Apple 原始加密包**，所以必须把 sinf 一起交给下载中心写回包内。
+/// NB 源的下载入口.与 `startNiuwaDownload` 同构：
+/// NB 下发的同样是 **Apple 原始加密包**，所以必须把 sinf 一起交给下载中心写回包内.
 ///
-/// v0.3.538：`name` 与 `version` 改为可传入 —— NB 详情页里同一个 trackId 会有多个
-/// 历史版本，只按 trackId 命名会让几行在「下载管理」里长得一模一样、分不清是哪个版本。
+/// `name` 与 `version` 改为可传入 —— NB 详情页里同一个 trackId 会有多个
+/// 历史版本，只按 trackId 命名会让几行在「下载管理」里长得一模一样、分不清是哪个版本.
 ///
-/// v0.3.545：加 `iconURL` —— 详情页从 lookup 拿到 512 图标后一起带进下载台账，
-/// 这样「下载管理」里那一行也有图标（以前 NB 源传的是 `nil`，那几行全是灰占位）。
+/// 加 `iconURL` —— 详情页从 lookup 拿到 512 图标后一起带进下载台账，
+/// 这样「下载管理」里那一行也有图标（以前 NB 源传的是 `nil`，那几行全是灰占位）.
 @MainActor
 func startNBDownload(trackID: String,
                      package: NBStoreClient.NBPackage,
@@ -620,39 +620,39 @@ func startNBDownload(trackID: String,
                                        sinfBase64: package.sinfBase64)
 }
 
-// MARK: - v0.3.406 牛蛙源：取直链 → 交给统一下载中心
+// MARK: - 牛蛙源：取直链 → 交给统一下载中心
 
-/// 牛蛙源「下载」的**唯一一份实现**（列表行与详情页共用，不留第二套）。
+/// 牛蛙源「下载」的**唯一一份实现**（列表行与详情页共用，不留第二套）.
 ///
 /// 与爱思源唯一的差别：爱思的**搜索结果里就带 `ipaURL`**，点一下直接进下载中心；
 /// 牛蛙要**先打一发** `POST /appstore/download` 才拿得到直链（`ba_ipaURL`），
-/// 所以这一步必须是异步的。
+/// 所以这一步必须是异步的.
 ///
 /// 拿到直链之后走的是**与爱思源一字不差的同一条链路**：
 /// `IPADownloadCenter.shared.start(name:bundleId:version:iconURL:remoteURL:source:sinfBase64:)`
-/// （v0.3.412：去掉 `autoInstall` 参数 —— 详见 `IPADownloadCenter.start`）
+/// （去掉 `autoInstall` 参数 —— 详见 `IPADownloadCenter.start`）
 /// —— 全项目只有这一套下载/安装实现（`ref-客户端常见坑`：禁止新建第二个下载管理器），
-/// 牛蛙不另开一条，也不在本函数里做任何文件/安装动作。
+/// 牛蛙不另开一条，也不在本函数里做任何文件/安装动作.
 ///
 /// 注意： `ba_ipaURL` **指向 `iosapps.itunes.apple.com` 是正常的**：牛蛙服务器代我们向 Apple 取包，
-/// 回来的是 Apple 签发的 CDN 地址，不是"抓错了源"。
+/// 回来的是 Apple 签发的 CDN 地址，不是"抓错了源".
 ///
-/// v0.3.407：随直链回来的 `ba_sinfs`（base64 的标准 `.sinf`）也一并交给下载中心
+/// 随直链回来的 `ba_sinfs`（base64 的标准 `.sinf`）也一并交给下载中心
 /// （`sinfBase64:`）—— 这类包是 Apple 的**原始加密包**，装之前必须先把它写回包内
-/// `SC_Info/<CFBundleExecutable>.sinf`（由 `IPADownloadCenter` 的 `PackageSINFWriter` 做）。
+/// `SC_Info/<CFBundleExecutable>.sinf`（由 `IPADownloadCenter` 的 `PackageSINFWriter` 做）.
 ///
-/// v0.3.408：**首次网络失败自动重试一次**（只一次）。原因见 `NiuwaStoreClient.pubUDID`：
+/// **首次网络失败自动重试一次**（只一次）.原因见 `NiuwaStoreClient.pubUDID`：
 /// 那两个 `pub_*` 字段原来会在**请求路径上现场建设备隧道**（秒级），
 /// 而同一时刻 App 自己的 LocalDevVPN 正在被重配 —— 这一发 HTTPS 会被顶掉，
-/// 表现就是「第一次点获取必失败、再点一次就成功」。已经把那两处改成**只吃缓存 + 后台预热**，
-/// 这里的这一发重试是给"网络抖动"兜底。**只对网络层失败重试**
-///（服务端说没有包 / 解密失败 / HTTP 非 2xx 重试没有意义，照旧直接失败）。
+/// 表现就是「第一次点获取必失败、再点一次就成功」.已经把那两处改成**只吃缓存 + 后台预热**，
+/// 这里的这一发重试是给"网络抖动"兜底.**只对网络层失败重试**
+///（服务端说没有包 / 解密失败 / HTTP 非 2xx 重试没有意义，照旧直接失败）.
 ///
-/// v0.3.410：**空直链也重试**（最多 2 次、间隔 600ms）—— 这是"大部分应用获取失败"的直接成因，
-/// 详见 `fetchNiuwaPackage` 的注释（含真机日志）。两层重试语义分开，不叠加。
+/// **空直链也重试**（最多 2 次、间隔 600ms）—— 这是"大部分应用获取失败"的直接成因，
+/// 详见 `fetchNiuwaPackage` 的注释（含真机日志）.两层重试语义分开，不叠加.
 ///
 /// `@MainActor`：**顶层自由函数不像 `View` 那样被推断成主 actor**，而这里要调
-/// `IPADownloadCenter`（`@MainActor`）与 `ToastCenter`。两个调用点都在 `View` 内。
+/// `IPADownloadCenter`（`@MainActor`）与 `ToastCenter`.两个调用点都在 `View` 内.
 @MainActor
 func startNiuwaDownload(_ app: NiuwaStoreClient.NiuwaApp,
                         region: NiuwaStoreClient.NiuwaRegion) async {
@@ -667,11 +667,11 @@ func startNiuwaDownload(_ app: NiuwaStoreClient.NiuwaApp,
                                            version: full?.version ?? app.version,
                                            iconURL: app.iconURL,
                                            remoteURL: link,
-                                           // v0.3.406：来源标成「牛蛙免登录」——
-                                           // 默认值是 `.i4Free`，不传就会被下载管理页错标成爱思。
+                                           // 来源标成「牛蛙免登录」——
+                                           // 默认值是 `.i4Free`，不传就会被下载管理页错标成爱思.
                                            source: .niuwa,
-                                           // v0.3.407：`ba_sinfs` 是这份包**本机专用**的 sinf，
-                                           // 落盘后由下载中心写回包内 `SC_Info/` —— 不然加密包装不上。
+                                           // `ba_sinfs` 是这份包**本机专用**的 sinf，
+                                           // 落盘后由下载中心写回包内 `SC_Info/` —— 不然加密包装不上.
                                            sinfBase64: full?.sinfBase64)
     } catch {
         // 失败不许静默：界面上给一句短提示，具体原因在日志里（`[牛蛙源]` 前缀）
@@ -679,13 +679,13 @@ func startNiuwaDownload(_ app: NiuwaStoreClient.NiuwaApp,
     }
 }
 
-/// 取直链。**两层重试，语义分开、互不叠加**：
+/// 取直链.**两层重试，语义分开、互不叠加**：
 ///
-/// ① **网络层**（`v0.3.408`）：`StoreError.network` = 请求根本没拿到响应 —— 这是
-///    「建隧道期间 LocalDevVPN 被重配、这一发被顶掉」唯一会产生的形态，**只重试一次**（400ms）。
-/// ② **空直链**（`v0.3.410`）：服务端回 200、但 `ba_ipaURL` 为空
+/// ① **网络层**（``）：`StoreError.network` = 请求根本没拿到响应 —— 这是
+///    「建隧道期间 LocalDevVPN 被重配、这一发被顶掉」唯一会产生的形态，**只重试一次**（400ms）.
+/// ② **空直链**（``）：服务端回 200、但 `ba_ipaURL` 为空
 ///    （`body` 长这样：`{"ba_sinfs":"","ba_ipaURL":""}`）→ 解析层把它当「没有包」，
-///    **返回 nil、不是 error** → 旧代码**根本不重试**，用户只能自己再点一次。
+///    **返回 nil、不是 error** → 旧代码**根本不重试**，用户只能自己再点一次.
 ///
 /// 真机日志（同一个 `com.tuyafeng.Via`）证明空直链是**限流/抖动**、不是"真没包"：
 /// ```
@@ -694,13 +694,13 @@ func startNiuwaDownload(_ app: NiuwaStoreClient.NiuwaApp,
 /// 18:47:20 / 18:47:41 region=0 → 空
 /// 18:47:43 region=0 → 成功 直链                                  ← 第 3 次成功
 /// ```
-/// ⇒ 对空直链做**有界重试**：最多再试 **2 次**、每次间隔 **~600ms**。
+/// ⇒ 对空直链做**有界重试**：最多再试 **2 次**、每次间隔 **~600ms**.
 ///
 /// **为什么有界（2 次）**：实测 1~2 次即成功；再多试只会把「服务端对这个应用真没包」
-/// 也拖成十几秒的假死 —— 那种情况就该如实报「没有可用的安装包」，不该让用户干等。
+/// 也拖成十几秒的假死 —— 那种情况就该如实报「没有可用的安装包」，不该让用户干等.
 ///
 /// 两层**不叠加**：`.network` 的那一次补发若也拿到空直链，才会进入第 ② 层重试；
-/// 其余错误（`.server` / `.decode` / `.crypto` / `.http(N)`）一律直接抛出，不重试。
+/// 其余错误（`.server` / `.decode` / `.crypto` / `.http(N)`）一律直接抛出，不重试.
 private func fetchNiuwaPackage(_ app: NiuwaStoreClient.NiuwaApp,
                                region: NiuwaStoreClient.NiuwaRegion) async throws -> NiuwaStoreClient.NiuwaApp? {
     // 第 0 次 = 首发；之后最多再补 2 次（只针对空直链）
@@ -721,10 +721,10 @@ private func fetchNiuwaPackage(_ app: NiuwaStoreClient.NiuwaApp,
     return hit
 }
 
-/// `fetchNiuwaPackage` 的**单次**请求（含 v0.3.408 的网络层一次重试）。
+/// `fetchNiuwaPackage` 的**单次**请求（含 的网络层一次重试）.
 ///
 /// 只负责「发一发、网络失败再补一发」，**不管空直链** —— 空直链的重试在上层，
-/// 拆开是为了不让两条重试揉在一起（否则会重复请求）。
+/// 拆开是为了不让两条重试揉在一起（否则会重复请求）.
 private func fetchNiuwaPackageOnce(_ app: NiuwaStoreClient.NiuwaApp,
                                    region: NiuwaStoreClient.NiuwaRegion) async throws -> NiuwaStoreClient.NiuwaApp? {
     do {

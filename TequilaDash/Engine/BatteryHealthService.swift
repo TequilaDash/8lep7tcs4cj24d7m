@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.3.199：电池健康数据模型 —— diagnostics_relay IORegistry/IOPMPowerSource 解析结果.
+/// 电池健康数据模型 —— diagnostics_relay IORegistry/IOPMPowerSource 解析结果.
 /// 字段规则移植自 iDescriptor（github.com/iDescriptor/iDescriptor）utils.rs query_battery_info.
 struct BatteryHealthInfo {
     var cycleCount: Int?
@@ -9,42 +9,42 @@ struct BatteryHealthInfo {
     var currentPercent: Int?      // 当前电量 %  BatteryData.CurrentCapacity
     var healthPercent: Int?       // 健康度 % = 满充/设计*100
     var serial: String?
-    /// v0.3.530：生产日期 `yyyy-MM-dd` —— 由**电池序列号本地解码**得到
+    /// 生产日期 `yyyy-MM-dd` —— 由**电池序列号本地解码**得到
     /// （爱思 9.0 同款 Path B，见 `BatterySerialDate`），解不出为 nil（UI 显示「未知」）.
     /// 与 `serial` 放在一起：它是 `serial` 的纯函数派生值，不是设备给的独立字段.
     var manufactureDate: String?
     var isCharging: Bool?
     var fullyCharged: Bool?
-    // v0.3.205：适配器（电源/电压）
+    // 适配器（电源/电压）
     var adapterWatts: Int?        // W
     var adapterVoltage: Double?   // V（mV/1000）
     var adapterDescription: String?  // 连接描述（如 USB-C/无线）
     var batteryManufacturer: String? // 厂商（电池序列号前 2 位前缀查表；见 §7）
-    // v0.3.286：移植爱思电池详情面板字段（IOPMPowerSource + gas gauge）
+    // 移植爱思电池详情面板字段（IOPMPowerSource + gas gauge）
     var currentCapacityMAh: Int?     // 当前容量 mAh（v0.3.456 起取 NominalChargeCapacity，对齐爱思）
     var voltage: Double?             // Voltage（mV → V：当前电压）
     var bootVoltage: Double?         // BootVoltage（mV → V：开机电压）
     var instantAmperage: Int?        // InstantAmperage（mA：电池电流，负=放电）
     var temperatureC: Double?        // Temperature（℃，-1/无效 → nil）
-    /// v0.3.443：温度**实际取自哪个 EntryName**（`IOPMPowerSource` 或
+    /// 温度**实际取自哪个 EntryName**（`IOPMPowerSource` 或
     /// `AppleSmartBatteryPack.BatteryData`）—— 排查用，nil = 两处都没有.
     var temperatureSource: String?
     var atWarnLevel: Bool?           // AtWarnLevel（电池处于警告水平）
     var atCriticalLevel: Bool?       // AtCriticalLevel（电池处于临界水平）
     var vendorCode: String?          // 电池序列号前 3 位（F8Y 等，兼容旧表用）
-    // v0.3.291：真机 iPhone15,4 / iOS 27.0 dump 实证新增
+    // 真机 iPhone15,4 / iOS 27.0 dump 实证新增
     var nominalChargeCapacity: Int?  // mAh 额定容量 BatteryData.NominalChargeCapacity
     var remainingCapacity: Int?      // mAh 剩余容量 BatteryData.RemainingCapacity
     var batteryPowerMW: Int?         // mW 电池功率 BatteryData.BatteryPower（负=放电）
-    // v0.3.305：iOS 27 实测仅存的温度/临界项（用于「电池温度/警告水平」的如实展示）
+    // iOS 27 实测仅存的温度/临界项（用于「电池温度/警告水平」的如实展示）
     var skinTemperatureC: Int?       // ℃ 电池表皮温度
                                      // （DeadBatteryBootData.GeneralPayload.AverageBattSkinTemp，上次欠压启动记录）
     var raw: [String: Any] = [:]  // 调试用（字段缺失时可看）
 }
 
-/// v0.3.199：电池健康服务 —— diagnostics_relay IORegistry/IOPMPowerSource.
+/// 电池健康服务 —— diagnostics_relay IORegistry/IOPMPowerSource.
 /// 非越狱、普通配对 + 解锁即可读取（iDescriptor 实证）.iOS 26/27 字段迁移已处理.
-/// v0.3.205 修复：BatteryData.MaxCapacity 在某些设备返回 0-100 百分比而非 mAh
+/// BatteryData.MaxCapacity 在某些设备返回 0-100 百分比而非 mAh
 /// （iDescriptor issue #132/#133）→ 加 mAh 量级 sanity 过滤；电量改百分比；
 /// 适配器电压/电源；厂商（Apple 推断）.
 enum BatteryHealthService {
@@ -88,7 +88,7 @@ enum BatteryHealthService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "电池健康")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -136,7 +136,7 @@ enum BatteryHealthService {
     }
 
     /// 读取电池健康（同步阻塞——调用方需放后台线程）.
-    /// v0.3.202：机型/系统版本从 lockdown GetValue 拿（IORegistry dict 无 ProductType）.
+    /// 机型/系统版本从 lockdown GetValue 拿（IORegistry dict 无 ProductType）.
     static func fetchBatteryHealth() throws -> BatteryHealthInfo {
         var tunnel = try createTunnel()
         defer { tunnel.free() }
@@ -199,13 +199,13 @@ enum BatteryHealthService {
             }
             primary = node
         } catch {
-            // ▸ 必须留痕：v0.3.443~v0.3.454 期间这里失败是**静默**的
+            // ▸ 必须留痕：~期间这里失败是**静默**的
             // （UI 只把错误塞进 errorText，日志里一行都没有），
-            // 于是「电池读不出来」只能靠推断 battery_dump.txt 不存在来定位，代价很大。
+            // 于是「电池读不出来」只能靠推断 battery_dump.txt 不存在来定位，代价很大.
             LoginLogger.shared.log("电池：主节点 IOPMPowerSource 查询失败：\(error.localizedDescription)", category: .general)
             throw error
         }
-        // v0.3.443：iOS 27 的 `IOPMPowerSource` 里**没有** `Temperature`（真机 dump 实证），
+        // iOS 27 的 `IOPMPowerSource` 里**没有** `Temperature`（真机 dump 实证），
         // 爱思 9.0 在此分支改查另一个节点 —— 反汇编实锤：
         //   idm_info.dll!ios_get_detailed_battery_info (RVA 0x13920)
         //   0x18001405c  cmp dword [rdi+0x34], 0      ; 上一步 Temperature == 0 ?
@@ -216,19 +216,19 @@ enum BatteryHealthService {
         //   0x1800140ce  plist_dict_get_item(bd, "Temperature")  → 温度
         var pack: [String: Any]? = nil
         if (intValue("Temperature", in: primary) ?? 0) <= 0 {
-            // ▸▸ v0.3.455 修回归：这里**必须**是「失败即放弃回退」，绝不能让整个读取失败。
+            // ▸▸ 修回归：这里**必须**是「失败即放弃回退」，绝不能让整个读取失败.
             //
-            // v0.3.443 用的是裸 `try`。于是只要 `AppleSmartBatteryPack` 这个节点
+            // 用的是裸 `try`.于是只要 `AppleSmartBatteryPack` 这个节点
             // 查不到（`diagnostics_relay_client_ioregistry` 的 name/class 两种形式都报错
-            // ⇒ `fetchRegistry` 抛错），**整个 `query` 直接抛出** ⇒ 电池板块报「无法读取」。
+            // ⇒ `fetchRegistry` 抛错），**整个 `query` 直接抛出** ⇒ 电池板块报「无法读取」.
             //
             // 为什么这个分支**每次都会走到**：上面那行注释已经写明「iOS 27 的
             // `IOPMPowerSource` 里没有 `Temperature`」⇒ `intValue(...) ?? 0` 恒为 0
-            // ⇒ `0 <= 0` 恒真。**主数据明明已经拿到了，却被一个可选的回退节点拖死。**
+            // ⇒ `0 <= 0` 恒真.**主数据明明已经拿到了，却被一个可选的回退节点拖死.**
             //
-            // 真机实证（v0.3.452，用户报告「电池健康没法读取电池数据」）：
+            // 真机实证（用户报告「电池健康没法读取电池数据」）：
             //   `LoginLogs/battery_dump.txt` **不存在** —— 而它正是在本函数下一行写的，
-            //   说明执行**从未走到那里**，即上面这个 `try` 抛了。
+            //   说明执行**从未走到那里**，即上面这个 `try` 抛了.
             do {
                 pack = try fetchRegistry(client: client, entryName: "AppleSmartBatteryPack")
             } catch {
@@ -236,31 +236,31 @@ enum BatteryHealthService {
                 pack = nil
             }
         }
-        // 「生产日期」定案用：把两个节点的完整 plist 落盘（只读、覆盖式、失败静默）。
+        // 「生产日期」定案用：把两个节点的完整 plist 落盘（只读、覆盖式、失败静默）.
         dumpBatteryRegistry(primary: primary, pack: pack)
         return parse(dict: primary, fallbackPack: pack, productType: productType, iosMajor: iosMajor)
     }
 
-    /// 按 `EntryName` 取一个 IORegistry 节点 → 字典（节点不存在返回 nil，出错抛错）。
+    /// 按 `EntryName` 取一个 IORegistry 节点 → 字典（节点不存在返回 nil，出错抛错）.
     ///
     /// 注意： `diagnostics_relay_client_ioregistry(client, current_plane, entry_name, entry_class, res)`
-    /// —— `DeviceEnrichService` 把节点名放第 3 参（entry_name），本文件历史上放第 4 参（entry_class）。
+    /// —— `DeviceEnrichService` 把节点名放第 3 参（entry_name），本文件历史上放第 4 参（entry_class）.
     ///
-    /// ▸▸ v0.3.455 修：**两种查法都要试，判据是「有没有拿到节点」，不是「有没有报错」。**
+    /// ▸▸ 修：**两种查法都要试，判据是「有没有拿到节点」，不是「有没有报错」.**
     ///
-    /// v0.3.443 把顺序改成「先 name 查」，但退回 class 的条件写成了 `if let e`（**报错才退回**）。
-    /// 真机实证（v0.3.454，2026-09-19 10:32:48）：
+    /// 把顺序改成「先 name 查」，但退回 class 的条件写成了 `if let e`（**报错才退回**）.
+    /// 真机实证（2026-09-19 10:32:48）：
     /// ```
     /// 电池：IOPMPowerSource 节点不存在（返回空）
     /// 电池：主节点 IOPMPowerSource 查询失败：未返回电池数据
     /// ```
     /// ⇒ 本机上 **name 形式不报错、但返回空节点** ⇒ 退回分支根本不执行
-    ///   ⇒ 主节点直接拿到 nil ⇒ **整个电池读取失败**（连温度回退都没机会跑）。
-    ///   而 class 形式（本文件历史上的原始写法）本来是能取到节点的。
+    ///   ⇒ 主节点直接拿到 nil ⇒ **整个电池读取失败**（连温度回退都没机会跑）.
+    ///   而 class 形式（本文件历史上的原始写法）本来是能取到节点的.
     ///
-    /// 教训：**「没报错」不等于「拿到了」**。拿不到节点时必须继续试下一种查法。
+    /// 教训：**「没报错」不等于「拿到了」**.拿不到节点时必须继续试下一种查法.
     private static func fetchRegistry(client: OpaquePointer, entryName: String) throws -> [String: Any]? {
-        // 先把两种查法都跑一遍，**只在「真的拿到节点」时才停下**。
+        // 先把两种查法都跑一遍，**只在「真的拿到节点」时才停下**.
         var firstError: UnsafeMutablePointer<IdeviceFfiError>?
         for byName in [true, false] {
             var node: plist_t?
@@ -270,7 +270,7 @@ enum BatteryHealthService {
                     : diagnostics_relay_client_ioregistry(client, nil, nil, cStr, &node)
             }
             if let e {
-                // 这一种查法报错 ⇒ 记下第一个错误（两种都失败时用它报错），继续试下一种。
+                // 这一种查法报错 ⇒ 记下第一个错误（两种都失败时用它报错），继续试下一种.
                 if firstError == nil { firstError = e } else { idevice_error_free(e) }
                 continue
             }
@@ -287,14 +287,14 @@ enum BatteryHealthService {
             return (try? PropertyListSerialization.propertyList(
                 from: Data(bytes: binPtr, count: Int(binLen)), options: [], format: nil)) as? [String: Any]
         }
-        // 两种查法都没拿到节点：报错就抛错，没报错就是「这个节点确实不存在」。
+        // 两种查法都没拿到节点：报错就抛错，没报错就是「这个节点确实不存在」.
         if let firstError {
             throw ffiError(firstError, fallback: "查询电池 IORegistry 失败（\(entryName)）")
         }
         return nil
     }
 
-    /// 取整数（Int / Double / Bool / String 形态都吃），供 query 里的判定用。
+    /// 取整数（Int / Double / Bool / String 形态都吃），供 query 里的判定用.
     private static func intValue(_ key: String, in dict: [String: Any]) -> Int? {
         if let n = dict[key] as? Int { return n }
         if let n = dict[key] as? Double { return Int(n) }
@@ -303,7 +303,7 @@ enum BatteryHealthService {
         return nil
     }
 
-    /// v0.3.443：一次性把电池相关的两个 IORegistry 节点**完整**落盘，
+    /// 一次性把电池相关的两个 IORegistry 节点**完整**落盘，
     /// 用于给「生产日期到底在设备侧还是在爱思服务端」定案（本次逆向唯一没算准的一项）.
     ///
     /// - 位置：`Documents/LoginLogs/battery_dump.txt`（覆盖式落盘）；
@@ -378,8 +378,8 @@ enum BatteryHealthService {
     }
 
     /// 解析 IORegistry 电池字典（字段规则来自 iDescriptor utils.rs）.
-    /// v0.3.205 修复 mAh/百分比混淆 + 电流百分比 + 适配器电压/电源.
-    /// v0.3.443：`fallbackPack` = `AppleSmartBatteryPack` 节点（iOS 27 温度回退，见 `query`）.
+    /// mAh/百分比混淆 + 电流百分比 + 适配器电压/电源.
+    /// `fallbackPack` = `AppleSmartBatteryPack` 节点（iOS 27 温度回退，见 `query`）.
     static func parse(dict: [String: Any], fallbackPack: [String: Any]? = nil,
                       productType: String? = nil, iosMajor: Int? = nil) -> BatteryHealthInfo {
         func num(_ key: String, in d: [String: Any]) -> Int? {
@@ -403,10 +403,10 @@ enum BatteryHealthService {
         // 2. 设计容量：BatteryData.DesignCapacity（iDescriptor 无顶层回退，mAh）
         let design = num("DesignCapacity", in: bd) ?? num("DesignCapacity", in: dict)
 
-        // 3. 容量 —— v0.3.291 真机实证修正（iPhone15,4 / iOS 27.0 dump）：
+        // 3. 容量 —— 真机实证修正（iPhone15,4 / iOS 27.0 dump）：
         //    mAh 真值只在 **BatteryData** 里；顶层 AppleRawMaxCapacity /
         //    AppleRawCurrentCapacity 在 iOS 27 已不存在（爱思同环境读不到 →
-        //    其「满充容量」显示 -1）。故一律以 BatteryData 为准。
+        //    其「满充容量」显示 -1）.故一律以 BatteryData 为准.
         let fullCharge = num("FullChargeCapacity", in: bd) ?? num("FullChargeCapacity", in: dict)
         let nominal = num("NominalChargeCapacity", in: bd) ?? num("NominalChargeCapacity", in: dict)
         let absolute = num("AbsoluteCapacity", in: bd)
@@ -415,7 +415,7 @@ enum BatteryHealthService {
         if let m = maxCapacity, m < 200 { maxCapacity = nil }   // 百分比形态剔除
         if maxCapacity == nil { maxCapacity = design }
 
-        // 4. 健康度 —— v0.3.443 改爱思口径：**额定容量 / 出厂设计容量**.
+        // 4. 健康度 —— 改爱思口径：**额定容量 / 出厂设计容量**.
         //    依据（爱思 9.0 反汇编 + 用户截图互证）：爱思「满充容量」显示 -1
         //    （即它没读到 FullChargeCapacity）却仍给出 81%，而
         //    NominalChargeCapacity / DesignCapacity = 2724 / 3329 = 81.8% ≈ 81%
@@ -426,23 +426,23 @@ enum BatteryHealthService {
         //    回退链保留：nominal 取不到时用 maxCapacity（现有能力不丢）.
         var health: Int? = nil
         if let design, design > 0, let healthBase = nominal ?? maxCapacity {
-            // ▸ v0.3.457：改成**四舍五入**（原来是 `Int(...)` 截断）。
-            //   爱思的反汇编显示它对 `Nominal/Design*100` 做四舍五入。
+            // ▸ ：改成**四舍五入**（原来是 `Int(...)` 截断）.
+            //   爱思的反汇编显示它对 `Nominal/Design*100` 做四舍五入.
             //   实机值 2709/3329 = 81.37% ⇒ 两者同为 81，分不出；但 81.6% 这种值
-            //   截断会给 81、四舍五入给 82 —— 差 1 就可能跨过评级档位边界。
-            //   （「爱思是否真的四舍五入」仍标**未验证**：实机样本落在两法同结果的区间。）
+            //   截断会给 81、四舍五入给 82 —— 差 1 就可能跨过评级档位边界.
+            //   （「爱思是否真的四舍五入」仍标**未验证**：实机样本落在两法同结果的区间.）
             //
             // 注意： 必须拆成中间变量：写成一句
             //   `min(100, max(0, Int((Double(healthBase) / Double(design)) * 100).rounded()))`
-            //   会让 Swift 类型检查器超时（CI 实锤 v0.3.457 构建失败：
-            //   `the compiler is unable to type-check this expression in reasonable time`）。
-            //   拆开之后每一步都有明确类型，编译器不再需要穷举重载组合。
+            //   会让 Swift 类型检查器超时（CI 实锤 构建失败：
+            //   `the compiler is unable to type-check this expression in reasonable time`）.
+            //   拆开之后每一步都有明确类型，编译器不再需要穷举重载组合.
             let ratio: Double = (Double(healthBase) / Double(design)) * 100.0
             let rounded: Int = Int(ratio.rounded())
             health = min(100, max(0, rounded))
         }
 
-        // 5. 当前电量 —— v0.3.291：BatteryData.CurrentCapacity 在 iOS 26/27 即百分比；
+        // 5. 当前电量 —— ：BatteryData.CurrentCapacity 在 iOS 26/27 即百分比；
         //    老版本回退 AppleRawCurrentCapacity / AppleRawMaxCapacity 比例.
         var currentPercent: Int? = nil
         if let c = num("CurrentCapacity", in: bd), c > 0, c <= 100 {
@@ -454,11 +454,11 @@ enum BatteryHealthService {
             currentPercent = c
         }
 
-        // v0.3.443：序列号首选 `BatterySerialNumber`（与爱思 9.0 一致 —— 反汇编里它先读
+        // 序列号首选 `BatterySerialNumber`（与爱思 9.0 一致 —— 反汇编里它先读
         // BatterySerialNumber，为空才回退 Serial），为空时回退 `Serial`.
         let serial = (dict["BatterySerialNumber"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             ?? (dict["Serial"] as? String)
-        // ▸ v0.3.530：「生产日期」**不再靠猜设备键名**，改为从电池序列号**本地解码**.
+        // ▸ ：「生产日期」**不再靠猜设备键名**，改为从电池序列号**本地解码**.
         //
         // 为什么换：`DateOfFirstUse` / `ManufactureDate` / `ProductionDate` /
         // `ManufacturingDate` 这一串键名在 iOS 27 的 `IOPMPowerSource`（含
@@ -473,7 +473,7 @@ enum BatteryHealthService {
         LoginLogger.shared.log("电池生产日期：\(manufactureDate ?? "未知")"
                                + "（序列号本地解码\(manufactureDate == nil ? "未命中" : "命中")"
                                + "；序列号\(serial == nil ? "未读到" : "已读到")）")
-        // v0.3.291：真机 ChargerData.IsCharging 是 1/0 整数而非 Bool，补数值形态
+        // 真机 ChargerData.IsCharging 是 1/0 整数而非 Bool，补数值形态
         let isCharging: Bool? = (dict["IsCharging"] as? Bool)
             ?? num("IsCharging", in: dict).map { $0 != 0 }
             ?? (dict["ChargerData"] as? [String: Any]).flatMap { num("IsCharging", in: $0).map { v in v != 0 } }
@@ -481,7 +481,6 @@ enum BatteryHealthService {
             ?? num("FullyCharged", in: dict).map { $0 != 0 }
             ?? num("FullyCharged", in: bd).map { $0 != 0 }
 
-        // 6. 适配器（v0.3.205）
         var adapterWatts: Int? = nil
         var adapterVoltage: Double? = nil
         var adapterDescription: String? = nil
@@ -499,7 +498,7 @@ enum BatteryHealthService {
             }
             adapterDescription = adapter["Description"] as? String
         }
-        // 7. 厂商 —— v0.3.443 改爱思口径：电池序列号**前 2 位**前缀查表.
+        // 7. 厂商 —— 改爱思口径：电池序列号**前 2 位**前缀查表.
         //
         //    爱思 9.0 的匹配逻辑（i4Tools.exe!0x14090ff60，调用点 0x140910168）：
         //      0x14091015e  rdx = QString(entry["prefix"])
@@ -544,7 +543,7 @@ enum BatteryHealthService {
             }
         }()
 
-        // 8. v0.3.286：爱思同款附加字段（电压/电流/温度/警告水平/当前容量 mAh）
+        // 8. ：爱思同款附加字段（电压/电流/温度/警告水平/当前容量 mAh）
         func volts(_ key: String) -> Double? {
             guard let mv = dbl(key, in: dict), mv > 0 else { return nil }
             return mv / 1000.0
@@ -552,10 +551,10 @@ enum BatteryHealthService {
         let voltageV = volts("Voltage")
         let bootVoltageV = volts("BootVoltage")
         let amperage = num("InstantAmperage", in: dict).map { $0 > 32768 ? $0 - 65536 : $0 }
-        // 温度 —— v0.3.443：`IOPMPowerSource` 缺 `Temperature`（iOS 27 真机实测）时，
+        // 温度 —— ：`IOPMPowerSource` 缺 `Temperature`（iOS 27 真机实测）时，
         // 回退到 `AppleSmartBatteryPack` → `BatteryData.Temperature`
         // （依据见 `query` 里 0x18001405c / 0x180014076 / 0x1800140ce 的反汇编注解）.
-        // 两处单位都是 1/100 ℃（3469 = 34.69 ℃）。
+        // 两处单位都是 1/100 ℃（3469 = 34.69 ℃）.
         // 两处都取不到 → 保持 nil（UI 显示「未知」），**不编默认值**.
         var tempC: Double? = nil
         var tempSource: String? = nil
@@ -574,21 +573,21 @@ enum BatteryHealthService {
             ?? (dict["BatteryData"] as? [String: Any]).flatMap { num("AtWarnLevel", in: $0).map { v in v != 0 } }
         let criticalLevel = dict["AtCriticalLevel"] as? Bool
             ?? num("AtCriticalLevel", in: dict).map { $0 != 0 }
-        // v0.3.305：iOS 27 实测 —— 整个 IOPMPowerSource 树里唯一的温度是
+        // iOS 27 实测 —— 整个 IOPMPowerSource 树里唯一的温度是
         // DeadBatteryBootData.GeneralPayload.AverageBattSkinTemp（℃ 整数，上次欠压启动记录）
         let skinTemp = (dict["DeadBatteryBootData"] as? [String: Any])
             .flatMap { $0["GeneralPayload"] as? [String: Any] }
             .flatMap { num("AverageBattSkinTemp", in: $0) }
-        // v0.3.291：当前容量 = BatteryData.AbsoluteCapacity（mA·h 实测值）；
+        // 当前容量 = BatteryData.AbsoluteCapacity（mA·h 实测值）；
         // 老版本回退 AppleRawCurrentCapacity；BatteryData.BatteryPower 为 mW 功率.
-        // 「当前容量」—— ▸ v0.3.456 改成 `NominalChargeCapacity`（对齐爱思）。
+        // 「当前容量」—— ▸ 改成 `NominalChargeCapacity`（对齐爱思）.
         //
         // 真机实证（同一台设备、同一时刻，2026-09-19）：
         //   爱思「当前容量」= **2709**；设备 registry 里
-        //   `NominalChargeCapacity = 2709`，而 `AbsoluteCapacity = 2263`。
-        // ⇒ 爱思的「当前容量」取的是**额定容量**，不是「剩余绝对容量」。
-        //   我们原来取 `AbsoluteCapacity` ⇒ 显示 2263，与爱思对不上（用户报告）。
-        // 回退链保留 —— nominal 取不到时不丢能力。
+        //   `NominalChargeCapacity = 2709`，而 `AbsoluteCapacity = 2263`.
+        // ⇒ 爱思的「当前容量」取的是**额定容量**，不是「剩余绝对容量」.
+        //   我们原来取 `AbsoluteCapacity` ⇒ 显示 2263，与爱思对不上（用户报告）.
+        // 回退链保留 —— nominal 取不到时不丢能力.
         let currentMAh = nominal
             ?? absolute
             ?? num("AppleRawCurrentCapacity", in: dict)

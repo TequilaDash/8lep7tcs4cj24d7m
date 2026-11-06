@@ -5,12 +5,12 @@ import CoreMedia
 /// 铃声管理服务 —— 走 RSD 隧道（AFCService，`com.apple.afc.shim.remote`，
 /// 根 = **/var/mobile/media**）.
 ///
-/// v0.3.233 变更（修复「导入后设置里不显示」）：
+/// 变更（修复「导入后设置里不显示」）：
 /// - 根因：iOS 7+ 的「设置 → 声音 → 铃声」**不扫描铃声目录**，只读注册表
-///   `iTunes_Control/iTunes/Ringtones.plist`。只上传 .m4r + 发同步通知并不会
-///   让铃声出现 —— 爱思助手导入有效，关键正在于它同步更新了这个注册表。
+///   `iTunes_Control/iTunes/Ringtones.plist`.只上传 .m4r + 发同步通知并不会
+///   让铃声出现 —— 爱思助手导入有效，关键正在于它同步更新了这个注册表.
 /// - 导入 = 上传 .m4r + 写注册表条目（Name/GUID/PID/Total Time/Media Kind）；
-///   删除/重命名同步维护注册表，避免幽灵条目 / 改名后从设置里消失。
+///   删除/重命名同步维护注册表，避免幽灵条目 / 改名后从设置里消失.
 ///
 /// v0.2.128 变更：
 /// - **移除系统提示音（/System/Library/Audio/UISounds）读取**：该目录在 AFC
@@ -22,8 +22,8 @@ import CoreMedia
 /// 注意： 硬限制：系统铃声库 `/var/mobile/Library/Ringtones` 在 AFC 根（media）
 /// 之外，隧道不可达，无法直接读取 —— 只能管理 media 内的铃声文件.
 /// `@unchecked Sendable`：本类**没有可变存储属性**——唯一存储属性是只读的
-/// `afc`（`AFCService` 单例，其隧道访问自身串行化）；所有方法只用局部变量。
-/// 因 `afc` 的类型未标注 `Sendable`，编译器无法自动推导，故用 unchecked 显式声明。
+/// `afc`（`AFCService` 单例，其隧道访问自身串行化）；所有方法只用局部变量.
+/// 因 `afc` 的类型未标注 `Sendable`，编译器无法自动推导，故用 unchecked 显式声明.
 final class RingtonesService: @unchecked Sendable {
 
     static let shared = RingtonesService()
@@ -231,7 +231,7 @@ final class RingtonesService: @unchecked Sendable {
 
     // MARK: - 铃声注册表（iTunes_Control/iTunes/Ringtones.plist）
 
-    /// 读取 → 修改 → 写回注册表。保留 "Ringtones" 以外的根键与已有条目
+    /// 读取 → 修改 → 写回注册表.保留 "Ringtones" 以外的根键与已有条目
     /// （爱思/iTunes 同步的铃声不受影响）；注册表有数据但解析失败时抛错，
     /// 绝不盲目覆盖.
     private func mutateRingtonesRegistry(_ mutate: (inout [String: [String: Any]]) throws -> Void) throws {
@@ -262,7 +262,7 @@ final class RingtonesService: @unchecked Sendable {
     }
 
     /// 注册/更新一条铃声记录（键 = 铃声文件名；同名重导入保留原 GUID/PID，
-    /// 只刷新名称与时长）。条目结构与 iTunes/爱思写入的一致：
+    /// 只刷新名称与时长）.条目结构与 iTunes/爱思写入的一致：
     /// Name / GUID / PID / Total Time（秒）/ Protected Content / Media Kind.
     func registerRingtone(fileName: String, displayName: String, durationSeconds: Double) throws {
         try mutateRingtonesRegistry { tones in

@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// v0.3.241：配置描述管理（「更多」板块入口）——
+/// 配置描述管理（「更多」板块入口）——
 /// iOS 设置描述文件（Configuration Profile）管理，misagent（MCInstall）通道.
-/// v0.3.241：空间回收式顶栏（.large + searchable 常驻搜索 UUID/名称）+ 选择模式批量删除
+/// 空间回收式顶栏（.large + searchable 常驻搜索 UUID/名称）+ 选择模式批量删除
 /// + 行完整显示（名称/类型/使用者/UUID 全文/过期时间，对齐爱思助手）+ 全量不过滤.
 struct ProfileConfigView: View {
     @State private var profiles: [ProfileConfigService.ConfigurationProfile] = []
@@ -19,7 +19,7 @@ struct ProfileConfigView: View {
 
     @State private var detailTarget: ProfileConfigService.ConfigurationProfile?
 
-    // v0.3.246：搜索覆盖详情页全部字段——名称/UUID/使用者/组织/类型/文件ID/描述/版本/可移除性
+    // 搜索覆盖详情页全部字段——名称/UUID/使用者/组织/类型/文件ID/描述/版本/可移除性
     private var filtered: [ProfileConfigService.ConfigurationProfile] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return profiles }
@@ -43,7 +43,7 @@ struct ProfileConfigView: View {
         List {
             if loading {
                 Section {
-                    // v0.3.699：区块级加载行收口到 AppLoadingRow（.block 档）.
+                    // 区块级加载行收口到 AppLoadingRow（.block 档）.
                     AppLoadingRow(title: "正在读取设备描述文件…", level: .block)
                 }
             } else if let err = errorText {
@@ -52,7 +52,7 @@ struct ProfileConfigView: View {
                         PairingGuideCard(showsBackground: false)
                             .listRowInsets(EdgeInsets())
                     } else {
-                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        // 区块级错误行统一到 AppErrorRow.
                         AppErrorRow(message: err)
                     }
                 }
@@ -168,7 +168,7 @@ struct ProfileConfigView: View {
                 if selectedUUIDs.contains(p.uuid) { selectedUUIDs.remove(p.uuid) }
                 else { selectedUUIDs.insert(p.uuid) }
             } else {
-                // v0.3.246：普通模式点击进详情页（对齐爱思助手：文件ID/版本/使用者/
+                // 普通模式点击进详情页（对齐爱思助手：文件ID/版本/使用者/
                 // 唯一码/状态/可移除/描述全量展示）
                 detailTarget = p
             }
@@ -224,7 +224,7 @@ struct ProfileConfigView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 详情页（v0.3.246，行样式对齐爱思助手：左标签右值，长文本换行）
+    // MARK: - 详情页（行样式对齐爱思助手：左标签右值，长文本换行）
 
     private func detailRow(_ label: String, _ value: String?, monospaced: Bool = false, copyable: Bool = false) -> some View {
         Group {
@@ -256,7 +256,7 @@ struct ProfileConfigView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    // v0.3.251: 字段对齐爱思助手 —— 文件 ID = PayloadUUID, 唯一码 = PayloadIdentifier
+                    // 字段对齐爱思助手 —— 文件 ID = PayloadUUID, 唯一码 = PayloadIdentifier
                     detailRow("文件 ID", p.uuid, monospaced: true, copyable: true)
                     detailRow("文件名称", p.name, copyable: true)
                     detailRow("版本号", p.version.map(String.init))

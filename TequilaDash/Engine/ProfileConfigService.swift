@@ -5,7 +5,7 @@ import Darwin
 //  ProfileConfigService.swift
 //  TequilaDash
 //
-//  v0.3.229：iOS 设置描述文件（Configuration Profile，.mobileconfig/.mobileprofile）管理.
+//  iOS 设置描述文件（Configuration Profile，.mobileconfig/.mobileprofile）管理.
 //  参考 pymobiledevice3 的 profile 命令（list / install / remove）——底层同为 misagent
 //  服务（com.apple.misagent）.与"预置描述管理"（.mobileprovision，ProvisioningProfileStore）
 //  共用同一服务：copy_all 返回设备全部 profile，按 PayloadType 排除预置描述.
@@ -24,7 +24,7 @@ enum ProfileConfigService {
         let version: Int?          // Version（版本号）
         let expiry: Date?          // ExpirationDate
         let isProvisioning: Bool   // 预置描述（.mobileprovision）
-        // v0.3.245：详情页新增字段（对齐爱思助手详情：文件ID/使用者/是否可移除…）
+        // 详情页新增字段（对齐爱思助手详情：文件ID/使用者/是否可移除…）
         let identifier: String?    // PayloadIdentifier（文件 ID）
         let removable: Bool        // 顶层 RemovalDisallowed 取反（默认可移除；设备端移除密码仅删除时报错）
         let created: Date?         // CreationDate（mobileprovision 常见）
@@ -49,10 +49,10 @@ enum ProfileConfigService {
 
     // MARK: - 隧道
 
-    /// v0.3.377：建隧道**串行化**——本 hostname 与 `ProvisioningProfileStore`
+    /// 建隧道**串行化**——本 hostname 与 `ProvisioningProfileStore`
     /// 是同一个字面量 `"TequilaDashProfiles"`，因此必须共用**同一条**队列
     ///（`ProvisioningProfileStore.tunnelQueue`），各建一条等于没保护.
-    /// 只锁「建隧道」这一步（理由同 v0.3.376 FileSharingService.tunnelQueue）.
+    /// 只锁「建隧道」这一步（理由同 FileSharingService.tunnelQueue）.
     private static func createTunnel() throws -> (adapter: OpaquePointer, handshake: OpaquePointer) {
         return try ProvisioningProfileStore.tunnelQueue.sync {
             try createTunnelLocked()
@@ -79,7 +79,7 @@ enum ProfileConfigService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "下载配置")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -163,11 +163,11 @@ enum ProfileConfigService {
         let parseFailed: Int
     }
 
-    /// 设备上**全部描述文件**（v0.3.239：取消类型过滤对齐爱思识别；预置描述标注"预置"）.
+    /// 设备上**全部描述文件**（取消类型过滤对齐爱思识别；预置描述标注"预置"）.
     static func listAll() throws -> ListResult {
-        /// copy_all 原始数量快照（ListResult 诊断用）。
+        /// copy_all 原始数量快照（ListResult 诊断用）.
         /// 原来是一个 `static var`，但它只服务于**本次调用**：在下面的闭包内写入、
-        /// 在同一同步调用栈上读回。改成局部量后语义不变，且不再有跨调用/跨线程共享。
+        /// 在同一同步调用栈上读回.改成局部量后语义不变，且不再有跨调用/跨线程共享.
         var rawCountSnapshot = 0
         var all = try withMisagent { client -> [ConfigurationProfile] in
             var profilePointers: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>?
@@ -206,7 +206,7 @@ enum ProfileConfigService {
                     if desc == nil { desc = first["PayloadDescription"] as? String }
                 }
 
-                // v0.3.241：mobileprovision 字段 fallback（Name/AppIDName/TeamName/Version/ExpirationDate）
+                // mobileprovision 字段 fallback（Name/AppIDName/TeamName/Version/ExpirationDate）
                 if displayName == nil { displayName = dict["Name"] as? String }
                 if displayName == nil { displayName = dict["AppIDName"] as? String }
                 let teamName = (dict["TeamName"] as? String)
@@ -228,7 +228,7 @@ enum ProfileConfigService {
                     ?? ("unknown-\(index)-" + (displayName ?? "unnamed"))
                 let isProvisioning = (type == "Provisioning Profiles")
                     || (dict["Entitlements"] is [String: Any])
-                // v0.3.245：详情页字段（PayloadIdentifier / RemovalDisallowed / CreationDate / payload 数）
+                // 详情页字段（PayloadIdentifier / RemovalDisallowed / CreationDate / payload 数）
                 let identifier = (dict["PayloadIdentifier"] as? String) ?? (dict["Identifier"] as? String)
                 let removable = !(dict["RemovalDisallowed"] as? Bool ?? false)
                 var created: Date?
@@ -257,7 +257,7 @@ enum ProfileConfigService {
             }
             return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
-        // v0.3.252：合并 MCInstall GetProfileList —— misagent 只给预置描述（.mobileprovision），
+        // 合并 MCInstall GetProfileList —— misagent 只给预置描述（.mobileprovision），
         // 用户安装的配置描述（.mobileconfig / 托管描述）它根本拿不到，这就是「描述文件管理
         // 比爱思少一截」的根因.合并去重后统一展示；MCInstall 不可用（老系统）则维持原样.
         if let managed = try? WirelessLockdownService.getManagedProfileList(), !managed.isEmpty {

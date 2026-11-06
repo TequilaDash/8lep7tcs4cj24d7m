@@ -84,7 +84,7 @@ struct FilePropertiesView: View {
                                 Label("复制 SHA-256", systemImage: "doc.on.doc")
                             }
                         } else if let error = vm.errorMessage {
-                            // v0.3.683：区块级错误行统一到 AppErrorRow.
+                            // 区块级错误行统一到 AppErrorRow.
                             AppErrorRow(message: error)
                         }
                     } header: {
@@ -138,7 +138,7 @@ struct FilePropertiesView: View {
 
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是语义正确的隔离，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 @MainActor
 final class FilePropertiesViewModel: ObservableObject {
     @Published var sha256: String?
@@ -177,7 +177,7 @@ final class FilePropertiesViewModel: ObservableObject {
                 }
 
                 // Swift 6：快照里的 [FileAttributeKey: Any]（Any 非 Sendable）不能跨隔离捕获，
-                // 在后台先把要展示的字段解析成 Sendable 值（Int/String/Date），主线程闭包只收简单值。
+                // 在后台先把要展示的字段解析成 Sendable 值（Int/String/Date），主线程闭包只收简单值.
                 let perms = (outcome.attrs[.posixPermissions] as? NSNumber)?.intValue
                 let owner = outcome.attrs[.ownerAccountName] as? String
                 let group = outcome.attrs[.groupOwnerAccountName] as? String
@@ -199,7 +199,7 @@ final class FilePropertiesViewModel: ObservableObject {
         }
     }
 
-    /// Swift 6：改为接收后台已解析好的 Sendable 字段（语义与原 attrs 字典取值完全一致）。
+    /// Swift 6：改为接收后台已解析好的 Sendable 字段（语义与原 attrs 字典取值完全一致）.
     private func apply(perms: Int?, owner: String?, group: String?, created: Date?) {
         if let perms {
             posixPermissions = String(format: "%04o", perms)

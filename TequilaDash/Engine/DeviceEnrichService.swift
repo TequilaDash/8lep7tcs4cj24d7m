@@ -1,11 +1,11 @@
 import Foundation
 
-/// v0.3.305：设备信息补全 —— 爱思「设备详情」缺项的**实测可用通道**。
+/// 设备信息补全 —— 爱思「设备详情」缺项的**实测可用通道**.
 ///
 /// ## 为什么需要它
 /// 真机 iPhone15,4 / iOS 27.0（2026-09-11 USB 直连实测）：
 /// `com.apple.mobile.iTunes` 域只剩 74 个键，**零部件序列号 / 容量 / 循环次数 / DeviceSupports\*
-/// 全部不在其中**（这些是老 iOS 才有的键）。此前设备信息里大片「—」的根因就在这里。
+/// 全部不在其中**（这些是老 iOS 才有的键）.此前设备信息里大片「—」的根因就在这里.
 ///
 /// ## 实测可用的通道
 /// `diagnostics_relay` 的 IORegistry **按节点名**查询（`EntryName`），一次隧道可查多个节点：
@@ -23,7 +23,7 @@ import Foundation
 /// ## 实测**取不到**的项（爱思能显示是因为走它自己的服务端，不是从设备读）
 /// `LatticeSerialNumber`（点阵）、`InfraredCameraSerialNumber`（红外摄像头）、`Vibration`（震动器编码）、
 /// 电池 `Temperature` / `AtWarnLevel` / `DateOfFirstUse` ——
-/// 设备树 `sacm-jasper` / `pearl-sep` / `haptics` / `prox` / `als` 节点里都没有序列号属性。
+/// 设备树 `sacm-jasper` / `pearl-sep` / `haptics` / `prox` / `als` 节点里都没有序列号属性.
 struct DeviceEnrichInfo {
     // 设备树 /product
     var coverglassSerial: String?      // 盖板码
@@ -95,7 +95,7 @@ enum DeviceEnrichService {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "设备信息增强")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -210,7 +210,7 @@ enum DeviceEnrichService {
     ///
     /// 设备树节点的值大多是**裸字节（binary plist 的 Data）**：C 字符串以 NUL 结尾，
     /// 例如 `CoverglassSerialNumber` = `GLDH620026S0000083+9000…\0`；
-    /// 少数是 4/8 字节小端整数（`unique-model` 是字符串，`wifi-chipset` 是字符串）。
+    /// 少数是 4/8 字节小端整数（`unique-model` 是字符串，`wifi-chipset` 是字符串）.
     static func text(_ v: Any?) -> String? {
         switch v {
         case let s as String:

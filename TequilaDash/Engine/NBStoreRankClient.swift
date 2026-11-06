@@ -5,7 +5,7 @@ import Foundation
 /// ## 为什么要单独一个文件
 ///
 /// `NBStoreClient` 只管「按 trackId 取包」（NB 私有协议 + 私有加解密），
-/// 而**榜单和搜索根本不该走 NB 私有接口** —— 因为 NB 自己也不产这份数据。
+/// 而**榜单和搜索根本不该走 NB 私有接口** —— 因为 NB 自己也不产这份数据.
 ///
 /// ## 榜单数据的真实来源（实测确证，2026-10-02）
 ///
@@ -19,15 +19,15 @@ import Foundation
 /// | 付费榜 | 潜水员戴夫 / 喵斯快跑 / 王国保卫战 5 |
 /// | 游戏榜（genre=6014） | 跃动小子 / 王者万象棋 / 王者荣耀 |
 ///
-/// ⇒ **NB 的榜单 = Apple 的 RSS**，它只是转发。所以我们**直接接 Apple**，
-/// 比对 NB 多绕一层中继更稳（少一个会挂的第三方），也**不再假装「NB 源没有榜单」**。
+/// ⇒ **NB 的榜单 = Apple 的 RSS**，它只是转发.所以我们**直接接 Apple**，
+/// 比对 NB 多绕一层中继更稳（少一个会挂的第三方），也**不再假装「NB 源没有榜单」**.
 ///
 /// ## 与爱思 / 牛蛙的差别
 ///
 /// 爱思的榜单是**爱思自己的服务器**算的（`app4.i4.cn`，且它顺带给了 IPA 直链）；
 /// Apple RSS **只给元数据**（图标 / 名字 / 开发者 / 价格 / 分类 / 简介），
-/// **不给安装包**。所以 NB 源的行点「获取」仍然回到 `NBStoreClient` 取包 ——
-/// 「榜单用 Apple、取包用 NB」是这套数据关系下的正确分工，不是拼凑。
+/// **不给安装包**.所以 NB 源的行点「获取」仍然回到 `NBStoreClient` 取包 ——
+/// 「榜单用 Apple、取包用 NB」是这套数据关系下的正确分工，不是拼凑.
 enum NBStoreRankClient {
 
     static let logTag = "[NB榜单]"
@@ -179,7 +179,7 @@ enum NBStoreRankClient {
     /// ## 这一条为什么必须有
     /// 用户反馈「**美区一个搜索不到、国区还那么点软件**」——
     /// 根因是 NB 源原来借的是**爱思**的搜索接口，而爱思是**中国区商店**，
-    /// 它的库里根本没有美区应用（美区自然搜不到），国区也只覆盖它自己收录的那点量。
+    /// 它的库里根本没有美区应用（美区自然搜不到），国区也只覆盖它自己收录的那点量.
     ///
     /// 换成 Apple 官方的 `search` 接口后，**区域跟着 `country` 走**：
     /// 美区能搜到美区商店的应用，国区能搜到国区商店的**全部**上架应用 ——
@@ -337,9 +337,9 @@ enum NBStoreRankClient {
         return s
     }
 
-    // MARK: - v0.3.545 详情页元数据（照搬 NB 助手的 DXSTiTunesAPI）
+    // MARK: - 详情页元数据（照搬 NB 助手的 DXSTiTunesAPI）
 
-    /// 详情页要显示的全部元数据 —— 字段**逐条对齐 NB 助手**的 `DXSTDetailModel`。
+    /// 详情页要显示的全部元数据 —— 字段**逐条对齐 NB 助手**的 `DXSTDetailModel`.
     ///
     /// ## 这份清单从哪来（不是自己想的）
     ///
@@ -355,10 +355,10 @@ enum NBStoreRankClient {
     ///
     /// 配套的 `artworkUrl60/100/512`、`screenshotUrls`、`sellerName`、`releaseNotes`、
     /// `minimumOSVersion`、`fileSizeBytes`、`formattedPrice` 等也都在同一段里
-    /// —— 而且这些键名与 **Apple 官方 lookup 的响应的键名逐字一致**。
+    /// —— 而且这些键名与 **Apple 官方 lookup 的响应的键名逐字一致**.
     ///
-    /// ⇒ 结论：NB 助手的详情页就是拿 `itunes.apple.com/lookup` 的响应对进这个模型。
-    /// 我们照做即可（这是「搬过来」最直白的形态）。
+    /// ⇒ 结论：NB 助手的详情页就是拿 `itunes.apple.com/lookup` 的响应对进这个模型.
+    /// 我们照做即可（这是「搬过来」最直白的形态）.
     struct AppDetail: Hashable {
         var trackID: String
         var name: String
@@ -390,8 +390,8 @@ enum NBStoreRankClient {
         /// 分类（`genres` 数组 + `primaryGenreName`）
         var genres: [String]
         /// **截图（预览图的来源）** —— `screenshotUrls` 是 iPhone 的，
-        /// `ipadScreenshotUrls` / `appletvScreenshotUrls` 是另外两端的。
-        /// NB 助手的 `DXSTDetailADView` 就是横向翻页显示这一组。
+        /// `ipadScreenshotUrls` / `appletvScreenshotUrls` 是另外两端的.
+        /// NB 助手的 `DXSTDetailADView` 就是横向翻页显示这一组.
         var screenshotURLs: [String]
 
         /// 包大小的可读文案（与 Apple 在 App Store 里显示的口径一致：十进制 MB/GB）
@@ -415,13 +415,13 @@ enum NBStoreRankClient {
     /// ## 与 `fetch` / `search` 的关系
     ///
     /// 那两条给的是**列表形态**（RSS / search 的扁平字段）；这一条给的是**详情形态**
-    /// （lookup 的完整字段，含截图与简介）。两者刻意分开：列表 50 条不需要
-    /// 每条都带 12 张截图，那样响应体要大一两个数量级。
+    /// （lookup 的完整字段，含截图与简介）.两者刻意分开：列表 50 条不需要
+    /// 每条都带 12 张截图，那样响应体要大一两个数量级.
     ///
     /// ## 参数口径
-    /// - `trackID`：App Store 数字 ID（= NB 的 `appID`）。
-    /// - `country`：区域 —— lookup **必须带**，否则拿到的价格/上架状态是美区的。
-    /// - `entity=software`：只要 iOS 应用（不加会混进 Mac / iPad 版本）。
+    /// - `trackID`：App Store 数字 ID（= NB 的 `appID`）.
+    /// - `country`：区域 —— lookup **必须带**，否则拿到的价格/上架状态是美区的.
+    /// - `entity=software`：只要 iOS 应用（不加会混进 Mac / iPad 版本）.
     static func detail(trackID: String, country: String) async throws -> AppDetail? {
         let tid = trackID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !tid.isEmpty else { return nil }
@@ -473,15 +473,15 @@ enum NBStoreRankClient {
 
     /// 把一份 **Apple lookup 形态的字典**映射成 `AppDetail`.
     ///
-    /// ## 为什么要有这个入口（v0.3.559）
+    /// ## 为什么要有这个入口
     ///
     /// 两个调用方吃的其实是**同一种字典**：
     /// 1. `detail(trackID:country:)` —— 现场打 `itunes.apple.com/lookup` 拿到的 `results[0]`；
     /// 2. `NBStoreClient.searchOffSaleApp` —— 下架记录里内嵌的 `lookupData`（NB 当初存下的
-    ///    那一份完整 lookup 响应，键名逐字一致，43 个键）。
+    ///    那一份完整 lookup 响应，键名逐字一致，43 个键）.
     ///
     /// 下架应用在 Apple 那边**查不到**（它就是被下架了才搜不到），现场 lookup 必然为空 ——
-    /// 所以详情页要靠第 2 条。两条路共用一份映射，避免字段两处各写一遍走偏.
+    /// 所以详情页要靠第 2 条.两条路共用一份映射，避免字段两处各写一遍走偏.
     ///
     /// - Parameters:
     ///   - obj: Apple lookup 响应里的一个对象（或 NB `lookupData` 解开后的对象）.

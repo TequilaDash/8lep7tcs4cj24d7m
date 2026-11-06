@@ -5,32 +5,32 @@ import UIKit
 ///
 /// ## 它解决什么
 /// 装 App 失败 / 中途取消之后，桌面上会留下**点不开也删不掉**的残留图标
-/// （白图标 / 灰图标 / 无名称图标）。这些图标在 SpringBoard 的**桌面布局**里
-/// 还占着一个位置，但对应的 App 早就不在设备上了。
+/// （白图标 / 灰图标 / 无名称图标）.这些图标在 SpringBoard 的**桌面布局**里
+/// 还占着一个位置，但对应的 App 早就不在设备上了.
 ///
 /// ## 原理（逆向爱思 + 公开资料核对）
 /// 走 `com.apple.springboardservices` 的两个命令：
 /// 1. `getIconState` —— 读出**整份**桌面布局；
-/// 2. `setIconState` —— 把改过的布局**整份**写回。
+/// 2. `setIconState` —— 把改过的布局**整份**写回.
 ///
-/// 判定「顽固」的判据：**布局里的 bundle id 不在「已安装应用清单」里**。
+/// 判定「顽固」的判据：**布局里的 bundle id 不在「已安装应用清单」里**.
 /// 必须按 bundle id 比对，**不能按显示名** —— 同名应用是存在的，而且
-/// WhatsApp 的显示名里带一个不可见字符，按名字比会误判。
+/// WhatsApp 的显示名里带一个不可见字符，按名字比会误判.
 ///
 /// ## 安全设计（三条）
 /// 1. **扫描是只读的** —— 不改设备上任何东西；
 /// 2. 写回前**一定**先把原始布局备份到 `Documents/IconStateBackup/`，
 ///    界面提供「恢复图标位置」一键回滚；
-/// 3. 读和写**用同一个 formatVersion**（`"2"` = 扁平列表，信息最全）。
+/// 3. 读和写**用同一个 formatVersion**（`"2"` = 扁平列表，信息最全）.
 ///
 /// ## 已知边界（如实写出来，别当成 bug）
-/// - `setIconState` 对「**已安装但不在桌面**的应用」无效 —— iOS 会把它放回新页。
-///   本功能只删「应用已经不在设备上」的残留，不受这条限制影响。
-/// - 布局里**不携带小组件**，所以小组件相关问题处理不了。
-/// - `formatVersion` 1/3 是固定网格，尾部 `false` 是**填充格**不是间隙 —— 这里统一用 `"2"`。
+/// - `setIconState` 对「**已安装但不在桌面**的应用」无效 —— iOS 会把它放回新页.
+///   本功能只删「应用已经不在设备上」的残留，不受这条限制影响.
+/// - 布局里**不携带小组件**，所以小组件相关问题处理不了.
+/// - `formatVersion` 1/3 是固定网格，尾部 `false` 是**填充格**不是间隙 —— 这里统一用 `"2"`.
 enum IconCleanupService {
 
-    /// 读写布局用的 formatVersion。**读写必须一致**，否则设备可能拒绝。
+    /// 读写布局用的 formatVersion.**读写必须一致**，否则设备可能拒绝.
     private static let formatVersion = "2"
 
     // MARK: - 类型
@@ -205,9 +205,9 @@ enum IconCleanupService {
         throw CleanupError.tunnelFailed(lastError ?? "创建开发者隧道失败")
     }
 
-    /// 建隧道 + 连主屏服务。`body` 拿到客户端句柄，返回前自动释放.
+    /// 建隧道 + 连主屏服务.`body` 拿到客户端句柄，返回前自动释放.
     ///
-    /// 注意： 整段必须在**后台线程**跑（建隧道是秒级 IO）。
+    /// 注意： 整段必须在**后台线程**跑（建隧道是秒级 IO）.
     private static func withClient<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
         var tunnel = try makeTunnel(hostname: "TequilaDashIconClean")
         defer { tunnel.free() }
@@ -293,7 +293,7 @@ enum IconCleanupService {
                   displayName: (entry["displayName"] as? String) ?? "")
     }
 
-    /// 递归遍历所有页，把每个**图标位**交给 `visit`。
+    /// 递归遍历所有页，把每个**图标位**交给 `visit`.
     ///
     /// 结构（`formatVersion = "2"`，扁平列表）：
     /// ```
@@ -364,7 +364,7 @@ enum IconCleanupService {
 
     /// 扫描顽固图标（**只读**，不改设备）.
     ///
-    /// - Parameter installedBundleIDs: 设备上已安装应用的 bundle id 集合。
+    /// - Parameter installedBundleIDs: 设备上已安装应用的 bundle id 集合.
     ///   由调用方传入（`AppDiscovery.fetchInstalledApps()`），这样本函数只依赖注入的清单，
     ///   便于单测，也避免在扫描里再建第二条隧道.
     static func scan(installedBundleIDs: Set<String>) throws -> ScanResult {

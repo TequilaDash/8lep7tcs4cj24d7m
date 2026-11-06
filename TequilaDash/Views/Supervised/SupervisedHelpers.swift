@@ -120,15 +120,15 @@ extension View {
 
 // MARK: - 已登记应用目录持久化
 
-/// 一份已登记目录（隐藏列表 / 通知列表）的读取结果。
+/// 一份已登记目录（隐藏列表 / 通知列表）的读取结果.
 ///
 /// `writable == false` = **这一次没能完整读出目录**（键值类型异常 / JSON 整份坏 /
-/// 有记录解不出）。调用方**必须只读、绝不回写** —— 否则会把没读到的登记项当成
-/// 「不存在」而覆盖掉：用户会看到「已登记应用」变空，一保存就把真台账清空。
+/// 有记录解不出）.调用方**必须只读、绝不回写** —— 否则会把没读到的登记项当成
+/// 「不存在」而覆盖掉：用户会看到「已登记应用」变空，一保存就把真台账清空.
 ///
 /// 与「文件不存在 = 合法空」必须分开：键不存在是合法的空目录（`writable == true`），
-/// 键存在却读不出才是不可写。两者压成同一个状态，正是本项目反复踩过的
-/// 「没能观察到 ≠ 确定没有」。
+/// 键存在却读不出才是不可写.两者压成同一个状态，正是本项目反复踩过的
+/// 「没能观察到 ≠ 确定没有」.
 struct SupervisedCatalogLoad<Item> {
     let items: [Item]
     let writable: Bool
@@ -144,34 +144,34 @@ extension UserDefaults {
         static let notificationApps = "esc_notificationApps"
     }
 
-    /// 读「可隐藏 App」目录。键不存在 = 合法空（可写）；存在但读不全 = 不可写。
+    /// 读「可隐藏 App」目录.键不存在 = 合法空（可写）；存在但读不全 = 不可写.
     func loadEscHiddenApps() -> SupervisedCatalogLoad<HiddenAppItem> {
         loadEscCatalog(key: Keys.hiddenApps, label: "隐藏应用目录")
     }
 
-    /// 读「通知管理 App」目录。键不存在 = 合法空（可写）；存在但读不全 = 不可写。
+    /// 读「通知管理 App」目录.键不存在 = 合法空（可写）；存在但读不全 = 不可写.
     func loadEscNotificationApps() -> SupervisedCatalogLoad<NotificationEntry> {
         loadEscCatalog(key: Keys.notificationApps, label: "通知管理目录")
     }
 
-    /// 写「可隐藏 App」目录。**调用方必须先确认 `loadEscHiddenApps().writable == true`。**
+    /// 写「可隐藏 App」目录.**调用方必须先确认 `loadEscHiddenApps().writable == true`.**
     func saveEscHiddenApps(_ items: [HiddenAppItem]) {
         saveEscCatalog(items, key: Keys.hiddenApps, label: "隐藏应用目录")
     }
 
-    /// 写「通知管理 App」目录。**调用方必须先确认 `loadEscNotificationApps().writable == true`。**
+    /// 写「通知管理 App」目录.**调用方必须先确认 `loadEscNotificationApps().writable == true`.**
     func saveEscNotificationApps(_ items: [NotificationEntry]) {
         saveEscCatalog(items, key: Keys.notificationApps, label: "通知管理目录")
     }
 
-    /// 读取一份已登记目录。**任何丢失都令 `writable = false`**（本次只读、不回写）。
+    /// 读取一份已登记目录.**任何丢失都令 `writable = false`**（本次只读、不回写）.
     private func loadEscCatalog<Item: Decodable>(key: String,
                                                  label: String) -> SupervisedCatalogLoad<Item> {
-        // 键不存在 = 合法空目录（首次运行 / 从没登记过），可以写。
+        // 键不存在 = 合法空目录（首次运行 / 从没登记过），可以写.
         guard let obj = object(forKey: key) else {
             return SupervisedCatalogLoad(items: [], writable: true, note: nil)
         }
-        // 键存在、但不是 Data —— 值被别的东西写坏/覆盖，读不出，不可写。
+        // 键存在、但不是 Data —— 值被别的东西写坏/覆盖，读不出，不可写.
         guard let data = obj as? Data else {
             return SupervisedCatalogLoad(items: [], writable: false,
                 note: "\(label)键值类型异常（不是 Data），本次按只读处理，不回写")
@@ -181,7 +181,7 @@ extension UserDefaults {
         if let list = try? dec.decode([Item].self, from: data) {
             return SupervisedCatalogLoad(items: list, writable: true, note: nil)
         }
-        // 2) 整份解失败 → **逐条**解，能救多少救多少（单条坏记录不再拖垮整份目录）。
+        // 2) 整份解失败 → **逐条**解，能救多少救多少（单条坏记录不再拖垮整份目录）.
         guard let raw = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
             return SupervisedCatalogLoad(items: [], writable: false,
                 note: "\(label) JSON 解析失败（数据损坏），本次按只读处理，不回写")
@@ -196,13 +196,13 @@ extension UserDefaults {
             return SupervisedCatalogLoad(items: [], writable: false,
                 note: "\(label) \(raw.count) 条全部无法解析，本次按只读处理，不回写")
         }
-        // 有救回来的条目，但仍**不写盘**：写回会把解不出的那几条永久抹掉。
+        // 有救回来的条目，但仍**不写盘**：写回会把解不出的那几条永久抹掉.
         return SupervisedCatalogLoad(items: salvaged, writable: false,
             note: "\(label) \(raw.count) 条里有 \(raw.count - salvaged.count) 条无法解析，"
                 + "本次按只读处理，不回写（原值保留）")
     }
 
-    /// 写入一份已登记目录。编码失败**不静默**（否则调用方以为已持久化）。
+    /// 写入一份已登记目录.编码失败**不静默**（否则调用方以为已持久化）.
     private func saveEscCatalog<Item: Encodable>(_ items: [Item], key: String, label: String) {
         do {
             set(try JSONEncoder().encode(items), forKey: key)

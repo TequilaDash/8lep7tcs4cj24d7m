@@ -96,7 +96,6 @@ final class FileService {
     /// 容器根目录专用枚举.
     ///
     /// 与 `list(directory:)` 不同，这里不先检查 `isDirectory`，也不依赖
-    /// `FileManager.contentsOfDirectory` —— 在 LiveContainer 访客沙盒下，
     /// 后者对跨容器路径会被裁剪.这里采用三级策略（对齐 Erosion 的
     /// `bad_query_list` 思路，但更稳健）：
     /// 1. FileManager 快路径：部分只读系统目录（如 /var/containers/Bundle/Application）
@@ -110,7 +109,7 @@ final class FileService {
         if let fmNames = try? fm.contentsOfDirectory(atPath: path), !fmNames.isEmpty {
             names = fmNames
         } else {
-            // v0.3.412：走漏洞利用注册表 —— 已启用的实现按随机顺序试，全失败 = 空。
+            // 走漏洞利用注册表 —— 已启用的实现按随机顺序试，全失败 = 空.
             names = ExploitRegistry.run { $0.entryNames(at: path, maxInode: 1_000_000) } ?? []
             if names.isEmpty {
                 names = ExploitRegistry.run { $0.entryNames(at: path, maxInode: 2_000_000) } ?? []
@@ -121,7 +120,6 @@ final class FileService {
 
     /// 直接列出目录一级条目，**不做 `isDirectory` 前置检查**.
     ///
-    /// 用于「已通过 SandboxEscape 消费扩展」后的兜底枚举：LiveContainer 访客沙盒下
     /// `fileExists(atPath:isDirectory:)` 对跨容器路径可能仍返回 false（导致
     /// `list(directory:)` 误报 notDirectory），但扩展生效后 `contentsOfDirectory`
     /// 实际可列.应用安装目录（/var/containers/Bundle/Application）等场景需要它.
@@ -139,9 +137,9 @@ final class FileService {
             //
             // 但**不能**一律塞 `fallbackKind`：容器根的 fallbackKind 是 `.directory`，
             // 于是在 App Group / 容器根这类属性被沙盒裁剪的目录里，`.foo.plist` 这种
-            // 明明带扩展名的文件也会被画成文件夹（用户看到的「metadata.plist 是个文件夹」）。
+            // 明明带扩展名的文件也会被画成文件夹（用户看到的「metadata.plist 是个文件夹」）.
             // 名字里有扩展名的按文件处理，没有的才按 fallbackKind（容器根里的 UUID 目录
-            // 都是无扩展名的，判断成立）。属性拿不到，所以可读性保守标 false.
+            // 都是无扩展名的，判断成立）.属性拿不到，所以可读性保守标 false.
             guard let attrs = try? fm.attributesOfItem(atPath: full) else {
                 let nameExtension = (name as NSString).pathExtension
                 items.append(FileItem(
@@ -344,10 +342,10 @@ final class FileService {
     /// Uses only the last path component so `/abs` or `../x` cannot leave `directory`.
     ///
     /// 注意： 本方法是 **check-then-act（非原子）** —— 先 `exists()` 探测、返回一个「当下未被占用」
-    ///    的候选名，调用方随后才 `createDirectory` / `copyItem`。探测与创建之间有窗口，
-    ///    **两个并发调用可能算到同一个名字**。仅可用于**单飞 / 串行**的 UI 路径
-    ///    （如文件浏览器：受 `isZipping` / `mutate` 串行保护）。
-    ///    需要「原子抢占、可并发」的场景，改用 `reserveUniqueDirectory(in:preferredName:)`。
+    ///    的候选名，调用方随后才 `createDirectory` / `copyItem`.探测与创建之间有窗口，
+    ///    **两个并发调用可能算到同一个名字**.仅可用于**单飞 / 串行**的 UI 路径
+    ///    （如文件浏览器：受 `isZipping` / `mutate` 串行保护）.
+    ///    需要「原子抢占、可并发」的场景，改用 `reserveUniqueDirectory(in:preferredName:)`.
     func uniqueDestination(in directory: String, preferredName: String) -> String {
         let leaf = (preferredName as NSString).lastPathComponent
         let preferredName = FileNameRules.sanitize(leaf) ?? "extracted"
@@ -372,15 +370,15 @@ final class FileService {
         }
     }
 
-    /// **原子地**在 `directory` 下为 `preferredName` 抢占一个新目录并返回它。
+    /// **原子地**在 `directory` 下为 `preferredName` 抢占一个新目录并返回它.
     ///
     /// 与 `uniqueDestination` 的关键区别：这里用 `mkdir(2)` 直接**创建**候选目录，
-    /// 已存在时内核返回 `EEXIST` → 换下一个候选名（`foo` → `foo 2` …）。
+    /// 已存在时内核返回 `EEXIST` → 换下一个候选名（`foo` → `foo 2` …）.
     /// 「探测 + 创建」是同一个不可分割的系统调用，因此**并发安全**：两个并发调用
-    /// 不可能拿到同一个目录（先到者成功，后到者拿到 `EEXIST` 换名）。
+    /// 不可能拿到同一个目录（先到者成功，后到者拿到 `EEXIST` 换名）.
     ///
-    /// 返回的目录**已由本方法创建**，调用方**不得再 `createDirectory`**，直接往里写即可。
-    /// 非 `EEXIST` 的失败（权限 / 磁盘满 …）原样抛出，调用方据此报错。
+    /// 返回的目录**已由本方法创建**，调用方**不得再 `createDirectory`**，直接往里写即可.
+    /// 非 `EEXIST` 的失败（权限 / 磁盘满 …）原样抛出，调用方据此报错.
     func reserveUniqueDirectory(in directory: String, preferredName: String) throws -> URL {
         let leaf = (preferredName as NSString).lastPathComponent
         let cleanName = FileNameRules.sanitize(leaf) ?? "extracted"

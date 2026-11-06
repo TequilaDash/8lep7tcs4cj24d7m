@@ -108,9 +108,9 @@ struct BackupsListView: View {
 
     private var mainContent: some View {
         List {
-            // v0.3.626：三态改用统一组件 AppStateSection。
+            // 三态改用统一组件 AppStateSection.
             // 本页原本就是全仓唯一把三态做一致的地方（三态都用 InfoActionCard），
-            // 现在把这份正确形态抽成公共组件，供其余 21 个文件替换裸 Text 空态。
+            // 现在把这份正确形态抽成公共组件，供其余 21 个文件替换裸 Text 空态.
             if vm.isLoading && vm.isEmpty {
                 AppStateSection(state: .loading("正在加载备份…",
                                                 detail: "读取 TequilaDash/Backups 目录中的备份归档."))
@@ -173,7 +173,7 @@ struct BackupsListView: View {
         }
     }
 
-    /// 读取失败的归档：**仍然列出**（标为「无法读取」），而不是从列表里消失。
+    /// 读取失败的归档：**仍然列出**（标为「无法读取」），而不是从列表里消失.
     @ViewBuilder
     private var unreadableSection: some View {
         if !vm.unreadable.isEmpty {
@@ -221,7 +221,6 @@ struct BackupsListView: View {
 
     /// The picked zip is already copied into the app sandbox by SharedDocumentPicker
     /// (`.documentPicker` uses `asCopy: true`), so we read it directly — no
-    /// security-scoped access dance needed (which fails inside LiveContainer guest).
     private func handlePickedZip(_ url: URL) {
         do {
             let dest = FileManager.default.temporaryDirectory
@@ -300,7 +299,7 @@ private struct BackupRow: View {
                         .font(.footnote)
                         .foregroundColor(AppTheme.pending)
                 case .invalidArchive(let message):
-                    // v0.3.682：行内错误统一走 AppErrorRow（info.circle + pending 橙），
+                    // 行内错误统一走 AppErrorRow（info.circle + pending 橙），
                     // 不再用红色八角叉 —— 归档读不出来通常是可恢复问题（文件损坏 / 隧道中断）.
                     AppErrorRow(message: message)
                 }
@@ -311,7 +310,7 @@ private struct BackupRow: View {
 }
 
 /// 读取失败的备份归档行：明确标为「无法读取（原因）」，让用户能区分
-/// 「真的没有备份」与「有备份但读不出」。
+/// 「真的没有备份」与「有备份但读不出」.
 private struct UnreadableBackupRow: View {
     let item: UnreadableBackupRecord
 
@@ -371,7 +370,6 @@ private func guestBundleId(from synthetic: String) -> String {
 }
 
 /// Picker shown after the user selects an external backup zip: choose which
-/// installed app (normal apps and LiveContainer guests, listed in two clearly
 /// separated sections) to restore it into.
 struct CustomRestoreSheet: View {
     let record: BackupRecord
@@ -585,7 +583,7 @@ struct RestoreView: View {
                     .padding()
                 case .failed(let message):
                     VStack(spacing: 12) {
-                        // v0.3.682：语义是「恢复失败」= 可重试的失败，不是「设备坏了 / 数据损坏」.
+                        // 语义是「恢复失败」= 可重试的失败，不是「设备坏了 / 数据损坏」.
                         // 按 DesignSystem.swift:622-624 的口径统一成 info.circle + pending 橙.
                         Image(systemName: "info.circle")
                             .font(.system(size: 48))
@@ -769,11 +767,11 @@ struct IdentifiedAlert: Identifiable {
 
 /// Swift 6：本类是 SwiftUI 的 UI 模型，只在主线程读写 → 标 `@MainActor` 是语义正确的隔离，
 /// 同时让 `self` 成为 Sendable，内层 `DispatchQueue.main.async { self.x = … }` 的
-/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）。
+/// `sending 'self'` 诊断自然消失（该闭包本来就在主线程执行，语义不变）.
 @MainActor
 final class BackupsListViewModel: ObservableObject {
     @Published var records: [BackupRecord] = []
-    /// 读取失败的归档（仍会列出，标为「无法读取」）。
+    /// 读取失败的归档（仍会列出，标为「无法读取」）.
     @Published var unreadable: [UnreadableBackupRecord] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -783,7 +781,7 @@ final class BackupsListViewModel: ObservableObject {
     private let catalog = BackupCatalog()
     private let restoreService = RestoreService()
 
-    /// 一个备份都没有 —— 可读的与读失败的都没有。
+    /// 一个备份都没有 —— 可读的与读失败的都没有.
     var isEmpty: Bool { records.isEmpty && unreadable.isEmpty }
 
     func reload() {
@@ -798,7 +796,7 @@ final class BackupsListViewModel: ObservableObject {
                     self.isLoading = false
                 }
             } catch {
-                // 目录整体列举失败：**明确报错**，绝不回空列表（回空 = 假空）。
+                // 目录整体列举失败：**明确报错**，绝不回空列表（回空 = 假空）.
                 DispatchQueue.main.async {
                     self.errorMessage = error.localizedDescription
                     self.isLoading = false
@@ -807,7 +805,7 @@ final class BackupsListViewModel: ObservableObject {
         }
     }
 
-    /// 删除一个读取失败的归档（用户确认这是垃圾/损坏文件时）。
+    /// 删除一个读取失败的归档（用户确认这是垃圾/损坏文件时）.
     func deleteUnreadable(_ item: UnreadableBackupRecord) {
         try? FileManager.default.removeItem(at: item.archiveURL)
         unreadable.removeAll { $0.id == item.id }
@@ -848,7 +846,7 @@ final class BackupsListViewModel: ObservableObject {
     }
 }
 
-/// Swift 6：同 BackupsListViewModel —— UI 模型，主线程读写，标 @MainActor。
+/// Swift 6：同 BackupsListViewModel —— UI 模型，主线程读写，标 @MainActor.
 @MainActor
 final class RestoreViewModel: ObservableObject {
     enum State {
@@ -860,14 +858,13 @@ final class RestoreViewModel: ObservableObject {
     }
 
     @Published var state: State = .confirm
-    /// Current LiveContainer guest sandboxes matching a container-app backup.
     /// `nil` until discovery finishes, an empty array means none present.
     @Published var sandboxCandidates: [LiveContainerGuest]? = nil
     /// The sandbox the user chose to restore into (when more than one exists).
     @Published var selectedSandbox: LiveContainerGuest? = nil
     private let service = RestoreService()
     /// Swift 6：取消标志在主线程写（cancel()）、后台还原流程里轮询读（isCancelled 闭包），
-    /// 用系统锁保护避免数据竞争（@MainActor 隔离无法覆盖后台轮询路径）。
+    /// 用系统锁保护避免数据竞争（@MainActor 隔离无法覆盖后台轮询路径）.
     private let cancelled = OSAllocatedUnfairLock(initialState: false)
 
     func prepare(session: RestoreSession, installedApps: [InstalledApp], preselectedGuest: LiveContainerGuest? = nil) {

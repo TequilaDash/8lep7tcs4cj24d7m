@@ -2,10 +2,10 @@
 //  PurchaseHistoryView.swift
 //  TequilaDash
 //
-//  「已购列表」—— 某个已登录 Apple ID 在 App Store 里的购买记录（DMAP）。
+//  「已购列表」—— 某个已登录 Apple ID 在 App Store 里的购买记录（DMAP）.
 //  支持按 名称 / Bundle ID / App ID 搜索，并按「上架 / 下架」分段筛选；
-//  每条可点进详情、可直接下载（含已下架应用 —— 只要买过）。
-//  下架应用的图标与详情来自 NB 下架库收录的快照（公开 lookup 对它们天然回空）。
+//  每条可点进详情、可直接下载（含已下架应用 —— 只要买过）.
+//  下架应用的图标与详情来自 NB 下架库收录的快照（公开 lookup 对它们天然回空）.
 //
 
 import SwiftUI
@@ -19,7 +19,7 @@ struct PurchaseHistoryView: View {
 
     @State private var apps: [OwnedApp] = []
     @State private var icons: [Int64: String] = [:]
-    /// 已购里有、Apple lookup 查不到 ⇒ 判为已下架（判据见 `loadIcons`）。
+    /// 已购里有、Apple lookup 查不到 ⇒ 判为已下架（判据见 `loadIcons`）.
     @State private var delistedIds: Set<Int64> = []
     @State private var keyword = ""
     @State private var segment: FilterSegment = .all
@@ -27,7 +27,7 @@ struct PurchaseHistoryView: View {
     @State private var errorText: String?
     @ObservedObject private var center = IPADownloadCenter.shared
 
-    /// 「上架 / 下架」筛选。判据同行内「已下架」胶囊 —— 都读 `delistedIds`。
+    /// 「上架 / 下架」筛选.判据同行内「已下架」胶囊 —— 都读 `delistedIds`.
     private enum FilterSegment: String, CaseIterable, Identifiable {
         case all = "全部"
         case onSale = "上架"
@@ -53,12 +53,12 @@ struct PurchaseHistoryView: View {
             List {
                 if loading {
                     Section {
-                        // v0.3.700：区块级加载行收口到 AppLoadingRow（.block 档）.
+                        // 区块级加载行收口到 AppLoadingRow（.block 档）.
                         AppLoadingRow(title: "读取已购列表…", level: .block)
                     }
                 } else if let errorText {
                     Section {
-                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        // 区块级错误行统一到 AppErrorRow.
                         AppErrorRow(message: errorText, retry: { Task { await load() } })
                     }
                 } else if apps.isEmpty {
@@ -132,7 +132,7 @@ struct PurchaseHistoryView: View {
 
     private func row(_ app: OwnedApp) -> some View {
         // 左段可点进详情（下架应用也能进 —— 详情页会走 NB 下架库补全，见 `AppStoreDetailView`）；
-        // 右侧「下载」按钮留在 NavigationLink **外面**，否则整行都归导航、按钮点不动。
+        // 右侧「下载」按钮留在 NavigationLink **外面**，否则整行都归导航、按钮点不动.
         HStack(spacing: 12) {
             NavigationLink {
                 AppStoreDetailView(item: storeItem(for: app),
@@ -184,7 +184,7 @@ struct PurchaseHistoryView: View {
             } label: {
                 Label("复制 App ID", systemImage: "number")
             }
-            // v0.3.749：失败原因以前只在「下载管理」页能看到，而已购是从 sheet 进来的、
+            // 失败原因以前只在「下载管理」页能看到，而已购是从 sheet 进来的、
             // 那个页根本不在导航里 ⇒ 长按把原因给出来，用户不用自己找页面.
             if let last = center.lastFinishedJob(bundleId: app.bundleId.isEmpty ? nil : app.bundleId,
                                                  name: app.name), last.phase == .failed {
@@ -195,11 +195,11 @@ struct PurchaseHistoryView: View {
         }
     }
 
-    /// 已购条目 → AppleID 通道下载。已购（含已下架）都能下：许可在账号里，Apple 仍发直链。
+    /// 已购条目 → AppleID 通道下载.已购（含已下架）都能下：许可在账号里，Apple 仍发直链.
     private func downloadButton(_ app: OwnedApp) -> some View {
         let bid = app.bundleId.isEmpty ? nil : app.bundleId
         let busy = center.activeJob(bundleId: bid, name: app.name) != nil
-        // v0.3.749（用户：「点下载没反应」）：任务毫秒级就 .failed 时，旧写法只看 activeJob ⇒
+        // 任务毫秒级就 .failed 时，旧写法只看 activeJob ⇒
         // 行立刻变回「下载」胶囊，再加一句无条件的「已开始下载」，感知就是「点了啥也没发生」.
         // `jobs` 是 @Published ⇒ 阶段翻转当场重算 body，不需要任何人为等待窗口（规则 29）.
         let last = center.lastFinishedJob(bundleId: bid, name: app.name)
@@ -231,12 +231,12 @@ struct PurchaseHistoryView: View {
 
     private func download(_ app: OwnedApp) {
         IPADownloadCenter.shared.startWithAppleID(item: storeItem(for: app), email: email)
-        // v0.3.749：这句原来无条件承诺「已开始下载」，而失败在异步链里 —— 属于假 Toast.
+        // 这句原来无条件承诺「已开始下载」，而失败在异步链里 —— 属于假 Toast.
         // 任务确实已同步建出来，所以只说「已加入下载」；成败由行内胶囊当场反映.
         ToastCenter.shared.show("已加入下载")
     }
 
-    /// 已购条目 → 商店条目：详情页与下载都吃同一个 `AppStoreItem`（图标已知就带上）。
+    /// 已购条目 → 商店条目：详情页与下载都吃同一个 `AppStoreItem`（图标已知就带上）.
     private func storeItem(for app: OwnedApp) -> AppStoreItem {
         AppStoreItem(id: app.idText,
                      name: app.name.isEmpty ? app.bundleId : app.name,
@@ -304,16 +304,16 @@ struct PurchaseHistoryView: View {
         await loadIcons()
     }
 
-    /// 图标只是锦上添花：批量 lookup，失败就退回字母块。
+    /// 图标只是锦上添花：批量 lookup，失败就退回字母块.
     /// 顺带判定「已下架」：**已购里有、Apple lookup 查不到** ⇒ 该 App 已下架
-    /// （对齐 ipatool 的 `ErrAppNotFound`：下架应用在公开 lookup 里天然缺席，但已购许可还在，仍能下）。
-    /// 只对「确实查回来过」的批次下结论 —— 整批空多半是接口/网络不可用，不能据此误标已下架。
+    /// （对齐 ipatool 的 `ErrAppNotFound`：下架应用在公开 lookup 里天然缺席，但已购许可还在，仍能下）.
+    /// 只对「确实查回来过」的批次下结论 —— 整批空多半是接口/网络不可用，不能据此误标已下架.
     private func loadIcons() async {
         let ids = apps.map { $0.idText }
         guard !ids.isEmpty else { delistedIds = []; return }
         var table: [Int64: String] = [:]
         var delisted = Set<Int64>()
-        // 步长与 lookupBatch 内部一致（40），保证「一批 = 一次 lookup」，成败可判。
+        // 步长与 lookupBatch 内部一致（40），保证「一批 = 一次 lookup」，成败可判.
         for chunk in stride(from: 0, to: ids.count, by: 40) {
             let slice = Array(ids[chunk ..< min(chunk + 40, ids.count)])
             guard let items = try? await AppStoreService.lookupBatch(ids: slice) else { continue }
@@ -326,8 +326,8 @@ struct PurchaseHistoryView: View {
             }
             delisted.formUnion(Set(slice.compactMap { Int64($0) }).subtracting(found))
         }
-        // 下架应用在公开 lookup 里天然缺席 ⇒ 上面这批拿不到它们的图标。改去 NB 下架库
-        // 按名字反查，用收录时留下的 `iconPath` 补上（认不出身份的不写，宁可留字母块）。
+        // 下架应用在公开 lookup 里天然缺席 ⇒ 上面这批拿不到它们的图标.改去 NB 下架库
+        // 按名字反查，用收录时留下的 `iconPath` 补上（认不出身份的不写，宁可留字母块）.
         let pending = apps.filter { delisted.contains($0.id) }
         if !pending.isEmpty {
             for (id, url) in await PurchaseHistoryService.offSaleIcons(for: pending) where table[id] == nil {

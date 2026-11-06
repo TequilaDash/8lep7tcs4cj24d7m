@@ -1,24 +1,24 @@
 import SwiftUI
 
-/// v0.3.207：百宝箱面板 —— 主页原生 sheet 呈现（presentationDetents 0.4↔1.0），
+/// 百宝箱面板 —— 主页原生 sheet 呈现（presentationDetents 0.4↔1.0），
 /// 系统上拉展开/下拉关闭，跟手流畅.内含杂七杂八工具的入口集合.
 ///
-/// v0.3.328：**移除监督模式（Supervision）与 Wi-Fi 射频开关**。
+/// **移除监督模式（Supervision）与 Wi-Fi 射频开关**.
 /// - 监督模式：需要把设备置为受监督并自造 Escalate 身份，设备侧只认「当初监督它的那份身份」，
-///   非越狱环境无解；已整块移除（含 SupervisionService）。
+///   非越狱环境无解；已整块移除（含 SupervisionService）.
 /// - Wi-Fi 射频：唯一可行通道是 MCInstall `SetWiFiPowerState`，而它**必须走监督通道**
-///   （无监督 → 14005 `Unable to set Wi-Fi power`）。既然坚持不走监督那套，该开关已移除。
+///   （无监督 → 14005 `Unable to set Wi-Fi power`）.既然坚持不走监督那套，该开关已移除.
 /// - 保留「局域网 Wi-Fi 配对连接」：走 lockdown `com.apple.mobile.wireless_lockdown`
-///   `EnableWifiConnections`，无需监督、真实可用。
+///   `EnableWifiConnections`，无需监督、真实可用.
 /// - 新增「开发者模式」：状态读 lockdown `DeveloperModeStatus`（com.apple.security.mac.amfi），
-///   开启走 RSD amfi 服务；**系统未提供远程关闭接口**，关闭需去设备设置里手动关。
+///   开启走 RSD amfi 服务；**系统未提供远程关闭接口**，关闭需去设备设置里手动关.
 struct TreasureBoxView: View {
-    /// v0.3.441：点「Gestalt 编辑」后的回调。由 HomeView 传入——它负责先关掉本 sheet，
+    /// 点「Gestalt 编辑」后的回调.由 HomeView 传入——它负责先关掉本 sheet，
     /// 再等 onDismiss 把 GestaltView push 到主页的导航栈上（本视图自己不 push，
-    /// 因为在 sheet 里 push 会落到 sheet 自己那层导航栈，页面就没有返回按钮了）。
+    /// 因为在 sheet 里 push 会落到 sheet 自己那层导航栈，页面就没有返回按钮了）.
     let onOpenGestalt: () -> Void
-    /// 打开「顽固图标清理」页。与 `onOpenGestalt` 同款：由 HomeView 在 sheet
-    /// **完全关闭后**再 push（直接在本 sheet 里 push 会套第二层导航栈，页面没返回按钮）。
+    /// 打开「顽固图标清理」页.与 `onOpenGestalt` 同款：由 HomeView 在 sheet
+    /// **完全关闭后**再 push（直接在本 sheet 里 push 会套第二层导航栈，页面没返回按钮）.
     let onOpenIconCleanup: () -> Void
     /// 打开「反激活设备」页.同样走「先关 sheet 再 push」的中转，理由同上.
     let onOpenDeactivate: () -> Void
@@ -34,16 +34,16 @@ struct TreasureBoxView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部标题区：v0.3.xxx 起标题改由页内 `brandHeader` 承担（不再是固定居中标题 +
-            // 全宽渐变 banner 两处重复）。sheet 拖动指示条由 presentationDragIndicator 提供。
+            // 顶部标题区： 起标题改由页内 `brandHeader` 承担（不再是固定居中标题 +
+            // 全宽渐变 banner 两处重复）.sheet 拖动指示条由 presentationDragIndicator 提供.
             ScrollView {
                 VStack(spacing: AppSpacing.row) {
                     brandHeader
                         .padding(.horizontal, AppTheme.pageInset)
-                    // v0.3.441：把「工具」区提到设备控制卡**之前**。
+                    // 把「工具」区提到设备控制卡**之前**.
                     // 为什么：本 sheet 默认 detent 只有 0.4，排在第三张的卡片在折叠区之外 ——
-                    // 「Gestalt 编辑」这个**真实可点的入口**会看不见，得先上拉才找得到。
-                    // 工具区里是唯一能跳转的条目，优先级高于两个开关，故上移。
+                    // 「Gestalt 编辑」这个**真实可点的入口**会看不见，得先上拉才找得到.
+                    // 工具区里是唯一能跳转的条目，优先级高于两个开关，故上移.
                     // 工具区改用「全宽行 + 发丝分隔」（`AppSettingsRow` + `AppHairline`，
                     // 见 `DesignSystem.swift` 硬规则 5），故**不套** `pageInset` —— 行内自带
                     // `AppSpacing.settingsInset`(22) 边距、分隔线全宽，与 TRApp 设置列表一致.
@@ -58,11 +58,11 @@ struct TreasureBoxView: View {
         .background(AppTheme.surfaceBase)
     }
 
-    /// 页面头部：品牌图标块 + 标题 + 副标题（**不是全宽方块 banner**）。
+    /// 页面头部：品牌图标块 + 标题 + 副标题（**不是全宽方块 banner**）.
     ///
-    /// v0.3.xxx：用户反馈「banner 是方块状的，不喜欢这种方块」⇒ 去掉全宽深藏青渐变实心 banner，
+    /// 用户反馈「banner 是方块状的，不喜欢这种方块」⇒ 去掉全宽深藏青渐变实心 banner，
     /// 深色品牌色只保留在**紧凑的连续圆角图标块**（`AppBrandTile`）里，标题 / 副标题走页面背景上的
-    /// 主 / 次字色。对照 TRApp（设置页无 hero、直接大标题 + 卡片分组；欢迎页 App 图标是深色大圆角方块）。
+    /// 主 / 次字色.对照 TRApp（设置页无 hero、直接大标题 + 卡片分组；欢迎页 App 图标是深色大圆角方块）.
     private var brandHeader: some View {
         HStack(spacing: 14) {
             AppBrandTile(systemName: "shippingbox.and.arrow.backward.fill", size: 56, symbolSize: 26)
@@ -232,7 +232,7 @@ struct TreasureBoxView: View {
             .disabled(wifiPairingBusy)
 
             if devModeBusy || wifiPairingBusy {
-                // v0.3.699：区块级加载行收口到 AppLoadingRow（.block 档）.
+                // 区块级加载行收口到 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在执行…", level: .block)
             }
             if let msg = devModeMsg {
@@ -250,13 +250,13 @@ struct TreasureBoxView: View {
         .onAppear(perform: refreshDeviceStates)
     }
 
-    /// 工具入口区。改用 DesignSystem 的**全宽行 + 发丝分隔**语言（`AppSettingsRow` + `AppHairline`，
+    /// 工具入口区.改用 DesignSystem 的**全宽行 + 发丝分隔**语言（`AppSettingsRow` + `AppHairline`，
     /// 见 `DesignSystem.swift` 硬规则 5）—— 原先是 16 圆角卡片（`.appCard()`）+ 手写行 + `Divider()`，
     /// 与本仓设置列表规范不符. 行内自带 `AppSpacing.settingsInset`(22) 边距与行底发丝分隔，
     /// 故本区**不套** `pageInset`（分隔线全宽），仅分组标题单独加 `pageInset` 与卡片左缘对齐；
     /// 标题与首行之间另加一条全宽 `AppHairline` 作组首规则.
     ///
-    /// `AppSettingsRow` 自 v0.3.643 起接行级 `iconTint`（默认 `AppTheme.accent`），本区各行按自身语义传色.
+    /// `AppSettingsRow` 自 起接行级 `iconTint`（默认 `AppTheme.accent`），本区各行按自身语义传色.
     private var itemsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
@@ -272,7 +272,7 @@ struct TreasureBoxView: View {
             // 组首规则：本组已脱离卡片、直接落在页面背景上，用一条全宽发丝分隔界定分组起点
             // （与各行行底分隔同一语言；`AppHairline` 的独立调用点，不再只被 `AppSettingsRow` 内部引用）.
             AppHairline()
-            // v0.3.441：Gestalt 入口。右侧 chevron 表示「可进入」.
+            // Gestalt 入口.右侧 chevron 表示「可进入」.
             AppSettingsRow(icon: "gearshape.2.fill", title: "Gestalt 编辑",
                            keywords: ["查询 / 修改 MobileGestalt 键值（含备份）"],
                            action: {
@@ -296,7 +296,7 @@ struct TreasureBoxView: View {
                                onOpenDeactivate()
                            },
                            iconTint: AppTheme.danger)
-            // 软件源管理：添加 / 管理第三方软件源。进源列表页后，右上角另有「软件源下载管理」入口.
+            // 软件源管理：添加 / 管理第三方软件源.进源列表页后，右上角另有「软件源下载管理」入口.
             AppSettingsRow(icon: "shippingbox.circle.fill", title: "软件源管理",
                            keywords: ["添加 / 管理第三方软件源"],
                            action: {
@@ -315,7 +315,7 @@ struct TreasureBoxView: View {
                            },
                            iconTint: AppTheme.categoryHealth)
             // 开启高级功能：把爱思「开启高级功能」从安装对话框里**拆出来**做成独立入口（用户原话
-            // 「这个是单独一个功能」）。真写设备端爱思移动端沙盒的授权标记（8es1421dg.be），
+            // 「这个是单独一个功能」）.真写设备端爱思移动端沙盒的授权标记（8es1421dg.be），
             // pair.config / RTD.cfg 构造不出会如实说明（详见 I4AdvancedView / I4PairingService）.
             AppSettingsRow(icon: "lock.shield.fill", title: "开启高级功能",
                            keywords: ["写爱思移动端沙盒的配对 / 授权文件"],

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// One guest app (inside LiveContainer) ranked by reclaimable safe space.
 struct LiveCleanAppRank: Identifiable {
     var id: String { guest.id }
     let guest: LiveContainerGuest
@@ -24,16 +23,13 @@ struct LiveCleanAppRank: Identifiable {
     var installedApp: InstalledApp { guest.installedApp }
 }
 
-/// Cleans cache and temp files of apps installed *inside* LiveContainer.
 /// Functionally identical to the Reclaim tab, but the targets are the guest
-/// apps hosted in LiveContainer's own Data container rather than system apps.
 struct LiveCleanTabView: View {
     @ObservedObject var appList: AppListViewModel
     @Binding var segment: ReclaimSegment
     @StateObject private var vm = LiveCleanTabViewModel()
     @State private var selecting = false
     @State private var searchText = ""
-    /// 规则 31：隧道待发期间续跑的是一整条链（读列表 → 发现 LiveContainer → 扫描），
     /// 列表回来后必须自己接上下一步，不许停在按钮前等用户再点.
     @State private var autoRunAfterLoad = false
 
@@ -197,7 +193,7 @@ struct LiveCleanTabView: View {
             }
             if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && visible.isEmpty && !vm.rows.isEmpty {
-                // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection（搜索无结果态）。
+                // 裸 Text 空态 → 统一三态组件 AppStateSection（搜索无结果态）.
                 AppStateSection(state: .empty("没有匹配「\(searchText)」的应用",
                                               message: "换个关键词试试.",
                                               icon: "magnifyingglass"))
@@ -278,7 +274,6 @@ struct LiveCleanTabView: View {
     }
 }
 
-/// Renders a LiveContainer guest icon from pre-decoded `Data`, with a
 /// shippingbox placeholder when the guest bundle shipped no icon.
 struct GuestIcon: View {
     let data: Data?
@@ -301,7 +296,6 @@ struct GuestIcon: View {
 }
 
 /// In-list banner about shared apps. When running inside the patched
-/// LiveContainer that granted container sandbox extensions, shared apps are
 /// scanned directly and we show a positive note. Otherwise we explain the old
 /// "convert to private" workaround.
 struct SharedAppLimitBanner: View {
@@ -335,7 +329,6 @@ struct SharedAppLimitBanner: View {
     }
 }
 
-/// On-device diagnostic for the LiveContainer container-scanning extension.
 /// Surfaces the host's grant decision and the per-token consume results so the
 /// failure point can be identified without a syslog (the user is often on
 /// Windows and cannot easily capture iOS logs).
@@ -430,7 +423,6 @@ final class LiveCleanTabViewModel: ObservableObject {
         }
     }
 
-    /// Find LiveContainer instances, then rank their guest apps by safe space.
     func discover(apps: [InstalledApp]) {
         didRun = true
         let instances = discovery.discover(installedApps: apps)

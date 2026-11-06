@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 struct CertificateView: View {
     @StateObject private var manager = CertificateManager.shared
     @StateObject private var settings = MemoryLimitSettings.shared
-    /// v0.3.131：自动撤销开关/白名单（统一撤销接口的管控项）
+    /// 自动撤销开关/白名单（统一撤销接口的管控项）
     @StateObject private var certStore = DeveloperCertStore.shared
     @State private var showLogin = false
     /// 待确认吊销的证书.
@@ -19,13 +19,13 @@ struct CertificateView: View {
     /// 批量吊销确认.
     @State private var showBatchRevokeConfirm = false
 
-    // v0.3.152 p12 导入（同源证书方案：导入主程序同款证书）
+    // p12 导入（同源证书方案：导入主程序同款证书）
     @State private var showP12Picker = false
     @State private var showP12Password = false
     @State private var p12Password = ""
     @State private var pendingP12Data: Data?
     @State private var p12Message: String?
-    // v0.3.155 删除已导入证书（LC 同款）
+    // 删除已导入证书（LC 同款）
     @State private var showRemoveCertConfirm = false
 
     var body: some View {
@@ -33,7 +33,7 @@ struct CertificateView: View {
             if !settings.isLoggedIn {
                 loginStatusRow
             }
-            // v0.3.131：自动撤销（统一撤销接口的管控开关）+ 白名单（仅一个）、（白名单与 SideStore/AltStore 标识的证书放行）遇 7460 情况使用
+            // 自动撤销（统一撤销接口的管控开关）+ 白名单（仅一个）、（白名单与 SideStore/AltStore 标识的证书放行）遇 7460 情况使用
             Section(header: Text("自动撤销"), footer: Text("配额满时自动吊销旧证书.")) {
                 Toggle("自动撤销证书", isOn: $certStore.autoRevokeEnabled)
                 TextField("白名单", text: $certStore.revokeWhitelist)
@@ -46,7 +46,7 @@ struct CertificateView: View {
                 // 避免同一条消息在页面上出现两次.
                 if let error = manager.lastError, manager.teamState == .loaded {
                     Section {
-                        // v0.3.754：会话过期（1100）走全仓统一卡片 AppSessionExpiredCard（规则 42）.
+                        // 会话过期（1100）走全仓统一卡片 AppSessionExpiredCard（规则 42）.
                         if manager.lastErrorIsSessionExpired {
                             AppSessionExpiredCard(message: error)
                         } else {
@@ -81,7 +81,7 @@ struct CertificateView: View {
                     }
                 }
             }
-            // v0.3.157：本地签名证书（p12）独立分组——登录与否都显示，与 Apple 侧证书列表区分
+            // 本地签名证书（p12）独立分组——登录与否都显示，与 Apple 侧证书列表区分
             localSigningSection
         }
         .listStyle(.insetGrouped)
@@ -109,7 +109,7 @@ struct CertificateView: View {
                     .disabled(manager.isWorking)
                 } else if settings.isLoggedIn {
                     Button {
-                        // v0.3.749：以前只拉 Apple 证书列表不重读本地 p12 状态，用户点刷新
+                        // 以前只拉 Apple 证书列表不重读本地 p12 状态，用户点刷新
                         // 看不到本地证书行变化，像摆设.先对齐本地，再拉列表.
                         certStore.reloadFromDisk()
                         manager.loadCerts()
@@ -130,7 +130,7 @@ struct CertificateView: View {
         }
         .onChange(of: showP12Picker) { _, shown in
             guard shown else { return }
-            // v0.3.749：入口即归零.旧实现在「选到文件」的成功路径从不复位，
+            // 入口即归零.旧实现在「选到文件」的成功路径从不复位，
             // 旗标永真后再点导入/更换都不触发 onChange——那才是「按多次才生效 /
             // 失败一次之后点不动」的真根因，contentShape 只治了首次点击.
             showP12Picker = false
@@ -240,8 +240,8 @@ struct CertificateView: View {
                 // 导致"压根没发起请求"被误认为"正在加载"，用户永远等不到结果.
                 // 现在 `.idle` 明确显示未加载 + 给一个「加载」按钮.
                 HStack {
-                    // 硬规则 1：不用黄色感叹号。原为 exclamationmark.circle + .orange，
-                    // 改为 info.circle + AppTheme.pending（语义相同，形态合规，且取色明暗自适应）。
+                    // 硬规则 1：不用黄色感叹号.原为 exclamationmark.circle + .orange，
+                    // 改为 info.circle + AppTheme.pending（语义相同，形态合规，且取色明暗自适应）.
                     Image(systemName: "info.circle").foregroundStyle(AppTheme.pending)
                     Text("尚未加载团队")
                         .foregroundStyle(.secondary)
@@ -253,17 +253,17 @@ struct CertificateView: View {
                 // 区块级加载收敛到共享 AppLoadingRow（.block 档）.
                 AppLoadingRow(title: "正在加载团队…", level: .block)
             case .failed(let message):
-                // v0.3.754：会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
+                // 会话过期（1100）走全仓统一卡片（规则 42）；其余错误保持 AppErrorRow.
                 if AppSessionExpiredCard.isSessionExpiredMessage(message) {
                     AppSessionExpiredCard(message: message)
                 } else {
-                    // v0.3.683：区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
+                    // 区块级错误行统一到 AppErrorRow（红字标题 "加载失败" 由图标语义承担）.
                     AppErrorRow(message: message, retry: { manager.loadTeams() })
                 }
             case .loaded:
                 if manager.teams.isEmpty {
-                    // v0.3.677：裸 Text 空态 → 统一三态组件 AppStateSection。
-                    // 这里确实是「空列表」：团队已加载成功、但账号下 0 个团队（不是错误态）。
+                    // 裸 Text 空态 → 统一三态组件 AppStateSection.
+                    // 这里确实是「空列表」：团队已加载成功、但账号下 0 个团队（不是错误态）.
                     AppStateSection(state: .empty("账号下没有可用团队",
                                                   message: "该 Apple ID 名下没有开发者团队；创建后重新加载.",
                                                   icon: "person.2.slash"), wrapsSection: false)
@@ -315,7 +315,7 @@ struct CertificateView: View {
         !certStore.revokeWhitelist.isEmpty && cert.serialNumber == certStore.revokeWhitelist
     }
 
-    // v0.3.152：底部安全区（现仅批量吊销栏；p12 已移至列表内独立分组 v0.3.157）
+    // 底部安全区（现仅批量吊销栏；p12 已移至列表内独立分组 ）
     @ViewBuilder
     private var p12ImportFooter: some View {
         VStack(spacing: 0) {
@@ -328,7 +328,7 @@ struct CertificateView: View {
 
     @ViewBuilder
     private func p12MessageText(_ msg: String) -> some View {
-        // v0.3.749：chip 化.「[完成] / [失败] 」前缀在显示层剥掉（赋值处保持
+        // chip 化.「[完成] / [失败] 」前缀在显示层剥掉（赋值处保持
         // 原样供判定），语义交给图标，正文一律灰色（功能行禁色硬规则）.
         let isOK = msg.hasPrefix("[完成]")
         let body = (msg.hasPrefix("[完成] ") || msg.hasPrefix("[失败] "))
@@ -373,9 +373,9 @@ struct CertificateView: View {
         .background(.bar)
     }
 
-    // v0.3.157：本地签名证书（p12）独立分组.作用：模块/文件真证书签名用的
+    // 本地签名证书（p12）独立分组.作用：模块/文件真证书签名用的
     // 本地证书（导入的 p12 或登录自动签发），与上方 Apple 侧证书列表（吊销对象）区分.
-    // v0.3.748 round2（用户 2026-11-02 点名：导入栏改一行展示、功能文字不许擅自加颜色、
+    // round2（用户 2026-11-02 点名：导入栏改一行展示、功能文字不许擅自加颜色、
     // 点导入不灵敏要按多次）：状态与导入合并为一行——已设置时行尾收「更换/删除」菜单，
     // 未设置时整行点击即导入；行内文字一律默认前景色（HARD-RULES 28）；
     // 命中区补 contentShape，present 经 Task 异步一跳，修首次点击被吞.
@@ -459,7 +459,7 @@ struct CertificateView: View {
         }
     }
 
-    // v0.3.152：白名单 swipeActions 拆出（body type-check 超时修复）
+    // 白名单 swipeActions 拆出（body type-check 超时修复）
     @ViewBuilder
     private func whitelistAddAction(_ cert: DeveloperCertificate) -> some View {
         if cert.serialNumber != certStore.revokeWhitelist {
@@ -524,7 +524,7 @@ struct CertificateView: View {
                 Spacer(minLength: AppSpacing.tight)
                 VStack(alignment: .trailing, spacing: AppSpacing.tight) {
                     if isWhitelisted(cert) {
-                        // v0.3.131：白名单胶囊（自动撤销时放行）.
+                        // 白名单胶囊（自动撤销时放行）.
                         // round8：本页状态胶囊统一 SizePill 的 `.compact` 档、不带覆盖项，
                         // 取色只用 success / pending / danger.白名单=放行保留，取 success.
                         SizePill(text: "白名单", tint: AppTheme.success, level: .compact)

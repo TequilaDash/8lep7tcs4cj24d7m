@@ -167,8 +167,8 @@ struct WallpaperView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 60)
 
-            // v0.3.677：空态改用统一组件 AppStateSection（原为手写图标 + 标题 + 说明的卡片）。
-            // 列表页的空态本来就该是这一套，说明句并进 message。
+            // 空态改用统一组件 AppStateSection（原为手写图标 + 标题 + 说明的卡片）.
+            // 列表页的空态本来就该是这一套，说明句并进 message.
             AppStateSection(state: .empty("还没有导入壁纸包",
                                           message: "导入 .tendies 文件即可应用自定义壁纸.支持 Collections、MercuryPoster、Videos 三类描述符.",
                                           icon: "photo.on.rectangle.angled"))
@@ -352,7 +352,7 @@ struct WallpaperView: View {
             let outcome = applyObjects(objects)
             DispatchQueue.main.async {
                 // 先把记录落下来 —— 写进去的目录名必须记住，否则日后「清空」就没有依据、
-                // 只能去猜哪些是自定义的（v0.3.460 删掉 Apple 默认收藏的根因）。
+                // 只能去猜哪些是自定义的（删掉 Apple 默认收藏的根因）.
                 // 部分成功也照记：写进去了就得有记录，否则那些目录永远无人认领.
                 for (objectID, mapping) in outcome.records {
                     guard let index = tendiesArray.firstIndex(where: { $0.id == objectID }) else { continue }
@@ -440,7 +440,7 @@ struct WallpaperView: View {
         let objects = tendiesArray
         let container = pbContainerPath
 
-        // 汇总所有记录：**只有这里点到名的目录才允许被删**。
+        // 汇总所有记录：**只有这里点到名的目录才允许被删**.
         // 记录之外的一律不碰 —— 我们没有任何依据判断它们是谁的（Apple 默认收藏也在里面）.
         // 用 reduce 出 `let`：这个值会被 @Sendable 的后台闭包捕获，不留可变变量.
         let recorded = objects.reduce(into: [String: [String]]()) { result, object in
@@ -480,7 +480,7 @@ struct WallpaperView: View {
 
             DispatchQueue.main.async {
                 // 已经删掉的目录名要从记录里划掉：否则「包删失败、但系统描述符删成功」的那些条目
-                // 会留着指向不存在目录的记录，下次清空再去删就必然失败、报成「移除失败」（假失败）。
+                // 会留着指向不存在目录的记录，下次清空再去删就必然失败、报成「移除失败」（假失败）.
                 var removedNames: Set<String> = []
                 if let descriptors {
                     for names in descriptors.removed.values { removedNames.formUnion(names) }
@@ -543,8 +543,8 @@ struct WallpaperView: View {
             }
             if descriptors.unrecorded > 0 {
                 // 只进日志：这个数必然含 Apple 默认精选集（干净设备上也 > 0），
-                // 放界面是恒定噪音，而且「未删除」会让用户以为清空失败。
-                // 我们不做归属判断 —— 这正是 v0.3.460 删掉 Apple 默认收藏的根因。
+                // 放界面是恒定噪音，而且「未删除」会让用户以为清空失败.
+                // 我们不做归属判断 —— 这正是 删掉 Apple 默认收藏的根因.
                 LoginLogger.shared.log(
                     "[壁纸] 清空：已删 \(removedCount) 张（我们记录的）；"
                     + "另有 \(descriptors.unrecorded) 个目录不在记录中，未动", category: .general)
@@ -643,7 +643,7 @@ private struct WallpaperExtractorSheet: View {
     }
 
     private var emptyState: some View {
-        // v0.3.677：空态改用统一组件 AppStateSection（原为手写图标 + 两行裸 Text）。
+        // 空态改用统一组件 AppStateSection（原为手写图标 + 两行裸 Text）.
         AppStateSection(state: .empty("未找到可提取的壁纸",
                                       message: "PosterBoard 容器中没有已安装的自定义描述符，或当前无权限读取.",
                                       icon: "photo.on.rectangle.angled"))

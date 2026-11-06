@@ -65,7 +65,7 @@ struct CrashLogView: View {
                         PairingGuideCard(showsBackground: false, note: "崩溃分析还需要 LocalDevVPN 已连接.")
                             .listRowInsets(EdgeInsets())
                     } else {
-                        // v0.3.683：区块级错误行统一到 AppErrorRow.
+                        // 区块级错误行统一到 AppErrorRow.
                         AppErrorRow(message: errorMessage, retry: { reload() })
                     }
                 } else if entries.isEmpty {
@@ -94,7 +94,7 @@ struct CrashLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                // v0.3.712（用户报）：非编辑态必须能看到「返回上一级目录」的向上箭头.
+                // 非编辑态必须能看到「返回上一级目录」的向上箭头.
                 // 原先它在 else 分支里，与刷新按钮同槽，某些 iOS 版本会把第二个图标挤掉.
                 if isEditing {
                     Button("全选") { selectAll() }

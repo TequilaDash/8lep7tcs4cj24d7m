@@ -39,12 +39,11 @@ enum LocalDevVPN {
 
     /// 本机是否存在 LocalDevVPN 建起的隧道接口.
     ///
-    /// ⚠️ v0.3.581 修正（真机实证）：旧实现以「本机存在 `targetIP` 的 /24 网段 IPv4 地址」
-    /// 为**唯一**判据，假设 LocalDevVPN 会把 utun 地址放在 `10.7.0.x`。但真机探针
+    /// 为**唯一**判据，假设 LocalDevVPN 会把 utun 地址放在 `10.7.0.x`.但真机探针
     /// （`P4_全能签逆向/_devicelog3/ddi_probe.txt:7` 与 `cd_probe.txt:8`，2026-10-05）
     /// 两次都出现 `isConnected=false` 而 `tunnel_create_rppairing(10.7.0.1:49152)`
     /// **成功** —— 隧道通了，本机却没有 `10.7.0.x` 的 IPv4 地址（utun 可能只给 IPv6，
-    /// 或本机侧地址在别的网段）⇒ 网段假设不成立，旧判据**必然假阴性**。
+    /// 或本机侧地址在别的网段）⇒ 网段假设不成立，旧判据**必然假阴性**.
     /// 现改为**不假设网段**：存在任意 `utun*` 接口（IPv4 或 IPv6）即算已连接；仅当
     /// 连 utun 都没有时，才退回按网段再判一次（命中才为真 ⇒ 不会新增假阴性）.
     static var isConnected: Bool {
@@ -73,7 +72,6 @@ enum LocalDevVPN {
     /// 与 ServiceNotFound 竞争（v0.2.106）.
     ///
     /// - Parameter timeout: 连接超时（秒）. 默认调用点用 1.0（保持既有行为不变）；
-    ///   蜂窝轮询由 `CellularTunnelManager` 传 0.25 —— 对齐 SideStore
     ///   `MinimuxerConstants.defaultTCPProbeTimeoutMs`（250ms），使 2 秒预算内能试更多次.
     static func isReachable(ip: String, timeout: TimeInterval, port: UInt16 = RemotePairingPort.current) -> Bool {
         var addr = sockaddr_in()
@@ -120,17 +118,14 @@ enum LocalDevVPN {
         isReachable(ip: targetIP, timeout: 1.0)
     }
 
-    /// 实际建连 IP：utun 对端（v0.3.773 定版）.
     ///
-    /// v0.3.772 真机证伪（4G 下 JIT Connection reset）：127.0.0.1:RSD 的回环 TCP 预演
 /// 恒通过（设备 remoted listener 恒监听回环），但「TCP 连得上」不是「隧道能用」
-/// 的证据 —— 直连 RPPairing 链路在真机上走不通。762–767 已验证的建链对象是 utun
+/// 的证据 —— 直连 RPPairing 链路在真机上走不通.762–767 已验证的建链对象是 utun
 /// 对端：卡点关蜂窝 → NE 断网窗口重建 utun → 主地址 10.7.0.1 建链成功.
     static var connectIP: String {
         targetIP
     }
 
-    /// 通道可达（v0.3.768 Gnoix 对齐）：utun 对端可达 或 设备直连可达。
     /// utun 先探（与既有判据同序），不通再探直连（各自带 timeout 上限，最坏 2×timeout）.
     static func isChannelReachable(timeout: TimeInterval) -> Bool {
         if isReachable(ip: targetIP, timeout: timeout) { return true }
@@ -139,7 +134,6 @@ enum LocalDevVPN {
 
     /// 探测**任一候选对端**是否可达（并行，取第一个成功）.
     ///
-    /// 对齐 SideStore `DeviceConnectionManager.resolveLocalVPNTunnel`：把所有候选对端
     /// 丢进 `withTaskGroup` **并行**探测，谁先回谁胜出（`group.cancelAll()`）.
     /// 本机可能同时装着 Surge / Loon / Shadowrocket 等（各起一条 utun），
     /// 只探「第一条 utun」会探错隧道 ⇒ 必须多候选并行.
@@ -159,20 +153,17 @@ enum LocalDevVPN {
         return flag.value
     }
 
-    /// 候选隧道对端地址（有序、去重、已按 SideStore `isValidCandidatePeer` 规则过滤）.
     ///
     /// 顺序：用户显式覆盖（`UserDefaults["TunnelDeviceIP"]`）→ 各 utun 点对点对端
     /// （同处 `10.0.0.0/8` 的排前）→ 出厂默认 `10.7.0.1`.
     ///
-    /// 对齐 SideStore：候选集合 ≈ `DeviceConnectionManager.resolveCandidatePeers`
     /// （route gateway → route destination → link-layer destination），
     /// 过滤规则 = `isValidCandidatePeer`；用户覆盖 ≈ `overridePeerIp`.
     ///
-    /// v0.3.619：**补上路由表来源**.
     ///
     /// 真机证据（用户 2026-10-17 截图）：`utun 隧道接口 = 存在`，
     /// 但「候选对端」只剩兜底 `10.7.0.1` —— 说明 `utunPeerIPv4Candidates()`（只读
-    /// `ifa_dstaddr`）**返回空**。而 minimuxer 的日志字段是
+    /// `ifa_dstaddr`）**返回空**.而 minimuxer 的日志字段是
     /// `linkLayerDestinationIP` / `destinationIPs` / `destinationGatewayIPs`，
     /// 那三个都来自**路由表**，不是 `ifa_dstaddr`.
     /// ⇒ 只读 `ifa_dstaddr` 是我自己收窄了来源；这里补齐路由表与链路层目的地.
@@ -212,8 +203,8 @@ enum LocalDevVPN {
     ///
     /// 实现走 **C 垫片** `EscRoutePeers.c`：`rt_msghdr` / `sockaddr_dl` / `RTAX_*`
     /// 定义在 `<net/route.h>`，**不在 Swift Clang Importer 的可见范围**
-    /// （CI 实测：`error: cannot find type 'rt_msghdr' in scope`）。
-    /// 与本仓 `EscBrowseApps.c` / `EscDDIProbe.c` 同款：解析全在 C 层，Swift 只拿字符串。
+    /// （CI 实测：`error: cannot find type 'rt_msghdr' in scope`）.
+    /// 与本仓 `EscBrowseApps.c` / `EscDDIProbe.c` 同款：解析全在 C 层，Swift 只拿字符串.
     ///
     /// 失败（sysctl 被拒 / 无 utun 路由）时返回空数组 —— 不抛错、不影响既有来源.
     static func routeTablePeers() -> [String] {
@@ -227,7 +218,6 @@ enum LocalDevVPN {
             .filter { isValidCandidatePeer($0) }
     }
 
-    /// 候选地址合法性 —— 对齐 SideStore `isValidCandidatePeer`：
     /// 拒空、拒 `0.0.0.0` / `default` / `255.255.255.255`、拒回环（`127.*`）、
     /// 拒组播（`224.*`、`239.*`），且必须是合法 IPv4.
     static func isValidCandidatePeer(_ ip: String) -> Bool {
@@ -249,7 +239,7 @@ enum LocalDevVPN {
     ///
     /// 为什么不再用 `isInstalled`（`canOpenURL`）决定分支：`canOpenURL` 依赖
     /// `Info.plist` 的 `LSApplicationQueriesSchemes` 白名单 —— 白名单漏登 `localdevvpn` 时
-    /// 它**恒返回 false**，于是无论装没装都跳 App Store（本轮修的正是这个）。
+    /// 它**恒返回 false**，于是无论装没装都跳 App Store（本轮修的正是这个）.
     /// `open` 的 completion 才是「系统到底受理了没有」的直接证据，故改用它兜底；
     /// 白名单照旧补上 `localdevvpn`（`VirtualLocationSettingsView` 仍用 `isInstalled` 显示状态）.
     static func openOrInstall() {
@@ -264,13 +254,9 @@ enum LocalDevVPN {
         }
     }
 
-    /// 对齐上游 91fcb9e94「LocalDevVPN: start it when the tunnel is needed, not at launch」：
-    /// 上游把「启动/回前台拉起」改为「需要隧道时拉起」（Engine.tunnelUp() + startsVPNWhenNeeded）.
     /// 本仓没有启动期拉起，这里只落按需拉起的最小判据.
-    /// 「需要隧道时自动拉起 LocalDevVPN」开关的存储键.默认开，与上游 autoStartLocalDevVPN 一致.
     static let autoStartKey = "TequilaDash.AutoStartLocalDevVPN"
 
-    /// 上次按需拉起的时间键.5 秒冷却内不重复拉起（对齐上游 tunnelUp() 的 handingOver 判据）.
     private static let lastHandoverKey = "TequilaDash.LocalDevVPNLastHandover"
 
     /// 「需要隧道时拉起」开关状态.未设置时默认 true.
@@ -402,8 +388,6 @@ enum LocalDevVPN {
     /// 枚举本机接口地址（IPv4 与 IPv6 都收，带接口名与地址族）.
     /// 旧实现只看 `AF_INET` ⇒ LocalDevVPN 的 utun 若只给 IPv6 就会整条漏掉；
     /// 这里两个地址族都收，且**不过滤接口名**（utun / en0 / pdp_ip0 一视同仁）.
-    /// v0.3.616：`private` → 供 TunnelHealthCheckView 诊断页使用.
-    /// v0.3.619：补 `peer`（`ifa_dstaddr`）与 `isPointToPoint` —— 诊断页要能直接看到
     /// utun 的对端到底解析出来没有（真机截图显示候选只有兜底 10.7.0.1，说明枚举返回空）.
     static func allInterfaces() -> [InterfaceInfo] {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?

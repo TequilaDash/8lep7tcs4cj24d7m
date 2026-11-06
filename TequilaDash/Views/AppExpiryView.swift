@@ -3,14 +3,12 @@ import UniformTypeIdentifiers
 
 /// Swift 6：`ProvisioningProfileStore.ProfileInfo` / `SideloadedAppInfo` 含
 /// `entitlements: [String: Any]`（`Any` 非 Sendable），两个类型都不是 Sendable，
-/// 不能作为 `Task.detached` 的返回类型跨 actor 边界传回。
+/// 不能作为 `Task.detached` 的返回类型跨 actor 边界传回.
 /// 这里用薄包装**转移**（不是共享）这些值：它们由 detached 任务内部一次性构造完成，
-/// 返回后只作为 `@State` 被主线程只读展示，之后没有任何线程再写入或并发访问。
+/// 返回后只作为 `@State` 被主线程只读展示，之后没有任何线程再写入或并发访问.
 private struct ProfileFetchBox<T>: @unchecked Sendable { let value: T }
 
-/// 描述文件管理（App Expiry，汉化移植自 StikDebug 的 ProfileView）.
 ///
-/// 与 StikDebug 原版的差异（按用户要求优化）：
 /// 1. 「未匹配描述文件」不再挤成一堆——按 AppIDName（证书名）分组，
 ///    每组显示软件名 + 最新过期时间 + 状态颜色，一眼分清属于哪个软件；
 /// 2. 新增批量选择删除（含全选），可一次清理多个过期 / 冗余描述文件.
@@ -460,7 +458,7 @@ struct AppExpiryView: View {
 
     private func expiryColor(_ days: Int) -> Color {
         switch days {
-        // v0.3.682：规则 6 —— 固定色改 AppTheme 语义 token（自适应明暗模式）.
+        // 规则 6 —— 固定色改 AppTheme 语义 token（自适应明暗模式）.
         case ..<0: return AppTheme.danger
         case 0...1: return AppTheme.danger
         case 2...3: return AppTheme.pending

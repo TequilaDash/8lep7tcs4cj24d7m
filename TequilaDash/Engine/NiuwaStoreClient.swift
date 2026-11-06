@@ -2,15 +2,15 @@ import Foundation
 import UIKit
 import CryptoKit
 
-// MARK: - 牛蛙报文加解密（v0.3.392）
+// MARK: - 牛蛙报文加解密
 
-/// 牛蛙接口的**请求/响应都要加解密**，算法由逆向确证、并已用 Python 独立复现。
+/// 牛蛙接口的**请求/响应都要加解密**，算法由逆向确证、并已用 Python 独立复现.
 ///
 /// ## 报文结构
 /// `报文 = base64NoPad(密文‖tag) + base64NoPad(str(N))`
 /// - 解密：切尾部 **14 字符** → 解出 `N`（10 位十进制）；前段解出 `密文‖tag`
-///   （样本实测 **58 字节 = 42 密文 + 16 tag**）。
-/// - `N` 是服务端/客户端约定的时间种子（原始客户端：`time(NULL) + arc4random_uniform(1e8) + 1e8`）。
+///   （样本实测 **58 字节 = 42 密文 + 16 tag**）.
+/// - `N` 是服务端/客户端约定的时间种子（原始客户端：`time(NULL) + arc4random_uniform(1e8) + 1e8`）.
 ///
 /// ## 算法与参数
 /// - **AES-256-GCM**（nonce 12 字节、tag 16 字节）
@@ -20,35 +20,35 @@ import CryptoKit
 /// ## 已验证
 /// 用真机抓到的响应样本解出：`{"pub_code":650,"pub_desc":"unknow error"}`
 /// ⇒ 这说明**服务端在报「你没按加密格式发请求」** —— 即「HTTP 200 但不是 JSON」的根因是
-/// **我们过去一直发明文 JSON**，而不是解密不出来。
+/// **我们过去一直发明文 JSON**，而不是解密不出来.
 private enum NiuwaCrypto {
 
-    /// ▸ 本次请求加密时**实际发出去的那个 T**（= 拼在请求体尾部的那串数字）。
+    /// ▸ 本次请求加密时**实际发出去的那个 T**（= 拼在请求体尾部的那串数字）.
     ///
     /// 为什么必须记住它（反汇编证据，`NiuwaCore`）：
     /// `nwcore_decryptByAESWithCipher:timeSlide:` 的 IMP `0x60a50` 里，
     /// `0x060a70 mov x24, x3`（x3 = `timeSlide:` 参数）→ `0x060b30 add x21, x0, x24`
-    /// ⇒ 服务端派生密钥用的是 **`N = 响应尾部的数字 + T`**，不是单纯的「尾部数字」。
+    /// ⇒ 服务端派生密钥用的是 **`N = 响应尾部的数字 + T`**，不是单纯的「尾部数字」.
     ///
     /// 这解释了「小样本能解、大样本解不开」：早期抓到的那个样本对应的请求**没带 T**（参数=0），
     /// 于是 `N = 尾部 + 0` 与我们当时的算法恰好一致；而请求侧加密打通后 `T ≠ 0`，
-    /// 服务端按 `尾部 + T` 派生，我们仍用「尾部」→ **GCM tag 必然校验失败**。
+    /// 服务端按 `尾部 + T` 派生，我们仍用「尾部」→ **GCM tag 必然校验失败**.
     ///
-    /// **v0.3.661 修正：T 改为「按请求传值」，不再用进程级单槽。**
+    /// **修正：T 改为「按请求传值」，不再用进程级单槽.**
     ///
-    /// 旧实现把它存成 `static var`（后加 `NSLock` 收口）。加锁只解决「读写撕裂」，
+    /// 旧实现把它存成 `static var`（后加 `NSLock` 收口）.加锁只解决「读写撕裂」，
     /// **解决不了语义错配**：`NiuwaStoreClient` 是 enum + 全 static func，没有 actor、
     /// 没有串行队列，而调用方 `I4StoreFreeView` 每次点「获取」都起一个独立 `Task`
     /// ⇒ 请求 A 发出去后 B 又发一次，B 写入 T，A 的响应回来时读到的是 **B 的 T**，
-    /// 按 `尾部 + B_T` 派生密钥 ⇒ GCM tag 校验失败 ⇒ 被报成「响应解密失败」。
+    /// 按 `尾部 + B_T` 派生密钥 ⇒ GCM tag 校验失败 ⇒ 被报成「响应解密失败」.
     /// 现在 `encrypt` 把本次的 T 随报文一起返回，`decrypt` 由调用方显式传入 ——
-    /// 每个请求的 T 只活在它自己的调用栈上，并发下天然正确，也不再需要锁。
+    /// 每个请求的 T 只活在它自己的调用栈上，并发下天然正确，也不再需要锁.
     ///
-    /// （原 `static var lastRequestT` 与配套 `NSLock` 已随本次改造删除 —— 没有静态状态就没有撕裂。）
+    /// （原 `static var lastRequestT` 与配套 `NSLock` 已随本次改造删除 —— 没有静态状态就没有撕裂.）
 
     /// 前缀 A（**32 字节**）：`~!@#$%^&*()_+` + **3 个空格** + `+_)(*&^%$#@!~` + **3 个空格**
     ///
-    /// 注意： 空格**必须显式拼接**：直接写在一行里极易被格式化/编辑器吃掉，而**差一个空格整个算法就废**。
+    /// 注意： 空格**必须显式拼接**：直接写在一行里极易被格式化/编辑器吃掉，而**差一个空格整个算法就废**.
     static let prefixA = ["~!@#$%^&*()_+", "   ", "+_)(*&^%$#@!~", "   "].joined()
 
     /// 前缀 B（**12 字节**）：`%$#@!` + **2 个空格** + `^&*()`
@@ -77,8 +77,8 @@ private enum NiuwaCrypto {
 
     /// 明文 → （可发送的报文串, 本次的 T）
     ///
-    /// T 必须由调用方带走、解密时再传回来（v0.3.661）。返回元组而不是写静态变量，
-    /// 是为了让「哪个 T 对应哪个响应」由调用栈决定，而不是由进程级状态决定。
+    /// T 必须由调用方带走、解密时再传回来.返回元组而不是写静态变量，
+    /// 是为了让「哪个 T 对应哪个响应」由调用栈决定，而不是由进程级状态决定.
     static func encrypt(_ plain: Data) -> (body: String, t: String)? {
         let n = newN()
         let (key, iv) = deriveKeyIV(n: n)
@@ -90,18 +90,18 @@ private enum NiuwaCrypto {
     }
 
     /// 报文串 → 明文
-    /// - Parameter requestT: **本次请求**实际发出去的那个 T（`encrypt` 的第二个返回值）。
-    ///   nil 表示「本轮没有可用的 T」（例如旧诊断入口），此时只试 `尾部` 与 `T` 之外的候选。
+    /// - Parameter requestT: **本次请求**实际发出去的那个 T（`encrypt` 的第二个返回值）.
+    ///   nil 表示「本轮没有可用的 T」（例如旧诊断入口），此时只试 `尾部` 与 `T` 之外的候选.
     static func decrypt(_ s: String, requestT t: String?) -> Data? {
-        // ▸ 关键（v0.3.395）：**先去掉整段的 base64 padding 再切分**。
+        // ▸ 关键：**先去掉整段的 base64 padding 再切分**.
         // 服务端可能带 `=` 返回：小响应恰好是 4 的倍数（92 字）看不出问题，
-        // 而大响应真机实测 9106 字、`9106 % 4 == 2` → 一定以 `==` 结尾。
-        // 那时「末尾 14 个字符」里会混进 `=` → 尾部取到的不是时间数字 → **分段错误 → 解密必败**。
+        // 而大响应真机实测 9106 字、`9106 % 4 == 2` → 一定以 `==` 结尾.
+        // 那时「末尾 14 个字符」里会混进 `=` → 尾部取到的不是时间数字 → **分段错误 → 解密必败**.
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "=", with: "")
-        // ▸ 诊断（v0.3.395）：真机出现「小响应能解开、大响应解不开」——
-        // 小响应 92 字符（密文 78 + 尾 14），大响应 9106 字符。**结构可能不同**，
-        // 而整体响应被日志截断到 2000 字，看不到尾部，所以这里把**关键分段信息**单独记一份。
+        // ▸ 诊断：真机出现「小响应能解开、大响应解不开」——
+        // 小响应 92 字符（密文 78 + 尾 14），大响应 9106 字符.**结构可能不同**，
+        // 而整体响应被日志截断到 2000 字，看不到尾部，所以这里把**关键分段信息**单独记一份.
         LoginLogger.shared.log("[牛蛙源·诊断] 报文长度=\(trimmed.count) 尾部20=[\(String(trimmed.suffix(20)))]",
                                category: .appStore)
         guard trimmed.count > 14 else { return nil }
@@ -117,12 +117,12 @@ private enum NiuwaCrypto {
         let ciphertext = Data(blob.prefix(blob.count - 16))
         let tag = Data(blob.suffix(16))
         let tailN = n                       // 响应尾部那串数字
-        // v0.3.665：形参内部名就是 `t`，这里原来写 `let t = requestT` 会报 cannot find 'requestT' in scope
+        // 形参内部名就是 `t`，这里原来写 `let t = requestT` 会报 cannot find 'requestT' in scope
         // ▸▸ 候选 N，按证据强度排序：
         // ① `尾部 + T` —— 反汇编证据 `add x21, x0, x24`（x0=尾部、x24=timeSlide 参数=我们发的 T）；
         // ② `尾部`     —— T=0 的老路径（早期那个 92 字样本就是这种，所以它能解开）；
-        // ③ `T`        —— 兜底。
-        // 逐个试，成功即返回 —— GCM 的 tag 校验"非过即挂"，不存在误判。
+        // ③ `T`        —— 兜底.
+        // 逐个试，成功即返回 —— GCM 的 tag 校验"非过即挂"，不存在误判.
         var candidates: [(String, String)] = []
         if let t, let sum = decimalSum(tailN, t) { candidates.append((sum, "尾部+T")) }
         candidates.append((tailN, "尾部"))
@@ -166,10 +166,10 @@ private enum NiuwaCrypto {
     }
 }
 
-/// v0.3.382：免登录下载商店的**第二来源**——牛蛙（NiuWaCore）接口客户端。
+/// 免登录下载商店的**第二来源**——牛蛙（NiuWaCore）接口客户端.
 ///
 /// 与接口一（爱思，见 `I4PCStoreClient`）并列：爱思只覆盖国区，牛蛙客户端**硬编码了
-/// 中国 / 美国两档区域**（数值语义 0/1；香港=2 未暴露，见 `NiuwaRegion`），所以它比爱思支持更多区。
+/// 中国 / 美国两档区域**（数值语义 0/1；香港=2 未暴露，见 `NiuwaRegion`），所以它比爱思支持更多区.
 ///
 /// 协议形态（已逆向确证，非推测）：
 /// - 基址 `https://api.ios222.com`（客户端配置目录名 base64 解出，全库唯一 base）
@@ -177,40 +177,40 @@ private enum NiuwaCrypto {
 /// - `POST /appstore/download`，body = `bundleid` + `region` + `pub_*` 五项
 /// - **不带任何 token / Authorization / uid** —— 即"免登录"（请求公共参数只有 `pub_*`）
 ///
-/// ## v0.3.387：真机「三档全搜不到」之后的二进制级复核结论
+/// ## ：真机「三档全搜不到」之后的二进制级复核结论
 ///
-/// 用户实测：切到牛蛙源后**任何关键词、任何区域都是空界面**。日志被清过拿不到，
+/// 用户实测：切到牛蛙源后**任何关键词、任何区域都是空界面**.日志被清过拿不到，
 /// 于是直接对 `NiuwaCore`（50,683,616 字节）做「ASCII 串 + base64 解码 + 键名全表」提取，
 /// 得到两条强证据 + 一条方法论修正：
 ///
 /// 1. **`region` 很可能是数字索引**：属性编码 `Tq,N,V_nwcore_region`（`q` = `NSInteger`），
 ///    且与 `nwcore_regionSegmented`（`QMUISegmentedControl`）+ `nwcore_regionItemClicked:`
-///    配套 → 分段控件的**索引**就是区域值。而我们传的是 ISO 串 `"cn"`（现已收敛为数字索引）。
+///    配套 → 分段控件的**索引**就是区域值.而我们传的是 ISO 串 `"cn"`（现已收敛为数字索引）.
 ///    另外：全库**没有** `cn`/`us`/`hk`/`中国`/`美国`/`香港` 任何一个明文短串
-///    （说明区域取值不是这些字符串，也可能标题在 .lproj 里）。
+///    （说明区域取值不是这些字符串，也可能标题在 .lproj 里）.
 /// 2. **`pub_*` 五项没有漏**：全库 `pub_` 键名共 15 个，其中 5 个正是
 ///    `pub_version` / `pub_udid` / `pub_lang` / `pub_platform` / `pub_system_version`，
-///    其余 10 个是 OpenSSL 符号（`pub_key` / `pub_pem_encode` / `pub_der_*` …）。
-///    **不存在 `pub_sign` / `timestamp` / `nonce` 之类的第六个公共参数** → 排除"漏签名"。
+///    其余 10 个是 OpenSSL 符号（`pub_key` / `pub_pem_encode` / `pub_der_*` …）.
+///    **不存在 `pub_sign` / `timestamp` / `nonce` 之类的第六个公共参数** → 排除"漏签名".
 /// 3. **属性名 ≠ JSON 键（关键修正）**：该客户端用 **YYModel**（二进制里有
 ///    `modelCustomPropertyMapper` / `modelContainerPropertyGenericClass`），
-///    JSON 键由映射表给出。`nwcore_` 前缀是**他们自己的属性命名约定**（630 个里绝大多数是
-///    UI 属性/方法名，如 `nwcore_appIcon` / `nwcore_appNameLab`）。
+///    JSON 键由映射表给出.`nwcore_` 前缀是**他们自己的属性命名约定**（630 个里绝大多数是
+///    UI 属性/方法名，如 `nwcore_appIcon` / `nwcore_appNameLab`）.
 ///    全库像"响应字段"的只有 6 个：`nwcore_apps` / `nwcore_code` / `nwcore_count` /
 ///    `nwcore_list` / `nwcore_messages` / `nwcore_status`；其中 `nwcore_apps`(NSArray)、
 ///    `nwcore_list`(NSArray)、`nwcore_messages`(NSArray) 在**同一个类的属性声明区里紧邻**，
 ///    而 `nwcore_count`(NSString) 与 `nwcore_list` 天然成对（列表 + 总数）
-///    → **数组键到底是 `nwcore_apps` 还是 `nwcore_list`，静态侧无法百分之百定死**。
+///    → **数组键到底是 `nwcore_apps` 还是 `nwcore_list`，静态侧无法百分之百定死**.
 ///
 /// 因此本版不再赌单一个键/单一形态，而是：
 /// - **数组键按序逐个试**（`listKeyCandidates`），命中即用；
 /// - **`region` 只发整数索引**（有 `Tq` 证据，且真机已确证 `0/1/2` 生效）；
-///   注意： **v0.3.389 起已收窄成"只发一种形态"**（`withRegionShapes` 里只剩数字形态）——
+///   注意： **起已收窄成"只发一种形态"**（`withRegionShapes` 里只剩数字形态）——
 ///   此处旧文写的「双形态各试一次」**已作废**，别照它改回去（原因见 `withRegionShapes` 的注释）；
 /// - **失败时把服务端实际返回的键名写进错误与日志** —— 这样用户截图一次就能定案，
-///   不用再赌（上一版就是只弹 toast、界面留空，白丢一轮证据）。
+///   不用再赌（上一版就是只弹 toast、界面留空，白丢一轮证据）.
 ///
-/// 下载/安装仍走既有 `IPADownloadCenter`（本类只取直链）。
+/// 下载/安装仍走既有 `IPADownloadCenter`（本类只取直链）.
 enum NiuwaStoreClient {
 
     // MARK: - 常量
@@ -225,15 +225,15 @@ enum NiuwaStoreClient {
     /// 响应体原文最多打进日志的字数（一次搜索的 JSON 可能几十 KB，只留头部够定位结构）
     private static let logBodyLimit = 2000
 
-    /// 响应里「应用数组」的候选键（按可能性排序，命中即用）。
+    /// 响应里「应用数组」的候选键（按可能性排序，命中即用）.
     ///
-    /// **▸ v0.3.403：`ba_apps` 排第一 —— 这是真机实测出来的真实键名。**
+    /// **▸ ：`ba_apps` 排第一 —— 这是真机实测出来的真实键名.**
     /// 真机拿到（解密成功后的）真实响应结构：
     /// ```json
     /// {"pub_code":0,"pub_desc":"接口调用成功","body":{"ba_apps":[{"trackName":"Via 浏览器","bundleId":"com.tuyafeng.Via", …}]}}
     /// ```
-    /// ⇒ **数组不在顶层，而是嵌在 `body` 里**（见 `perform` 的 `scopes`）。
-    /// 下面那几个 `nwcore_*` 是从二进制字符串里推的、**至今未在真机命中过**，保留只为兜底。
+    /// ⇒ **数组不在顶层，而是嵌在 `body` 里**（见 `perform` 的 `scopes`）.
+    /// 下面那几个 `nwcore_*` 是从二进制字符串里推的、**至今未在真机命中过**，保留只为兜底.
     private static let listKeyCandidates = [
         "ba_apps", "apps", "list", "nwcore_apps", "nwcore_list", "data", "result",
     ]
@@ -241,18 +241,18 @@ enum NiuwaStoreClient {
     // MARK: - 区域
 
     /// 客户端的区域档位（中文串「中国 / 美国」来自
-    /// `NWCoreClassAppStoreSearchTableViewCell` 附近的 NSInteger 分段索引）。
+    /// `NWCoreClassAppStoreSearchTableViewCell` 附近的 NSInteger 分段索引）.
     ///
     /// **`rawValue` 是 ISO 串（历史口径，**线上从未用过**），`index` 是分段索引（真机已确证）** ——
-    /// 见类型注释 1：`nwcore_region` 的 objc 类型是 `NSInteger`，线上就是**数字**。
-    /// 请求侧**只发数字**（`withRegionShapes` 里只剩数字形态；`rawValue` 现在只用于持久化与回落）。
+    /// 见类型注释 1：`nwcore_region` 的 objc 类型是 `NSInteger`，线上就是**数字**.
+    /// 请求侧**只发数字**（`withRegionShapes` 里只剩数字形态；`rawValue` 现在只用于持久化与回落）.
     ///
     /// ## ▸ 只保留「中国 / 美国」两档
     ///
     /// **`region` 数值语义：`0 = 中国` / `1 = 美国` / `2 = 香港`**（交接文档结论 + 机器码/UI 证据；
-    /// 真机侧另有旁证：`0` 返回中文名、`1`/`2` 返回英文名）。
+    /// 真机侧另有旁证：`0` 返回中文名、`1`/`2` 返回英文名）.
     /// **原版牛蛙 UI 只有「中国 / 美国」两档**（区域切换控件 `nwcore_regionSegmented`
-    /// 是个 `QMUISegmentedControl`，由 `nwcore_regionItemClicked:` 弹出），香港档**没有入口**。
+    /// 是个 `QMUISegmentedControl`，由 `nwcore_regionItemClicked:` 弹出），香港档**没有入口**.
     ///
     /// ### ▸▸ 实测证据（2026-09-14 真机日志，同一个 `com.tuyafeng.Via`）
     /// | region | `/appstore/search` | `/appstore/download` |
@@ -263,22 +263,22 @@ enum NiuwaStoreClient {
     ///
     /// 香港档失败时的解密响应（逐字）：
     /// `{"pub_code":0,"pub_desc":"接口调用成功","body":{"ba_sinfs":"","ba_ipaURL":""}}`
-    /// —— 服务端报「成功」却**不给包**。⇒ **香港档：搜得到、下不了**（不是"什么都拿不到"）。
+    /// —— 服务端报「成功」却**不给包**.⇒ **香港档：搜得到、下不了**（不是"什么都拿不到"）.
     /// 既然点了「获取」必然失败，就不该把它摆给用户 → 本枚举**去掉 `.hk`**，
-    /// `allCases` 只剩两项，界面分段控件（`ForEach(...allCases)`）自动跟着收敛。
+    /// `allCases` 只剩两项，界面分段控件（`ForEach(...allCases)`）自动跟着收敛.
     ///
-    /// 注意： **将来若要恢复香港档，用 `index = 2`**（数值语义未变，只是没暴露）。
+    /// 注意： **将来若要恢复香港档，用 `index = 2`**（数值语义未变，只是没暴露）.
     /// 旧持久化值 `"hk"` 由 `NiuwaRegion(rawValue:) ?? .cn` 兜底回落成 `.cn`
-    /// （见 `Views/I4StoreFreeView.swift` 的 `region` 计算属性）。
+    /// （见 `Views/I4StoreFreeView.swift` 的 `region` 计算属性）.
     enum NiuwaRegion: String, CaseIterable, Identifiable {
         case cn = "cn"
         case us = "us"
 
         var id: String { rawValue }
 
-        /// 分段控件索引（`nwcore_regionSegmented` 的 selectedSegmentIndex）。
-        /// 顺序取自 UI 两档的中文次序：中国 → 美国。
-        /// **香港档将来若恢复 = index 2**（见类型注释）。
+        /// 分段控件索引（`nwcore_regionSegmented` 的 selectedSegmentIndex）.
+        /// 顺序取自 UI 两档的中文次序：中国 → 美国.
+        /// **香港档将来若恢复 = index 2**（见类型注释）.
         var index: Int {
             switch self {
             case .cn: return 0
@@ -296,13 +296,13 @@ enum NiuwaStoreClient {
 
     // MARK: - 模型
 
-    /// 搜索结果 / 详情里的一个应用。
+    /// 搜索结果 / 详情里的一个应用.
     ///
     /// 字段名两套并存（服务端键惯例 + iTunes 风格），解析时都兼容：
     /// `nwcore_app_id` / `nwcore_bundleid` / `nwcore_name` / `nwcore_desc` /
     /// `nwcore_strVersion` / `nwcore_url` / `nwcore_ipaURL` / `nwcore_strAppSize` /
     /// `nwcore_strAppIconName`，以及 `app_id` / `bundleid` / `name` / `trackName` /
-    /// `artworkUrl512` / `iconURL` / `downloadURL` / `fileId` / `stid`。
+    /// `artworkUrl512` / `iconURL` / `downloadURL` / `fileId` / `stid`.
     struct NiuwaApp: Identifiable, Hashable {
         /// 牛蛙侧 app id（`nwcore_app_id` / `app_id`）
         var appId: String?
@@ -313,13 +313,13 @@ enum NiuwaStoreClient {
         /// 大小文案（`nwcore_strAppSize`，服务端给的就是带单位的字符串）
         var sizeText: String?
         var iconURL: String?
-        /// 安装包直链（`nwcore_ipaURL` / `nwcore_url` / `downloadURL` / 下载接口的 `ba_ipaURL`）。
+        /// 安装包直链（`nwcore_ipaURL` / `nwcore_url` / `downloadURL` / 下载接口的 `ba_ipaURL`）.
         ///
-        /// 注意： v0.3.407：这条直链**指向 `iosapps.itunes.apple.com` 是正常的、不是"抓错了源"** ——
+        /// 注意： ：这条直链**指向 `iosapps.itunes.apple.com` 是正常的、不是"抓错了源"** ——
         /// 牛蛙服务器自己用它的账号向 Apple 取包，再把 Apple 签发的 CDN 地址（形如
-        /// `…/signed.dpkg.ipa?accessKey=…`）连同**针对本机 UDID 的 sinf**（`ba_sinfs`）一起下发。
+        /// `…/signed.dpkg.ipa?accessKey=…`）连同**针对本机 UDID 的 sinf**（`ba_sinfs`）一起下发.
         /// 所以「包来自 Apple CDN + sinf 由牛蛙给」这两件事同时成立，别把它当成爱思那种
-        /// "服务端存着一份已签名 IPA" 的模型。
+        /// "服务端存着一份已签名 IPA" 的模型.
         var downloadURL: String?
         /// 包校验值（`md5`，客户端模型里有这个字段）
         var md5: String?
@@ -327,28 +327,28 @@ enum NiuwaStoreClient {
         var fileId: String?
         /// 更新时间（`currentVersionReleaseDate`，形如 `2025-06-06T10:00:00+08:00`）
         var releaseDate: String?
-        /// v0.3.404：**下载接口**返回的 `ba_sinfs`（base64 文本，安装加密包时要用）。
-        /// 只有 `/appstore/download` 的响应带它；搜索接口恒为 nil。
+        /// **下载接口**返回的 `ba_sinfs`（base64 文本，安装加密包时要用）.
+        /// 只有 `/appstore/download` 的响应带它；搜索接口恒为 nil.
         ///
-        /// ## v0.3.407：**已经用起来了**（v0.3.406 留的触发条件已触发）
+        /// ## ：**已经用起来了**（留的触发条件已触发）
         ///
         /// 真机上装牛蛙包时报「加密包…缺少 SC_Info/*.sinf」→ 说明牛蛙给的 Apple 原始包
-        /// 里没有可用 sinf，必须用这一份。现在的接线：
+        /// 里没有可用 sinf，必须用这一份.现在的接线：
         /// · `IPADownloadCenter.Job.sinfBase64` 收下它（`start(...)` 的 `sinfBase64:` 参数，
         ///   由 `startNiuwaDownload`（`Views/I4StoreFreeView.swift`）传入）；
         /// · 下载落盘后、安装前，由 `IPADownloadCenter` 的 `PackageSINFWriter`
         ///   把 base64 解码成 `Data`，写进包内
-        ///   `Payload/<App>.app/SC_Info/<CFBundleExecutable>.sinf`。
+        ///   `Payload/<App>.app/SC_Info/<CFBundleExecutable>.sinf`.
         ///
         /// **它是什么**：base64 解出来是**标准 `.sinf` 容器**，不是别的包装格式 ——
         /// 真机样本解出 **1032 字节**，头 4 字节 `00 00 04 08`（= 长度 1032）紧跟 ASCII `sinf`，
-        /// 正是 `.sinf` 的长度前缀 + tag 结构。所以它是「可以直接丢进 `SC_Info/` 的那份文件」，
-        /// **不要再给它加任何包装/加密**。
+        /// 正是 `.sinf` 的长度前缀 + tag 结构.所以它是「可以直接丢进 `SC_Info/` 的那份文件」，
+        /// **不要再给它加任何包装/加密**.
         ///
         /// **「包内已有别的设备的 sinf」已处理**：ZIP 写入器（`vendor/ApplePackage/Supplement/ZipFoundationShim.swift`）
-        /// 有 `removeEntry(with:)`（v0.3.546 新增）；`PackageSINFWriter` 遇到包内已有 sinf 时
-        /// **替换**成服务端下发的这份 —— v0.3.560 起走整包重写（`ApplePackageArchive.replaceEntries`），
-        /// v0.3.568 起写入包内全部 `SC_Info/*.sinf` 路径，不再记日志跳过。
+        /// 有 `removeEntry(with:)`（新增）；`PackageSINFWriter` 遇到包内已有 sinf 时
+        /// **替换**成服务端下发的这份 —— 起走整包重写（`ApplePackageArchive.replaceEntries`），
+        /// 起写入包内全部 `SC_Info/*.sinf` 路径，不再记日志跳过.
         ///
         /// **历史**（为什么非要写回包里）：本项目两条安装链路的 sinf 都不是"传参数"进去的，
         /// 而是**从包里读**：
@@ -356,13 +356,13 @@ enum NiuwaStoreClient {
         ///   判到加密包后走 `IPAPackageInspector.extractSINF(ipaPath:)`，读的是
         ///   `Payload/<App>.app/SC_Info/<exe>.sinf`；
         /// · AppleID 通道更靠前一步：`SignatureInjector.inject(sinfs:into:)`
-        ///   （`Engine/AppStoreLocalInstallService.swift:83`）先把 Apple 签发的 sinf **写回包内**。
-        /// ⇒ 介质是**包本身**，光把这个字符串往下传没有任何消费者 —— 所以 v0.3.407 的做法是
-        /// 「落盘后写回包内」，而不是给它加一个安装参数。
+        ///   （`Engine/AppStoreLocalInstallService.swift:83`）先把 Apple 签发的 sinf **写回包内**.
+        /// ⇒ 介质是**包本身**，光把这个字符串往下传没有任何消费者 —— 所以 的做法是
+        /// 「落盘后写回包内」，而不是给它加一个安装参数.
         ///
         /// **当初为什么绕开 `SignatureInjector`**：它是 AppleID 通道用的，自己从
         /// `SC_Info/Manifest.plist` 的 `SinfPaths` 里挑路径、且「条目已存在就抛错」；
-        /// 而我们要写的是由 `CFBundleExecutable` 唯一确定的那个路径，且宁可跳过也不写重名条目。
+        /// 而我们要写的是由 `CFBundleExecutable` 唯一确定的那个路径，且宁可跳过也不写重名条目.
         var sinfBase64: String?
 
         /// 列表按 bundleId 去重 → 用 bundleId 当 id
@@ -386,15 +386,15 @@ enum NiuwaStoreClient {
         /// 200 但信封里没有已知的数组键 —— 把 `code` / `messages` / **实际键名**都带上
         case server(code: String, message: String)
         case network(String)
-        /// v0.3.392：报文加解密失败（请求体加密 / 响应解密）
+        /// 报文加解密失败（请求体加密 / 响应解密）
         case crypto(String)
 
         var errorDescription: String? {
             switch self {
             case .badURL: return "接口地址无效"
             case .http(let c): return "请求失败（HTTP \(c)）"
-            /// v0.3.389：真机实测服务端回的是 **base64 密文**，不是 JSON。
-            /// 这句要留在界面上，否则用户只会反复点、而我们这边看不出原因。
+            /// 真机实测服务端回的是 **base64 密文**，不是 JSON.
+            /// 这句要留在界面上，否则用户只会反复点、而我们这边看不出原因.
             case .decode: return "响应不是 JSON（服务端加密了，待解密）"
             case .server(let code, let message):
                 return message.isEmpty ? "服务端返回码 \(code)" : "\(message)（\(code)）"
@@ -407,33 +407,32 @@ enum NiuwaStoreClient {
 
     private static let session: URLSession = {
         let cfg = URLSessionConfiguration.default
-        // v0.3.390：请求超时 25s → **10s**。
+        // 请求超时 25s → **10s**.
         // 现状（真机实测）：服务端回的是**加密体**，我们解不开 → 每次搜索都必然以解析失败收场，
-        // 25 秒的等待纯属浪费用户时间。等密钥到手、能真正解出数据后，再按需调回。
+        // 25 秒的等待纯属浪费用户时间.等密钥到手、能真正解出数据后，再按需调回.
         cfg.timeoutIntervalForRequest = 10
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: cfg)
     }()
 
-    /// `pub_udid`：优先本机真实 UDID，取不到就用一次生成、持久化的伪 UDID。
+    /// `pub_udid`：优先本机真实 UDID，取不到就用一次生成、持久化的伪 UDID.
     ///
     /// 伪值形如 40 位十六进制（与真 UDID 同形）：`UniqueDeviceIdentifier` 在 iOS 26/27
-    /// 与 LiveContainer 下经常取不到，而**请求体必须带这个键**，宁可给个形状合法的稳定值，
-    /// 也不要在探测阶段因为一个字段把整次请求变成畸形。
+    /// 也不要在探测阶段因为一个字段把整次请求变成畸形.
     ///
-    /// ## v0.3.408：**改成只吃缓存**（这条是「第一次点获取必失败」的直接嫌疑）
+    /// ## ：**改成只吃缓存**（这条是「第一次点获取必失败」的直接嫌疑）
     ///
     /// 原来这里调的是 `LocalDeviceIdentity.load()` —— 那是**会现场建 RSD 隧道**的入口，
     /// 而 `LocalDeviceIdentity` 的文件头明确写着「**绝不能在下载启动这类关键路径上同步调用**」
-    ///（真机实测建一次隧道是**秒级**）。于是每一次「获取」在真正发 HTTPS 之前，
+    ///（真机实测建一次隧道是**秒级**）.于是每一次「获取」在真正发 HTTPS 之前，
     /// 都可能先卡着建一条隧道；而同一时刻 App 自己的 LocalDevVPN 正在被重配，
-    /// **这一发请求会被顶掉** → 用户看到「获取安装包失败」，再点一次（缓存已热 / 隧道已起）就成功。
+    /// **这一发请求会被顶掉** → 用户看到「获取安装包失败」，再点一次（缓存已热 / 隧道已起）就成功.
     ///
-    /// 现在沿用 v0.3.402 在 AppleID 下载链路上立下的规矩（`warmUpInBackground()` +
-    /// 只吃缓存）：**请求路径上零设备 IO**。冷缓存就先给伪 UDID 顶着，并顺手把预热挂到后台；
-    /// 缓存一热，后面的请求自然都是真值。
+    /// 现在沿用 在 AppleID 下载链路上立下的规矩（`warmUpInBackground()` +
+    /// 只吃缓存）：**请求路径上零设备 IO**.冷缓存就先给伪 UDID 顶着，并顺手把预热挂到后台；
+    /// 缓存一热，后面的请求自然都是真值.
     /// 日志里会写明这一次用的是**真值还是伪值**（只在变化时打一行），
-    /// 所以「首次失败」到底是不是它，下一轮真机日志一看便知。
+    /// 所以「首次失败」到底是不是它，下一轮真机日志一看便知.
     private static var pubUDID: String {
         if let snap = LocalDeviceIdentity.cachedSnapshot(),
            let real = snap.udid?.trimmingCharacters(in: .whitespaces),
@@ -453,11 +452,11 @@ enum NiuwaStoreClient {
         return hex
     }
 
-    /// `pub_udid` 用的是真值还是伪值 —— **只在变化时打一行**。
+    /// `pub_udid` 用的是真值还是伪值 —— **只在变化时打一行**.
     ///
     /// 为什么要专门记它：「第一次点获取必失败、重试才成功」这件事，最需要排除的就是
     /// 「第一次带伪 UDID、第二次带真 UDID」——那会让**同一个应用**的两次请求在服务端看来
-    /// 是两个设备。有这一行，下一轮真机日志就能定案（而不是靠猜）。
+    /// 是两个设备.有这一行，下一轮真机日志就能定案（而不是靠猜）.
     private static func noteUDIDSource(_ source: String) {
         paramLock.lock()
         let changed = lastUDIDSource != source
@@ -475,14 +474,14 @@ enum NiuwaStoreClient {
 
     /// 连接设备的 iOS 版本（取不到回落到本机 `UIDevice.current.systemVersion`）
     ///
-    /// ## v0.3.408：**改成只吃缓存 + 后台预热**
+    /// ## ：**改成只吃缓存 + 后台预热**
     /// 原来这里**每次请求**都调 `DeviceInfoService.lockdownFullDict()` —— 那是一条
-    /// **要建隧道的设备 IO**（秒级，且不像身份那样有进程内缓存）。
+    /// **要建隧道的设备 IO**（秒级，且不像身份那样有进程内缓存）.
     /// 一次「获取」因此可能连建两条隧道（身份一条 + 本字段一条），
-    /// 这正是「第一次点必失败」的另一半原因（同一时刻 App 自己的 LocalDevVPN 在被重配）。
+    /// 这正是「第一次点必失败」的另一半原因（同一时刻 App 自己的 LocalDevVPN 在被重配）.
     ///
     /// 现在：缓存里没有就**不建隧道**，直接用本机 `UIDevice.current.systemVersion` 顶上
-    ///（同一台设备、同一个值），同时把真正的读取挂到后台；读到了下一轮就用真值。
+    ///（同一台设备、同一个值），同时把真正的读取挂到后台；读到了下一轮就用真值.
     private static var pubSystemVersion: String {
         paramLock.lock()
         let cached = prefetchedSystemVersion
@@ -495,17 +494,17 @@ enum NiuwaStoreClient {
     private static let paramLock = NSLock()
     /// Swift 6 并发检查：下面三个静态变量的**全部**读写都在上面的 `paramLock` 内
     /// （见 `pubSystemVersion` / `noteUDIDSource` / `udidSourceForLog` / `warmUpDeviceParamsInBackground`），
-    /// 因此本身线程安全。
+    /// 因此本身线程安全.
     /// 后台预热取到的 `ProductVersion`（`nil` = 还没取到 —— 此时用本机 `UIDevice` 版本顶上）
     nonisolated(unsafe) private static var prefetchedSystemVersion: String?
     /// 是否已有一轮预热在跑（防止每次请求都起一条隧道）
     nonisolated(unsafe) private static var prefetchingParams = false
     nonisolated(unsafe) private static var lastUDIDSource: String?
 
-    /// 后台预热 `pub_*` 里那两处**需要设备 IO** 的字段。可重复调用，进程内只真读一次。
+    /// 后台预热 `pub_*` 里那两处**需要设备 IO** 的字段.可重复调用，进程内只真读一次.
     ///
     /// 身份那一半交给 `LocalDeviceIdentity` 自己的预热（同一条 lockdown 隧道，不会重复建）；
-    /// 这里只补它不管的 `ProductVersion`。两者都**不在**请求路径上等待。
+    /// 这里只补它不管的 `ProductVersion`.两者都**不在**请求路径上等待.
     static func warmUpDeviceParamsInBackground() {
         paramLock.lock()
         let alreadyHave = prefetchedSystemVersion != nil
@@ -521,7 +520,7 @@ enum NiuwaStoreClient {
                 value = v
             }
             // Swift 6：NSLock 的 lock/unlock 在 async 上下文不可用，改用作用域加锁
-            // `withLock`（临界区内没有 await，语义与原来的 lock/unlock 完全一致）。
+            // `withLock`（临界区内没有 await，语义与原来的 lock/unlock 完全一致）.
             paramLock.withLock {
                 if !value.isEmpty { prefetchedSystemVersion = value }
                 prefetchingParams = false
@@ -534,19 +533,18 @@ enum NiuwaStoreClient {
         }
     }
 
-    /// 本 App 的 build 号（`CFBundleVersion`）—— 牛蛙的 `pub_version` 量级与之相符。
+    /// 本 App 的 build 号（`CFBundleVersion`）—— 牛蛙的 `pub_version` 量级与之相符.
     ///
-    /// 注意： **不能用 `Bundle.main`**：本 App 常以侧载 / LiveContainer 方式运行，那时
     /// `Bundle.main` 可能指向**宿主**的 bundle，取到的是与牛蛙无关的 build 号
-    /// （项目铁律：一律 `Bundle(for: SomeClass.self)`，见 `SAPAssetsLocator`）。
+    /// （项目铁律：一律 `Bundle(for: SomeClass.self)`，见 `SAPAssetsLocator`）.
     private final class BundleToken {}
 
     private static var pubVersion: String {
         Bundle(for: BundleToken.self).infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
-    /// 公共参数五项（`pub_*`）—— 这就是牛蛙的"免登录"身份，没有 token / Authorization / uid。
-    /// v0.3.387：类型放开成 `[String: Any]`，好让 `region` 能按需发**数字**而不是字符串。
+    /// 公共参数五项（`pub_*`）—— 这就是牛蛙的"免登录"身份，没有 token / Authorization / uid.
+    /// 类型放开成 `[String: Any]`，好让 `region` 能按需发**数字**而不是字符串.
     private static func pubParams(iPad: Bool) -> [String: Any] {
         [
             "pub_version": pubVersion,
@@ -557,17 +555,17 @@ enum NiuwaStoreClient {
         ]
     }
 
-    /// - Returns: 响应字节 + **本次请求发出去的 T**（解密要用它派生密钥，见 `NiuwaCrypto.decrypt`）。
+    /// - Returns: 响应字节 + **本次请求发出去的 T**（解密要用它派生密钥，见 `NiuwaCrypto.decrypt`）.
     private static func postJSON(_ path: String, body: [String: Any]) async throws -> (data: Data, t: String) {
         guard let url = URL(string: host + path) else { throw StoreError.badURL }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        // ▸ v0.3.392：**请求体必须加密**。
+        // ▸ ：**请求体必须加密**.
         // 过去我们发的是明文 JSON，服务端直接回 `{"pub_code":650,"pub_desc":"unknow error"}`
-        // （HTTP 状态还是 200）—— 这就是「HTTP 200 但不是 JSON」的真正原因。
-        // 报文格式与响应一致：`base64NoPad(密文‖tag) + base64NoPad(str(N))`。
+        // （HTTP 状态还是 200）—— 这就是「HTTP 200 但不是 JSON」的真正原因.
+        // 报文格式与响应一致：`base64NoPad(密文‖tag) + base64NoPad(str(N))`.
         let plain = try JSONSerialization.data(withJSONObject: body)
         guard let sealed = NiuwaCrypto.encrypt(plain) else {
             throw StoreError.crypto("请求体加密失败")
@@ -577,13 +575,13 @@ enum NiuwaStoreClient {
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw StoreError.http(http.statusCode)
         }
-        // T 随返回值一起交出去 —— 调用方解密时必须用**这一次**的 T（v0.3.661）
+        // T 随返回值一起交出去 —— 调用方解密时必须用**这一次**的 T
         return (data, sealed.t)
     }
 
     // MARK: - 搜索
 
-    /// 关键词搜索（免登录）。`region` 决定区（中国 / 美国）。
+    /// 关键词搜索（免登录）.`region` 决定区（中国 / 美国）.
     static func search(keyword: String, region: NiuwaRegion, iPad: Bool = true) async throws -> [NiuwaApp] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { return [] }
@@ -597,7 +595,7 @@ enum NiuwaStoreClient {
 
     // MARK: - 下载（只取直链，不下载文件）
 
-    /// 按 bundleId 取安装包直链；服务端没给直链时返回 `nil`。
+    /// 按 bundleId 取安装包直链；服务端没给直链时返回 `nil`.
     static func download(bundleId: String, region: NiuwaRegion, iPad: Bool = true) async throws -> NiuwaApp? {
         let bid = bundleId.trimmingCharacters(in: .whitespaces)
         guard !bid.isEmpty else { return nil }
@@ -607,17 +605,17 @@ enum NiuwaStoreClient {
             body["region"] = regionValue
             return try await perform(path: downloadPath, body: body, shape: shape)
         }
-        // v0.3.661：服务端下载响应里**没有 `bundleid` 键**（真机实测 body 只有 ba_ipaURL/ba_sinfs），
-        // `perform` 于是给了空串。旧实现原样返回 —— 调用方 `I4StoreFreeView` 用 `full.bundleId`
-        // 拼产物文件名，空串会得到 `.ipa` 这种无名文件，也会让「装的是不是这个 App」无法校验。
-        // 请求本来就是按 bundleId 发的，空串时用请求值补齐是**无歧义的**。
+        // 服务端下载响应里**没有 `bundleid` 键**（真机实测 body 只有 ba_ipaURL/ba_sinfs），
+        // `perform` 于是给了空串.旧实现原样返回 —— 调用方 `I4StoreFreeView` 用 `full.bundleId`
+        // 拼产物文件名，空串会得到 `.ipa` 这种无名文件，也会让「装的是不是这个 App」无法校验.
+        // 请求本来就是按 bundleId 发的，空串时用请求值补齐是**无歧义的**.
         guard var app = list.first else { return nil }
         if app.bundleId.trimmingCharacters(in: .whitespaces).isEmpty {
             //（a）响应里没给 bundleid → 用请求值补齐
             app.bundleId = bid
         } else if app.bundleId.caseInsensitiveCompare(bid) != .orderedSame {
-            //（b）响应给的 bundleid 与请求的**不是同一个 App** → 不能拿去装。
-            // 旧实现 `return list.first` 完全不校验，服务端串包时会装错应用。
+            //（b）响应给的 bundleid 与请求的**不是同一个 App** → 不能拿去装.
+            // 旧实现 `return list.first` 完全不校验，服务端串包时会装错应用.
             LoginLogger.shared.log("\(logTag) [失败] 下载响应 bundleId 不匹配：请求 \(bid)、返回 \(app.bundleId)",
                                    category: .appStore)
             throw StoreError.server(code: "bundleId-mismatch", message: "返回的安装包与请求的应用不一致")
@@ -627,17 +625,17 @@ enum NiuwaStoreClient {
 
     // MARK: - region 双形态
 
-    /// 注意： **v0.3.389 临时收窄成「只发一种形态」**。
+    /// 注意： **临时收窄成「只发一种形态」**.
     ///
     /// 原因（真机实测）：`region=cn` 与 `region=us` 两次请求**返回的都是 base64 密文**，不是 JSON ——
-    /// 说明「搜不到」的**瓶颈不在 region 取值**，而在**响应体本身要解密**。
+    /// 说明「搜不到」的**瓶颈不在 region 取值**，而在**响应体本身要解密**.
     /// 既然三种形态都会失败，串行三发只会让用户白白多等（25s 超时 × 3 = 最长 75 秒，
-    /// 表现为「一直卡在加载中」，用户实测正是这个现象）。
+    /// 表现为「一直卡在加载中」，用户实测正是这个现象）.
     ///
     /// 所以本版**只发数字形态**（证据最强：`nwcore_region` 的 objc 类型是 `Tq` = `NSInteger`），
-    /// 快速失败、快速给用户信息。**等响应解密做完**（见 `[牛蛙源] 失败 响应不是 JSON 对象` 的那条链路），
-    /// 再决定要不要把候选形态加回来。
-    /// - Parameter region: 只用来生成候选形态（本版固定单元素）；请求体的区域值由 `attempt` 自己写入。
+    /// 快速失败、快速给用户信息.**等响应解密做完**（见 `[牛蛙源] 失败 响应不是 JSON 对象` 的那条链路），
+    /// 再决定要不要把候选形态加回来.
+    /// - Parameter region: 只用来生成候选形态（本版固定单元素）；请求体的区域值由 `attempt` 自己写入.
     private static func withRegionShapes(
         region: NiuwaRegion,
         _ attempt: (Any, String) async throws -> [NiuwaApp]
@@ -663,7 +661,7 @@ enum NiuwaStoreClient {
 
     // MARK: - 请求 + 全量诊断日志
 
-    /// 发一次请求，**把请求体（UDID 打码）/ HTTP 状态码 / 响应体原文全打进 `LoginLogger`**。
+    /// 发一次请求，**把请求体（UDID 打码）/ HTTP 状态码 / 响应体原文全打进 `LoginLogger`**.
     ///
     /// 失败三分：
     /// - `network`：URLSession 直接抛（没有 HTTP 响应）
@@ -671,16 +669,16 @@ enum NiuwaStoreClient {
     /// - `server(code:message:)`：200 但**没有任何候选数组键命中** ——
     ///   把 `code` / `messages` / **响应里实际存在的键名**原文带上（这条最关键：
     ///   用户截图一次就能定案，不必再赌键名）
-    /// 把最近一次响应**完整**写到 `Documents/LoginLogs/niuwa_last_response.txt`（覆盖式）。
+    /// 把最近一次响应**完整**写到 `Documents/LoginLogs/niuwa_last_response.txt`（覆盖式）.
     ///
     /// 用途：日志里的响应会被截断到 2000 字，而排查加解密必须看**完整**报文
-    ///（尤其尾部那 14 个字符 = `base64(时间数字)`，它决定 key/iv 的派生）。
+    ///（尤其尾部那 14 个字符 = `base64(时间数字)`，它决定 key/iv 的派生）.
     /// 电脑侧取回：`python ssh_run.py niuwa`（会打印长度 + 尾部 + T，并把全文存到本地，
-    /// 再当场按 `尾部+T` → `尾部` → `T` 顺序试解）。
+    /// 再当场按 `尾部+T` → `尾部` → `T` 顺序试解）.
     ///
-    /// 注意： 它属于 `NiuwaStoreClient` 而不是 `NiuwaCrypto` —— v0.3.399 曾把它放进
+    /// 注意： 它属于 `NiuwaStoreClient` 而不是 `NiuwaCrypto` —— 曾把它放进
     /// `NiuwaCrypto`（private），结果客户端侧调用不到，CI 报
-    /// `error: cannot find 'dumpResponse' in scope`。诊断落盘是客户端的职责，放这里。
+    /// `error: cannot find 'dumpResponse' in scope`.诊断落盘是客户端的职责，放这里.
     private static func dumpResponse(_ raw: String, path: String, t: String?) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let dir = docs.appendingPathComponent("LoginLogs", isDirectory: true)
@@ -688,16 +686,16 @@ enum NiuwaStoreClient {
         let file = dir.appendingPathComponent("niuwa_last_response.txt")
         let header = "path=\(path)\nlen=\(raw.count)\ntail20=\(String(raw.suffix(20)))\n"
             + "T=\(t ?? "nil")\n---\n"
-        // v0.3.661：落盘前把响应里出现过的本机 UDID 换成掩码。
-        // 请求体日志已走 `describeBody` 打码（见其 `pub_udid` 分支），此处不能成漏点。
+        // 落盘前把响应里出现过的本机 UDID 换成掩码.
+        // 请求体日志已走 `describeBody` 打码（见其 `pub_udid` 分支），此处不能成漏点.
         let masked = maskUDIDIfPresent(in: raw)
         try? (header + masked).write(to: file, atomically: true, encoding: .utf8)
     }
 
-    /// 把文本里出现的本机 UDID（真值或伪值）替换成 `maskUDID` 的形态。
+    /// 把文本里出现的本机 UDID（真值或伪值）替换成 `maskUDID` 的形态.
     ///
-    /// 只替换**能确证是这台设备**的两个值：缓存里的真 UDID 与 `niuwa.pseudoUDID`。
-    /// 不按正则猜 40 位十六进制 —— 那样会把响应里别的标识也改坏。
+    /// 只替换**能确证是这台设备**的两个值：缓存里的真 UDID 与 `niuwa.pseudoUDID`.
+    /// 不按正则猜 40 位十六进制 —— 那样会把响应里别的标识也改坏.
     private static func maskUDIDIfPresent(in text: String) -> String {
         var out = text
         var secrets: [String] = []
@@ -714,9 +712,9 @@ enum NiuwaStoreClient {
         return out
     }
 
-    /// - Parameter shape: 本次实际发出的 region 形态描述，**只用于日志**。
-    /// v0.3.661：删掉形参 `region:` —— 函数体内从未读取它（区域值由调用方写进 `body["region"]`），
-    /// 留着会让后续维护者误以为区域在这里参与决策。
+    /// - Parameter shape: 本次实际发出的 region 形态描述，**只用于日志**.
+    /// 删掉形参 `region:` —— 函数体内从未读取它（区域值由调用方写进 `body["region"]`），
+    /// 留着会让后续维护者误以为区域在这里参与决策.
     private static func perform(path: String, body: [String: Any],
                                 shape: String) async throws -> [NiuwaApp] {
         let log = LoginLogger.shared
@@ -738,21 +736,21 @@ enum NiuwaStoreClient {
         }
 
         let raw = String(data: data, encoding: .utf8) ?? "<非 UTF-8 \(data.count) 字节>"
-        // ▸ v0.3.399：**把完整响应单独落盘**（覆盖式，只留最后一次）。
+        // ▸ ：**把完整响应单独落盘**（覆盖式，只留最后一次）.
         //
         // 为什么必须在日志之外再存一份：日志里的响应被 `truncate()` 截到 **2000 字**，
         // 而真实大响应有 **9106 字** —— 尾部的 14 个字符（= `base64(时间数字)`）
-        // 正好在截断之外，于是「分段到底对不对」这件事**永远验证不了**。
-        // 存成独立文件后，电脑侧用 `ssh_run.py niuwa` 一条命令取回本地，不受任何截断与行序影响。
+        // 正好在截断之外，于是「分段到底对不对」这件事**永远验证不了**.
+        // 存成独立文件后，电脑侧用 `ssh_run.py niuwa` 一条命令取回本地，不受任何截断与行序影响.
         //
-        // ▸ v0.3.661：**只在失败时落盘**，且落盘前打码 UDID。
+        // ▸ ：**只在失败时落盘**，且落盘前打码 UDID.
         // 旧实现每个响应都写一次（一次点击最多 4 次），而 `Documents/` 会被 iCloud 备份、
-        // 且响应里有服务端回显的本机 UDID —— 请求体日志打了码，落盘文件却没打，等于绕过打码。
-        // 现在成功路径不写盘；失败路径写上，但先把文档里出现过的 UDID 换成掩码。
+        // 且响应里有服务端回显的本机 UDID —— 请求体日志打了码，落盘文件却没打，等于绕过打码.
+        // 现在成功路径不写盘；失败路径写上，但先把文档里出现过的 UDID 换成掩码.
         log.log("\(logTag) ← 原始响应 \(truncate(raw))", category: .appStore)
 
-        // ▸ v0.3.392：响应是**加密体**，先解密再解析。
-        // 解密失败时把原始体前 200 字符留档（否则以后又是「什么都看不到」）。
+        // ▸ ：响应是**加密体**，先解密再解析.
+        // 解密失败时把原始体前 200 字符留档（否则以后又是「什么都看不到」）.
         guard let plain = NiuwaCrypto.decrypt(raw, requestT: requestT) else {
             log.log("\(logTag) [失败] 响应解密失败；原始体（前 200）：\(String(raw.prefix(200)))",
                     category: .appStore)
@@ -773,38 +771,38 @@ enum NiuwaStoreClient {
             ?? string(obj["message"])
             ?? ""
 
-        // ▸ v0.3.403：状态码/描述的真实键名是 `pub_code` / `pub_desc`
-        // （真机实测响应：`{"pub_code":0,"pub_desc":"接口调用成功","body":{…}}`）。
-        // 旧的 `nwcore_code` / `code` 保留兜底 —— 它们是从二进制字符串推的、至今未在真机命中。
+        // ▸ ：状态码/描述的真实键名是 `pub_code` / `pub_desc`
+        // （真机实测响应：`{"pub_code":0,"pub_desc":"接口调用成功","body":{…}}`）.
+        // 旧的 `nwcore_code` / `code` 保留兜底 —— 它们是从二进制字符串推的、至今未在真机命中.
         let code = string(obj["pub_code"]) ?? string(obj["nwcore_code"]) ?? string(obj["code"]) ?? "-"
 
-        // ▸▸ v0.3.661：**`pub_code != 0` 就是失败**，不再顺着往下找数组。
-        // 真机实测信封：`{"pub_code":0,"pub_desc":"接口调用成功"}`，失败时 pub_code=650 / 非 0。
+        // ▸▸ ：**`pub_code != 0` 就是失败**，不再顺着往下找数组.
+        // 真机实测信封：`{"pub_code":0,"pub_desc":"接口调用成功"}`，失败时 pub_code=650 / 非 0.
         // 旧实现把 code 只写进日志、解析照走，于是服务端明确报错时用户只会看到
-        // 「无候选数组键命中」这种我们自己的诊断话术 —— 真原因（比如"无此应用"）被吞掉。
-        // 对照 `NBStoreClient.swift:624`：那边是 `if let n = obj["code"] as? NSNumber, n.intValue != 0 { throw … }`。
-        // 注意 **必须放在 `ba_ipaURL` 分支之前**：下载接口成功时 body 无数组，走的是另一条 return。
+        // 「无候选数组键命中」这种我们自己的诊断话术 —— 真原因（比如"无此应用"）被吞掉.
+        // 对照 `NBStoreClient.swift:624`：那边是 `if let n = obj["code"] as? NSNumber, n.intValue != 0 { throw … }`.
+        // 注意 **必须放在 `ba_ipaURL` 分支之前**：下载接口成功时 body 无数组，走的是另一条 return.
         if let codeValue = Int(code.trimmingCharacters(in: .whitespaces)), codeValue != 0 {
             log.log("\(logTag) [失败] 服务端返回码 \(code)：\(message.isEmpty ? "-" : message)",
                     category: .appStore)
             throw StoreError.server(code: code, message: message)
         }
 
-        // ▸▸ v0.3.407：**把「服务端没有包」与「我们解析漏了形态」分开**（只对下载请求生效）。
+        // ▸▸ ：**把「服务端没有包」与「我们解析漏了形态」分开**（只对下载请求生效）.
         //
         // 起因（真机日志）：同一个接口、同一个 region，`Via` / `SogouExplorer` 成功，
         // `msedge` / `TakeBrowser` 失败，而失败的都掉进下面那条「找数组」分支 ——
-        // 说明 `body.ba_ipaURL` 没通过 `!ipa.isEmpty`。但当时**没有任何一行日志打出它的值**，
-        // 到底是「没有这个键」「键在但值是空串」还是「值不是 String」只能靠猜。
+        // 说明 `body.ba_ipaURL` 没通过 `!ipa.isEmpty`.但当时**没有任何一行日志打出它的值**，
+        // 到底是「没有这个键」「键在但值是空串」还是「值不是 String」只能靠猜.
         // 下面这几行就是给它定性的，一次真机即可判定：
         //   (a) 键根本不在 → 牛蛙服务器对这些应用**确实没有包**（不是我们的 bug，如实告诉用户）；
-        //   (b) 键在但取值不可用（空串 / NSNull / 非字符串）→ 是我们漏了某种形态，按实际类型补解析。
-        // 日志里带 `bundleId` + `code`/`desc`，所以「某个应用恒失败」与「同一应用时好时坏」也分得开。
+        //   (b) 键在但取值不可用（空串 / NSNull / 非字符串）→ 是我们漏了某种形态，按实际类型补解析.
+        // 日志里带 `bundleId` + `code`/`desc`，所以「某个应用恒失败」与「同一应用时好时坏」也分得开.
         if path == downloadPath {
             let requestTarget = (body["bundleid"] as? String) ?? "-"
             let desc = message.isEmpty ? "-" : message
-            // v0.3.408：把 `pub_udid` 的来源一起打出来 —— 「第一次点必失败」的定案依据之一
-            // 就是「失败的这次带的是伪 UDID、成功的那次带真 UDID」。
+            // 把 `pub_udid` 的来源一起打出来 —— 「第一次点必失败」的定案依据之一
+            // 就是「失败的这次带的是伪 UDID、成功的那次带真 UDID」.
             let udidNote = "udid=\(udidSourceForLog)；"
             if let envelope = obj["body"] as? [String: Any] {
                 if let rawIPA = envelope["ba_ipaURL"] {
@@ -828,24 +826,24 @@ enum NiuwaStoreClient {
             }
         }
 
-        // ▸▸ v0.3.404：**下载接口的响应没有数组** —— `body` 直接给两个字段：
-        //   `ba_ipaURL`（安装包直链）、`ba_sinfs`（base64 的 sinf）。
-        // 真机实测（v0.3.403 日志）：
+        // ▸▸ ：**下载接口的响应没有数组** —— `body` 直接给两个字段：
+        //   `ba_ipaURL`（安装包直链）、`ba_sinfs`（base64 的 sinf）.
+        // 真机实测（日志）：
         //   {"body":{"ba_ipaURL":"https://iosapps.itunes.apple.com/…signed.dpkg.ipa?accessKey=…",
         //            "ba_sinfs":"AAAECHNpbmY…"},"pub_code":0,"pub_desc":"接口调用成功"}
-        // 之前这里和搜索**共用「找数组」的解析** → 永远命中不了 → 用户看到「获取不了」。
+        // 之前这里和搜索**共用「找数组」的解析** → 永远命中不了 → 用户看到「获取不了」.
         if let body = obj["body"] as? [String: Any],
            let ipa = string(body["ba_ipaURL"]), !ipa.isEmpty {
-            // v0.3.664：**校验后再往下传**。
+            // **校验后再往下传**.
             //
             // 原来这里 `string(body["ba_sinfs"])` 原样透传，等于把「服务端说了什么」直接
-            // 当成「我们能用的 sinf」交给下一条安装链。牛蛙这一路的历史样本是真 sinf
+            // 当成「我们能用的 sinf」交给下一条安装链.牛蛙这一路的历史样本是真 sinf
             // （1032 字节、头 `00 00 04 08`，见上面 `sinfBase64` 字段的注释），但代码从未验证过；
             // 服务端改个字段语义、或换了一种包装，我们会毫无察觉地把它写进包里，
-            // 症状要到 installd 报解密失败才看得见。
+            // 症状要到 installd 报解密失败才看得见.
             //
             // 判据复用 `PackageSINFWriter.sinfStructure` 那**唯一一套**三态结构判定，
-            // 不在这里另立一套魔数（见 `validatedSinfBase64`）。
+            // 不在这里另立一套魔数（见 `validatedSinfBase64`）.
             let sinfB64 = validatedSinfBase64(string(body["ba_sinfs"]),
                                                  appID: string(body["bundleid"]) ?? "-")
             log.log("\(logTag) [完成] 下载接口返回直链（sinf \(sinfB64?.count ?? 0) 字符，已过形态校验）"
@@ -865,9 +863,9 @@ enum NiuwaStoreClient {
                              sinfBase64: sinfB64)]
         }
 
-        // ▸▸ v0.3.403：**数组可能嵌在 `body` 里**（真机实测就是 `body.ba_apps`）。
+        // ▸▸ ：**数组可能嵌在 `body` 里**（真机实测就是 `body.ba_apps`）.
         // 先在 `body` 里找，再回落到顶层 —— 之前的实现只看顶层，
-        // 于是明明解密成功、数据也拿到了，却报「无候选数组键命中」。
+        // 于是明明解密成功、数据也拿到了，却报「无候选数组键命中」.
         var scopes: [[String: Any]] = []
         if let body = obj["body"] as? [String: Any] { scopes.append(body) }
         scopes.append(obj)
@@ -877,9 +875,9 @@ enum NiuwaStoreClient {
                 guard let arr = scope[key] as? [[String: Any]] else { continue }
                 let apps = arr.compactMap(parse)
                 if apps.isEmpty && !arr.isEmpty {
-                    // ▸ 最关键的诊断：命中了数组、却一条都没解析出来 → 说明**字段键名**不对。
+                    // ▸ 最关键的诊断：命中了数组、却一条都没解析出来 → 说明**字段键名**不对.
                     // 把服务端首条记录的**实际键名**打出来，一次真机搜索就能定死键名
-                    // （上一版就是静默丢弃，白丢了一轮）。
+                    // （上一版就是静默丢弃，白丢了一轮）.
                     let firstKeys = arr[0].keys.sorted().joined(separator: ", ")
                     log.log("\(logTag) [注意] 命中数组键「\(key)」但 0 条解析成功（服务端给了 \(arr.count) 条）；"
                             + "首条记录的键=[\(firstKeys)]（region=\(shape)）", category: .appStore)
@@ -923,18 +921,18 @@ enum NiuwaStoreClient {
 
     // MARK: - 解析
 
-    /// 单条记录 → `NiuwaApp`。
+    /// 单条记录 → `NiuwaApp`.
     ///
-    /// **键名必须同时兼容三套**（这是 v0.3.387 定位到的「列表全空」真因）：
+    /// **键名必须同时兼容三套**（这是 定位到的「列表全空」真因）：
     /// - **无前缀**（`bundleid` / `name` / `downloadURL` / `app_id` …）：二进制里有
     ///   `currentVersionReleaseDate` 这种**无前缀键与 `nwcore_apps` 物理紧邻**（同在 AppStore 模型区）
     ///   → 搜索返回的记录用的是无前缀键；
     /// - **`nwcore_` 前缀**（`nwcore_bundleid` / `nwcore_name` / `nwcore_strVersion` …）：他们自己的属性命名；
     /// - **`nwcore_strApp*`**：已安装应用那一套模型（`strAppPath`/`strAppExecutable` 同族），
-    ///   这里只作兜底。
+    ///   这里只作兜底.
     ///
     /// 早期只认 `nwcore_bundleid` → 一条都解析不出来 → `compactMap` 静默全丢 →
-    /// 返回空数组 → **界面空白且不报错**（正是用户的实测现象）。
+    /// 返回空数组 → **界面空白且不报错**（正是用户的实测现象）.
     private static func parse(_ d: [String: Any]) -> NiuwaApp? {
         guard let bundleId = string(d["nwcore_strAppBundleId"])
                 ?? string(d["nwcore_bundleid"])
@@ -980,11 +978,11 @@ enum NiuwaStoreClient {
         return v
     }
 
-    /// 取字符串值；**空串与纯空白都归一成 nil**。
+    /// 取字符串值；**空串与纯空白都归一成 nil**.
     ///
-    /// v0.3.661：加上 trim。旧版 `!s.isEmpty` 放过了 `" "` 这类值 —— 服务端字段带空白时
-    /// 会一路进到 `expectedFileName` / bundleId 比较里，表现为「字段看起来有值但哪儿都不匹配」。
-    /// 对照 `SignSourceClient.swift:291-295` 的同名函数（早已 trim）。
+    /// 加上 trim.旧版 `!s.isEmpty` 放过了 `" "` 这类值 —— 服务端字段带空白时
+    /// 会一路进到 `expectedFileName` / bundleId 比较里，表现为「字段看起来有值但哪儿都不匹配」.
+    /// 对照 `SignSourceClient.swift:291-295` 的同名函数（早已 trim）.
     private static func string(_ v: Any?) -> String? {
         if let s = v as? String {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -994,20 +992,20 @@ enum NiuwaStoreClient {
         return nil
     }
 
-    /// 校验牛蛙给的 `ba_sinfs` 真的是**sinf 容器**，通过则原样返回 base64，否则返回 nil 并明确报错。
+    /// 校验牛蛙给的 `ba_sinfs` 真的是**sinf 容器**，通过则原样返回 base64，否则返回 nil 并明确报错.
     ///
     /// ## 为什么这里不自己写魔数判断
     ///
-    /// 判据只有**一处**：`PackageSINFWriter.sinfStructure(_:)`（定义在 `IPADownloadCenter.swift`）。
+    /// 判据只有**一处**：`PackageSINFWriter.sinfStructure(_:)`（定义在 `IPADownloadCenter.swift`）.
     /// 它认两种合法形态，而且三态（valid / invalid / unrecognized）——
-    /// v0.3.565 曾因为「只认一种格式」误杀过合法的 SuperBlob 形态，v0.3.570 才改成三态。
-    /// 如果这里再抄一份魔数，两处判据迟早分叉：一边放行、另一边拒绝，症状极难定位。
+    /// 曾因为「只认一种格式」误杀过合法的 SuperBlob 形态，才改成三态.
+    /// 如果这里再抄一份魔数，两处判据迟早分叉：一边放行、另一边拒绝，症状极难定位.
     ///
     /// ## 为什么必须在这里拦，而不是只靠写包时拦
     ///
-    /// `IPADownloadCenter.writeIfNeeded` 失败时**只记日志、静默跳过写入**（包内原有 sinf 保留）。
-    /// 对牛蛙这一路来说，那意味着「用户拿到一个装不上的包，但界面上什么异常都没有」。
-    /// 在产出侧拦一刀，至少能让日志里出现「哪一层、哪个 app、为什么不合格」。
+    /// `IPADownloadCenter.writeIfNeeded` 失败时**只记日志、静默跳过写入**（包内原有 sinf 保留）.
+    /// 对牛蛙这一路来说，那意味着「用户拿到一个装不上的包，但界面上什么异常都没有」.
+    /// 在产出侧拦一刀，至少能让日志里出现「哪一层、哪个 app、为什么不合格」.
     private static func validatedSinfBase64(_ raw: String?, appID: String) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         guard let data = Data(base64Encoded: raw, options: [.ignoreUnknownCharacters]) else {
@@ -1017,12 +1015,12 @@ enum NiuwaStoreClient {
             return nil
         }
         // `PackageSINFWriter` 是**顶层** enum（IPADownloadCenter.swift:1323 缩进为 0），
-        // 不是 `IPADownloadCenter` 的嵌套类型 —— 加前缀会编译失败。
+        // 不是 `IPADownloadCenter` 的嵌套类型 —— 加前缀会编译失败.
         switch PackageSINFWriter.sinfStructure(data) {
         case .valid:
             return raw
         case .invalid:
-            // 头 4 字节是**大端长度**，打出来最能说明「长度字段与实际长度对不上」。
+            // 头 4 字节是**大端长度**，打出来最能说明「长度字段与实际长度对不上」.
             let declared = data.count >= 4
                 ? data.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
                 : -1
@@ -1033,9 +1031,9 @@ enum NiuwaStoreClient {
                     category: .appStore)
             return nil
         case .unrecognized:
-            // ⚠️「不认识」≠「坏」。放行风险是写出坏包，拒绝风险是丢掉一份可能合法的 sinf ——
+            // ⚠️「不认识」≠「坏」.放行风险是写出坏包，拒绝风险是丢掉一份可能合法的 sinf ——
             // 这里选择**放行**并大声记日志：包内原有的 sinf 仍在，写入了坏字节也比用户
-            // 完全拿不到包强；而日志能让人回头补判据。
+            // 完全拿不到包强；而日志能让人回头补判据.
             LoginLogger.shared.log("\(logTag) [注意] sinf **格式不认识**｜层=\(downloadPath).body.ba_sinfs"
                              + "｜appID=\(appID)（\(data.count) 字节，"
                     + "开头 \(data.prefix(8).map { String(format: "%02x", $0) }.joined())）"

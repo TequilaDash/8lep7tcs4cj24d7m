@@ -2,16 +2,16 @@ import SwiftUI
 
 /// 蜂窝隧道支持（二级页）—— 「更多 → Cellular 隧道支持」点进来.
 ///
-/// v0.3.762 用户裁定：快捷指令方案整体删除（shortcuts:// 跳前台严重冲突），
+/// 用户裁定：快捷指令方案整体删除（shortcuts:// 跳前台严重冲突），
 /// 开关方式收敛为三选：自动（私有优先，兜底卡点弹窗）/ 私有实现 / 卡点弹窗.
 /// 页面只剩：开关方式 / 私有开关状态 / 总开关 / 右上角运行日志.
 struct CellularSupportView: View {
     @AppStorage(CellularTunnelManager.enabledKey) private var enabled = false
 
-    /// v0.3.756：右上角「运行日志」面板.
+    /// 右上角「运行日志」面板.
     @State private var showLog = false
 
-    /// v0.3.757：私有开关「写入权限」状态（实时观察服务发布）.
+    /// 私有开关「写入权限」状态（实时观察服务发布）.
     @ObservedObject private var toggleService = CellularDataToggleService.shared
 
     /// 私有开关 API 可用性（init 期探测定死）.

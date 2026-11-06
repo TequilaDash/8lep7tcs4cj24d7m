@@ -2,7 +2,7 @@
 //  HighRefreshService.swift
 //  TequilaDash
 //
-//  全局高刷（v0.3.51）——移植自 GlobalRefresh 的帧率方案：
+//  全局高刷——移植自 GlobalRefresh 的帧率方案：
 //  持续调度的 CADisplayLink 携带 preferredFrameRateRange(30, max, max)，
 //  迫使系统在 app 活跃期间维持最高刷新率（ProMotion 120Hz）.
 //  关闭时 preferred 回 0 交还系统自适应，不干涉其它场景.
@@ -14,9 +14,9 @@ import UIKit
 
 /// `@unchecked Sendable`：可变状态（`displayLink` / `frameCount` / `lastSample` /
 /// `@Published isRunning`·`measuredFPS`）只在主线程写——`start` / `stop` 由 UI 调用，
-/// `tick` 是 CADisplayLink 回调（主 runloop）。唯一的跨线程访问是 SSH 诊断命令
+/// `tick` 是 CADisplayLink 回调（主 runloop）.唯一的跨线程访问是 SSH 诊断命令
 /// （`SSHServerService.execute`，非隔离上下文）对 `isRunning` / `measuredFPS` /
-/// `maxFPS` 三个标量做只读快照。跨线程不存在并发写。
+/// `maxFPS` 三个标量做只读快照.跨线程不存在并发写.
 final class HighRefreshService: NSObject, ObservableObject, @unchecked Sendable {
     static let shared = HighRefreshService()
 

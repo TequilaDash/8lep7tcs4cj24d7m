@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// 职责：
 ///  · 已登录账号一览 + 点选「当前下载账号」+ 单个/全部「退出登录」；
-///  · **添加账号**：走 Asspp 分叉的本地 SAP 登录（v0.3.323 起，不再用 anisette）；
+///  · **添加账号**：走 Asspp 分叉的本地 SAP 登录（不再用 anisette）；
 ///  · 账号体检：dsid / passwordToken / cookie 条数（这三样缺了 Apple 会当未登录，
 ///    下载就报 `MZFinance.NoAccount_message`）.
 struct AppStoreAccountsView: View {
@@ -13,10 +13,10 @@ struct AppStoreAccountsView: View {
     @State private var current: String = ""
     @State private var confirmSignOutAll = false
     @State private var showAddAccount = false
-    /// v0.3.332：单个账号「重登」（用已存凭据续期；Apple 要码时弹统一 2FA 面板并显示来源）
+    /// 单个账号「重登」（用已存凭据续期；Apple 要码时弹统一 2FA 面板并显示来源）
     @State private var reloginTarget: ReloginTarget?
     @State private var reloginBusyEmail: String?
-    /// v0.3.344：长按账号 → 查已购列表（DMAP，只读）
+    /// 长按账号 → 查已购列表（DMAP，只读）
     @State private var historyTarget: ReloginTarget?
 
     /// 2FA 面板的来源（sheet(item:) 需要 Identifiable）

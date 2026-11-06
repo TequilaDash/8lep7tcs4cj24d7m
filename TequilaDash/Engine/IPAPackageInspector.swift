@@ -1,30 +1,30 @@
 import Foundation
 import Compression
 
-/// v0.3.300：本地 IPA 包检测（FairPlay 加密 / Bundle 信息）
+/// 本地 IPA 包检测（FairPlay 加密 / Bundle 信息）
 ///
 /// **为什么需要它**：App Store 原始下载的 IPA 是 **FairPlay 加密**的
-/// （主二进制 Mach-O 的 `LC_ENCRYPTION_INFO_64.cryptid == 1`）。这种包**只能在
+/// （主二进制 Mach-O 的 `LC_ENCRYPTION_INFO_64.cryptid == 1`）.这种包**只能在
 /// 有解密密钥的设备上装**（即走 App Store 正规安装流程）；用 Apple ID 重签只能
 /// 替换 `embedded.mobileprovision` 与重做 `_CodeSignature`，**不会解密 `__TEXT`**，
-/// 装上去必然校验失败。所以下载后必须先判定，再决定怎么装 —— 而不是盲目塞给 installd。
+/// 装上去必然校验失败.所以下载后必须先判定，再决定怎么装 —— 而不是盲目塞给 installd.
 ///
 /// 判据来自 Mach-O 加载命令：
 ///   - `LC_ENCRYPTION_INFO`    (0x21, 32 位)
 ///   - `LC_ENCRYPTION_INFO_64` (0x2C, 64 位)
-///   cryptid = 0 → 已解密（可重签/可直接装）；cryptid = 1 → FairPlay 加密。
+///   cryptid = 0 → 已解密（可重签/可直接装）；cryptid = 1 → FairPlay 加密.
 ///
 /// 实现只用 Foundation + Compression：zip 的 method 8 就是 raw DEFLATE
 /// （`COMPRESSION_ZLIB`），`compression_decode_buffer` 允许只解出所需前若干字节，
-/// 因此**不必**把几百 MB 的主二进制整个展开。
+/// 因此**不必**把几百 MB 的主二进制整个展开.
 enum IPAPackageInspector {
 
     struct Inspection {
-        /// 主二进制的加密状态（v0.3.570：三态）。
+        /// 主二进制的加密状态（三态）.
         ///
         /// **为什么必须三态**：此前是 `isEncrypted: Bool`，读不出主二进制时被写成 `false`
-        /// ——「没能观察到」被当成了「确定未加密」，于是加密包被判成明文包、跳过 sinf 注入。
-        /// 现在读不出 = `.unknown`，任何消费点都必须显式处理，不得默认成 `.plaintext`。
+        /// ——「没能观察到」被当成了「确定未加密」，于是加密包被判成明文包、跳过 sinf 注入.
+        /// 现在读不出 = `.unknown`，任何消费点都必须显式处理，不得默认成 `.plaintext`.
         enum Encryption {
             case encrypted   // cryptid != 0
             case plaintext   // cryptid == 0（明确读到）
@@ -110,7 +110,7 @@ enum IPAPackageInspector {
         return result
     }
 
-    /// 快速判定是否 FairPlay 加密。`nil` = **读不出来 / 无法判定**（不等于「未加密」）。
+    /// 快速判定是否 FairPlay 加密.`nil` = **读不出来 / 无法判定**（不等于「未加密」）.
     static func isFairPlayEncrypted(ipaPath: String) -> Bool? {
         guard let ins = inspect(ipaPath: ipaPath) else { return nil }
         return ins.isEncrypted
@@ -121,7 +121,7 @@ enum IPAPackageInspector {
     /// 提取 `Payload/<name>.app/SC_Info/<CFBundleExecutable>.sinf`
     ///
     /// 这是 installd 安装 App Store（加密）应用时必须的 `ApplicationSINF` 载荷：
-    /// installd 拿它向 Apple 请求该设备的解密密钥。**没有 sinf 就装不了加密包。**
+    /// installd 拿它向 Apple 请求该设备的解密密钥.**没有 sinf 就装不了加密包.**
     static func extractSINF(ipaPath: String) -> Data? {
         extract(ipaPath: ipaPath, suffixProvider: { exe, appPrefix in
             "\(appPrefix).app/SC_Info/\(exe).sinf"
@@ -129,20 +129,20 @@ enum IPAPackageInspector {
     }
 
     /// 提取 `Payload/<name>.app/iTunesMetadata.plist`（作为安装选项 `iTunesMetadata`）
-    /// 取包内 `iTunesMetadata.plist`。
+    /// 取包内 `iTunesMetadata.plist`.
     ///
-    /// ## 为什么试两个位置（v0.3.585 实测修正）
+    /// ## 为什么试两个位置（实测修正）
     ///
     /// **真实 App Store 包的 `iTunesMetadata.plist` 在 IPA 顶层**（与 `Payload/` 平级），
-    /// **不在 `.app` 里**。旧实现只找 `\(appPrefix).app/iTunesMetadata.plist`
-    /// ⇒ 对真实包**恒返回 nil**。
+    /// **不在 `.app` 里**.旧实现只找 `\(appPrefix).app/iTunesMetadata.plist`
+    /// ⇒ 对真实包**恒返回 nil**.
     ///
     /// 实测（`哔哩哔哩3.20.1.ipa`）：顶层条目为
-    /// `META-INF / Payload / iTunesArtwork / iTunesMetadata.plist` —— 确认在顶层。
+    /// `META-INF / Payload / iTunesArtwork / iTunesMetadata.plist` —— 确认在顶层.
     /// 而该包**确实含** `itemId` 与 `softwareVersionExternalIdentifier`，
-    /// 是旧实现**找错位置**才读不到（连带让「按账号现取 sinf」在第一步就放弃、静默回退）。
+    /// 是旧实现**找错位置**才读不到（连带让「按账号现取 sinf」在第一步就放弃、静默回退）.
     ///
-    /// ⇒ 顶层优先（真实包），再退回 `.app` 内（部分重打包的包会把它放进去）。
+    /// ⇒ 顶层优先（真实包），再退回 `.app` 内（部分重打包的包会把它放进去）.
     static func extractiTunesMetadata(ipaPath: String) -> Data? {
         if let atRoot = extract(ipaPath: ipaPath,
                                 suffixProvider: { _, _ in "iTunesMetadata.plist" },

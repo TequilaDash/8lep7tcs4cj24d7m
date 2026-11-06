@@ -2,9 +2,9 @@
 //  ModuleHostShell.swift
 //  TequilaDash
 //
-//  v0.3.481：模块「原生 SwiftUI 二级界面」的外壳.
+//  模块「原生 SwiftUI 二级界面」的外壳.
 //
-//  ## ▸ v0.3.512：顶栏改成**真正的导航栏**（用户反馈「这个顶栏好丑 其实我一直不喜欢这个」）
+//  ## ▸ ：顶栏改成**真正的导航栏**（用户反馈「这个顶栏好丑 其实我一直不喜欢这个」）
 //
 //  旧实现是自绘的一行：左边两个**带文字**的按钮（「返回上一级」「主页」）+ 标题靠右 +
 //  一条 Divider. 问题有三个：
@@ -81,7 +81,7 @@ struct ModuleHostShell: View {
     private var content: some View {
         if tabs.isEmpty {
             // 注册名缺失 / 模块没声明原生界面：给一句人话，不留白屏.
-            // v0.3.721：这里不在 List 内（外层是 NavigationStack），系统 ContentUnavailableView 的灰底
+            // 这里不在 List 内（外层是 NavigationStack），系统 ContentUnavailableView 的灰底
             // 与品牌色体系不符；整页空态统一用自包含的 AppEmptyState（无需 Section 外壳）.
             AppEmptyState(
                 icon: "square.grid.2x2",

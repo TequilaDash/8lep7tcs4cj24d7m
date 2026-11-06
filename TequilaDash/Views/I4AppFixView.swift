@@ -20,18 +20,18 @@ private struct I4AccRow: Identifiable {
 ///
 /// ## 为什么没有应用列表、没有下载台账
 /// 爱思这个入口是**设备级**的：`QDialogFixApp` 没有应用选择列表，`CDeviceAppMgr` 拿到设备对象后
-/// **无条件**写授权文件（plist 是设备级键：serial / udid / imei…，不是应用级）。
-/// 故本页照此实现：不选应用、不查下载台账、不看共享账号白名单。
+/// **无条件**写授权文件（plist 是设备级键：serial / udid / imei…，不是应用级）.
+/// 故本页照此实现：不选应用、不查下载台账、不看共享账号白名单.
 /// （证据：`P3_爱思助手_逆向/_简报/爱思9_修复弹窗_完整实现.md` §2.2）
 ///
 /// ## 不移植
 ///   - 联网 `XX-AUTH` 授权（协议在 `idm_sync.dll` + 爱思服务端，iOS 侧拿不到）；
 ///   - 代理 App 容器里的 `AppInstall_SyncInfo.dat`（落点是 FairPlay 马甲包容器，读者不在我们手里）；
-///   - 「兜底安装代理 App」（代理 App 是 FairPlay 加密马甲包，我们装不了）。
+///   - 「兜底安装代理 App」（代理 App 是 FairPlay 加密马甲包，我们装不了）.
 ///
 /// ## `auth` 字段
 /// 照爱思的兜底逻辑用常量 `"1,2,3,4"`（爱思在「sync 成功但输出为空」时写这个值）；服务端
-/// `XX-AUTH` 真值拿不到，故直接用爱思自己的兜底。是否生效取决于设备端爱思代理 App（读者）。
+/// `XX-AUTH` 真值拿不到，故直接用爱思自己的兜底.是否生效取决于设备端爱思代理 App（读者）.
 ///
 /// ## 界面口径
 /// 只留必要操作与结论；路径 / `auth` 值 / 重试次数等**技术细节折叠进「技术详情」**，
@@ -101,17 +101,17 @@ struct I4AppFixView: View {
     /// 主行动从「全宽淡蓝按钮」改成**卡片 banner**：与 `ReclaimTabView` / `LiveCleanTabView`
     /// 的「扫描应用缓存与临时文件 · 立即扫描」同款 —— 白底大圆角卡（`appCard`，`AppRadius.card`）
     /// + 左侧品牌蓝图标（`AppRowIcon`）+ 标题 + 2 行灰字副标题 + 浅蓝淡底胶囊按钮
-    /// （`InfoActionCard` 内部即 `TintedButtonStyle`，不用纯蓝实底）。只改样式，功能与 `confirmShown`
+    /// （`InfoActionCard` 内部即 `TintedButtonStyle`，不用纯蓝实底）.只改样式，功能与 `confirmShown`
     /// 流程不变；文案精简到「修复什么 + 何时写入」.
     private var actionSection: some View {
         // 与「空间回收」（`ReclaimTabView` 的「立即扫描」）**同款写法**：`Section` 里直接放
         // `InfoActionCard`，由 `insetGrouped` 出系统卡片（左右边距与同页 `statusSection`
-        // 的「设备已就绪」完全一致）。
+        // 的「设备已就绪」完全一致）.
         //
-        // v0.3.602 之前的写法是 `VStack { InfoActionCard }.appCard()` 再叠
+        // 之前的写法是 `VStack { InfoActionCard }.appCard()` 再叠
         // `.listRowInsets(leading/trailing: pageInset)` —— 等于**套了两层内缩**
         // （insetGrouped 一层 + listRowInsets 一层 + appCard 自己还有 padding），
-        // 卡片比同页的「设备已就绪」窄一大截，用户 2026-10-13 报「banner 都没对齐」。
+        // 卡片比同页的「设备已就绪」窄一大截，用户 2026-10-13 报「banner 都没对齐」.
         Section {
             InfoActionCard(
                 icon: "wrench.and.screwdriver.fill",

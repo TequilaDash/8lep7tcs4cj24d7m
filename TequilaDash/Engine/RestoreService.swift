@@ -40,7 +40,6 @@ final class RestoreService {
     func eligibility(for record: BackupRecord, installedApps: [InstalledApp]) -> RestoreEligibility {
         let metadata = record.metadata
 
-        // Container apps (LiveContainer guests) are not in the system app list.
         // Eligibility is based on whether the recorded container path still exists
         // and is reachable through the sandbox extension.
         if metadata.isContainerApp {
@@ -173,7 +172,7 @@ final class RestoreService {
                 }
 
                 // Stream the entry to disk in fixed-size chunks. This is the
-                // v0.3.532 fix for "restoring a single >4 GiB file runs out of
+                // fix for "restoring a single >4 GiB file runs out of
                 // memory": the old code read the whole entry into `Data` before
                 // writing it, so one big file was enough to get the process
                 // jetsam-killed. See `writeEntryStreaming` for how the manifest
@@ -327,7 +326,6 @@ final class RestoreService {
         return parts.count == 3 ? parts[1] : synthetic
     }
 
-    /// For a container-app backup, return the LiveContainer guest sandboxes
     /// currently present on the device that match the backed-up app (same host
     /// + same guest bundle id). Empty when the app is no longer hosted or when
     /// discovery fails. Used by the restore flow to offer a sandbox picker when

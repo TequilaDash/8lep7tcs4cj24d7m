@@ -208,7 +208,7 @@ final class CertificateManager: ObservableObject {
         }
     }
 
-    /// v0.3.157：白名单自动清理——列表刷新成功后比对：白名单 serial 已不在
+    /// 白名单自动清理——列表刷新成功后比对：白名单 serial 已不在
     /// 当前证书列表（已吊销/已不存在/账号切换）时自动清除，避免残留记录
     /// 在「自动吊销」流程中静默放行本应吊销的证书.
     private func pruneWhitelistIfStale() {

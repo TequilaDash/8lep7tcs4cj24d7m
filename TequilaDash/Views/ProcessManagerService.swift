@@ -25,27 +25,27 @@ import Darwin
 ///   `Int32 → UInt32` 转换在任何编译/平台组合下出现歧义.
 /// `Sendable`（非 unchecked）：本类**没有可变存储属性**——两个存储属性都是
 /// `let` 的串行队列（`DispatchQueue` 本身是 `Sendable`），所有进程状态都在
-/// 方法内局部变量里、并已被这两条队列串行化。
+/// 方法内局部变量里、并已被这两条队列串行化.
 ///
 /// 注意： **本条注释已经被改过三次 —— 前两版「成因」都是猜的，全部作废**：
 /// ① 上面「3 次退避重试覆盖**偶发** `ServiceNotFound`」：作废；
 /// ② 第二版「设备未挂 DDI（Developer Disk Image）⇒ CoreDevice 整块不广播」：作废；
 /// ③ 第三版「接错隧道（CoreDevice 族只在 CoreDeviceProxy 隧道的第二个 RSD 握手上）」：
-///    **同样作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）。
-/// **⇒ 本文件从此不再写任何成因推测。**
+///    **同样作废**（与 PC 侧 `pymobiledevice3` 的交叉验证矛盾）.
+/// **⇒ 本文件从此不再写任何成因推测.**
 ///
 /// **事实（用户实测 + PC 侧交叉验证）**：`ServiceNotFound`(21) 是**设备侧的服务状态问题**，
 /// **不是本 App 的缺陷** —— 该服务在设备侧**偶尔**不可用，**重启手机即恢复**（用户实测；
-/// 同类工具也这么处理）。**与 DDI 无关，也与「用哪条隧道」无关**：PC 侧标准工具
-/// `pymobiledevice3` 拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**。
-/// **原理未知。**
+/// 同类工具也这么处理）.**与 DDI 无关，也与「用哪条隧道」无关**：PC 侧标准工具
+/// `pymobiledevice3` 拿到的 RSD 服务表与我们**逐条一致**（64 条），调同一个服务**同样失败**.
+/// **原理未知.**
 ///
 /// **仍然成立（保留）**：`rsd.rs:171-189` 查服务是纯 `HashMap`、查不到直接
 /// `Err(ServiceNotFound)`（错误码 21），**无回退** ⇒ 失败时**重试 3 次毫无意义**（只是白等 0.9s）；
 /// 两个内置模块 / 进程管理 / 虚拟定位停止 / 拨号器主题重启电话 / IPCC 重启 CommCenter /
-/// 设备控制重启 SpringBoard **共用同一套 `app_service` 底座** ⇒ 它不可用时这些会一起失败。
+/// 设备控制重启 SpringBoard **共用同一套 `app_service` 底座** ⇒ 它不可用时这些会一起失败.
 ///
-/// **v0.3.599 修复（主页-模块「执行」报 `ServiceNotFound`）—— 不再赌它「在不在」，改为先查表再选路**：
+/// **修复（主页-模块「执行」报 `ServiceNotFound`）—— 不再赌它「在不在」，改为先查表再选路**：
 /// - `rsd_service_available(handshake, "com.apple.coredevice.appservice")` 与
 ///   `app_service_connect_rsd` 读的是**同一张** `handshake.services`（源码实证：
 ///   `RsdHandshake::connect` = `self.services.get(name)`；`rsd_service_available` =
@@ -53,10 +53,10 @@ import Darwin
 /// - 预检说「不在」⇒ 改走 **DVT 族**（`com.apple.instruments.dtservicehub`，与内存查询 /
 ///   截图 / 虚拟定位**同族**、**不依赖 CoreDevice**）：`device_info_running_processes` 列进程、
 ///   `process_control_kill_app(pid)` 结束进程；
-/// - 两条路都失败才如实报错 —— 不再把裸 `ServiceNotFound` 弹给用户（`ModuleService` 侧同步映射成人话）。
+/// - 两条路都失败才如实报错 —— 不再把裸 `ServiceNotFound` 弹给用户（`ModuleService` 侧同步映射成人话）.
 /// - **仍未验证（诚实标注）**：DVT 的进程表是否包含 `locationd` / `wifid` 这类**系统守护进程**、
 ///   以及 `killPid:` 对守护进程是否放行 —— 本设备截图 / sysmontap 已证 DVT 族可连，但
-///   「守护进程可见性」需真机复测。代码在失败时会如实报「未找到 xxx（DVT 通道）」，不假装成功。
+///   「守护进程可见性」需真机复测.代码在失败时会如实报「未找到 xxx（DVT 通道）」，不假装成功.
 final class ProcessManagerService: Sendable {
 
     static let shared = ProcessManagerService()
@@ -64,12 +64,12 @@ final class ProcessManagerService: Sendable {
 
     /// 串行队列：保证 listProcesses / sendSignal 不并发建隧道.
     /// 同一 hostname 并发 `tunnel_create_rppairing` 会互相抢占（RSD 通道竞争），
-    /// 因此这里必须串行 —— 这条约束本身成立。
+    /// 因此这里必须串行 —— 这条约束本身成立.
     /// 注意： 2026-09-19 更正：但它是**通道被抢占**的根因，**不是** `ServiceNotFound` 的根因 ——
-    /// 后者是**设备侧的服务状态问题**（该服务偶尔不可用，**重启手机即恢复**），与并发无关。
-    /// 见上方注释。
+    /// 后者是**设备侧的服务状态问题**（该服务偶尔不可用，**重启手机即恢复**），与并发无关.
+    /// 见上方注释.
     private let operationQueue = DispatchQueue(label: "com.tequila.dash.processmgr", qos: .userInitiated)
-    /// v0.3.38：内存查询专用串行队列（sysmontap 阻塞式，不与其他操作争用）
+    /// 内存查询专用串行队列（sysmontap 阻塞式，不与其他操作争用）
     private let memoryQueue = DispatchQueue(label: "com.tequila.dash.processmgr.memory", qos: .utility)
 
     /// TequilaDash 的配对文件路径（与「应用管理」/ 虚拟定位共用）.
@@ -126,7 +126,7 @@ final class ProcessManagerService: Sendable {
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "进程管理")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
-        // v0.3.764：门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
+        // 门先于就绪闸门 —— 蜂窝下先开断网窗口，窗口内跳过 guardReady（旧顺序缓存不可达时先抛「隧道未就绪」，卡点弹窗被闷死）.
         if !loopbackGated {
             try TunnelGate.guardReady()
         }
@@ -179,7 +179,7 @@ final class ProcessManagerService: Sendable {
     /// 连接 app_service，失败自动重试 3 次.
     ///
     /// 注意： 这 3 次重试**覆盖不了任何东西**：失败是设备侧 `app_service` 服务偶尔不可用
-    /// （`ServiceNotFound`，**重启手机即恢复**），重试只是白等 0.9s。见类头注释。
+    /// （`ServiceNotFound`，**重启手机即恢复**），重试只是白等 0.9s.见类头注释.
     private func connectAppService(adapter: OpaquePointer, handshake: OpaquePointer) throws -> OpaquePointer {
         var lastError: NSError?
         for attempt in 0..<3 {
@@ -198,16 +198,16 @@ final class ProcessManagerService: Sendable {
 
     // MARK: 服务表预检 + 通道选路
 
-    /// RSD 服务表里的 CoreDevice 入口名（= 上游 `AppServiceClient::rsd_service_name()`，源码实证）。
-    /// 该族未挂 DDI 时不广播 ⇒ 不在表里 ⇒ `app_service_connect_rsd` 必抛 `ServiceNotFound`(21)。
+    /// RSD 服务表里的 CoreDevice 入口名（= 上游 `AppServiceClient::rsd_service_name()`，源码实证）.
+    /// 该族未挂 DDI 时不广播 ⇒ 不在表里 ⇒ `app_service_connect_rsd` 必抛 `ServiceNotFound`(21).
     private static let appServiceServiceName = "com.apple.coredevice.appservice"
 
-    /// 预检：`app_service` 是否在**本次** RSD 握手的服务表里。
+    /// 预检：`app_service` 是否在**本次** RSD 握手的服务表里.
     ///
     /// `rsd_service_available` 只做 `handshake.services.contains_key(name)`：**不连设备、
-    /// 不发任何请求**，所以能安全地当路由开关用。它与 `app_service_connect_rsd`
+    /// 不发任何请求**，所以能安全地当路由开关用.它与 `app_service_connect_rsd`
     /// （`RsdHandshake::connect` = `services.get(name)`）读的是**同一张**表
-    /// ⇒ 预检结果精确预测连接会不会抛 21。
+    /// ⇒ 预检结果精确预测连接会不会抛 21.
     private func appServiceAvailable(handshake: OpaquePointer) -> Bool {
         var available = false
         if let ffiError = Self.appServiceServiceName.withCString({
@@ -221,8 +221,8 @@ final class ProcessManagerService: Sendable {
 
     // MARK: 枚举进程
 
-    /// 枚举设备进程。**先查服务表再选路**：
-    /// `app_service` 在表里 → 走 CoreDevice（原路径）；不在或连不上 → 走 DVT 回退。
+    /// 枚举设备进程.**先查服务表再选路**：
+    /// `app_service` 在表里 → 走 CoreDevice（原路径）；不在或连不上 → 走 DVT 回退.
     func listProcesses() throws -> [ProcessEntry] {
         try operationQueue.sync {
             var tunnel = try createTunnel(hostname: "TequilaDashProcess")
@@ -235,12 +235,12 @@ final class ProcessManagerService: Sendable {
                let entries = try? listProcessesViaAppService(adapter: adapter, handshake: handshake) {
                 return entries
             }
-            // app_service 不在服务表里（CoreDevice 族未广播）或连接失败 ⇒ DVT 回退。
+            // app_service 不在服务表里（CoreDevice 族未广播）或连接失败 ⇒ DVT 回退.
             return try listProcessesViaDVT(adapter: adapter, handshake: handshake)
         }
     }
 
-    /// 原路径：CoreDevice `app_service_list_processes`。
+    /// 原路径：CoreDevice `app_service_list_processes`.
     private func listProcessesViaAppService(
         adapter: OpaquePointer, handshake: OpaquePointer
     ) throws -> [ProcessEntry] {
@@ -267,13 +267,13 @@ final class ProcessManagerService: Sendable {
         return result
     }
 
-    /// 回退路径：DVT `device_info_running_processes`。
+    /// 回退路径：DVT `device_info_running_processes`.
     ///
     /// 走 `com.apple.instruments.dtservicehub`（与内存查询 / 截图 / 虚拟定位**同族**；
-    /// 该族在本设备已被截图 / sysmontap 真机验证可用，**不依赖 CoreDevice**）。
+    /// 该族在本设备已被截图 / sysmontap 真机验证可用，**不依赖 CoreDevice**）.
     /// 设备回传 `name`（execname，如 `locationd` / `wifid`）与 `realAppName`；这里把 execname
     /// 放进 `executablePath` —— `ProcessEntry.displayName` 取路径末段，于是
-    /// `displayName == "locationd"`，与模块 `process` 字段能直接匹配。
+    /// `displayName == "locationd"`，与模块 `process` 字段能直接匹配.
     private func listProcessesViaDVT(
         adapter: OpaquePointer, handshake: OpaquePointer
     ) throws -> [ProcessEntry] {
@@ -313,12 +313,12 @@ final class ProcessManagerService: Sendable {
 
     // MARK: 发送信号
 
-    // MARK: - 内存查询（v0.3.33：DVT sysmontap physFootprint）
+    // MARK: - 内存查询（DVT sysmontap physFootprint）
 
     /// 通过 DVT sysmontap 获取每个进程的 physFootprint（物理内存占用）.
     /// 返回 [pid: bytes]，进程已退出时不出现在字典中.
     func fetchMemoryUsage() throws -> [Int32: UInt64] {
-        // v0.3.38：不用 operationQueue.sync（sysmontap 阻塞式会卡死串行队列）
+        // 不用 operationQueue.sync（sysmontap 阻塞式会卡死串行队列）
         try memoryQueue.sync {
             var tunnel = try createTunnel(hostname: "TequilaDashSysmon")
             defer { tunnel.free() }
@@ -520,12 +520,12 @@ final class ProcessManagerService: Sendable {
         }
     }
 
-    /// 向指定 PID 发信号。同样**先查服务表再选路**：
+    /// 向指定 PID 发信号.同样**先查服务表再选路**：
     /// `app_service` 在表里 → 走 CoreDevice（原路径，支持 SIGCONT / SIGSTOP / SIGKILL）；
-    /// 不在或连不上 → 走 DVT（**只支持结束进程**，见 `sendSignalViaDVT`）。
+    /// 不在或连不上 → 走 DVT（**只支持结束进程**，见 `sendSignalViaDVT`）.
     ///
     /// `expectedName`：调用方若知道该 PID「应该叫什么」（模块按名字匹配后拿到），
-    /// 传进来可在 DVT 通道上做一次**进程名核对**，避免 PID 复用导致误杀。
+    /// 传进来可在 DVT 通道上做一次**进程名核对**，避免 PID 复用导致误杀.
     func sendSignal(_ action: ProcessControlAction, toPID pid: Int, expectedName: String? = nil) throws {
         try operationQueue.sync {
             var tunnel = try createTunnel(hostname: "TequilaDashProcess")
@@ -543,7 +543,7 @@ final class ProcessManagerService: Sendable {
         }
     }
 
-    /// 原路径：CoreDevice `app_service_send_signal`（SIGCONT / SIGSTOP / SIGKILL 都支持）。
+    /// 原路径：CoreDevice `app_service_send_signal`（SIGCONT / SIGSTOP / SIGKILL 都支持）.
     private func sendSignalViaAppService(
         _ action: ProcessControlAction, toPID pid: Int,
         adapter: OpaquePointer, handshake: OpaquePointer
@@ -566,12 +566,11 @@ final class ProcessManagerService: Sendable {
         defer { if let response { app_service_free_signal_response(response) } }
     }
 
-    /// 回退路径：DVT `process_control_kill_app(pid)`。
+    /// 回退路径：DVT `process_control_kill_app(pid)`.
     ///
-    /// DVT 的 processcontrol 通道只有 `killPid:`（源码实证：上游 `kill_app` 直接发
     /// `killPid:` + pid，**不做名字查表**）⇒ **只能结束进程**；恢复 / 挂起如实报错，
-    /// 不假装成功。结束前若调用方给了 `expectedName`，先用 `device_info_execname_for_pid`
-    /// 核对一次，避免 PID 复用误杀。
+    /// 不假装成功.结束前若调用方给了 `expectedName`，先用 `device_info_execname_for_pid`
+    /// 核对一次，避免 PID 复用误杀.
     private func sendSignalViaDVT(
         _ action: ProcessControlAction, toPID pid: Int, expectedName: String?,
         adapter: OpaquePointer, handshake: OpaquePointer
@@ -587,7 +586,7 @@ final class ProcessManagerService: Sendable {
         guard let server else { throw makeError("创建 DVT 服务失败") }
         defer { remote_server_free(server) }   // 晚于下方 handle 释放（defer 后进先出）
 
-        // 1) 名字核对（仅当调用方提供了期望名）：PID 可能被系统复用，杀错进程后果严重。
+        // 1) 名字核对（仅当调用方提供了期望名）：PID 可能被系统复用，杀错进程后果严重.
         if let expectedName, !expectedName.isEmpty {
             var deviceInfo: OpaquePointer?
             if let ffiError = device_info_new(server, &deviceInfo) {
@@ -602,7 +601,7 @@ final class ProcessManagerService: Sendable {
             }
             let actual = execName.flatMap { String(cString: $0) } ?? ""
             if let execName { idevice_string_free(execName) }
-            // 设备可能回传名字或路径，取末段后大小写不敏感比较。
+            // 设备可能回传名字或路径，取末段后大小写不敏感比较.
             let actualLeaf = actual.split(separator: "/").last.map(String.init) ?? actual
             guard actualLeaf.lowercased() == expectedName.lowercased() else {
                 throw makeError("PID \(pid) 现在是「\(actual.isEmpty ? "未知" : actualLeaf)」，"

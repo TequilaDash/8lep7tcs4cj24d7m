@@ -3,7 +3,6 @@ import SwiftUI
 
 /// 「Anisette 服务器」二级页 —— 「更多 → 设置 → Anisette 服务器」点进来的下一级.
 ///
-/// 对照 AltStore Classic 的 Remote AltServer 页（参考截图 5）分区：
 ///   · **Status**：当前服务器连通性（检测中 / 已连接 / 失败原因）；
 ///   · **常用**：常用服务器列表，选中打勾；
 ///   · **Custom**：自定义地址输入 + 打勾选用；
@@ -13,13 +12,13 @@ import SwiftUI
 struct AnisetteServersView: View {
     /// 与设置页、`AnisetteProvider` 同源的服务器键.
     @AppStorage("AnisetteServer") private var anisetteServer: String = "https://ani.stikstore.app"
-    /// v0.3.613：用户自定义的 `X-MMe-Client-Info`（留空 = 用内置默认）.
+    /// 用户自定义的 `X-MMe-Client-Info`（留空 = 用内置默认）.
     ///
     /// 为什么需要可自定义（依据 SideSign PR #5「Fix 2FA failing」，2026-10-13 merged）：
     /// GSA 现在会**指纹识别所用的 adi 库**，导致既有 anisette 服务器生成的 headers 被拒
-    /// （用户侧表现就是 `Code -80045`）。SideSign 作者实测把 client info 换成
+    /// （用户侧表现就是 `Code -80045`）.SideSign 作者实测把 client info 换成
     /// `<Pixel 8><Android; 14; UQ1A.240205.004><com.apple.AuthKit/1 (com.apple.android.music/4.9.6)>`
-    /// 就能让既有服务器恢复可用。但 GSA 的判据会再变，故**做成可编辑**，
+    /// 就能让既有服务器恢复可用.但 GSA 的判据会再变，故**做成可编辑**，
     /// 与 SideStore 的 `customAnisetteClientInfo` 同款（它的优先级是
     /// 「UserDefaults 自定义 > 配置文件 > 默认值」，本仓取前两者）.
     @AppStorage("CustomAnisetteClientInfo") private var customClientInfo: String = ""
@@ -29,7 +28,6 @@ struct AnisetteServersView: View {
     @State private var status: Status = .checking
     @State private var statusTask: Task<Void, Never>?
     @State private var showAdiResetConfirm: Bool = false
-    /// SideStore 同名开关：勾选时重置只清 adi.pb，保留自定义 client-info（默认勾选）.
     @State private var keepAnisetteHeaders: Bool = true
 
     /// 服务器连通性检测结果.
@@ -46,12 +44,12 @@ struct AnisetteServersView: View {
         let url: String
     }
 
-    /// 常用服务器 —— **直接取 `MemoryLimitSettings.anisetteServers`（15 个）**，不再另维护一份。
+    /// 常用服务器 —— **直接取 `MemoryLimitSettings.anisetteServers`（15 个）**，不再另维护一份.
     ///
-    /// v0.3.603 之前这里硬编码了 5 个（对照参考截图 5 的 AltStore Popular 列表），
+    /// 之前这里硬编码了 5 个（对照参考截图 5 的 AltStore Popular 列表），
     /// 而设置层 `MemoryLimitSettings.anisetteServers` 有 15 个（原有 4 + 合并 SideInstaller
-    /// 社区列表 11）—— 两处不一致，用户 2026-10-13 报「原来几十个去哪里了」。
-    /// **唯一真相源**：列表归 `MemoryLimitSettings`，本页只负责渲染。
+    /// 社区列表 11）—— 两处不一致，用户 2026-10-13 报「原来几十个去哪里了」.
+    /// **唯一真相源**：列表归 `MemoryLimitSettings`，本页只负责渲染.
     private static let popular: [PopularServer] = MemoryLimitSettings.anisetteServers.map { url in
         let host = MemoryLimitSettings.host(from: url)
         return PopularServer(name: host, url: url)
@@ -82,7 +80,6 @@ struct AnisetteServersView: View {
         // sheet 挂 List 根：挂 Section 上时页内状态一刷新首次呈现即被回收（弹出即消失 bug）.
         .sheet(isPresented: $showAdiResetConfirm) {
             AdiResetSheet {
-                // SideStore 的 Reset ADI 语义（SideStore ResetAdiAlertController）：
                 // 一个破坏性「重置」按钮 + 勾选「保留头部自定义」，没有第二种重置.
                 if !keepAnisetteHeaders {
                     UserDefaults.standard.removeObject(forKey: "CustomAnisetteClientInfo")
@@ -218,18 +215,18 @@ struct AnisetteServersView: View {
                     .foregroundStyle(.secondary)
             }
             engineRow
-            // v0.3.620：本机 ADI 取数**已接线**（v0.3.613 起），这里按真实状态显示.
-            // 旧文案「未接线（回退远程）」是 v0.3.613 之前的遗留，会让用户误以为功能没做.
+            // 本机 ADI 取数**已接线**，这里按真实状态显示.
+            // 旧文案「未接线（回退远程）」是 之前的遗留，会让用户误以为功能没做.
             // 真实判据：`hasAdiPb`（有配给票据才可能走本机）+ `readiness()`.
             if oda.hasEngineInstalled {
                 HStack {
                     Text("本机取数")
                     Spacer()
                     Text(localFetchStatus)
-                        // v0.3.648：原写法 `.foregroundColor(isReady ? .secondary : .secondary)`
-                        // 两个分支完全相同 —— 写了等于没写。这里改成真正有信息量的区分：
+                        // 原写法 `.foregroundColor(isReady ? .secondary : .secondary)`
+                        // 两个分支完全相同 —— 写了等于没写.这里改成真正有信息量的区分：
                         // 能本机生成（有 adiPb）用次字色，还在等首次配给用更弱的第三字色，
-                        // 让用户一眼看出「现在是不是已经能本机取数」。
+                        // 让用户一眼看出「现在是不是已经能本机取数」.
                         .foregroundColor(oda.hasAdiPb ? Color.secondary : Color(UIColor.tertiaryLabel))
                         .lineLimit(1)
                 }
@@ -245,10 +242,10 @@ struct AnisetteServersView: View {
         case .notReady(let missing):
             return "未就绪（缺 \(missing.joined(separator: "、"))）"
         case .ready:
-            // v0.3.648：原文案「首次需联网配给后转本机」有歧义——
-            // 用户读到的是「功能还没做完」。真实情况是：本机取数**已接线**，
+            // 原文案「首次需联网配给后转本机」有歧义——
+            // 用户读到的是「功能还没做完」.真实情况是：本机取数**已接线**，
             // 只是 Apple ID 的配给票据（adiPb）还没生成；
-            // 走一次登录流程就会自动联网配给，拿不到票据不是因为缺功能。
+            // 走一次登录流程就会自动联网配给，拿不到票据不是因为缺功能.
             return oda.hasAdiPb ? "本机生成（不连服务器）" : "待首次登录后启用"
         }
     }
@@ -282,8 +279,8 @@ struct AnisetteServersView: View {
             }
         }
         if let error = oda.lastError {
-            // v0.3.697 起：整行错误行统一到 AppErrorRow（info.circle + AppTheme.pending）.
-            // 旧写法是自造的红字 footnote，与 v0.3.683 收口的 28 处同形，
+            // 整行错误行统一到 AppErrorRow（info.circle + AppTheme.pending）.
+            // 旧写法是自造的红字 footnote，与 收口的 28 处同形，
             // 且与其它页面的错误行外观不一致. 取色按 DesignSystem.swift 的文档判据：
             // 引擎下载 / 移除失败是可恢复问题（上面的按钮可再触发一次），
             // 用 pending 橙而不是 danger 红. 不传 retry —— 同区块的
@@ -294,8 +291,6 @@ struct AnisetteServersView: View {
 
     // MARK: - 恢复默认
 
-    /// 对齐 SideStore 的「Reset ADI」：重置 adi.pb 时可选保留头部自定义
-    /// （SideStore: ResetAdiAlertViewController 的 "Keep header customizations" 勾选，
     /// 本仓映射为确认弹窗里的两个动作；保留 = 不动「自定义 client-info」设置）.
     private var resetSection: some View {
         Section {
@@ -395,7 +390,6 @@ struct AnisetteServersView: View {
 }
 
 
-/// 重置 adi.pb 确认卡（对齐 SideStore 的 Reset ADI 弹窗：勾选 + 单个破坏性按钮 + 取消）.
 private struct AdiResetSheet: View {
     var onReset: () -> Void
     @State private var keepHeaders = true
