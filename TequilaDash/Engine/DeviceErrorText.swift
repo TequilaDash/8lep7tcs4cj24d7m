@@ -52,7 +52,7 @@ enum LockdownFailure: Equatable {
 enum DeviceErrorText {
 
     /// 直接返回 char* 的净化文案；指针为空返回 nil.
-    static func cleaned(_ raw: UnsafeMutablePointer<CChar>?) -> String? {
+    static func cleaned(_ raw: UnsafePointer<CChar>?) -> String? {
         guard let raw else { return nil }
         return annotate(String(cString: raw))
     }
