@@ -363,14 +363,8 @@ final class IPAInstallService: ObservableObject, @unchecked Sendable {
               let token = account.swiftAuthToken, !token.isEmpty else { return }
         let email = account.email
         isWarmingUp = true
-        // v0.3.765 看门狗：恢复链路里任何一环卡死（anisette/FFI/隧道门）超过 60 秒，
-        // 强制解除「正在恢复签名会话」状态——宁可显示未登录，也绝不永久转圈.
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 60_000_000_000)
-            guard let self, self.isWarmingUp else { return }
-            self.isWarmingUp = false
-            LoginLogger.shared.log("[注意] 签名会话恢复超过 60 秒未结束，界面已停止等待；后台恢复若成功会自动转为已登录")
-        }
+        // v0.3.767：按用户裁定删除 60s 看门狗——恢复完成即翻转 isWarmingUp（事件驱动、零延迟、
+        // 无超时机制）；765 已把预注册移出恢复路径，链路上不再有会挂死的环节.
         Task { [weak self] in
             guard let self else { return }
             defer { self.isWarmingUp = false }

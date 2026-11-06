@@ -133,6 +133,13 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         let checker = CellularNetworkChecker.shared
         // v0.3.761：Wi-Fi 判定改 BSD 接口快照（en* 持有地址才算），utun 场景不再误判.
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return false }
+        // v0.3.767（Gnoix 对齐）：断网窗口建立的通路在蜂窝恢复后仍可用（真机实测）——
+        // 通路已在就不再二次卡点，直接放行；判据与 guardReady 完全一致，门过 ⇒ 操作必过.
+        if TunnelGate.isReady { return false }
+        if LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: 0.5, port: RemotePairingPort.current) {
+            TunnelGate.setReady(true)
+            return false
+        }
         if !checker.isNetworkConnectedNow { return false }
         gateLock.lock()
         if gateBusy || runTask != nil { gateLock.unlock(); return false }
@@ -193,6 +200,8 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     func awaitLoopbackGate(label: String) async -> LoopbackGateVerdict {
         let checker = CellularNetworkChecker.shared
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return .notNeeded }
+        // v0.3.767（Gnoix 对齐）：通路已在（上次卡点窗口建立，蜂窝恢复后仍可用）⇒ 不再二次卡点.
+        if await loopbackPathAlive() { return .notNeeded }
         if !checker.isNetworkConnectedNow { return .notNeeded }
         let acquired: Bool = gateLock.withLock {
             if gateBusy || runTask != nil { return false }
@@ -223,6 +232,17 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             self.phase = .injecting(label: label)
         }
         return .opened
+    }
+
+    /// 通路已在判定（v0.3.767 Gnoix 对齐）：缓存说通就信；缓存说断再权威补一枪 0.5s 探测
+    /// （与 TunnelGate.guardReady 同判据同上限，硬规则 29）.
+    private func loopbackPathAlive() async -> Bool {
+        if TunnelGate.isReady { return true }
+        let alive = await Task.detached(priority: .userInitiated) {
+            LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: 0.5, port: RemotePairingPort.current)
+        }.value
+        if alive { TunnelGate.setReady(true) }
+        return alive
     }
 
     /// 门核心：弹卡 → 自动关 → 等断网（8s）→ 手动（900s）。
@@ -345,6 +365,10 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
         // ① Wi-Fi 在线：无需卡点，直接执行（不开弹窗）.（v0.3.761：接口快照判定）
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi {
+            return try await action()
+        }
+        // ①b v0.3.767（Gnoix 对齐）：通路已在 ⇒ 不弹卡直接执行（通路在蜂窝恢复后仍可用）.
+        if await loopbackPathAlive() {
             return try await action()
         }
         // ② 已经离线：路由重置窗口已开，直接进窗口.
