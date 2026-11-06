@@ -232,7 +232,14 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     private var instanceBrowser: NetServiceBrowser?
     private var fallbackTypeBrowsers: [NWBrowser] = []
     private var pending: [NetService] = []
-    private var typeEnumTimeout: DispatchWorkItem?
+    /// 事件收摊记账：原先前这里是 `asyncAfter(.now()+10)` 统一定时收摊（用户令：不许自己加秒数），
+    /// 现在两路都落定才停，全程零定时器.
+    private var metaQuerySettled = false
+    private var fallbackTypesTotal = 0
+    private var settledFallbackBrowsers: Set<ObjectIdentifier> = []
+    /// browseToken -> 浏览器：@Sendable 闭包直接捕获 NWBrowser 会撞 #SendableClosureCaptures（CI 实测），
+    /// 故闭包只捕获 Int 令牌，回表取浏览器.
+    private var fallbackBrowserBox: [Int: NWBrowser] = [:]
 
     func start() {
         guard !isBrowsing else { return }
@@ -322,7 +329,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     // MARK: - 服务类型枚举（SideStore 三层模型的第②层）
 
     /// SideStore discoverServiceTypes 同款：_services._dns-sd._udp. meta-query 优先，
-    /// 68 型 NWBrowser 兜底探测并行挂上，10 秒超时统一收摊.
+    /// 68 型 NWBrowser 兜底探测并行挂上；收摊靠事件（tryFinishTypeEnumeration），不定秒.
     func discoverServiceTypes(in domain: String) {
         let domainWithDot = domain.hasSuffix(".") ? domain : domain + "."
         stopTypeSearch()
@@ -334,31 +341,60 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         browser.searchForServices(ofType: "_services._dns-sd._udp.", inDomain: domainWithDot)
         typeBrowser = browser
         startFallbackSearches(types: Self.commonServiceTypesToBrowse, in: domainWithDot)
-        let timeout = DispatchWorkItem { [weak self] in self?.stopTypeSearch() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
-        typeEnumTimeout = timeout
+    }
+
+    /// 收摊判据（用户 m27306「谁让你加的延迟和秒数」）：两路事件都落定才 stop ——
+    /// ① meta-query 出终态（didFind moreComing=false / didNotSearch / DidStopSearch）；
+    /// ② 68 型兜底浏览器每型都回过至少一次结果集（空集也算）或进入 failed/cancelled.
+    /// 任何一路没落定就继续挂着，页面显示「正在枚举服务类型…」——没有定时器，也不许有.
+    private func tryFinishTypeEnumeration() {
+        guard isEnumeratingTypes, metaQuerySettled else { return }
+        guard settledFallbackBrowsers.count >= fallbackTypesTotal else { return }
+        stopTypeSearch()
+    }
+
+    private func noteFallbackBrowserSettled(_ token: Int) {
+        guard let browser = fallbackBrowserBox[token] else { return }
+        let key = ObjectIdentifier(browser)
+        guard !settledFallbackBrowsers.contains(key) else { return }
+        settledFallbackBrowsers.insert(key)
+        tryFinishTypeEnumeration()
     }
 
     /// SideStore startFallbackSearches 同款：每型一个 NWBrowser 直接 browse，
     /// 有结果即记类型；浏览器挂入 fallbackTypeBrowsers 统一停.
     private func startFallbackSearches(types: [String], in domain: String) {
-        for t in types {
+        settledFallbackBrowsers = []
+        fallbackBrowserBox = [:]
+        fallbackTypesTotal = types.count
+        for (browseToken, t) in types.enumerated() {
             let typeWithoutDot = t.hasSuffix(".") ? String(t.dropLast()) : t
             let parameters = typeWithoutDot.contains("_tcp") ? NWParameters.tcp : NWParameters.udp
             let descriptor = NWBrowser.Descriptor.bonjour(type: typeWithoutDot, domain: domain)
             let browser = NWBrowser(for: descriptor, using: parameters)
             browser.browseResultsChangedHandler = { [weak self] results, _ in
-                guard !results.isEmpty else { return }
                 DispatchQueue.main.async {
-                    self?.insertServiceType(rawType: t)
+                    guard let self else { return }
+                    if !results.isEmpty { self.insertServiceType(rawType: t) }
+                    // 首回调（含空集）即该型探完：NWBrowser 就绪后必发一次结果集，这就是收摊事件.
+                    self.noteFallbackBrowserSettled(browseToken)
                 }
             }
-            browser.stateUpdateHandler = { state in
-                // 探测失败（含 LC 宿主白名单拦截）静默：枚举是观测面，不打扰用户.
-                _ = state
+            browser.stateUpdateHandler = { [weak self] state in
+                // 探测失败（含 LC 宿主白名单拦截）静默：枚举是观测面，不打扰用户；
+                // 但 failed/cancelled 同样是终态，必须记账，否则该型永不落定、枚举永不收摊.
+                switch state {
+                case .failed, .cancelled:
+                    DispatchQueue.main.async { self?.noteFallbackBrowserSettled(browseToken) }
+                case .ready, .waiting:
+                    break
+                @unknown default:
+                    break
+                }
             }
             browser.start(queue: DispatchQueue.global(qos: .userInitiated))
             fallbackTypeBrowsers.append(browser)
+            fallbackBrowserBox[browseToken] = browser
         }
     }
 
@@ -367,8 +403,10 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         typeBrowser = nil
         for b in fallbackTypeBrowsers { b.cancel() }
         fallbackTypeBrowsers.removeAll()
-        typeEnumTimeout?.cancel()
-        typeEnumTimeout = nil
+        fallbackBrowserBox = [:]
+        settledFallbackBrowsers = []
+        fallbackTypesTotal = 0
+        metaQuerySettled = false
         if isEnumeratingTypes { isEnumeratingTypes = false }
     }
 
@@ -422,6 +460,10 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
                 rawType = name + type
             }
             insertServiceType(rawType: rawType)
+            if !moreComing {
+                metaQuerySettled = true
+                tryFinishTypeEnumeration()
+            }
             return
         }
         lastErrorText = nil
@@ -455,7 +497,14 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
             isBrowsingInstances = false
             return
         }
-        guard browser !== domainBrowser, browser !== typeBrowser else { return }
+        if browser === typeBrowser {
+            // 枚举失败（LC 宿主未声明 _services._dns-sd._udp 时常见）同样是终态：记账收摊，
+            // 但不报错——兜底探测可能仍有结果，本页只是观测面.
+            metaQuerySettled = true
+            tryFinishTypeEnumeration()
+            return
+        }
+        guard browser !== domainBrowser else { return }
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
         // LC #1519：LiveContainer 宿主按自己的 NSBonjourServices 白名单校验服务类型，
         // guest 声明不合并；缺类型时该浏览器报错且权限弹窗不弹（_remotepairing._tcp
@@ -467,7 +516,11 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
-        // 主动 stop 的正常收尾；状态由 stop()/stopTypeSearch() 管理，这里不动.
+        // 主动 stop 的正常收尾；typeBrowser 被停掉也算 meta 落定，别把枚举吊着.
+        if browser === typeBrowser {
+            metaQuerySettled = true
+            tryFinishTypeEnumeration()
+        }
     }
 
     // MARK: - NetServiceDelegate

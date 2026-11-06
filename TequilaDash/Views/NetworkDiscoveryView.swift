@@ -258,7 +258,7 @@ private struct NetworkDomainDetailView: View {
             } header: {
                 Text("服务类型")
             } footer: {
-                Text("SideStore 同款：_services._dns-sd._udp 枚举 + 常见类型兜底探测，10 秒收敛.点类型看实例.")
+                Text("SideStore 同款：_services._dns-sd._udp 枚举 + 常见类型兜底探测，两路探测都落定后自动停止.点类型看实例.")
             }
         }
         .listStyle(.insetGrouped)

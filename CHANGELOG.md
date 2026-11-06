@@ -1,6 +1,8 @@
 ## [0.3.774] - 2026-11-06
 
 ### 修复
+- 服务类型枚举去定时器：原先前这里挂一个 10 秒 `asyncAfter` 统一收摊（用户 {{ACCOUNT_74r86bdi}}「谁让你加的延迟和秒数」），现在两路探测都落定才停——meta-query 出终态（didFind moreComing=false / didNotSearch / DidStopSearch）与 68 型兜底每型至少回过一次结果集（空集也算，failed/cancelled 同样记账），全程零定时器；页面在落定前一直显示「正在枚举服务类型」，落定即收摊，用户可见文案里的秒数一并删掉.
+- 待发页就绪续跑本来就在：9 个待发页都接了 `onTunnelReady`（形如 `.onTunnelReady { resumePending() }`，进程管理用 `onReceive($isReady)`），缺的只是「有人去开卡点」，已由上一条补上；这条更正记在这儿免得下次误判成零接线.
 - 蜂窝隧道就绪等待去秒级轮询：`waitForTunnelReady` 原每 200ms `Thread.sleep` 撞一次、预算 2s，改为入口先探一次，未就绪即挂到两个真事件上——内置隧道的 `NEVPNStatusDidChange` 与 utun 建拆引起的 `NWPathMonitor` 路径更新（LocalDevVPN 这类第三方 App 的隧道不归本进程发 NE 通知，路径事件是唯一可用信号，且 start 后必有一次初值回调）；事件命中立刻唤醒。
 - 万一两路事件都不来，兜底只剩毫秒级：每 20ms 复查、累计上限 250ms（`readyTickMs`/`readyBudgetMs`），不再有 2s 的等。单次 TCP 探测本身仍是 socket connect 的 250ms 上限，不是等待策略。
 - JIT 建隧道重试退避由 300ms/600ms 递增改为固定 20ms 毫秒级间隔（`JITEnableService.retryTickMs`）；节流交给 FFI 与 socket，不再人为退避秒数。
