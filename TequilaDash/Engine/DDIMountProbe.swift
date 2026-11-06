@@ -108,7 +108,7 @@ enum DDIMountProbe {
 
         out.append("[0] 前置")
         out.append("  · 配对文件：\(FileManager.default.fileExists(atPath: pairingPath) ? "存在" : "缺失")  \(pairingPath)")
-        out.append("  · 隧道 targetIP=\(LocalDevVPN.targetIP) isConnected=\(LocalDevVPN.isConnected)（与所选方式无关；当前所选=\(TunnelManager.selectedKind.title)）")
+        out.append("  · 隧道 targetIP=\(LocalDevVPN.connectIP) isConnected=\(LocalDevVPN.isConnected)（与所选方式无关；当前所选=\(TunnelManager.selectedKind.title)）")
         guard FileManager.default.fileExists(atPath: pairingPath) else {
             out.append("")
             out.append("结论：未导入配对文件，探针终止（无法建隧道）.")
@@ -232,7 +232,7 @@ enum DDIMountProbe {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "DDI 探测")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         guard deviceIP.withCString({ inet_pton(AF_INET, $0, &addr.sin_addr) }) == 1 else {
             throw probeError("隧道 IP 无效：\(deviceIP)")
         }

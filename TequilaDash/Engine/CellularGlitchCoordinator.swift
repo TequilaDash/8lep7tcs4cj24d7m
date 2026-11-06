@@ -136,7 +136,9 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         // v0.3.767（Gnoix 对齐）：断网窗口建立的通路在蜂窝恢复后仍可用（真机实测）——
         // 通路已在就不再二次卡点，直接放行；判据与 guardReady 完全一致，门过 ⇒ 操作必过.
         if TunnelGate.isReady { return false }
-        if LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: 0.5, port: RemotePairingPort.current) {
+        // v0.3.768（Gnoix 对齐）：判据升级为双通道（utun 对端 或 设备直连），直连通了
+        // 蜂窝下也不再弹卡 —— RSD 监听设备所有网卡，iOS 只限应用连 127.0.0.1 回环.
+        if LocalDevVPN.isChannelReachable(timeout: 0.5) {
             TunnelGate.setReady(true)
             return false
         }
@@ -239,7 +241,7 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     private func loopbackPathAlive() async -> Bool {
         if TunnelGate.isReady { return true }
         let alive = await Task.detached(priority: .userInitiated) {
-            LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: 0.5, port: RemotePairingPort.current)
+            LocalDevVPN.isChannelReachable(timeout: 0.5)
         }.value
         if alive { TunnelGate.setReady(true) }
         return alive

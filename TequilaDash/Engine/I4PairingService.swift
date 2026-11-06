@@ -655,7 +655,7 @@ enum I4PairingService {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "i4 工具箱")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         guard deviceIP.withCString({ inet_pton(AF_INET, $0, &addr.sin_addr) }) == 1 else {
             throw PairingError.pairTransportFailed(
                 "隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")

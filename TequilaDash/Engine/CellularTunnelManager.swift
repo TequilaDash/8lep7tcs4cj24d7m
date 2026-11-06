@@ -131,7 +131,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         // 通路建立后蜂窝恢复仍可用（真机实测）；隧道已就绪时再关蜂窝纯属破坏（且此路径无人恢复）.
         // 零延迟直接放行（结论等价 waitForTunnelReady 成功）.
         if TunnelGate.isReady
-            || LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: 0.5, port: RemotePairingPort.current) {
+            || LocalDevVPN.isChannelReachable(timeout: 0.5) {
             TunnelGate.setReady(true)
             Self.logGateOnce("pathAlive", "通路已在（蜂窝恢复后仍可用），跳过关蜂窝直接放行")
             return true

@@ -98,7 +98,7 @@ enum StorageDetailService {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "存储详情")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         guard deviceIP.withCString({ inet_pton(AF_INET, $0, &addr.sin_addr) }) == 1 else {
             throw makeError("隧道 IP 无效：\(deviceIP)")
         }

@@ -164,7 +164,7 @@ enum IconCleanupService {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "图标清理")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         guard deviceIP.withCString({ inet_pton(AF_INET, $0, &addr.sin_addr) }) == 1 else {
             throw CleanupError.tunnelFailed("隧道 IP 无效：\(deviceIP)")
         }

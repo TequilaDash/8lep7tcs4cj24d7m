@@ -1,3 +1,14 @@
+## [0.3.768] - 2026-11-06
+
+### 新增
+- 设备直连通道（Gnoix 对齐逆向落地）：Bonjour（_remotepairing._tcp / _remoted._tcp）解析出设备自身 IPv4 + RSD 端口并持久化；utun 隧道不可达时（蜂窝下）自动改走「设备自身 IP 直连」—— RSD 监听设备所有网卡，iOS 只限制应用连 127.0.0.1 回环，不限自身网卡地址，蜂窝下隧道操作不再依赖 LocalDevVPN.
+- 隧道就绪探测 / 闸门 / 卡点门 / 蜂窝管理器全链路升级为「utun 或直连」双通道判据（probeOnce → TunnelGate → guardReady → beginLoopbackGate → prepareForTunnel），直连可用时卡点弹窗不再出现.
+- 建连候选链升级：直连候选（90 秒探测新鲜戳）排最前，防陈旧 IP 挂死 Rust 无超时 connect；全部建隧道服务的 sockaddr 来源统一 connectIP（直连新鲜 ? 设备 IP : utun 对端）.
+- 网络发现（mDNS）二级页（SideStore Network Discovery 移植）：入口在「Cellular 隧道支持 → 网络发现」，实时浏览 _remotepairing / _remoted / _remotepairing-pairable-host 服务，展示设备直连候选（IP / 端口 / 新鲜度）与一键探测直连.
+
+### 修复
+- 蜂窝下「之后所有隧道操作直接用」对齐 Gnoix：直连候选一经探测通过即持续保鲜（后台探测 1.5 秒一拍），蜂窝恢复后无需任何卡点 / 弹窗.
+
 ## [0.3.767] - 2026-11-06
 
 ### 修复

@@ -470,7 +470,8 @@ static uint16_t TDRPPairingPort(void) {
 /// 本次要依次尝试的候选对端（v0.3.636 新增）。
 ///
 /// 顺序与 Swift 侧 `LocalDevVPN.candidateTunnelPeers()` 对齐：
-///   1. 上次成功的那个（若有）—— 命中率最高，放最前
+///   0. 直连候选（Bonjour 设备自身 IP，90s 探测新鲜）—— 蜂窝下唯一活路，放最前
+///   1. 上次成功的那个（若有）—— 命中率最高
 ///   2. 用户显式覆盖 `TunnelDeviceIP`
 ///   3. utun 点对点对端 + 路由表枚举（`esc_route_utun_peers`）
 ///   4. 兜底 10.7.0.1
@@ -488,6 +489,19 @@ static uint16_t TDRPPairingPort(void) {
         [seen addObject:ip];
         [out addObject:ip];
     };
+
+    // 0. 直连候选（v0.3.768 Gnoix 对齐）：Bonjour 解析出的设备自身 IP + RSD 端口。
+    // 仅当 Swift 侧直连探测 90 秒内成功过（rppairing.directIPAt 新鲜）才纳入——
+    // Rust tunnel_create_rppairing 首个 connect 无超时，陈旧 IP 会挂死整条链路。
+    // 直连不依赖 utun（RSD 监听设备所有网卡，iOS 只限应用连回环），蜂窝下照样可用；
+    // 且必须排在 utun 候选之前：蜂窝下 utun 对端会挂住无超时 connect.
+    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+    NSString *directIP = [[defs stringForKey:@"rppairing.directIP"]
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    double directAt = [defs doubleForKey:@"rppairing.directIPAt"];
+    BOOL directFresh = directIP.length > 0 && directAt > 0
+        && ([[NSDate date] timeIntervalSince1970] - directAt) < 90.0;
+    if (directFresh) add(directIP);
 
     // 1. 上次成功的
     NSString *lastGood = [[NSUserDefaults standardUserDefaults] stringForKey:@"TunnelLastGoodPeer"];

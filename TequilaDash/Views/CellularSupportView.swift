@@ -59,6 +59,21 @@ struct CellularSupportView: View {
             }
 
             Section {
+                NavigationLink {
+                    NetworkDiscoveryView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("网络发现（mDNS）")
+                        Text("Bonjour 设备服务浏览，设备直连通道的数据源.")
+                            .font(AppFont.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("网络发现")
+            }
+
+            Section {
                 Toggle("蜂窝刷新", isOn: $enabled)
             } header: {
                 Text("总开关")

@@ -120,6 +120,20 @@ enum LocalDevVPN {
         isReachable(ip: targetIP, timeout: 1.0)
     }
 
+    /// 实际建连 IP（v0.3.768 Gnoix 对齐）：直连候选新鲜（90 秒内探测通过）→ 设备自身 IP；
+    /// 否则回落 utun 对端 `targetIP`（既有行为不变）。新鲜戳由
+    /// `RemotePairingPort.probeDirectEndpoint` 成功时刷新，后台探测循环持续保鲜.
+    static var connectIP: String {
+        RemotePairingPort.freshDirectIPCandidate ?? targetIP
+    }
+
+    /// 通道可达（v0.3.768 Gnoix 对齐）：utun 对端可达 或 设备直连可达。
+    /// utun 先探（与既有判据同序），不通再探直连（各自带 timeout 上限，最坏 2×timeout）.
+    static func isChannelReachable(timeout: TimeInterval) -> Bool {
+        if isReachable(ip: targetIP, timeout: timeout) { return true }
+        return RemotePairingPort.probeDirectEndpoint(timeout: timeout)
+    }
+
     /// 探测**任一候选对端**是否可达（并行，取第一个成功）.
     ///
     /// 对齐 SideStore `DeviceConnectionManager.resolveLocalVPNTunnel`：把所有候选对端

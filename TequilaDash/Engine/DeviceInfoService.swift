@@ -496,7 +496,7 @@ enum DeviceInfoService {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "读取设备信息")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         // v0.3.637：必须校验 inet_pton 返回值。
         //
         // 原实现是 `let _ = ...` 丢弃返回值。而 `sockaddr_in()` 全 0 初始化，

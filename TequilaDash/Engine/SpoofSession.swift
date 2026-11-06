@@ -504,7 +504,7 @@ final class SpoofSession: ObservableObject {
         pendingCoordinate = coordinate
         let systemCoordinate = ChinaCoordinateTransform.mapCoordinateToSystemCoordinate(coordinate)
         let pairingPath = self.pairingPath
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         let lat = systemCoordinate.latitude
         let lon = systemCoordinate.longitude
         // 图钉/落点必须回显「用户放的原始坐标」（WGS-84 地图坐标）；lat/lon 是系统坐标系
@@ -656,7 +656,7 @@ final class SpoofSession: ObservableObject {
         let hadSession = LocationEngine.isSessionActive
         let systemCoordinate = ChinaCoordinateTransform.mapCoordinateToSystemCoordinate(coordinate)
         let pairingPath = self.pairingPath
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         let lat = systemCoordinate.latitude
         let lon = systemCoordinate.longitude
         let sourceRaw = source.rawValue

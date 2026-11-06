@@ -70,7 +70,8 @@ enum TunnelGate {
             let frames = Thread.callStackSymbols.dropFirst(2).prefix(3).joined(separator: " <- ")
             TunnelDiagnostics.note("主线程隧道调用", frames.isEmpty ? "guardReady 在主线程同步等待" : frames)
         }
-        let reachable = LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: probeTimeout, port: RemotePairingPort.current)
+        // v0.3.768（Gnoix 对齐）：utun 对端不通再探设备直连通道（各 0.5s 上限）.
+        let reachable = LocalDevVPN.isChannelReachable(timeout: probeTimeout)
         if reachable {
             setReady(true)
             // 让 MainActor 侧的发布状态跟上（后台补一拍，不阻塞调用方）.
@@ -101,6 +102,8 @@ final class TunnelReadiness: ObservableObject {
     private var started = false
     private var probeTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
+    /// 最近一拍是否走了直连通道（状态翻转时才记日志，防每拍刷屏）.
+    private var lastProbeWasDirect = false
     /// 探测节奏：不通 1.5 秒一拍（尽快发现 VPN 起来），通 20 秒保活确认.
     private static let downInterval: TimeInterval = 1.5
     private static let upInterval: TimeInterval = 20.0
@@ -141,9 +144,20 @@ final class TunnelReadiness: ObservableObject {
         let ip = LocalDevVPN.targetIP
         let port = RemotePairingPort.current
         let timeout = Self.probeTimeout
-        let reachable = await Task.detached(priority: .utility) {
+        // v0.3.768（Gnoix 对齐）：先探 utun 对端（既有判据），不通再探设备直连通道
+        // （Bonjour 解析的设备自身 IP + RSD 端口）——蜂窝下 LocalDevVPN 隧道死透，
+        // RSD 监听设备所有网卡仍可直连；iOS 只限制应用连 127.0.0.1 回环，不限自身网卡.
+        let utunReachable = await Task.detached(priority: .utility) {
             LocalDevVPN.isReachable(ip: ip, timeout: timeout, port: port)
         }.value
+        var reachable = utunReachable
+        var viaDirect = false
+        if !utunReachable {
+            viaDirect = await Task.detached(priority: .utility) {
+                RemotePairingPort.probeDirectEndpoint(timeout: timeout)
+            }.value
+            reachable = viaDirect
+        }
         let now = Date()
         TunnelGate.setReady(reachable)
         lastCheckedAt = now
@@ -152,6 +166,12 @@ final class TunnelReadiness: ObservableObject {
             TunnelDiagnostics.note("隧道就绪", reachable
                 ? "状态翻转：不可达 → 可达（\(ip):\(port)）"
                 : "状态翻转：可达 → 不可达（\(ip):\(port)）")
+        }
+        if viaDirect != lastProbeWasDirect {
+            TunnelDiagnostics.note("直连通道", viaDirect
+                ? "utun(\(ip):\(port))不可达，设备直连(\(RemotePairingPort.discoveredIP ?? "-"):\(port))接管"
+                : "直连通道让位（utun 可达或直连探测未通过）")
+            lastProbeWasDirect = viaDirect
         }
         isReady = reachable
     }

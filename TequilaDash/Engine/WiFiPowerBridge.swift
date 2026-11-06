@@ -68,7 +68,7 @@ final class WiFiPowerBridge: @unchecked Sendable {
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "Wi-Fi 电源桥")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }
         CellularTunnelManager.shared.prepareForTunnel()
-        let deviceIP = LocalDevVPN.targetIP
+        let deviceIP = LocalDevVPN.connectIP
         guard !deviceIP.isEmpty else {
             throw makeError("隧道 IP 为空（请检查「设置 → 本地隧道」）")
         }
