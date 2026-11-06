@@ -96,7 +96,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-        let code = errorDict[NSNetServicesErrorCode]?.intValue ?? -1
+        let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
         lastErrorText = "浏览失败（Bonjour code \\(code)）.本地网络权限被拒时常见."
         isBrowsing = false
     }
