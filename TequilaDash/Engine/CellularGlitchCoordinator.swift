@@ -88,6 +88,9 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         epochValue += 1
         let value = epochValue
         epochLock.unlock()
+        // epoch 推进 = 旧流程作废：立即广播唤醒蜂窝事件等待者（v0.3.773 事件驱动改造，
+        // 取代 v0.3.763 的 100ms 轮询观察 shouldAbort；取消即刻生效，不残留任何等待）.
+        CellularNetworkChecker.shared.cancelWait()
         return value
     }
 
@@ -251,9 +254,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             orchestratedByGate: true,
             shouldAbort: { [weak self] in self?.isCancelled(epoch) ?? true })
         if isCancelled(epoch) { return (false, true) }
-        // Gnoix 同款（performBypassGlitchHandshake TY1）：关蜂窝指令已发出，
-        // 立即请求 NE 隧道重连——NE 自己的重试 + 路由重置双保险覆盖窗口.
-        LocalDevVPN.reconnectForCellularGlitch()
         var ok = await checker.waitForCellularToTurnOff(
             timeoutSeconds: 8,
             shouldAbort: { [weak self] in self?.isCancelled(epoch) ?? true })
@@ -268,9 +268,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
                 shouldAbort: { [weak self] in self?.isCancelled(epoch) ?? true })
         }
         let cancelled = isCancelled(epoch)
-        // 断网确认后才算「窗口已开」：此处再请求一次（幂等），覆盖
-        // NE 首连因蜂窝路由未重置而失败、需要窗口内重试的场景.
-        if ok, !cancelled { LocalDevVPN.reconnectForCellularGlitch() }
         return (ok && !cancelled, cancelled)
     }
 

@@ -10,8 +10,10 @@ import Network
 
 /// 常驻 `NWPathMonitor` 探针：
 /// · `isConnected` / `isWiFi` / `isCellularOnly` 供引擎与 UI 读取；
-/// · `waitForCellularToTurnOff(timeoutSeconds:)` 供关蜂窝后等「路由重置窗口」——
-///   蜂窝真正断掉的瞬间窗口打开，固定 sleep 只能赌时长.
+/// · `waitForCellularToTurnOff` / `waitForNetworkToReturn` 供卡点链路等「路由重置窗口」
+///   与「网络恢复」——**纯事件驱动**：`pathUpdateHandler` 是唯一推进源，
+///   没有轮询、没有固定 sleep；`timeoutSeconds` 只是「iOS 万一不发 path 更新」
+///   的一次性兜底上限（到点按未等到收场），不是节奏控制.
 final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     static let shared = CellularNetworkChecker()
 
@@ -31,28 +33,72 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     }
     private let connectedBox = ConnectedBox()
 
-    /// 「蜂窝已断」等待：断网 resume(true)，超时 resume(false).
-    private final class WaitBox: @unchecked Sendable {
+    /// 事件等待登记表：一个等待者 = 一个 id，**只会被唤醒一次**.
+    ///
+    /// 三个竞争方（先到先得，其余自动作废）：
+    /// · 事件（`pathUpdateHandler`）→ `finishAll(true)`；
+    /// · 取消（`cancelWait()`，由 epoch 推进触发）→ `finishAll(false)`；
+    /// · 兜底上限（一次性 `asyncAfter`）→ `finish(id, false)`.
+    private final class WaiterRegistry: @unchecked Sendable {
+        private final class Slot {
+            let continuation: CheckedContinuation<Bool, Never>
+            var ceiling: DispatchWorkItem?
+            var done = false
+            init(_ continuation: CheckedContinuation<Bool, Never>) { self.continuation = continuation }
+        }
         private let lock = NSLock()
-        private var continuation: CheckedContinuation<Bool, Never>?
+        private var slots: [UInt64: Slot] = [:]
+        private var nextID: UInt64 = 0
 
-        /// 存入等待者；已有等待者时返回 false（避免重复等待互相踩）.
-        func store(_ continuation: CheckedContinuation<Bool, Never>) -> Bool {
-            lock.lock(); defer { lock.unlock() }
-            guard self.continuation == nil else { return false }
-            self.continuation = continuation
-            return true
+        func enroll(_ continuation: CheckedContinuation<Bool, Never>) -> UInt64 {
+            let slot = Slot(continuation)
+            lock.lock()
+            nextID += 1
+            let id = nextID
+            slots[id] = slot
+            lock.unlock()
+            return id
         }
 
-        func resumeIfPending(_ result: Bool) {
+        /// 挂兜底上限任务（登记完成后立刻挂）.
+        func attachCeiling(_ id: UInt64, _ work: DispatchWorkItem) {
             lock.lock()
-            let continuation = self.continuation
-            self.continuation = nil
+            let slot = slots[id]
+            if let slot, !slot.done { slot.ceiling = work } else { lock.unlock(); work.cancel(); return }
             lock.unlock()
-            continuation?.resume(returning: result)
+        }
+
+        /// 按 id 唤醒（幂等）.
+        func finish(_ id: UInt64, _ value: Bool) {
+            lock.lock()
+            guard let slot = slots[id], !slot.done else { lock.unlock(); return }
+            slot.done = true
+            slots.removeValue(forKey: id)
+            let ceiling = slot.ceiling
+            lock.unlock()
+            ceiling?.cancel()
+            slot.continuation.resume(returning: value)
+        }
+
+        /// 唤醒全部（事件 / 取消）.
+        func finishAll(_ value: Bool) {
+            lock.lock()
+            let firing = slots.values.filter { !$0.done }
+            firing.forEach { $0.done = true }
+            slots.removeAll(keepingCapacity: true)
+            lock.unlock()
+            firing.forEach { slot in
+                slot.ceiling?.cancel()
+                slot.continuation.resume(returning: value)
+            }
         }
     }
-    private let waitBox = WaitBox()
+    /// 「蜂窝已断」等待者.
+    private let disconnectRegistry = WaiterRegistry()
+    /// 「网络已恢复」等待者.
+    private let reconnectRegistry = WaiterRegistry()
+    /// 兜底上限的一次性定时器队列（不跑轮询，只挂 asyncAfter）.
+    private let ceilingQueue = DispatchQueue(label: "com.tequila.dash.cellular-network-checker.ceiling")
 
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in
@@ -67,8 +113,11 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
                 self.isCellularOnly = cellularOnly
             }
             if !connected {
-                // 网络断开 = 蜂窝关闭触发的路由重置窗口已开.
-                self.waitBox.resumeIfPending(true)
+                // 网络断开 = 蜂窝关闭触发的路由重置窗口已开 ⇒ 唤醒「已断」等待者.
+                self.disconnectRegistry.finishAll(true)
+            } else {
+                // 恢复联网 = 「开蜂窝生效」的实测证据 ⇒ 唤醒「已恢复」等待者.
+                self.reconnectRegistry.finishAll(true)
             }
         }
         monitor.start(queue: queue)
@@ -122,41 +171,46 @@ final class CellularNetworkChecker: ObservableObject, @unchecked Sendable {
     }
 
     /// 等待网络真的断掉（Gnoix `waitForCellularToTurnOff` 同职责）.
-    /// - Returns: 已断 / 等待期间断网 = `true`；超时仍在线 = `false`.
-    ///   超时 `false` 不阻断调用方：后续还有隧道就绪探测兜底.
-        func waitForCellularToTurnOff(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
+    ///
+    /// 推进只靠 `pathUpdateHandler` 事件；`timeoutSeconds` 为一次性兜底上限.
+    /// - Returns: 已断 / 等待期间断网 = `true`；上限到点仍在线 = `false`.
+    ///   返回 `false` 不阻断调用方：后续还有隧道就绪探测兜底.
+    func waitForCellularToTurnOff(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
+        if shouldAbort?() == true || Task.isCancelled { return false }
         if !connectedBox.value { return true }
-        // v0.3.763：100ms 切片轮询（感知即毫秒级推进），废弃单等待者 WaitBox ——
-        // 多个等待者互抢一个坑位、cancel 只能杀「当时 pending」的那个，是取消不立即生效的根因.
-        let deadline = Date().timeIntervalSinceReferenceDate + timeoutSeconds
-        while Date().timeIntervalSinceReferenceDate < deadline {
-            if shouldAbort?() == true { return false }
-            if Task.isCancelled { return false }
-            if !connectedBox.value { return true }
-            try? await Task.sleep(nanoseconds: 100_000_000)
+        let woken: Bool = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let id = disconnectRegistry.enroll(continuation)
+            // 登记与事件之间的竞态：登记瞬间蜂窝可能已断（path 回调可能已跑完）.
+            if !connectedBox.value { disconnectRegistry.finish(id, true); return }
+            if shouldAbort?() == true || Task.isCancelled { disconnectRegistry.finish(id, false); return }
+            let work = DispatchWorkItem { [weak self] in self?.disconnectRegistry.finish(id, false) }
+            disconnectRegistry.attachCeiling(id, work)
+            self.ceilingQueue.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)
         }
-        return !connectedBox.value
+        // 唤醒可能略滞后于事实（path 回调与本地读序），出口按事实复核一次.
+        return woken || !connectedBox.value
     }
 
-    /// 取消未决等待（按「未等到」收场）.
+    /// 取消全部未决等待（按「未等到」收场）. epoch 推进即调用，取消即刻生效、零轮询.
     func cancelWait() {
-        waitBox.resumeIfPending(false)
+        disconnectRegistry.finishAll(false)
+        reconnectRegistry.finishAll(false)
     }
 
-    /// 等待网络恢复在线（v0.3.757：开蜂窝效果校验用）.
-    /// - Returns: 期间恢复联网 = `true`；超时仍离线 = `false`.
-        func waitForNetworkToReturn(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
+    /// 等待网络恢复在线（v0.3.757：开蜂窝效果校验用）. 同上，纯事件驱动 + 一次性上限.
+    /// - Returns: 期间恢复联网 = `true`；上限到点仍离线 = `false`.
+    func waitForNetworkToReturn(timeoutSeconds: Double, shouldAbort: (() -> Bool)? = nil) async -> Bool {
+        if shouldAbort?() == true || Task.isCancelled { return false }
         if connectedBox.value { return true }
-        // Date 比较走 Double 时间戳（>=/<= 是 weak import 雷，守卫 swift_date_compare_guard.py 拦截）.
-        // v0.3.763：100ms 切片 + shouldAbort 令牌，网络恢复即毫秒级返回.
-        let deadline = Date().timeIntervalSinceReferenceDate + timeoutSeconds
-        while Date().timeIntervalSinceReferenceDate < deadline {
-            if shouldAbort?() == true { return false }
-            if Task.isCancelled { return false }
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            if connectedBox.value { return true }
+        let woken: Bool = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let id = reconnectRegistry.enroll(continuation)
+            if connectedBox.value { reconnectRegistry.finish(id, true); return }
+            if shouldAbort?() == true || Task.isCancelled { reconnectRegistry.finish(id, false); return }
+            let work = DispatchWorkItem { [weak self] in self?.reconnectRegistry.finish(id, false) }
+            reconnectRegistry.attachCeiling(id, work)
+            self.ceilingQueue.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)
         }
-        return connectedBox.value
+        return woken || connectedBox.value
     }
 
     /// 一次性 Wi-Fi 探针（Gnoix `isWiFiInterfaceActive()` 同职责）.

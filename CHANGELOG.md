@@ -7,7 +7,7 @@
 - NSBonjourServices 补齐 SideStore（AltStore/Info.plist）同款 69 项：此前只声明 3 项，未声明类型会被 iOS 本地网络权限直接拦掉，枚举与浏览都收不到.
 - 修域二级页实例过滤失效：服务记录 domain 带尾点（local.）而域行不带（local），双向归一后再比，此前实例列表恒空.
 - 直连探测文案改观测口径（「回环 TCP 可达」），不再承诺「可直接建隧道」.
-- 蜂窝卡点窗口补「utun 兜底建链」主动半程：关蜂窝指令发出即请求 NE 隧道重连（reconnectForCellularGlitch，幂等纯请求），与路由重置触发的 NE 自恢复双保险覆盖断网窗口；蜂窝恢复后网络恢复事件仍事件驱动重建隧道（rebuildTunnelIfNeeded 既有链）.
+- 蜂窝链路去轮询、改事件驱动：`waitForCellularToTurnOff` / `waitForNetworkToReturn` 的 100ms 切片轮询（v0.3.763 自加）删除，改由常驻 NWPathMonitor 的 pathUpdateHandler 直接唤醒多等待者登记表；断网/恢复两个方向各一张表，epoch 推进即时广播作废等待，取消零延迟。timeoutSeconds 只保留为「iOS 万一不发 path 更新」的一次性兜底上限，不再充当推进节奏。
 
 ## [0.3.772] - 2026-11-06
 
