@@ -18,6 +18,9 @@ final class JITEnableService: Sendable {
 
     private init() {}
 
+    /// 建隧道重试之间的毫秒级间隔（用户裁定：延迟一律毫秒级）.
+    private static let retryTickMs: Int = 20
+
     /// TequilaDash 的配对文件路径（与「应用管理」/ 虚拟定位共用）.
     private var pairingPath: String {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -95,9 +98,10 @@ final class JITEnableService: Sendable {
             throw makeError("隧道 IP 无效：\(deviceIP)（请检查「设置 → 本地隧道」）")
         }
 
-        // 隧道建立失败自动重试（最多 3 次、短退避）：Wi-Fi↔蜂窝切换等
-        // 瞬时抖动会导致 RPPairing 握手失败，重试后通常成功
-        // （对齐 StikDebug PR #432 的隧道重试思路）.
+        // 隧道建立失败自动重试（最多 3 次）：Wi-Fi↔蜂窝切换等瞬时抖动会导致
+        // RPPairing 握手失败，重试后通常成功（对齐 StikDebug PR #432 的思路）.
+        // v0.3.774 用户裁定：重试间隔必须是毫秒级 —— 这里只留 20ms 防空转，
+        // 真正的节流来自 socket connect / FFI 自身，不再是人为退避.
         TunnelDiagnostics.begin("JIT 建隧道", "hostname=\(hostname) ip=\(deviceIP)")
         var lastError: NSError?
         for attempt in 0..<3 {
@@ -133,7 +137,8 @@ final class JITEnableService: Sendable {
                 lastError = makeError("创建开发者隧道失败")
             }
             if attempt < 2 {
-                usleep(useconds_t(300_000 * (attempt + 1)))
+                // 毫秒级重探间隔（旧版 300ms/600ms 递增退避已废：秒味太重）.
+                usleep(useconds_t(Self.retryTickMs * 1000))
             }
         }
         let finalError = lastError ?? makeError("创建开发者隧道失败（请确认 LocalDevVPN 已连接）")

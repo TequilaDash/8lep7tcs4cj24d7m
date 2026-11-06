@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import NetworkExtension
 
 /// 「Cellular隧道支持」——蜂窝网络（无 Wi-Fi）下也能连本地隧道.
 ///
@@ -40,12 +41,18 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// `UserDefaults` 键. 沿用本仓「模块.项」点号惯例（与 `TunnelManager.kindKey` 同款）.
     static let enabledKey = "TequilaDash.CellularTunnelSupport"
 
-    /// 轮询隧道就绪的总预算（对齐 SideStore `waitForMinimuxerReady(timeout: 2.0)`）.
-    private static let readyTimeout: TimeInterval = 2.0
-    /// 轮询间隔（对齐 SideStore `200_000_000` ns = 200ms）.
-    private static let pollInterval: TimeInterval = 0.2
-    /// 单次 TCP 探测超时（对齐 SideStore `MinimuxerConstants.defaultTCPProbeTimeoutMs` = 250ms）.
-    private static let probeTimeout: TimeInterval = 0.25
+    /// 隧道就绪等待预算（**毫秒级**）. v0.3.774 用户裁定：延迟与上限一律毫秒级，
+    /// 不许出现秒级轮询/退避. 推进源是两个真事件：`NEVPNStatusDidChange`（内置隧道
+    /// 会话状态变化）与 `NWPathMonitor.pathUpdateHandler`（第三方 utun 建/拆会改接口集，
+    /// LocalDevVPN 的隧道归它管，且 start 后必有一次初值回调）.
+    /// 本预算只兜「两个事件源都不来」的极端情形.
+    private static let readyBudgetMs: Int = 250
+    /// 事件缺席时的毫秒级复查间隔（不是退避秒数）.
+    private static let readyTickMs: Int = 20
+    /// 单次 TCP 探测上限（socket connect 自身的花费，对齐 SideStore `defaultTCPProbeTimeoutMs` = 250ms）.
+    private static let probeTimeoutMs: Int = 250
+    /// `LocalDevVPN.isAnyCandidateReachable` 要秒制参数，这里只做单位换算.
+    private static var probeTimeout: TimeInterval { Double(probeTimeoutMs) / 1000.0 }
 
     // MARK: - 开关与判据
 
@@ -108,13 +115,14 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// 再等隧道就绪（用完由 `turnOnDataIfNeeded` 恢复）。iOS 在蜂窝上网时对回环 VPN
     /// 有系统级限制 ⇒ 不关蜂窝必然 `connect refused`.
     ///
-    /// - Returns: 是否处于蜂窝模式且隧道已就绪（`false` = 未开开关 / 有 Wi-Fi / 轮询超时）.
+    /// - Returns: 是否处于蜂窝模式且隧道已就绪（`false` = 未开开关 / 有 Wi-Fi / 就绪等待在毫秒级预算内未连通）.
     ///   未就绪时**不阻断**调用方：由后续 `ensureHeartbeat()` 如实报错（见 `AppDiscovery`）.
     ///
     /// 虽然内部要跑 async 的关蜂窝动作，但这个函数被 **28 个建隧道调用点**使用，
     /// 其中多数在同步上下文里。故内部用 `DispatchSemaphore` 等 async 结果 ——
     /// 与 `isWiFiSatisfied` 同款手法。蜂窝模式下阻塞调用线程最长约
-    /// `关蜂窝效果判定(≤6s) + readyTimeout`；Wi-Fi 下第一道闸门就返回，零开销.
+    /// `关蜂窝效果判定上限(2.5s + 3.5s 极性重试) + 毫秒级就绪预算(250ms + 探测)`；
+    /// Wi-Fi 下第一道闸门就返回，零开销.
     @discardableResult
     func prepareForTunnel() -> Bool {
         // 快速闸门：平台 / 开关 / Wi-Fi。三项任一不满足直接返回，**不阻塞**。.
@@ -143,7 +151,7 @@ final class CellularTunnelManager: @unchecked Sendable {
                                   category: .tunnelCellular)
         }
 
-        let ready = waitForTunnelReady(timeout: Self.readyTimeout)
+        let ready = waitForTunnelReady()
         // 诊断：把「隧道到底在不在、候选对端是哪些、本机接口长什么样」如实打进日志.
         let peers = LocalDevVPN.candidateTunnelPeers()
         LoginLogger.shared.log(
@@ -153,21 +161,66 @@ final class CellularTunnelManager: @unchecked Sendable {
         return ready
     }
 
-    /// 有界轮询「隧道端口（49152）可达」，最多等 `timeout`.
+    /// 隧道就绪等待（v0.3.774 起**事件驱动**）：入口零延迟探一次，未就绪就等事件唤醒.
     ///
-    /// 每一轮都调 `LocalDevVPN.isAnyCandidateReachable(timeout:)` **并行**探全部候选对端
-    /// （本机可能同时装着 Surge / Loon / Shadowrocket，各起一条 utun，
-    /// 只探第一条 utun 会探错隧道）.
-    func waitForTunnelReady(timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        // Date 比较一律改比 Double 时间戳：iOS 27.2 beta 上 >=/<= 是 weak import（GOT 空则 PC=0 直接被杀），
-        // < 与 > 今天仍是 strong，但同类雷会随 SDK 挪位置 —— 守卫 swift_date_compare_guard.py 统一拦四个比较符.
-        while Date().timeIntervalSinceReferenceDate < deadline.timeIntervalSinceReferenceDate {
-            if LocalDevVPN.isAnyCandidateReachable(timeout: Self.probeTimeout) { return true }
-            Thread.sleep(forTimeInterval: Self.pollInterval)
+    /// 两路事件源，命中即 `wake.signal()` 立刻返回（不再靠时间撞运气）：
+    ///   · `NEVPNStatusDidChange` —— 内置隧道（`TunnelKind.builtIn`）的会话状态变化.
+    ///     回调必须派到独立 `OperationQueue`：`queue: nil` 在 posting 线程同步执行，
+    ///     而本函数常在主线程阻塞调用 ⇒ 事件永远进不来.
+    ///   · `NWPathMonitor.pathUpdateHandler` —— LocalDevVPN / Surge / Loon 这些**别的 App**
+    ///     建的隧道不向我们进程发 NE 状态通知（NEVPNStatusDidChange 只发给会话拥有者），
+    ///     但它们建/拆 utun 会改变接口集 ⇒ 路径更新是唯一可用的外部事件.
+    ///
+    /// 毫秒级兜底 = 事件整段不来时，每 `readyTickMs`(20ms) 复查一次，累计不超过
+    /// `readyBudgetMs`(250ms)；全程无秒级 sleep，也无无界等待.
+    ///
+    /// 探测一律走 `LocalDevVPN.isAnyCandidateReachable(timeout:)` **并行**探全部候选对端
+    /// （本机可能同时装着 Surge / Loon / Shadowrocket，各起一条 utun，只探第一条会探错隧道）.
+    func waitForTunnelReady() -> Bool {
+        if Self.probePeers() { return true }
+
+        let hit = BoolBox()
+        let wake = DispatchSemaphore(value: 0)
+        let token = NotificationCenter.default.addObserver(
+            forName: .NEVPNStatusDidChange,
+            object: nil,
+            queue: Self.statusQueue
+        ) { _ in
+            if Self.probePeers() { hit.set(true); wake.signal() }
         }
-        return false
+        let pathQueue = DispatchQueue(label: "com.tequila.dash.tunnel-ready-path")
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { _ in
+            if Self.probePeers() { hit.set(true); wake.signal() }
+        }
+        monitor.start(queue: pathQueue)
+
+        // systemUptime 比 Double（不用 Date 比较：iOS 27.2 beta 上 >=/<= 是 weak import，
+        // GOT 空则 PC=0 直接被杀；守卫 swift_date_compare_guard.py 统一拦 Date 比较）.
+        let deadline = ProcessInfo.processInfo.systemUptime + Double(Self.readyBudgetMs) / 1000.0
+        while !hit.value, ProcessInfo.processInfo.systemUptime < deadline {
+            // 20ms 毫秒级 tick：被事件 signal 唤醒时立刻退出，不等满.
+            _ = wake.wait(timeout: .now() + .milliseconds(Self.readyTickMs))
+            if Self.probePeers() { hit.set(true); break }
+        }
+        monitor.cancel()
+        NotificationCenter.default.removeObserver(token)
+        // 回调可能已在别的队列上排队：摘掉两路源后再判一次，不漏最后一路事件.
+        return hit.value || Self.probePeers()
     }
+
+    /// 一次并行就绪探测（多候选，R8 硬规则）.
+    private static func probePeers() -> Bool {
+        LocalDevVPN.isAnyCandidateReachable(timeout: probeTimeout)
+    }
+
+    /// `NEVPNStatusDidChange` 回调的执行队列（单串行；调用线程阻塞时事件仍能送达）.
+    private static let statusQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.name = "com.tequila.dash.tunnel-status"
+        return queue
+    }()
 
     /// 同步等待一个 async 闭包的结果.
     ///
@@ -183,8 +236,8 @@ final class CellularTunnelManager: @unchecked Sendable {
             box.set(await body())
             semaphore.signal()
         }
-        // 上限 = 私有关蜂窝效果判定最长等待（2.5s + 3.5s 极性重试）+ 就绪轮询 + 余量.
-        let ceiling: TimeInterval = 10 + readyTimeout + 2
+        // 上限 = 关蜂窝效果判定上限（2.5s + 3.5s 极性重试）+ 毫秒级就绪预算(250ms)+两次探测 + 余量.
+        let ceiling: TimeInterval = 6 + Double(readyBudgetMs + probeTimeoutMs * 2) / 1000.0 + 2
         _ = semaphore.wait(timeout: .now() + .seconds(Int(ceiling)))
         return box.value
     }

@@ -1,3 +1,9 @@
+## [0.3.774] - 2026-11-06
+
+### 修复
+- 蜂窝隧道就绪等待去秒级轮询：`waitForTunnelReady` 原每 200ms `Thread.sleep` 撞一次、预算 2s，改为入口先探一次，未就绪即挂到两个真事件上——内置隧道的 `NEVPNStatusDidChange` 与 utun 建拆引起的 `NWPathMonitor` 路径更新（LocalDevVPN 这类第三方 App 的隧道不归本进程发 NE 通知，路径事件是唯一可用信号，且 start 后必有一次初值回调）；事件命中立刻唤醒。
+- 万一两路事件都不来，兜底只剩毫秒级：每 20ms 复查、累计上限 250ms（`readyTickMs`/`readyBudgetMs`），不再有 2s 的等。单次 TCP 探测本身仍是 socket connect 的 250ms 上限，不是等待策略。
+- JIT 建隧道重试退避由 300ms/600ms 递增改为固定 20ms 毫秒级间隔（`JITEnableService.retryTickMs`）；节流交给 FFI 与 socket，不再人为退避秒数。
 ## [0.3.773] - 2026-11-06
 
 ### 修复
