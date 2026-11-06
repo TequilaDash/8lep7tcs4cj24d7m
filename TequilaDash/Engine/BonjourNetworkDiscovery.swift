@@ -15,13 +15,14 @@
 //
 //  线程模型（与 RemotePairingPort.BonjourPortWorker 同款）：NetServiceBrowser schedule
 //  在主 RunLoop，delegate 回调天然主线程；NWBrowser 兜底探测跑在全局队列，
-//  结果回主线程后并入 @Published。本类非隔离.
+//  结果回主线程后并入 @Published。本类 @unchecked Sendable：@Published 只在主线程写，
+//  NWBrowser 的 @Sendable 闭包只持弱引用回主线程消费.
 //
 
 import Foundation
 import Network
 
-final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrowserDelegate, NetServiceDelegate {
+final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrowserDelegate, NetServiceDelegate, @unchecked Sendable {
 
     struct DiscoveredService: Identifiable, Equatable {
         let id: String

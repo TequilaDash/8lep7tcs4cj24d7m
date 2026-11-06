@@ -246,7 +246,7 @@ private struct NetworkDomainDetailView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(t.displayName)
                             Text(t.rawType)
-                                .font(AppFont.caption2)
+                                .font(AppFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
