@@ -8,30 +8,21 @@ private enum MainTab: Hashable {
     case more
 }
 
-/// v0.3.197：顶部 Tab 重组 — 手机管家形态.
-/// 原 5 tab（应用/空间回收/模块/Gestalt/更多）→ 3 tab：
-/// 主页（空间回收 + 应用管理 + 模块 + 百宝箱卡片入口）/ Gestalt / 更多.
-/// MoreView（原 More 页）保留备份/关于/设置等次要入口.
-///
-/// v0.3.441：Gestalt 不再占底部 tab，改从「主页 → 百宝箱」进入.
-/// 原因：底部只有两栏（主页 / 更多）比三栏干净，且 Gestalt 属于低频的进阶功能，
-/// 塞进底部会稀释主页/更多这两个高频入口.删除后 `.gestalt` 已无任何引用，
-/// `GestaltView` 改为 push 到主页的导航栈上（见 HomeView 的 navigationDestination）.
 struct RootView: View {
     @StateObject private var viewModel = AppListViewModel()
     @AppStorage("HasAcknowledgedLimits") private var hasAcknowledgedLimits = false
     @State private var selectedTab: MainTab = .home
     @ObservedObject private var copyFeedback = CopyFeedback.shared
-    /// v0.3.481：模块「原生 SwiftUI 二级界面」的展示状态.
+    /// 模块「原生 SwiftUI 二级界面」的展示状态.
     /// 二级界面用 `fullScreenCover` 盖住整个 TabView（看不到 App 默认底栏），
     /// 由 `ModuleUIRouter` 驱动；本视图只负责把它盖上来 + 响应「回主页」通知.
     @StateObject private var moduleUIRouter = ModuleUIRouter.shared
-    /// v0.3.760：蜂窝卡点弹窗（Gnoix 移植）—— 断网窗口内跑 misagent 等回环操作.
+    /// 蜂窝卡点弹窗（Gnoix 移植）—— 断网窗口内跑 misagent 等回环操作.
     @StateObject private var glitchCoordinator = CellularGlitchCoordinator.shared
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // v0.3.197：主页 — 手机管家形态
+            // 主页 — 手机管家形态
             NavigationStack {
                 HomeView(appList: viewModel)
             }
@@ -43,7 +34,7 @@ struct RootView: View {
 
             NavigationStack {
                 MoreView(appList: viewModel, onResetPairing: {
-                    // v0.3.673（task-7 发现4）：resetPairing 现在会抛（建连进行中拒绝删除，返回 -8）.
+                    // resetPairing 现在会抛（建连进行中拒绝删除，返回 -8）.
                     // 这个闭包是 throwing 的：失败原因由设置页（SettingsForm）接住并弹窗，
                     // 这里只负责「成功之后跳到主页」，避免「跳到主页但什么都没重置」.
                     try viewModel.resetPairing()
@@ -70,7 +61,7 @@ struct RootView: View {
             }
             .interactiveDismissDisabled()
         }
-        // v0.3.760：蜂窝卡点弹窗 —— CellularGlitchCoordinator.run/beginLoopbackGate 会置 modalRequest.
+        // 蜂窝卡点弹窗 —— CellularGlitchCoordinator.run/beginLoopbackGate 会置 modalRequest.
         // 下滑关闭等同于「取消」：走 coordinator.dismiss() 复位 phase.
         .sheet(item: Binding(
             get: { glitchCoordinator.modalRequest },
@@ -78,7 +69,7 @@ struct RootView: View {
         )) { request in
             CellularGlitchModalView(request: request)
         }
-        // v0.3.481：模块原生二级界面 —— 用 fullScreenCover 而不是 push/sheet，
+        // 模块原生二级界面 —— 用 fullScreenCover 而不是 push/sheet，
         // 目的是**完全盖住 TabView**（用户看到的底部导航栏是模块自己的，不是 App 默认底栏）.
         // 顶栏常驻「返回上一级 / 主页」两个出口（见 ModuleHostShell）.
         .fullScreenCover(item: Binding(
@@ -100,7 +91,7 @@ struct RootView: View {
                 selectedTab = .more
                 ToastCenter.shared.show("请到 更多 → 应用安装 → 共享转换 里手动选择文件")
             }, completion: { r in
-                // D4：导入成功时把 record **交接**给「共享转换」页（挂起值，等它挂载 / 回前台后
+                // 导入成功时把 record **交接**给「共享转换」页（挂起值，等它挂载 / 回前台后
                 // 一次性消费，见 `PendingImportHandoff`）.以前这里只切 tab + 弹 toast，record 被就地
                 // 丢弃 ⇒ 用户只能去点「扫描新文件」，那会把同一个包**再复制一份**（重复包 +
                 // 第一条 record 永久丢失）.**只接上记录，不自动修补 / 安装**，三步确认语义不变.
@@ -131,7 +122,7 @@ struct RootView: View {
     private func warmUpAutoLogin() {
         let settings = MemoryLimitSettings.shared
         guard settings.isLoggedIn, !settings.appleID.isEmpty else { return }
-        // v0.3.743：自动登录关掉时，冷启动不再自动恢复任何会话（含证书链）——
+        // 自动登录关掉时，冷启动不再自动恢复任何会话（含证书链）——
         // 此前只挡了页面内的自动登录，启动预热照跑，用户会莫名其妙被登录/弹 2FA.
         guard IPAInstallService.isAutoSignInEnabled else { return }
         IPAInstallService.shared.warmUp()
@@ -150,7 +141,7 @@ struct SetupStep: View {
                 .font(.headline)
                 .foregroundColor(.white)
                 .frame(width: 28, height: 28)
-                // v0.3.721：原 Color.accentColor 是系统蓝 #007AFF，与品牌蓝 AppTheme.accent 不一致.
+                // 原 Color.accentColor 是系统蓝 #007AFF，与品牌蓝 AppTheme.accent 不一致.
                 .background(AppTheme.accent)
                 .clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) {
@@ -175,7 +166,7 @@ struct SettingsForm: View {
         return memorySettings.isLoggedIn ? memorySettings.appleID : "未登录"
     }
 
-    /// v0.3.122：开发证书状态观察（创建成功/失败即时刷新 UI）
+    /// 开发证书状态观察（创建成功/失败即时刷新 UI）
     @StateObject private var certStore = DeveloperCertStore.shared
     @State private var certTask: Task<Void, Never>?
     @State private var certError: String?
@@ -183,19 +174,19 @@ struct SettingsForm: View {
     /// 对齐上游 91fcb9e94：需要隧道而未连接时自动拉起 LocalDevVPN.默认开.
     @AppStorage(LocalDevVPN.autoStartKey) private var autoStartLocalDevVPN: Bool = true
     @AppStorage("AnisetteServer") private var anisetteServer: String = "https://ani.stikstore.app"
-    /// v0.3.379：在线安装的清单 HTTPS 托管地址（留空则用公共临时托管）
+    /// 在线安装的清单 HTTPS 托管地址（留空则用公共临时托管）
     @AppStorage(OnlineInstallConfig.endpointKey) private var onlineInstallEndpoint: String = ""
     @State private var shareTarget: ShareTarget?
     @State private var showNoPairingAlert = false
-    /// v0.3.673：重置配对文件失败的原因（建连进行中时 TunnelContext 返回 -8）.
+    /// 重置配对文件失败的原因（建连进行中时 TunnelContext 返回 -8）.
     @State private var resetPairingError: String?
-    /// v0.2.112：左上角登录日志入口（排查Apple 登录 / Anisette 失败用）.
+    /// 左上角登录日志入口（排查Apple 登录 / Anisette 失败用）.
     @State private var showLoginLog = false
     @AppStorage(KeepAliveManager.enabledKey) private var keepAliveEnabled = false
     /// 「Cellular隧道支持」：默认关 ⇒ 开关不开时引擎层全部 no-op，零行为变化.
     /// 键与引擎层同源（`CellularTunnelManager.enabledKey`），对齐 `TunnelManager.kindKey` 的用法.
     @AppStorage(CellularTunnelManager.enabledKey) private var cellularTunnelSupport = false
-    // v0.3.434：日志上限（可配置）+ 一键清空
+    // 日志上限（可配置）+ 一键清空
     @StateObject private var logLimit = LogLimitSettings.shared
     @State private var fileLimitText = ""
     @State private var catLimitText = ""
@@ -205,7 +196,7 @@ struct SettingsForm: View {
 
     var body: some View {
         Form {
-            // v0.3.745 账户体系重做：多账户保持 + 一键切换 + 侧载/证书共用，入口收敛为二级页.
+            // 多账户保持 + 一键切换 + 侧载/证书共用，入口收敛为二级页.
             Section(header: Text("Apple ID 账户"),
                     footer: Text("登录过的账户全部保持，可批量登录并随时切换；IPA 侧载与开发证书统一使用当前账户.")) {
                 NavigationLink {
@@ -220,7 +211,7 @@ struct SettingsForm: View {
                 }
             }
 
-            // v0.3.122：开发证书（原生可拆卸模块的签名信任链）
+            // 开发证书（原生可拆卸模块的签名信任链）
             Section(header: Text("开发证书"), footer: Text("用已登录 Apple ID 的开发证书给原生模块签名.")) {
                 if certStore.hasCert {
                     Label("证书已创建\(certStore.teamId.map { " · Team \($0)" } ?? "")",
@@ -268,7 +259,7 @@ struct SettingsForm: View {
             // 放在「本地隧道」设备 IP 之前：先选隧道方式，再填对端 IP.
             TunnelPickerView()
 
-            // v0.3.741：用户要求一级页只留入口 —— 开关与全部配置搬进二级页
+            // 用户要求一级页只留入口 —— 开关与全部配置搬进二级页
             // （CellularSupportView：总开关 / 快捷指令名 / 基础延时 / 引导示范）.
             Section(header: Text("蜂窝网络"),
                     footer: Text("蜂窝网络下会先运行「关蜂窝」快捷指令再等隧道就绪（用完恢复).点进去可以开关、改快捷指令名与等待时间.")) {
@@ -307,7 +298,7 @@ struct SettingsForm: View {
                 }
 
                 Button("重置配对文件", role: .destructive) {
-                    // v0.3.673（task-7 发现4）：建连进行中时 TunnelContext 拒绝删除（返回 -8）.
+                    // 建连进行中时 TunnelContext 拒绝删除（返回 -8）.
                     // 旧代码不看结果，用户以为已重置而配对文件仍在、隧道仍是旧身份.
                     // onResetPairing 现在是 throwing 的，失败原因在这里接住交给下方 alert 展示；
                     // 成功后的界面跳转由 RootView 的闭包负责（本结构体没有 appList 引用）.
@@ -321,7 +312,7 @@ struct SettingsForm: View {
                 }
             }
 
-            // v0.3.438：日志上限（单位 MB）+ 一键清空.
+            // 日志上限（单位 MB）+ 一键清空.
             //  · 位置按用户要求挪到「配对文件」下方（原先在 Form 最顶，用户反馈不协调）；
             //  · 不再显示 "= 1024 KB" 之类的换算数值；
             //  · 输入框**允许留空**（留空 = 默认值，不会强行回填文本）.
@@ -444,7 +435,7 @@ struct SettingsForm: View {
         } message: {
             Text("当前没有可导出的 pairingFile.plist.请先导入或生成配对文件.")
         }
-        // v0.3.438：把当前日志上限填进输入框.
+        // 把当前日志上限填进输入框.
         // 值**等于默认值**时显示为空（占位符里就是默认值），这样用户能真正把输入框清空，
         // 而不是一取消输入状态就被强行回填成 "1".
         .onAppear {
@@ -465,7 +456,7 @@ struct SettingsForm: View {
         .toastHost()
     }
 
-    /// v0.3.122：创建开发证书（错误不再吞掉——弹窗展示，1100 提示重新登录）
+    /// 创建开发证书（错误不再吞掉——弹窗展示，1100 提示重新登录）
     private func runCertCreation() async {
         do {
             try await DeveloperCertStore.shared.createCertificateWithStoredAccount()
@@ -480,7 +471,7 @@ struct SettingsForm: View {
     }
 
     /// 重置配对文件失败弹窗的绑定.
-    /// v0.3.674：原先内联写成 `.alert(_:isPresented: Binding(get:set:))`，
+    /// 原先内联写成 `.alert(_:isPresented: Binding(get:set:))`，
     /// 叠在整条 SettingsForm 修饰链上会把类型检查推到超时（CI: "the compiler is unable to
     /// type-check this expression in reasonable time"）.抽成计算属性后每段表达式独立求解.
     private var resetPairingAlert: Binding<Bool> {

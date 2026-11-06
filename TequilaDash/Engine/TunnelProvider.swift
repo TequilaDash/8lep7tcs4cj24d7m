@@ -34,7 +34,7 @@ import UIKit
 
 // MARK: - 隧道类型
 
-/// 隧道方式. `rawValue` 直接落 `UserDefaults["TunnelKind"]`.
+/// 隧道方式. `rawValue` 直接落 `UserDefaults[TunnelManager.kindKey]`.
 enum TunnelKind: String, CaseIterable, Identifiable, Sendable {
     case localDevVPN
     case shadowrocket
