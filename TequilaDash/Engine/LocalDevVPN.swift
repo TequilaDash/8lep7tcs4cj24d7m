@@ -120,9 +120,8 @@ enum LocalDevVPN {
         isReachable(ip: targetIP, timeout: 1.0)
     }
 
-    /// 实际建连 IP（v0.3.768 Gnoix 对齐）：直连候选新鲜（90 秒内探测通过）→ 设备自身 IP；
-    /// 否则回落 utun 对端 `targetIP`（既有行为不变）。新鲜戳由
-    /// `RemotePairingPort.probeDirectEndpoint` 成功时刷新，后台探测循环持续保鲜.
+    /// 实际建连 IP（v0.3.769 Gnoix 对齐）：直连戳存在（事件驱动）→ 回环端点 127.0.0.1；
+    /// 否则回落 utun 对端 `targetIP`（既有行为不变）。戳由正向事件置位、反向事件清零.
     static var connectIP: String {
         RemotePairingPort.freshDirectIPCandidate ?? targetIP
     }

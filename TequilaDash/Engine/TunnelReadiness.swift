@@ -18,9 +18,9 @@
 //  - `TunnelGate`：无隔离的线程安全缓存 + 同步闸门 `guardReady()` —— 供任意线程的
 //    同步 `createTunnel()` 零等待调用；缓存说通 → 立刻放行，说不通 → 立刻抛人话错误
 //    （并踢一次立即重探），绝不现场长探测.
-//  - `TunnelReadiness`：@MainActor ObservableObject，后台 Task 常驻探测（不通 1.5 秒
-//    一拍、通了 20 秒保活，NWPathMonitor 网络变化立即加拍），每拍把结论写回
-//    `TunnelGate` 并发布到 `isReady` —— UI 之后要显示「隧道已就绪」直接观察它.
+//  - `TunnelReadiness`：@MainActor ObservableObject，纯事件驱动（v0.3.769，用户硬规则：
+//    零延迟、禁轮询）—— 网络路径变化、回前台、guardReady 按需补探三类事件触发
+//    probeOnce，结论写回 `TunnelGate` 并发布到 `isReady`，无任何后台常驻循环.
 //
 
 import Foundation
@@ -100,13 +100,9 @@ final class TunnelReadiness: ObservableObject {
     @Published private(set) var becameReadyAt: Date?
 
     private var started = false
-    private var probeTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
-    /// 最近一拍是否走了直连通道（状态翻转时才记日志，防每拍刷屏）.
+    /// 最近一次探测是否走了直连通道（状态翻转时才记日志）.
     private var lastProbeWasDirect = false
-    /// 探测节奏：不通 1.5 秒一拍（尽快发现 VPN 起来），通 20 秒保活确认.
-    private static let downInterval: TimeInterval = 1.5
-    private static let upInterval: TimeInterval = 20.0
     /// 单次探测超时（非阻塞 connect + poll）.
     private static let probeTimeout: TimeInterval = 0.5
 
@@ -119,9 +115,6 @@ final class TunnelReadiness: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        probeTask = Task.detached(priority: .utility) { [weak self] in
-            await self?.probeLoop()
-        }
         let monitor = NWPathMonitor()
         pathMonitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
@@ -134,7 +127,14 @@ final class TunnelReadiness: ObservableObject {
             }
         }
         monitor.start(queue: DispatchQueue(label: "com.tequila.dash.tunnelreadiness.path"))
-        TunnelDiagnostics.note("隧道就绪", "后台探测已启动（target=\(LocalDevVPN.targetIP):\(RemotePairingPort.current)）")
+        // 事件二：App 回前台 → 立即重探（后台期间网络可能已变，UI 不能拿旧结论）.
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.probeOnce()
+            }
+        }
+        TunnelDiagnostics.note("隧道就绪", "事件驱动探测已启动（target=\(LocalDevVPN.targetIP):\(RemotePairingPort.current)）")
     }
 
     // MARK: - 探测
@@ -194,13 +194,4 @@ final class TunnelReadiness: ObservableObject {
         }
     }
 
-    private func probeLoop() async {
-        while !Task.isCancelled {
-            let before = isReady
-            await probeOnce()
-            // 状态翻转后的下一拍立即跟近（尽快把新结论钉住），否则按新节奏走.
-            let interval = before == isReady ? (isReady ? Self.upInterval : Self.downInterval) : Self.downInterval
-            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-        }
-    }
 }

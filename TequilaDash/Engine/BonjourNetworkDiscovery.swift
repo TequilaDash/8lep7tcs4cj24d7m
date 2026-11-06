@@ -29,8 +29,8 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
         var endpointText: String {
             if state == .resolving { return "解析中…" }
-            if let i = ip, let p = port { return "\\(i):\\(p)" }
-            if let p = port { return "端口 \\(p)" }
+            if let i = ip, let p = port { return "\(i):\(p)" }
+            if let p = port { return "端口 \(p)" }
             return state == .failed ? "解析失败" : "未解析"
         }
 
@@ -97,7 +97,12 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
-        lastErrorText = "浏览失败（Bonjour code \\(code)）.本地网络权限被拒时常见."
+        // LC #1519：LiveContainer 宿主按自己的 NSBonjourServices 白名单校验服务类型，
+        // guest 声明不合并；缺类型时该浏览器报错且权限弹窗不弹（_remotepairing._tcp
+        // 宿主已声明，可用）。列表里有服务时不打扰用户；回环建连不需要本地网络权限.
+        if services.isEmpty {
+            lastErrorText = "浏览失败（Bonjour code \(code)）.在 LiveContainer 内多为宿主未声明该服务类型，不影响回环建连."
+        }
         isBrowsing = false
     }
 

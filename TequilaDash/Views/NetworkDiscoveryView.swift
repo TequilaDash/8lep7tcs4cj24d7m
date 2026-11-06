@@ -4,7 +4,7 @@
 //
 //  网络发现（mDNS）二级页 —— 入口：Cellular 隧道支持 → 网络发现.
 //  SideStore「Network Discovery」移植：实时浏览设备广播的 Bonjour 服务，
-//  并展示设备直连通道（Gnoix 对齐）的数据源：设备自身 IP + RSD 端口.
+//  并展示直连端点（Gnoix 对齐）：回环 127.0.0.1 + Bonjour 发现的 RSD 端口.
 //
 
 import SwiftUI
@@ -16,15 +16,14 @@ struct NetworkDiscoveryView: View {
     @State private var probeResult = ""
 
     private var directText: String {
-        guard let ip = RemotePairingPort.discoveredIP else { return "未发现" }
-        return ip + (RemotePairingPort.freshDirectIPCandidate != nil ? "（新鲜）" : "（过期）")
+        RemotePairingPort.freshDirectIPCandidate ?? "未打戳（等待正向事件）"
     }
 
     var body: some View {
         List {
             Section {
                 statusRow("解析端口", RemotePairingPort.summary)
-                statusRow("直连候选", directText)
+                statusRow("直连端点", directText)
                 statusRow("建连 IP", LocalDevVPN.connectIP)
                 statusRow("隧道缓存", TunnelGate.isReady ? "就绪" : "未就绪")
                 Button {
@@ -48,7 +47,7 @@ struct NetworkDiscoveryView: View {
             } header: {
                 Text("通道状态")
             } footer: {
-                Text("设备直连通道从同一份 Bonjour 发现结果取设备自身 IP 与 RSD 端口，蜂窝下不依赖 LocalDevVPN.")
+                Text("直连端点 = 回环 127.0.0.1 + Bonjour 发现的 RSD 端口（Gnoix 同款），事件驱动打戳，蜂窝下不依赖 LocalDevVPN.")
             }
 
             Section {
@@ -82,7 +81,7 @@ struct NetworkDiscoveryView: View {
             } header: {
                 Text("mDNS 服务")
             } footer: {
-                Text("实时浏览 _remotepairing / _remoted / _remotepairing-pairable-host 三类服务（SideStore Network Discovery 同款）.本地网络权限关闭时列表为空.")
+                Text("实时浏览 _remotepairing / _remoted / _remotepairing-pairable-host 三类服务（SideStore Network Discovery 同款）.在 LiveContainer 内宿主已声明 _remotepairing._tcp，其余类型可能浏览失败，不影响使用.")
             }
         }
         .listStyle(.insetGrouped)
@@ -108,19 +107,18 @@ struct NetworkDiscoveryView: View {
         Task {
             let result = await Task.detached(priority: .userInitiated) {
                 let port = RemotePairingPort.resolveNow(timeout: 5)
-                let ip = RemotePairingPort.discoveredIP
+                let source = RemotePairingPort.lastSourceDescription
                 let ok = RemotePairingPort.probeDirectEndpoint(timeout: 2)
-                return (port, ip, ok)
+                return (port, source, ok)
             }.value
             probing = false
-            let (port, ip, ok) = result
-            switch (ip, ok) {
-            case let (i?, true):
-                probeResult = "直连探测通过：\\(i):\\(port)（90 秒内可直连建隧道）."
-            case let (i?, false):
-                probeResult = "已解析 \\(i):\\(port)，直连探测未通过（设备可能换了网络）."
-            default:
-                probeResult = "未发现设备 IP（端口 \\(port)）.请让设备与本机同网后重试."
+            let (port, source, ok) = result
+            if ok {
+                probeResult = "直连探测通过：127.0.0.1:\(port),可直接建隧道."
+            } else if source == "Bonjour" {
+                probeResult = "已发现配对服务（端口 \(port)）,但直连探测未通过.可重试一次."
+            } else {
+                probeResult = "未发现配对服务（回落端口 \(port)）.请确认设备与本机同网后重试."
             }
         }
     }

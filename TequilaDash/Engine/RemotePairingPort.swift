@@ -2,7 +2,7 @@
 //  RemotePairingPort.swift
 //  TequilaDash
 //
-//  RPPairing 通道解析（端口 + 设备直连 IP；iOS 27.2 起端口不再保证是 49152）
+//  RPPairing 通道解析（端口 + 直连端点；iOS 27.2 起端口不再保证是 49152）
 //
 //  背景：iOS 26 / 27 早期，设备端 Remote Pairing 服务一直固定 49152，全仓二十余处
 //  建隧道代码把数字写死。iOS 27.2 起这个假设不再成立（上游 StikDebug 的修法是用
@@ -11,9 +11,15 @@
 //
 //  本文件负责两件事：
 //    1. 给出当前该用的端口。调用点一律写 RemotePairingPort.current，不要自己再写数字。
-//    2. v0.3.768（Gnoix 对齐）：Bonjour 解析的同时记下设备自身 IPv4 —— RSD 监听设备
-//       所有网卡，App 直连设备自身 IP 不依赖 LocalDevVPN 的 utun（蜂窝下 utun 死透，
-//       直连仍通；iOS 只限制应用连 127.0.0.1 回环，不限设备自身网卡地址）。
+//    2. v0.3.769（Gnoix 取证对齐）：直连端点 = 回环 127.0.0.1 + Bonjour 发现的 RSD 端口。
+//       Gnoix 二进制取证实锤（gnoix_strings.txt）：「Endpoint = 127.0.0.1:0」
+//       「muxer.rs 127.0.0.1 Starting listener」——它连的是设备自己的回环地址，
+//       不经任何 utun，蜂窝下照样通（回环 TCP 不需要本地网络权限）。
+//
+//  直连通道纯事件驱动（用户硬规则：零延迟、禁轮询、禁墙钟新鲜窗）：
+//    正向事件打戳：Bonjour 解析出端口（服务在）、probeDirectEndpoint 探测通过；
+//    反向事件清戳：探测失败、Bonjour 解析超时（服务消失）、网络路径变化
+//    （NWPathMonitor，清完立即重解析）、隧道建立失败（invalidate）。
 //
 //  端口解析三级，任何一级失败都退回 49152（与旧行为完全一致，因此不会比现在更差）：
 //    1. 用户手动覆盖（UserDefaults 键 rppairing.portOverride）
@@ -32,6 +38,7 @@
 
 import Darwin
 import Foundation
+import Network
 
 enum RemotePairingPort {
 
@@ -44,7 +51,9 @@ enum RemotePairingPort {
     static let resolvedDefaultsKey = "rppairing.resolvedPort"
     /// Bonjour 最近解析出的设备自身 IPv4（直连候选，持久化跨启动）。
     static let directIPDefaultsKey = "rppairing.directIP"
-    /// 直连候选的新鲜戳：最近一次直连探测通过的 epoch 秒（ObjC 候选链判新鲜用）。
+    /// 直连端点主机（当前恒为回环 127.0.0.1），与 directIPAt 成对读写（ObjC 候选链读）。
+    static let directHostDefaultsKey = "rppairing.directHost"
+    /// 直连戳：最近一次正向事件的 epoch 秒（>0 = 直连端点可用；0 = 不可用）。
     static let directIPAtDefaultsKey = "rppairing.directIPAt"
 
     /// Bonjour 同时浏览两型：_remotepairing._tcp 是经典服务名，_remoted._tcp 是
@@ -53,10 +62,8 @@ enum RemotePairingPort {
     fileprivate static let bonjourDomain = "local."
     private static let cacheTTL: TimeInterval = 60
     private static let browseTimeout: TimeInterval = 5
-    /// 直连候选新鲜窗口：90 秒内探测通过才算「现在就能连」。Rust 侧
-    /// tunnel_create_rppairing 首个 connect 无超时，陈旧 IP 会挂死整条链路，
-    /// 候选链只收新鲜戳内的直连 IP；后台探测 1.5 秒一拍，窗口远大于拍距.
-    private static let directIPFreshWindow: TimeInterval = 90
+    /// 直连端点：Gnoix 取证定案——设备自身的回环地址（设备上的 App 连本机 RSD 就走 127.0.0.1）.
+    static let loopbackHost = "127.0.0.1"
 
     private static let stateLock = NSLock()
     // 下面四项全部只在 stateLock 内读写。Swift 6 的并发检查看不到锁，
@@ -65,6 +72,8 @@ enum RemotePairingPort {
     nonisolated(unsafe) private static var cachedAt: Date?
     nonisolated(unsafe) private static var lastSource = "未解析"
     nonisolated(unsafe) private static var resolving = false
+    nonisolated(unsafe) private static var pathMonitor: NWPathMonitor?
+    nonisolated(unsafe) private static var pathMonitorStarted = false
 
     // MARK: - 对外
 
@@ -90,7 +99,7 @@ enum RemotePairingPort {
     /// 诊断用：当前端口从哪来。
     static var summary: String {
         if let manual = manualOverride { return "\(manual)（手动覆盖）" }
-        let direct = discoveredIP.map { "，直连 \($0)" } ?? ""
+        let direct = freshDirectIPCandidate.map { "，直连 \($0)" } ?? ""
         stateLock.lock()
         defer { stateLock.unlock() }
         guard let port = cachedPort else { return "\(fallback)（回落，尚未解析成功）\(direct)" }
@@ -99,14 +108,17 @@ enum RemotePairingPort {
 
     /// 提前解析一次，不阻塞调用方。App 启动与 VPN 连上时各调一次即可。
     static func warmUp() {
+        startPathMonitorIfNeeded()
         kickResolveIfIdle()
     }
 
     /// 作废端口缓存。隧道建立失败后调用，下一次 current 会重新解析。
+    /// 同时清直连戳（反向事件：连不上 → 直连端点视为不可用）.
     static func invalidate() {
         stateLock.lock()
         cachedAt = nil
         stateLock.unlock()
+        clearDirect(reason: "隧道建立失败")
     }
 
     /// 同步解析一次（最长约 timeout + 1 秒）。只给诊断页这类可以等的路径用，
@@ -132,24 +144,72 @@ enum RemotePairingPort {
         return raw
     }
 
-    /// 直连候选：90 秒内直连探测通过才返回（调用方拿去建连绝不落空挂死）。
+    /// 直连候选（纯事件驱动）：直连戳存在 → 返回回环端点；否则 nil。
+    /// 调用方拿去建连绝不落空挂死（Rust 首个 connect 无超时，戳不在绝不给候选）.
     static var freshDirectIPCandidate: String? {
-        guard let ip = discoveredIP else { return nil }
         let at = UserDefaults.standard.double(forKey: directIPAtDefaultsKey)
-        guard at > 0, Date().timeIntervalSince1970 - at < directIPFreshWindow else { return nil }
-        return ip
+        guard at > 0 else { return nil }
+        let host = (UserDefaults.standard.string(forKey: directHostDefaultsKey) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return host.isEmpty ? loopbackHost : host
     }
 
-    /// 直连探测：设备自身 IP + RSD 端口，带超时上限（默认 0.5s）。
-    /// 成功即刷新新鲜戳 —— TunnelGate / 建连候选链全靠这个戳判「直连现在可用」。
+    /// 直连探测：回环端点 + 当前端口，带超时上限（默认 0.5s）。
+    /// 通过 → 打戳（正向事件）；失败 → 清戳（反向事件）。
+    /// 这是唯一判定「直连现在可用」的入口，TunnelGate / 建连候选链全看这个戳.
     @discardableResult
     static func probeDirectEndpoint(timeout: TimeInterval = 0.5) -> Bool {
-        guard let ip = discoveredIP else { return false }
-        let ok = LocalDevVPN.isReachable(ip: ip, timeout: timeout, port: current)
+        let ok = LocalDevVPN.isReachable(ip: loopbackHost, timeout: timeout, port: current)
         if ok {
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: directIPAtDefaultsKey)
+            stampDirect(source: "直连探测")
+        } else {
+            clearDirect(reason: "直连探测未通过")
         }
         return ok
+    }
+
+    /// 诊断用：最近一次解析来源（Bonjour / 手动覆盖 / 回落 / 未解析）.
+    static var lastSourceDescription: String {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return lastSource
+    }
+
+    /// 正向事件打戳（Bonjour 解析成功 / 直连探测通过）.
+    private static func stampDirect(source: String) {
+        let defs = UserDefaults.standard
+        let wasDown = defs.double(forKey: directIPAtDefaultsKey) <= 0
+        defs.set(loopbackHost, forKey: directHostDefaultsKey)
+        defs.set(Date().timeIntervalSince1970, forKey: directIPAtDefaultsKey)
+        if wasDown {
+            TunnelDiagnostics.note("直连通道", "回环端点可用（\(loopbackHost):\(current)，\(source)）")
+        }
+    }
+
+    /// 反向事件清戳（探测失败 / 解析超时 / 网络路径变化 / 隧道建立失败）.
+    private static func clearDirect(reason: String) {
+        let defs = UserDefaults.standard
+        guard defs.double(forKey: directIPAtDefaultsKey) > 0 else { return }
+        defs.set(0, forKey: directIPAtDefaultsKey)
+        defs.removeObject(forKey: directHostDefaultsKey)
+        TunnelDiagnostics.note("直连通道", "回环端点戳已清（\(reason)）")
+    }
+
+    /// 网络路径变化事件（NWPathMonitor）：清直连戳 → 作废端口缓存 → 立即重解析.
+    /// 纯事件驱动：路径不变就不动，无任何轮询.
+    private static func startPathMonitorIfNeeded() {
+        stateLock.lock()
+        if pathMonitorStarted { stateLock.unlock(); return }
+        pathMonitorStarted = true
+        stateLock.unlock()
+        let monitor = NWPathMonitor()
+        pathMonitor = monitor
+        monitor.pathUpdateHandler = { _ in
+            clearDirect(reason: "网络路径变化")
+            invalidate()
+            kickResolveIfIdle()
+        }
+        monitor.start(queue: DispatchQueue(label: "com.tequila.dash.rppairing.path"))
     }
 
     // MARK: - 内部
@@ -176,6 +236,12 @@ enum RemotePairingPort {
         // 同步一份给 ObjC（TunnelContext.m 的 TDRPPairingPort 从这两个键读，
         // 见该文件顶部注释：.m 不引 Swift 生成头，改用 UserDefaults 传值）.
         UserDefaults.standard.set(Int(port), forKey: resolvedDefaultsKey)
+        // 直连戳事件：Bonjour 解析成功 = 服务在（正向打戳）；解析失败回落 = 服务消失（清戳）.
+        if source == "Bonjour" {
+            stampDirect(source: "Bonjour")
+        } else if source == "回落" {
+            clearDirect(reason: "Bonjour 未发现服务")
+        }
         if let ip {
             let previous = UserDefaults.standard.string(forKey: directIPDefaultsKey)
             UserDefaults.standard.set(ip, forKey: directIPDefaultsKey)
