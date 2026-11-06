@@ -112,6 +112,26 @@ enum TunnelDiagnostics {
         }
     }
 
+    // MARK: - 最近事件（界面快照）
+
+    /// 「最近隧道事件」内存快照上限.
+    private static let maxRecentLines = 12
+
+    /// 最近隧道事件（新在上）—— 给「网络发现」页等无法 SSH 的场景直接看失败原因.
+    /// 只读内存环形缓冲，与 LoginLogger 写入同锁，不新增存储.
+    static func recentEvents() -> [String] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return recentLines
+    }
+
+    private static func recordRecent(_ line: String) {
+        recentLines.insert(line, at: 0)
+        if recentLines.count > maxRecentLines {
+            recentLines.removeLast(recentLines.count - maxRecentLines)
+        }
+    }
+
     // MARK: - 服务表
 
     /// 把设备广播的 RSD 服务表逐行写进隧道日志.
@@ -175,6 +195,7 @@ enum TunnelDiagnostics {
     nonisolated(unsafe) private static var lastKey = ""
     nonisolated(unsafe) private static var lastAt = Date.distantPast
     nonisolated(unsafe) private static var suppressed = 0
+    nonisolated(unsafe) private static var recentLines: [String] = []
 
     /// 同一条消息 1.5 秒内重复出现就压掉.
     ///
@@ -200,6 +221,7 @@ enum TunnelDiagnostics {
         lastAt = now
         stateLock.unlock()
         let suffix = dropped > 0 ? "（同上一行，另有 \(dropped) 次相同记录已省略）" : ""
+        recordRecent(body + suffix)
         LoginLogger.shared.log(body + suffix, category: category)
     }
 

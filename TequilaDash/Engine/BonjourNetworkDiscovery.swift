@@ -19,6 +19,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         let id: String
         var name: String
         var type: String
+        var domain: String
         var ip: String?
         var port: Int?
         var state: State
@@ -48,7 +49,11 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     @Published private(set) var isBrowsing = false
     @Published private(set) var lastErrorText: String?
 
+    /// 浏览到的可注册域（SideStore Discovery「Browsable Domains」同款，如 "local"）.
+    @Published private(set) var domains: [String] = []
+
     private var browsers: [NetServiceBrowser] = []
+    private var domainBrowser: NetServiceBrowser?
     private var pending: [NetService] = []
 
     func start() {
@@ -56,6 +61,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         isBrowsing = true
         lastErrorText = nil
         services = []
+        domains = []
         pending = []
         for type in Self.serviceTypes {
             let browser = NetServiceBrowser()
@@ -64,11 +70,18 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
             browser.searchForServices(ofType: type, inDomain: "local.")
             browsers.append(browser)
         }
+        let domainBrowser = NetServiceBrowser()
+        domainBrowser.delegate = self
+        domainBrowser.schedule(in: .main, forMode: .common)
+        domainBrowser.searchForRegistrationDomains()
+        self.domainBrowser = domainBrowser
     }
 
     func stop() {
         browsers.forEach { $0.stop() }
         browsers = []
+        domainBrowser?.stop()
+        domainBrowser = nil
         pending.forEach { $0.stop() }
         pending = []
         isBrowsing = false
@@ -81,6 +94,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     // MARK: - NetServiceBrowserDelegate（主 RunLoop 回调）
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+        lastErrorText = nil
         let id = serviceID(service)
         pending.append(service)
         service.delegate = self
@@ -88,6 +102,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         guard !services.contains(where: { $0.id == id }) else { return }
         services.append(DiscoveredService(id: id, name: service.name ?? "（未命名）",
                                           type: service.type ?? "unknown",
+                                          domain: service.domain ?? "local.",
                                           ip: nil, port: nil, state: .resolving))
     }
 
@@ -95,7 +110,14 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         services.removeAll { $0.id == serviceID(service) }
     }
 
+    func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domain: String, moreComing: Bool) {
+        let name = domain.hasSuffix(".") ? String(domain.dropLast()) : domain
+        guard !name.isEmpty, !domains.contains(name) else { return }
+        domains.append(name)
+    }
+
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        guard browser !== domainBrowser else { return }
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
         // LC #1519：LiveContainer 宿主按自己的 NSBonjourServices 白名单校验服务类型，
         // guest 声明不合并；缺类型时该浏览器报错且权限弹窗不弹（_remotepairing._tcp
@@ -119,6 +141,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         services = services.map { row in
             guard row.id == id else { return row }
             return DiscoveredService(id: row.id, name: row.name, type: row.type,
+                                     domain: row.domain,
                                      ip: ip, port: sender.port,
                                      state: ip == nil ? .failed : .ready)
         }
@@ -129,6 +152,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         services = services.map { row in
             guard row.id == id else { return row }
             return DiscoveredService(id: row.id, name: row.name, type: row.type,
+                                     domain: row.domain,
                                      ip: nil, port: nil, state: .failed)
         }
     }
