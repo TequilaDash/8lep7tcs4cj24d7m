@@ -319,6 +319,10 @@ enum LocalDevVPN {
                 // utun 还在：窗口内的路由重置已让 NE 自行恢复，无需干预.
                 return
             }
+            // 与 startWhenNeeded 同款护栏：helper 未装时 openOrInstall 的兜底是
+            // 跳 App Store——绝不能在卡点弹窗进行中把用户甩出去.
+            guard isInstalled else { return }
+            UserDefaults.standard.set(Date(), forKey: lastHandoverKey)
             openOrInstall()
         }
         if Thread.isMainThread {
