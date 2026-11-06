@@ -221,9 +221,15 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     /// 浏览到的可注册域（SideStore Discovery「Browsable Domains」同款，如 "local"）.
     @Published private(set) var domains: [String] = []
 
+    /// 类型二级页的实例列表（SideStore ServiceInstancesView 同款：一次只浏览一个类型）.
+    @Published private(set) var typeInstances: [DiscoveredService] = []
+    @Published private(set) var isBrowsingInstances = false
+    @Published private(set) var instanceErrorText: String?
+
     private var browsers: [NetServiceBrowser] = []
     private var domainBrowser: NetServiceBrowser?
     private var typeBrowser: NetServiceBrowser?
+    private var instanceBrowser: NetServiceBrowser?
     private var fallbackTypeBrowsers: [NWBrowser] = []
     private var pending: [NetService] = []
     private var typeEnumTimeout: DispatchWorkItem?
@@ -255,6 +261,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func stop() {
+        stopInstanceBrowsing()
         browsers.forEach { $0.stop() }
         browsers = []
         domainBrowser?.stop()
@@ -263,6 +270,53 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         pending.forEach { $0.stop() }
         pending = []
         isBrowsing = false
+    }
+
+    // MARK: - 单类型实例浏览（三层模型的第③层，类型二级页专用）
+
+    /// 只浏览一个类型的实例并解析地址端口 —— SideStore discoverInstances(ofType:) 的等价实现，
+    /// 但走 NetServiceBrowser（解析后能拿到 ip:port，NWBrowser 那侧只给名字）.
+    func startInstanceBrowsing(rawType: String, domain: String) {
+        stopInstanceBrowsing()
+        let parts = Self.browseComponents(rawType: rawType, domain: domain)
+        typeInstances = []
+        instanceErrorText = nil
+        isBrowsingInstances = true
+        let browser = NetServiceBrowser()
+        browser.delegate = self
+        browser.schedule(in: .main, forMode: .common)
+        browser.searchForServices(ofType: parts.type, inDomain: parts.domain)
+        instanceBrowser = browser
+    }
+
+    func stopInstanceBrowsing() {
+        instanceBrowser?.stop()
+        instanceBrowser = nil
+        isBrowsingInstances = false
+    }
+
+    /// 把枚举层的原始类型串拆成 NetServiceBrowser 能吃的（类型, 域）：
+    /// "_apple-mobdev2._tcp.local." → ("_apple-mobdev2._tcp.", "local.")；
+    /// "_remotepairing._tcp." + domain "local" → ("_remotepairing._tcp.", "local.")。
+    /// meta-query 回来的是 PTR 全名（类型里自带域），浏览时必须剥掉，否则 code -65563.
+    static func browseComponents(rawType: String, domain: String) -> (type: String, domain: String) {
+        var t = rawType.trimmingCharacters(in: .whitespacesAndNewlines)
+        var d = domain.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = t.lowercased()
+        if lower.hasSuffix(".local.") {
+            t = String(t.dropLast(".local.".count))
+            d = "local"
+        } else if lower.hasSuffix(".local") {
+            t = String(t.dropLast(".local".count))
+            d = "local"
+        }
+        if t.hasSuffix(".") { t = String(t.dropLast()) }
+        // 只剩 "_apple-mobdev2" 这种没有协议段的残段时补回 ._tcp.（上游同款默认）
+        if !t.contains("_tcp") && !t.contains("_udp") { t += "._tcp" }
+        if !t.hasSuffix(".") { t += "." }
+        if d.isEmpty { d = "local" }
+        if !d.hasSuffix(".") { d += "." }
+        return (t, d)
     }
 
     // MARK: - 服务类型枚举（SideStore 三层模型的第②层）
@@ -318,13 +372,17 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         if isEnumeratingTypes { isEnumeratingTypes = false }
     }
 
-    /// 规范化并去重插入类型：补尾点，只收 ._tcp. / ._udp. 结尾的真实类型，
-    /// 过滤 meta 自身（_services._dns-sd）与残段.
+    /// 规范化并去重插入类型：补尾点；只过滤 meta 自身（_services._dns-sd）与空串.
+    ///
+    /// v0.3.774（真机对比用户图二/图三）：旧版这里还要求以 ._tcp. / ._udp. 结尾，于是把
+    /// meta-query 回来的 PTR 全名（"_apple-mobdev2._tcp.local."）整条丢掉，同域下 SideStore
+    /// 显示 4 行我们只显示 2 行 —— 上游 BonjourDiscoveryManager.didFind(:553) 是照收的，
+    /// 查不到友好名就挂 nil（SideStore 渲染成橙色问号行）。现在同口径：未知类型保留，
+    /// 由 displayName 回落原始串；实例浏览再按 browseComponents 归一化回真实类型.
     private func insertServiceType(rawType: String) {
         var t = rawType.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+        guard !t.isEmpty, !t.lowercased().contains("_dns-sd") else { return }
         if !t.hasSuffix(".") { t += "." }
-        guard t.hasSuffix("._tcp.") || t.hasSuffix("._udp.") else { return }
         let info = ServiceTypeInfo(rawType: t, friendlyName: Self.friendlyName(for: t))
         if !serviceTypes.contains(info) {
             serviceTypes.append(info)
@@ -338,6 +396,21 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     // MARK: - NetServiceBrowserDelegate（主 RunLoop 回调）
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+        if browser === instanceBrowser {
+            // 类型二级页（SideStore ServiceInstancesView 同款）：只进 typeInstances，
+            // 不污染主页面的三型列表.
+            let row = DiscoveredService(id: serviceID(service), name: service.name ?? "（未命名）",
+                                        type: service.type ?? "unknown",
+                                        domain: service.domain ?? "local.",
+                                        ip: nil, port: nil, state: .resolving)
+            if !typeInstances.contains(where: { $0.id == row.id }) {
+                typeInstances.append(row)
+            }
+            service.delegate = self
+            pending.append(service)
+            service.resolve(withTimeout: 6)
+            return
+        }
         if browser === typeBrowser {
             // meta-query：PTR 目标（如 "_airplay._tcp.local."）被 NetService 解析为
             // name=类型主体 + type=协议段；两种拆法都归一成 "_airplay._tcp."（SideStore :553 同款拼法）.
@@ -364,7 +437,9 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-        services.removeAll { $0.id == serviceID(service) }
+        let id = serviceID(service)
+        services.removeAll { $0.id == id }
+        typeInstances.removeAll { $0.id == id }
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domain: String, moreComing: Bool) {
@@ -374,6 +449,12 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        if browser === instanceBrowser {
+            let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
+            instanceErrorText = "该类型浏览失败（Bonjour code \(code)）.多为宿主未声明该服务类型，不影响其它功能."
+            isBrowsingInstances = false
+            return
+        }
         guard browser !== domainBrowser, browser !== typeBrowser else { return }
         let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
         // LC #1519：LiveContainer 宿主按自己的 NSBonjourServices 白名单校验服务类型，
@@ -402,11 +483,24 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
                                      ip: ip, port: sender.port,
                                      state: ip == nil ? .failed : .ready)
         }
+        typeInstances = typeInstances.map { row in
+            guard row.id == id else { return row }
+            return DiscoveredService(id: row.id, name: row.name, type: row.type,
+                                     domain: row.domain,
+                                     ip: ip, port: sender.port,
+                                     state: ip == nil ? .failed : .ready)
+        }
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
         let id = serviceID(sender)
         services = services.map { row in
+            guard row.id == id else { return row }
+            return DiscoveredService(id: row.id, name: row.name, type: row.type,
+                                     domain: row.domain,
+                                     ip: nil, port: nil, state: .failed)
+        }
+        typeInstances = typeInstances.map { row in
             guard row.id == id else { return row }
             return DiscoveredService(id: row.id, name: row.name, type: row.type,
                                      domain: row.domain,

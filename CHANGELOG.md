@@ -4,6 +4,9 @@
 - 蜂窝隧道就绪等待去秒级轮询：`waitForTunnelReady` 原每 200ms `Thread.sleep` 撞一次、预算 2s，改为入口先探一次，未就绪即挂到两个真事件上——内置隧道的 `NEVPNStatusDidChange` 与 utun 建拆引起的 `NWPathMonitor` 路径更新（LocalDevVPN 这类第三方 App 的隧道不归本进程发 NE 通知，路径事件是唯一可用信号，且 start 后必有一次初值回调）；事件命中立刻唤醒。
 - 万一两路事件都不来，兜底只剩毫秒级：每 20ms 复查、累计上限 250ms（`readyTickMs`/`readyBudgetMs`），不再有 2s 的等。单次 TCP 探测本身仍是 socket connect 的 250ms 上限，不是等待策略。
 - JIT 建隧道重试退避由 300ms/600ms 递增改为固定 20ms 毫秒级间隔（`JITEnableService.retryTickMs`）；节流交给 FFI 与 socket，不再人为退避秒数。
+- 蜂窝待发页补上卡点：空间回收、应用列表、设备信息、AFC 文件、崩溃日志、图标清理、LiveContainer 清理、进程管理、铃声这 9 个页面原先只显示「等待 LocalDevVPN 隧道（开启后自动继续）」，没有任何人去建隧道——卡点只在 25 个以上引擎 RSD 回环调用里触发，而这些页面首屏走 heartbeat/待发判定，4G 下永久挂住.现在待发条出现即踢一次蜂窝门（`CellularGlitchCoordinator.kickPassiveGate`，同标签只踢一次、Wi-Fi 与离线状态不打扰），断网窗口内建链成功照旧置真通路、恢复蜂窝、自动收卡，页面续跑链 `onTunnelReady` 当场接上.未就绪时如实报「蜂窝通路仍未建立」，不再静默挂起.
+- 网络发现类型列表不再吞类型：meta-query（_services._dns-sd._udp）回来的 PTR 全名（形如 _apple-mobdev2._tcp.local.）此前被我方「必须以 ._tcp./._udp. 结尾」的过滤丢弃，同域下只剩兜底探测命中的两三项，比 SideStore 少一半.改为与 SideStore 一致全部保留，查不到友好名的直接显示原始串.
+- 网络发现改回 SideStore 的两层结构：域二级页只列服务类型，实例挪到点类型后的下一级页面（此前把「隧道服务实例」塞在域二级页底部，不是 SideStore 的做法，也没要求过）.新增按类型浏览实例的入口，浏览前把 PTR 全名归一成真实类型加域（不补尾点 browse 会直接失败）.
 ## [0.3.773] - 2026-11-06
 
 ### 修复

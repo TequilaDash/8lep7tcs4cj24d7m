@@ -34,6 +34,17 @@ enum TunnelPending {
     static func describe(_ error: Error) -> String {
         isPending(error) ? copy : error.localizedDescription
     }
+
+    /// 挂在待发位上的页面出现时踢一次蜂窝通路（v0.3.774）：蜂窝在线且通路未建 ⇒ 走与主动操作
+    /// **同一条**卡点链（弹卡 → 关蜂窝 → 断网窗口内建链 → 成功置真），本行随即由 onTunnelReady
+    /// 当场消失并续跑；Wi-Fi / 已就绪 / 已离线都不动作（判据在 kickPassiveGate 内）.
+    ///
+    /// 标签取 detail 的首个短句（「读取设备应用，然后扫描可回收空间」→「读取设备应用」）：
+    /// 弹窗把它当导航标题，整句太长；同时它也是「同一页面只踢一次」的去重键.
+    static func kickCellularGate(for detail: String?) {
+        let head = (detail ?? "本页等待隧道").split(separator: "，").first.map(String.init) ?? "本页等待隧道"
+        CellularGlitchCoordinator.shared.kickPassiveGate(label: head)
+    }
 }
 
 /// 待发态的行内展示：转圈 + 中性文案，语义是「还在等」，不是「失败」.
@@ -46,6 +57,9 @@ struct TunnelPendingRow: View {
 
     var body: some View {
         AppLoadingRow(title: TunnelPending.copy, detail: detail, level: level)
+            // v0.3.774：待发态一出现就去踢蜂窝通路 —— 此前卡点只由引擎的 RSD 回环调用触发，
+            // 走心跳的页面（空间回收/应用列表）挂在待发位上没人建隧道，4G 下永久停在这行.
+            .onAppear { TunnelPending.kickCellularGate(for: detail) }
     }
 }
 

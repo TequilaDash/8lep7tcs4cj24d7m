@@ -121,6 +121,40 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// 被动待发页专用踢脚（v0.3.774）：页面挂在「等待 LocalDevVPN 隧道」时，让它走与主动操作
+    /// **完全相同**的一条卡点链，而不是永远等着别人去建隧道.
+    ///
+    /// 真机缺陷（2026-11-06 用户图一，4G 下「空间回收」整页永久待发）：卡点只由引擎里的 RSD
+    /// 回环调用触发（beginLoopbackGate / awaitLoopbackGate），而空间回收与应用列表首屏走的是
+    /// AppDiscovery.ensureHeartbeat —— 心跳失败直接抛 heartbeatFailed，视图判成「待发」，
+    /// 于是**没有任何人尝试建隧道**，页面就挂在那儿.
+    ///
+    /// 只在「蜂窝在线 + 通路未建」时动作：Wi-Fi 下待发文案本身就是正解（等用户开 VPN）；
+    /// 已离线说明断网窗口已开，由 NWPathMonitor → probeOnce / rebuildTunnelIfNeeded 兜底；
+    /// 通路已在则绝不重复关蜂窝.每个标签只踢一次（同一页面反复重绘/滚动不叠加弹窗）——
+    /// 卡点被用户取消后不许再骚扰；真要走第二条，用户重进页面即可（那时上一轮已收尾）.
+    func kickPassiveGate(label: String) {
+        if TunnelGate.isReady { return }
+        if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return }
+        guard CellularNetworkChecker.shared.isNetworkConnectedNow else { return }
+        passiveKickLock.lock()
+        defer { passiveKickLock.unlock() }
+        guard !passiveKickedLabels.contains(label) else { return }
+        passiveKickedLabels.insert(label)
+        run(label: label) {
+            // prepareForTunnel 内部用 semaphore 等异步结果，绝不许在主线程跑；run 的 Task
+            // 从主视图发起会继承 MainActor ⇒ 显式切后台线程.
+            let ready = await Task.detached(priority: .userInitiated) {
+                CellularTunnelManager.shared.prepareForTunnel()
+            }.value
+            guard ready else {
+                throw CellularGlitchError(message: "蜂窝通路仍未建立，请在控制中心关闭蜂窝网络后重试.")
+            }
+        }
+    }
+
+    private let passiveKickLock = NSLock()
+    private var passiveKickedLabels: Set<String> = []
     // MARK: - 通用门（同步链路接入点：所有建 RSD 隧道的回环操作）
 
     /// 通用门·入口（同步，可在任意线程调）.

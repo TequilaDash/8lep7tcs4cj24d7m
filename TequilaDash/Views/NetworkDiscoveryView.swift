@@ -2,9 +2,10 @@
 //  NetworkDiscoveryView.swift
 //  TequilaDash
 //
-//  网络发现（mDNS）二级页 —— 入口：Cellular 隧道支持 → 网络发现.
-//  SideStore「Discovery」完整移植：可浏览域（含域二级页）+ mDNS 服务列表 +
-//  直连端点观测 + 导航栏蜂窝支持开关（SideStore 同位）+ 右上角隧道事件日志.
+//  网络发现（mDNS）—— 入口：Cellular 隧道支持 → 网络发现.
+//  SideStore「Discovery」三层结构照搬：可浏览域 → 该域的服务类型 → 该类型的实例，
+//  另加 mDNS 服务列表 + 直连端点观测 + 导航栏蜂窝支持开关（SideStore 同位）+ 隧道事件日志.
+//  v0.3.774（用户图二反馈）：实例不再塞在域二级页里，改成像 SideStore 那样点类型进下一级.
 //
 
 import SwiftUI
@@ -163,7 +164,7 @@ struct NetworkDiscoveryView: View {
         } header: {
             Text("可浏览域")
         } footer: {
-            Text("SideStore Discovery 同款：设备可注册的 Bonjour 域.点进去看该域下发现的服务.")
+            Text("SideStore Discovery 同款：设备可注册的 Bonjour 域.点进去看该域下的服务类型.")
         }
     }
 
@@ -215,17 +216,12 @@ struct NetworkDiscoveryView: View {
     }
 }
 
-/// 域二级页：该域下枚举的服务类型 + 浏览到的实例
-/// （SideStore 点「local」进来的页面：先类型列表，再逐型实例）.
+/// 域二级页：只列该域下枚举到的服务类型（SideStore ServiceTypesView 同款两层结构）.
+/// v0.3.774（用户图二）：原先塞在本页底部的「隧道服务实例」Section 不该出现在这里 ——
+/// 实例属于类型那一层，改成点类型行进 NetworkTypeInstancesView.
 private struct NetworkDomainDetailView: View {
     @ObservedObject var discovery: BonjourNetworkDiscovery
     let domain: String
-
-    /// 实例的 domain 带尾点（NetService 原样，如 "local."），域行不带 —— 双向归一后再比.
-    private var rows: [BonjourNetworkDiscovery.DiscoveredService] {
-        let d = domain.hasSuffix(".") ? domain : domain + "."
-        return discovery.services.filter { ($0.domain.hasSuffix(".") ? $0.domain : $0.domain + ".") == d }
-    }
 
     var body: some View {
         List {
@@ -243,32 +239,26 @@ private struct NetworkDomainDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(discovery.serviceTypes) { t in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(t.displayName)
-                            Text(t.rawType)
-                                .font(AppFont.caption)
-                                .foregroundStyle(.secondary)
+                        NavigationLink {
+                            NetworkTypeInstancesView(discovery: discovery, info: t, domain: domain)
+                        } label: {
+                            // 有友好名：主行友好名 + 副行原始类型；查不到（SideStore 的橙色问号
+                            // 那类）主行直接显示原始串，不再被我方过滤器吞掉.
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.displayName)
+                                if t.friendlyName != nil {
+                                    Text(t.rawType)
+                                        .font(AppFont.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                 }
             } header: {
                 Text("服务类型")
             } footer: {
-                Text("SideStore 同款：_services._dns-sd._udp 枚举 + 常见类型兜底探测，10 秒收敛.")
-            }
-
-            Section {
-                if rows.isEmpty {
-                    Text(discovery.isBrowsing ? "正在浏览该域…" : "该域下暂未发现服务实例.")
-                        .font(AppFont.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(rows) { s in
-                        NetworkDiscoveryView.serviceRow(s)
-                    }
-                }
-            } header: {
-                Text("隧道服务实例")
+                Text("SideStore 同款：_services._dns-sd._udp 枚举 + 常见类型兜底探测，10 秒收敛.点类型看实例.")
             }
         }
         .listStyle(.insetGrouped)
@@ -279,6 +269,49 @@ private struct NetworkDomainDetailView: View {
         }
         .onDisappear {
             discovery.stopTypeSearch()
+        }
+    }
+}
+
+/// 类型三级页：该类型下的实例（SideStore ServiceInstancesView 同款）.
+/// meta-query 带回来的 PTR 全名（"_apple-mobdev2._tcp.local."）在浏览前由
+/// BonjourNetworkDiscovery.browseComponents 归一化成真实类型 + 域，否则浏览直接失败.
+private struct NetworkTypeInstancesView: View {
+    @ObservedObject var discovery: BonjourNetworkDiscovery
+    let info: BonjourNetworkDiscovery.ServiceTypeInfo
+    let domain: String
+
+    var body: some View {
+        List {
+            Section {
+                if discovery.typeInstances.isEmpty {
+                    Text(discovery.isBrowsingInstances ? "正在浏览该类型…" : "该类型下暂未发现实例.")
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(discovery.typeInstances) { s in
+                        NetworkDiscoveryView.serviceRow(s)
+                    }
+                }
+                if let err = discovery.instanceErrorText {
+                    Text(err)
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("服务实例")
+            } footer: {
+                Text("原始类型 \(info.rawType).所在域 \(domain).")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(info.friendlyName ?? "服务实例")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            discovery.startInstanceBrowsing(rawType: info.rawType, domain: domain)
+        }
+        .onDisappear {
+            discovery.stopInstanceBrowsing()
         }
     }
 }
