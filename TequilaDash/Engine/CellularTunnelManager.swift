@@ -209,7 +209,7 @@ final class CellularTunnelManager: @unchecked Sendable {
         if !ready {
             LoginLogger.shared.log(
                 "[Cellular] 主动建链后仍未就绪（已发起=" + String(kicked) + "）. utun="
-                + String(LocalDevVPN.isConnected) + " 接口=" + LocalDevVPN.ipv4InterfaceSummary()," ,
+                + String(LocalDevVPN.isConnected) + " 接口=" + LocalDevVPN.ipv4InterfaceSummary(),
                 category: .tunnelCellular)
         }
         return ready
