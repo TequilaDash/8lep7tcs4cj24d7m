@@ -133,15 +133,10 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         let checker = CellularNetworkChecker.shared
         // v0.3.761：Wi-Fi 判定改 BSD 接口快照（en* 持有地址才算），utun 场景不再误判.
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return false }
-        // v0.3.767（Gnoix 对齐）：断网窗口建立的通路在蜂窝恢复后仍可用（真机实测）——
-        // 通路已在就不再二次卡点，直接放行；判据与 guardReady 完全一致，门过 ⇒ 操作必过.
+        // v0.3.771（重做）：门只信「通路真的建着」—— TunnelGate.isReady 只被硬证据置真
+        // （断网窗口内操作真实成功 / utun 对端可达）；直连端口探测不再参与判定：探测连得上
+        // RSD 端口 ≠ 隧道能用（LC 实测假阳性，门放行后建隧道失败，卡点兜底被跳过）.
         if TunnelGate.isReady { return false }
-        // v0.3.768（Gnoix 对齐）：判据升级为双通道（utun 对端 或 设备直连），直连通了
-        // 蜂窝下也不再弹卡 —— RSD 监听设备所有网卡，iOS 只限应用连 127.0.0.1 回环.
-        if LocalDevVPN.isChannelReachable(timeout: 0.5) {
-            TunnelGate.setReady(true)
-            return false
-        }
         if !checker.isNetworkConnectedNow { return false }
         gateLock.lock()
         if gateBusy || runTask != nil { gateLock.unlock(); return false }
@@ -202,8 +197,8 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     func awaitLoopbackGate(label: String) async -> LoopbackGateVerdict {
         let checker = CellularNetworkChecker.shared
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi { return .notNeeded }
-        // v0.3.767（Gnoix 对齐）：通路已在（上次卡点窗口建立，蜂窝恢复后仍可用）⇒ 不再二次卡点.
-        if await loopbackPathAlive() { return .notNeeded }
+        // v0.3.771（重做）：通路真的建着（硬证据置真，同 beginLoopbackGate 注释）⇒ 不再二次卡点.
+        if TunnelGate.isReady { return .notNeeded }
         if !checker.isNetworkConnectedNow { return .notNeeded }
         let acquired: Bool = gateLock.withLock {
             if gateBusy || runTask != nil { return false }
@@ -234,17 +229,6 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
             self.phase = .injecting(label: label)
         }
         return .opened
-    }
-
-    /// 通路已在判定（v0.3.767 Gnoix 对齐）：缓存说通就信；缓存说断再权威补一枪 0.5s 探测
-    /// （与 TunnelGate.guardReady 同判据同上限，硬规则 29）.
-    private func loopbackPathAlive() async -> Bool {
-        if TunnelGate.isReady { return true }
-        let alive = await Task.detached(priority: .userInitiated) {
-            LocalDevVPN.isChannelReachable(timeout: 0.5)
-        }.value
-        if alive { TunnelGate.setReady(true) }
-        return alive
     }
 
     /// 门核心：弹卡 → 自动关 → 等断网（8s）→ 手动（900s）。
@@ -369,8 +353,8 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         if CellularNetworkChecker.captureInterfaceSnapshot().wifi {
             return try await action()
         }
-        // ①b v0.3.767（Gnoix 对齐）：通路已在 ⇒ 不弹卡直接执行（通路在蜂窝恢复后仍可用）.
-        if await loopbackPathAlive() {
+        // ①b v0.3.771（重做）：通路真的建着 ⇒ 不弹卡直接执行（置真只认硬证据）.
+        if TunnelGate.isReady {
             return try await action()
         }
         // ② 已经离线：路由重置窗口已开，直接进窗口.
@@ -411,6 +395,10 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         await setPhase(.injecting(label: label))
         do {
             let value = try await action()
+            // v0.3.771（重做）：断网窗口内操作真实成功 = 通路真实建立的最强证据，在此置真 ——
+            // 蜂窝恢复后门据此放行不再二次卡点（Gnoix 对齐：关一次蜂窝，之后蜂窝下直接用）.
+            TunnelGate.setReady(true)
+            TunnelDiagnostics.note("蜂窝通路", "断网窗口内操作成功，通路已真实建立，蜂窝恢复后不再卡点")
             if !isCancelled(epoch) {
                 await setPhase(.success)
                 restoreTask?.cancel()

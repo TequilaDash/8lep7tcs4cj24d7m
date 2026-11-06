@@ -75,6 +75,11 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         domainBrowser.schedule(in: .main, forMode: .common)
         domainBrowser.searchForRegistrationDomains()
         self.domainBrowser = domainBrowser
+        // SideStore 同款（BonjourDiscoveryManager.discoverDomains 启动即写死 local）：
+        // 注册域枚举在 iOS 上几乎不回结果，保底 local 让可浏览域列表不再空白.
+        if !domains.contains("local") {
+            domains.append("local")
+        }
     }
 
     func stop() {

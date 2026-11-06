@@ -4,7 +4,7 @@
 //
 //  网络发现（mDNS）二级页 —— 入口：Cellular 隧道支持 → 网络发现.
 //  SideStore「Discovery」完整移植：可浏览域（含域二级页）+ mDNS 服务列表 +
-//  直连端点观测 + 导航栏蜂窝支持开关（SideStore 同位）+ 最近隧道事件快照.
+//  直连端点观测 + 导航栏蜂窝支持开关（SideStore 同位）+ 右上角隧道事件日志.
 //
 
 import SwiftUI
@@ -17,6 +17,7 @@ struct NetworkDiscoveryView: View {
 
     @State private var probing = false
     @State private var probeResult = ""
+    @State private var showEvents = false
     @State private var recentEvents: [String] = []
 
     private var directText: String {
@@ -78,27 +79,6 @@ struct NetworkDiscoveryView: View {
             } footer: {
                 Text("实时浏览 _remotepairing / _remoted / _remotepairing-pairable-host 三类服务（SideStore Network Discovery 同款）.在 LiveContainer 内宿主已声明 _remotepairing._tcp，其余类型可能浏览失败，不影响使用.")
             }
-
-            Section {
-                if recentEvents.isEmpty {
-                    Text("暂无隧道事件.做一次隧道操作后回来点「刷新」.")
-                        .font(AppFont.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(recentEvents.enumerated()), id: \.offset) { pair in
-                        Text(pair.element)
-                            .font(AppFont.footnote.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Button("刷新") {
-                    recentEvents = TunnelDiagnostics.recentEvents()
-                }
-            } header: {
-                Text("最近隧道事件")
-            } footer: {
-                Text("与「运行日志 / SSH tunnellog」同一份隧道诊断的内存快照（新在上，最多 12 条）.蜂窝下无法 SSH 时，用这里看隧道失败原因.")
-            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("网络发现（mDNS）")
@@ -117,12 +97,47 @@ struct NetworkDiscoveryView: View {
                 }
                 .accessibilityLabel("蜂窝支持开关")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    recentEvents = TunnelDiagnostics.recentEvents()
+                    showEvents = true
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                }
+                .accessibilityLabel("隧道事件日志")
+            }
         }
         .onAppear {
             discovery.start()
-            recentEvents = TunnelDiagnostics.recentEvents()
         }
         .onDisappear { discovery.stop() }
+        .sheet(isPresented: $showEvents) {
+            NavigationStack {
+                List {
+                    if recentEvents.isEmpty {
+                        Text("暂无隧道事件.做一次隧道操作后点「刷新」.")
+                            .font(AppFont.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(recentEvents.enumerated()), id: \.offset) { pair in
+                            Text(pair.element)
+                                .font(AppFont.footnote.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("隧道事件")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("刷新") {
+                            recentEvents = TunnelDiagnostics.recentEvents()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// SideStore Discovery「Browsable Domains」同款：可浏览域 + 域二级页.
@@ -188,7 +203,6 @@ struct NetworkDiscoveryView: View {
                 return (port, source, ok)
             }.value
             probing = false
-            recentEvents = TunnelDiagnostics.recentEvents()
             let (port, source, ok) = result
             if ok {
                 probeResult = "直连探测通过：127.0.0.1:\(port),可直接建隧道."

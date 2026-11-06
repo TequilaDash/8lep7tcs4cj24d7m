@@ -159,7 +159,9 @@ final class TunnelReadiness: ObservableObject {
             reachable = viaDirect
         }
         let now = Date()
-        TunnelGate.setReady(reachable)
+        // v0.3.771（重做）滞回：置真只认硬证据（utun 对端可达；门内真实成功另行置真），
+        // 直连探测只「维持」已置真的通路、绝不把假探成真（LC 实测直连探测假阳性）.
+        TunnelGate.setReady(utunReachable || (TunnelGate.isReady && reachable))
         lastCheckedAt = now
         if reachable && !isReady { becameReadyAt = now }
         if reachable != isReady {

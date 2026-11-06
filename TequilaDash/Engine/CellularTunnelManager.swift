@@ -127,13 +127,11 @@ final class CellularTunnelManager: @unchecked Sendable {
             return false
         }
 
-        // v0.3.767（Gnoix 对齐）：通路已在就绝不重复关蜂窝 —— 关蜂窝只为在断网窗口抢建通路，
-        // 通路建立后蜂窝恢复仍可用（真机实测）；隧道已就绪时再关蜂窝纯属破坏（且此路径无人恢复）.
-        // 零延迟直接放行（结论等价 waitForTunnelReady 成功）.
-        if TunnelGate.isReady
-            || LocalDevVPN.isChannelReachable(timeout: 0.5) {
-            TunnelGate.setReady(true)
-            Self.logGateOnce("pathAlive", "通路已在（蜂窝恢复后仍可用），跳过关蜂窝直接放行")
+        // v0.3.771（重做）：通路已在就绝不重复关蜂窝 —— isReady 只被硬证据置真
+        // （断网窗口内真实成功 / utun 对端），直连端口探测不参与（LC 实测假阳性）；
+        // 隧道已就绪时再关蜂窝纯属破坏（且此路径无人恢复）. 零延迟直接放行.
+        if TunnelGate.isReady {
+            Self.logGateOnce("pathAlive", "通路已在（真实建立且未被清），跳过关蜂窝直接放行")
             return true
         }
 
