@@ -305,6 +305,29 @@ enum LocalDevVPN {
         return true
     }
 
+    /// 蜂窝卡点窗口专用：请求 NE 隧道立刻（重）建链.
+    ///
+    /// Gnoix 的关蜂窝动作本身就是「趁隙建链」的一半：NE 的底层连接在
+    /// 路由重置发生时会自动重试；这里补的是另一半——若 NE 首连因蜂窝
+    /// 路由尚未重置而失败（ConnectionReset 等），窗口内主动再拉起一次.
+    /// 纯请求式（不等待、不抛错）：重试节奏仍由 NE/TunnelContext 的
+    /// 连接逻辑与路由重置事件驱动，协调器只负责把「该连了」的信号送进主线程.
+    static func reconnectForCellularGlitch() {
+        let kick = {
+            guard autoStartWhenNeeded, TunnelManager.selectedKind == .localDevVPN else { return }
+            if isConnected {
+                // utun 还在：窗口内的路由重置已让 NE 自行恢复，无需干预.
+                return
+            }
+            openOrInstall()
+        }
+        if Thread.isMainThread {
+            kick()
+        } else {
+            DispatchQueue.main.async(execute: kick)
+        }
+    }
+
     /// 首个合格的点对点 utun 对端地址（= `utunPeerIPv4Candidates()` 的第一项）.
     /// 单地址版；蜂窝就绪轮询改走多候选 `isAnyCandidateReachable(timeout:)`.
     ///
