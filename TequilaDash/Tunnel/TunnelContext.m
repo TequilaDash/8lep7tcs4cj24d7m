@@ -470,11 +470,10 @@ static uint16_t TDRPPairingPort(void) {
 /// 本次要依次尝试的候选对端（v0.3.636 新增）。
 ///
 /// 顺序与 Swift 侧 `LocalDevVPN.candidateTunnelPeers()` 对齐：
-///   0. 直连候选（Bonjour 设备自身 IP，90s 探测新鲜）—— 蜂窝下唯一活路，放最前
-///   1. 上次成功的那个（若有）—— 命中率最高
-///   2. 用户显式覆盖 `TunnelDeviceIP`
-///   3. utun 点对点对端 + 路由表枚举（`esc_route_utun_peers`）
-///   4. 兜底 10.7.0.1
+///   0. 上次成功的那个（若有）—— 命中率最高
+///   1. 用户显式覆盖 `TunnelDeviceIP`
+///   2. utun 点对点对端 + 路由表枚举（`esc_route_utun_peers`）
+///   3. 兜底 10.7.0.1
 ///
 /// 去重后返回。拿不到路由表就只用前两级，不影响建连。
 - (NSArray<NSString *> *)_candidateTunnelPeers {
@@ -489,19 +488,6 @@ static uint16_t TDRPPairingPort(void) {
         [seen addObject:ip];
         [out addObject:ip];
     };
-
-    // 0. 直连候选（v0.3.769 Gnoix 取证对齐）：回环 127.0.0.1 + Bonjour 发现的 RSD 端口。
-    // Swift 侧事件驱动打戳（正向事件置位 / 反向事件清零，无时间窗无轮询）——
-    // 戳存在才纳入。直连不依赖 utun，蜂窝下照样可用；且必须排在 utun 候选之前：
-    // 蜂窝下 utun 对端会挂住无超时 connect.
-    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
-    double directAt = [defs doubleForKey:@"rppairing.directIPAt"];
-    NSString *directHost = [[defs stringForKey:@"rppairing.directHost"]
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (directAt > 0) {
-        if (directHost.length == 0) directHost = @"127.0.0.1";
-        add(directHost);
-    }
 
     // 1. 上次成功的
     NSString *lastGood = [[NSUserDefaults standardUserDefaults] stringForKey:@"TunnelLastGoodPeer"];

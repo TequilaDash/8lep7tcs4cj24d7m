@@ -70,9 +70,8 @@ enum TunnelGate {
             let frames = Thread.callStackSymbols.dropFirst(2).prefix(3).joined(separator: " <- ")
             TunnelDiagnostics.note("主线程隧道调用", frames.isEmpty ? "guardReady 在主线程同步等待" : frames)
         }
-        // v0.3.772（回环定版）：主地址恒 127.0.0.1:RSD —— 探测对象与建链对象一致，
-        // 回环预演通过 = 建链第一步成立（余下步骤失败由功能侧如实报错）.
-        if LocalDevVPN.loopbackProbeReady(timeout: probeTimeout) {
+        // v0.3.773（凭证定版）：探测对象 == 建链对象（主地址 = utun 对端）.
+        if LocalDevVPN.isReachable(ip: LocalDevVPN.targetIP, timeout: probeTimeout) {
             setReady(true)
             // 让 MainActor 侧的发布状态跟上（后台补一拍，不阻塞调用方）.
             Task { @MainActor in
@@ -83,7 +82,7 @@ enum TunnelGate {
         Task { @MainActor in
             await TunnelReadiness.shared.probeOnce()
         }
-        throw TunnelReadinessError(ip: "127.0.0.1", port: RemotePairingPort.current)
+        throw TunnelReadinessError(ip: LocalDevVPN.targetIP, port: RemotePairingPort.current)
     }
 }
 
@@ -139,31 +138,24 @@ final class TunnelReadiness: ObservableObject {
 
     /// 立即探测一次（socket 在后台线程跑，结论回主线程发布 + 写入 TunnelGate 缓存）.
     func probeOnce() async {
-        var port = RemotePairingPort.current
+        let ip = LocalDevVPN.targetIP
+        let port = RemotePairingPort.current
         let timeout = Self.probeTimeout
-        // v0.3.772（回环定版）：只探 127.0.0.1:RSD —— 与 tunnel_create_rppairing 建链
-        // 主地址同源，探测通过即建链前半段成立（回环 refusal 即时，无 utun 黑洞）.
-        // 端口未知时事件驱动解析一次（Bonjour/缓存），不再维护 utun/直连双通道口径.
-        if port == 0 {
-            port = await Task.detached(priority: .utility) {
-                RemotePairingPort.resolveNow(timeout: 3)
-            }.value
-        }
-        var reachable = false
-        if port > 0 {
-            reachable = await Task.detached(priority: .utility) {
-                LocalDevVPN.isReachable(ip: "127.0.0.1", timeout: timeout, port: port)
-            }.value
-        }
+        // v0.3.773（凭证定版）：只探 utun 对端 —— 探测对象 == 建链主地址.
+        // 回环 TCP 预演已被 v0.3.772 真机证伪（设备 remoted listener 恒监听回环，
+        // 回环 TCP 通 ≠ 隧道通，蜂窝下假放行导致功能 Connection reset）.
+        let reachable = await Task.detached(priority: .utility) {
+            LocalDevVPN.isReachable(ip: ip, timeout: timeout, port: port)
+        }.value
         let now = Date()
-        // 探测对象 == 建链对象：通即置真，不通即清假，无滞回.
+        // 探测对象 == 建链对象：通即置真，不通即清假（蜂窝切换时立即清凭证）.
         TunnelGate.setReady(reachable)
         lastCheckedAt = now
         if reachable && !isReady { becameReadyAt = now }
         if reachable != isReady {
             TunnelDiagnostics.note("隧道就绪", reachable
-                ? "状态翻转：不可达 → 可达（127.0.0.1:\(port)）"
-                : "状态翻转：可达 → 不可达（127.0.0.1:\(port)）")
+                ? "状态翻转：不可达 → 可达（\(ip):\(port)）"
+                : "状态翻转：可达 → 不可达（\(ip):\(port)）")
         }
         isReady = reachable
     }

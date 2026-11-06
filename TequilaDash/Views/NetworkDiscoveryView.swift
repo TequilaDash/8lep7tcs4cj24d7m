@@ -52,7 +52,7 @@ struct NetworkDiscoveryView: View {
             } header: {
                 Text("通道状态")
             } footer: {
-                Text("直连端点 = 回环 127.0.0.1 + Bonjour 发现的 RSD 端口（Gnoix 同款），事件驱动打戳，蜂窝下不依赖 LocalDevVPN.")
+                Text("RSD 端口由 Bonjour 事件驱动解析.建连主地址为 utun 对端；蜂窝下开启蜂窝支持，由 LocalDevVPN 在断网窗口兜底建链.")
             }
 
             domainSection
@@ -205,7 +205,7 @@ struct NetworkDiscoveryView: View {
             probing = false
             let (port, source, ok) = result
             if ok {
-                probeResult = "直连探测通过：127.0.0.1:\(port),可直接建隧道."
+                probeResult = "直连探测通过：127.0.0.1:\(port)（回环 TCP 可达）."
             } else if source == "Bonjour" {
                 probeResult = "已发现配对服务（端口 \(port)）,但直连探测未通过.可重试一次."
             } else {
@@ -215,29 +215,70 @@ struct NetworkDiscoveryView: View {
     }
 }
 
-/// 域二级页：该域下发现的服务（SideStore 点「local」进来的页面）.
+/// 域二级页：该域下枚举的服务类型 + 浏览到的实例
+/// （SideStore 点「local」进来的页面：先类型列表，再逐型实例）.
 private struct NetworkDomainDetailView: View {
     @ObservedObject var discovery: BonjourNetworkDiscovery
     let domain: String
 
+    /// 实例的 domain 带尾点（NetService 原样，如 "local."），域行不带 —— 双向归一后再比.
     private var rows: [BonjourNetworkDiscovery.DiscoveredService] {
-        discovery.services.filter { $0.domain == domain }
+        let d = domain.hasSuffix(".") ? domain : domain + "."
+        return discovery.services.filter { ($0.domain.hasSuffix(".") ? $0.domain : $0.domain + ".") == d }
     }
 
     var body: some View {
         List {
-            if rows.isEmpty {
-                Text(discovery.isBrowsing ? "正在浏览该域…" : "该域下暂未发现服务.")
+            Section {
+                if discovery.isEnumeratingTypes && discovery.serviceTypes.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("正在枚举服务类型…")
+                    }
                     .font(AppFont.footnote)
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(rows) { s in
-                    NetworkDiscoveryView.serviceRow(s)
+                } else if discovery.serviceTypes.isEmpty {
+                    Text("该域下未枚举到服务类型.")
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(discovery.serviceTypes) { t in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t.displayName)
+                            Text(t.rawType)
+                                .font(AppFont.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
+            } header: {
+                Text("服务类型")
+            } footer: {
+                Text("SideStore 同款：_services._dns-sd._udp 枚举 + 常见类型兜底探测，10 秒收敛.")
+            }
+
+            Section {
+                if rows.isEmpty {
+                    Text(discovery.isBrowsing ? "正在浏览该域…" : "该域下暂未发现服务实例.")
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(rows) { s in
+                        NetworkDiscoveryView.serviceRow(s)
+                    }
+                }
+            } header: {
+                Text("隧道服务实例")
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle(domain)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            discovery.discoverServiceTypes(in: domain)
+        }
+        .onDisappear {
+            discovery.stopTypeSearch()
+        }
     }
 }
