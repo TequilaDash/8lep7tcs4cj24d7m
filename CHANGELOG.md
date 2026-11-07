@@ -1,3 +1,8 @@
+## [0.3.779] - 2026-11-07
+
+- 隧道.软隧道改走回环 lockdown 直连（minimuxer/StikDebug 同型）：真机隧道日志实证软隧道全链死于 usbmuxd_connect ENOENT（iOS 沙盒没有 /var/run/usbmuxd）.新增 TCP 第 0 级链路：TcpStream 连 127.0.0.1:62078 lockdown→先试本机配对记录→失败即自配对（本机生成 host id）→start_session→start_service(com.apple.coredevice.proxy)→回环连服务端口→CoreDeviceProxy→jktcp 软件隧道→RSD 握手；usbmuxd 链降级为越狱/桌面场景后备，不再挡在真机面前
+- 隧道.软隧道失败阶段名带 tcp_ 前缀（tcp_lockdown_connect/tcp_read_record/tcp_lockdown_pair/tcp_start_session/tcp_start_service/tcp_connect_service_port/cd_tunnel_handshake/software_tunnel/rsd_handshake），隧道日志板块可精确定位到步
+
 ## [0.3.778] - 2026-11-07
 
 - 隧道.全部服务接入软隧道优先（Gnoix 同型）：新增 SoftTunnelService 统一入口（单队列串行建立），链路 usbmuxd→lockdown→com.apple.coredevice.proxy→create_software_tunnel→RSD 握手；建立成功即跳过卡点门与 utun 对端，蜂窝/Wi-Fi 均直连可用

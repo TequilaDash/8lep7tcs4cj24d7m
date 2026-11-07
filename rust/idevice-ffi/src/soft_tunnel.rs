@@ -4,6 +4,7 @@ use std::ffi::{CStr, c_char};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use idevice::{
+    Idevice,
     IdeviceError,
     core_device_proxy::CoreDeviceProxy,
     lockdown::LockdownClient,
@@ -24,6 +25,8 @@ use crate::{
 const SERVICE_CORE_DEVICE_PROXY: &str = "com.apple.coredevice.proxy";
 const LOCKDOWN_PORT: u16 = 62078;
 const LABEL: &str = "tequila";
+const LOCKDOWN_HOST: &str = "127.0.0.1";
+const SELF_BUID: &str = "tequila-self";
 
 struct SoftFailure {
     kind: TunnelFailureKind,
@@ -122,7 +125,97 @@ async fn port_via_self_pair(udid: &str, device_id: u32) -> Result<(LockdownClien
     }
     Ok((client, port))
 }
-async fn finish_soft_tunnel(
+// ---------------------------------------------------------------- loopback lockdown chain
+
+async fn lockdown_connect_tcp() -> Result<LockdownClient, SoftFailure> {
+    let stream = tokio::net::TcpStream::connect((LOCKDOWN_HOST, LOCKDOWN_PORT))
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "tcp_lockdown_connect", io_err(e)))?;
+    Ok(LockdownClient::new(Idevice::new(Box::new(stream), LABEL)))
+}
+
+async fn tcp_service_port(mut client: LockdownClient, pf: &PairingFile) -> Result<(LockdownClient, u16), SoftFailure> {
+    client
+        .start_session(pf)
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailurePairVerify, "tcp_start_session", e))?;
+    let (port, _) = client
+        .start_service(SERVICE_CORE_DEVICE_PROXY)
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "tcp_start_service", e))?;
+    Ok((client, port))
+}
+
+async fn port_via_tcp_file(path: &str) -> Result<(LockdownClient, u16), SoftFailure> {
+    let pf = PairingFile::read_from_file(path)
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "tcp_read_record", e))?;
+    let client = lockdown_connect_tcp().await?;
+    tcp_service_port(client, &pf).await
+}
+
+#[cfg(feature = "pair")]
+async fn port_via_tcp_self_pair() -> Result<(LockdownClient, u16), SoftFailure> {
+    let mut client = lockdown_connect_tcp().await?;
+    let pf = client
+        .pair(gen_host_id(), SELF_BUID.to_string(), Some(LABEL))
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailurePairVerify, "tcp_lockdown_pair", e))?;
+    tcp_service_port(client, &pf).await
+}
+
+async fn chain_tcp(file_path: Option<&str>) -> Result<(AdapterHandle, RsdHandshakeHandle), SoftFailure> {
+    // Try an on-disk lockdown pairing record first. The remote-pairing record the app
+    // keeps uses a different host identity than lockdownd itself, so this normally
+    // fails and falls through to self pairing below.
+    if let Some(path) = file_path {
+        if let Ok((client, port)) = port_via_tcp_file(path).await {
+            return finish_soft_tunnel_tcp(client, port).await;
+        }
+    }
+
+    #[cfg(feature = "pair")]
+    {
+        let (client, port) = port_via_tcp_self_pair().await?;
+        return finish_soft_tunnel_tcp(client, port).await;
+    }
+
+    #[cfg(not(feature = "pair"))]
+    Err(sf(
+        TunnelFailureKind::TunnelFailurePairVerify,
+        "tcp_lockdown_pair",
+        IdeviceError::InternalError("pair feature disabled".into()),
+    ))
+}
+
+async fn finish_soft_tunnel_tcp(
+    client: LockdownClient,
+    port: u16,
+) -> Result<(AdapterHandle, RsdHandshakeHandle), SoftFailure> {
+    // Keep the lockdown session (and its socket) alive for the tunnel handshake.
+    let _session = client;
+    let stream = tokio::net::TcpStream::connect((LOCKDOWN_HOST, port))
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "tcp_connect_service_port", io_err(e)))?;
+    let idev = Idevice::new(Box::new(stream), LABEL);
+    let proxy = CoreDeviceProxy::new(idev)
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureTlsHandshake, "cd_tunnel_handshake", e))?;
+    let rsd_port = proxy.tunnel_info().server_rsd_port;
+    let adapter = proxy
+        .create_software_tunnel()
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureTlsHandshake, "software_tunnel", e))?;
+    let mut handle = adapter.to_async_handle();
+    let stream = handle
+        .connect(rsd_port)
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "rsd_port_connect", e))?;
+    let handshake = RsdHandshake::new(stream)
+        .await
+        .map_err(|e| sf(TunnelFailureKind::TunnelFailureOther, "rsd_handshake", e))?;
+    Ok((AdapterHandle(handle), RsdHandshakeHandle(handshake)))
+}
+
+async fn finish_soft_tunnel_usbmuxd(
     device_id: u32,
     client: LockdownClient,
     port: u16,
@@ -202,9 +295,28 @@ pub unsafe extern "C" fn tunnel_create_soft(
     };
 
     let res = run_sync_local(async move {
+        let mut last: Option<SoftFailure> = None;
+
+        // Stage 0: loopback lockdown chain (minimuxer/StikDebug style). This is the
+        // only transport that exists inside the iOS sandbox: /var/run/usbmuxd is not
+        // reachable there, but lockdownd listens on 127.0.0.1:62078 on the device
+        // itself. Failure stages from this chain carry the tcp_ prefix.
+        match chain_tcp(file_path.as_deref()).await {
+            Ok(done) => return Ok(done),
+            Err(f) => {
+                tracing::warn!("soft tunnel: loopback lockdown failed at {}: {:?}", f.stage, f.err);
+                last = Some(f);
+            }
+        }
+
+        // Fallback: usbmuxd transport (jailbroken devices / desktop hosts).
         let mut conn = match UsbmuxdConnection::default().await {
             Ok(c) => c,
-            Err(e) => return Err(sf(TunnelFailureKind::TunnelFailureOther, "usbmuxd_connect", e)),
+            Err(e) => {
+                let f = sf(TunnelFailureKind::TunnelFailureOther, "usbmuxd_connect", e);
+                tracing::warn!("soft tunnel: usbmuxd fallback failed at {}: {:?}", f.stage, f.err);
+                return Err(last.unwrap_or(f));
+            }
         };
         let devices = match conn.get_devices().await {
             Ok(d) => d,
@@ -224,8 +336,7 @@ pub unsafe extern "C" fn tunnel_create_soft(
         let device_id = dev.device_id;
         drop(devices);
 
-        tracing::info!("soft tunnel: device {udid} (id {device_id}), starting pairing chain");
-        let mut last: Option<SoftFailure> = None;
+        tracing::info!("soft tunnel: device {udid} (id {device_id}), starting usbmuxd pairing chain");
         let mut client_port: Option<(LockdownClient, u16)> = None;
 
         match conn.get_pair_record(&udid).await {
@@ -284,7 +395,7 @@ pub unsafe extern "C" fn tunnel_create_soft(
             }
         };
 
-        finish_soft_tunnel(device_id, client, port).await
+        finish_soft_tunnel_usbmuxd(device_id, client, port).await
     });
 
     match res {
