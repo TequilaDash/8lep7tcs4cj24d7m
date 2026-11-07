@@ -292,7 +292,7 @@ struct HomeView: View {
         }
     }
 
-    /// 扩展与商店：2 项「模块 + 商店」，保持全宽行.
+    /// 扩展与商店：3 项「模块 + 商店 + 沙盒容器」，保持全宽行.
     ///
     /// ⚠️ 改前两行图标底均为**橙棕** `AppModule.store.tint`（`#C2620E`）—— 用户点名的「棕色踩雷」处.
     /// `categoryStore` 已去棕改为**冷青蓝**，故此处两行随之变青蓝；分组头竖条同用商店模块色.
@@ -309,6 +309,11 @@ struct HomeView: View {
                 navRow(title: "AppStore 商店", subtitle: "榜单 / 搜索 / 应用详情",
                        icon: "app.badge.fill", tint: AppModule.store.tint) {
                     AppStoreView()
+                }
+                rowDivider
+                navRow(title: "沙盒容器", subtitle: "容器内安装 / 元数据隔离",
+                       icon: "square.stack.3d.up.fill", tint: AppModule.store.tint) {
+                    SandboxContainerView()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

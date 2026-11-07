@@ -1,3 +1,11 @@
+## [0.3.781] - 2026-11-07
+
+- 沙盒容器.新增「沙盒容器」功能（参考 LiveContainer）：主页「扩展与商店」加第三行入口，容器列表走网格卡片 + 搜索 + 导入 IPA（SandboxImportService 解包进 SandboxApps/Applications，zip-slip 与 20000 文件 / 2GB 上限已设）.本阶段只做容器管理与数据目录隔离，容器内启动需要未加密包并配合 JIT 或重签，后续版本再接
+
+- 沙盒容器.详情页（SandboxAppDetailView）：包体 / 可写目录路径、版本、大小、安装时间，可创建与重建可写目录（Data/Application/<UUID> 预建 Library/Caches、Library/Cookies、Documents、SystemData，缺了访客 App 首次写缓存会崩）、浏览包体目录、分享包体、删除容器；删除按真实结果上报（removed / notFound / failed），不报假「已删除」
+
+- 沙盒容器.图标加载走 SandboxIconLoader（NSLock 缓存、Task.detached 取图、不写负缓存），避免主线程读盘卡顿；导入遮罩固定文案，不跨 actor 传 progress 闭包（Swift 6 complete 并发下非法）
+
 ## [0.3.780] - 2026-11-07
 
 - 隧道.软隧道加传输层熔断：真机隧道日志实证 iOS 沙盒禁止 App 进程 connect 62078，TCP 直连恒失败（stage=tcp_lockdown_connect，Operation not permitted os error 1）.连续两次传输层被拒即本会话停用进程内直连，不再每次操作白撞一遍；配对/协议层失败不计，仍每次重试
