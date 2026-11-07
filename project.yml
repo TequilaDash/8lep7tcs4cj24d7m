@@ -27,8 +27,8 @@ settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: com.tequila.dash
     PRODUCT_NAME: TequilaDash
-    MARKETING_VERSION: "0.3.782"
-    CURRENT_PROJECT_VERSION: "1071"
+    MARKETING_VERSION: "0.3.783"
+    CURRENT_PROJECT_VERSION: "1072"
     # 注：这里**刻意不写** `SWIFT_VERSION` —— 实测顶层 `settings.base` 的它**不被 xcodegen 采纳**，
     # 真正生效的是下面 target 层那一份（当前 `"6.0"` = Swift 6 语言模式）。
     # 另注：**编译器版本 ≠ 语言模式** —— CI 用 Xcode 27 自带的 Swift 6.4 编译器，
@@ -188,6 +188,11 @@ targets:
       # 注意 litehook.c 会 #include "dyld_cache_format.h"，靠上面的 HEADER_SEARCH_PATHS 找到。
       - path: vendor/litehook/src
       - path: vendor/fishhook
+        # LICENSE 是纯文本，落在 source 树里会被 xcodegen 当资源平铺进 .app 根。
+        # 许可正文已另存 Resources/Licenses/fishhook.txt，由 prepare.sap.py 拷进 bundle/SAPAssets，
+        # 所以这里只排除 LICENSE 文件本身，不动 fishhook.c/.h。
+        excludes:
+          - "LICENSE"
       - path: vendor/BitByteData/Sources
         # 排除 vendor 占位 PrivacyInfo.xcprivacy：两份内容完全相同且都在 Sources 根目录，
         # xcodegen 会把二者都复制进 app bundle 导致 "Multiple commands produce .../PrivacyInfo.xcprivacy"。
@@ -262,8 +267,8 @@ targets:
         # 版本号三处同步（HARD-RULES 22）：主 App 的 settings.base 与 Resources/Info.plist 之外，
         # 扩展 target 是第三处 —— 原先这里停在 0.3.587/881（落后主 App 33 个版本），
         # 会让 .appex 的 CFBundleVersion 与主 App 不一致，iOS 安装/升级可拒或把扩展判过期。
-        MARKETING_VERSION: "0.3.782"
-        CURRENT_PROJECT_VERSION: "1071"
+        MARKETING_VERSION: "0.3.783"
+        CURRENT_PROJECT_VERSION: "1072"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         # 与主 target 同口径的 Swift 6 严格并发（详见主 target 的说明）.
         SWIFT_VERSION: "6.0"

@@ -47,6 +47,11 @@ int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
 // 路由表 → utun 对端（`rt_msghdr` 不在 Swift Clang Importer 可见范围，必须走 C 垫片）
 #include "../Tunnel/EscRoutePeers.h"
 
+// hook 底座垫片（v0.3.783）：litehook / fishhook 的上游签名里有 mach_header_u 与
+// `struct rebinding`，Swift 的 Clang Importer 处理不了（typedef 带 #ifdef、函数指针要跨语言
+// 携带上下文），全部关在 C 层 —— 与 EscDDIProbe / EscRoutePeers 同一先例。
+#include "EscHookBridge.h"
+
 #include "../Services/MachOLoader/uloader.h"
 
 // 崩溃探针：把硬故障（SIGSEGV/BUS/ILL/FPE）的 信号/地址/PC 写入 fd 后重抛

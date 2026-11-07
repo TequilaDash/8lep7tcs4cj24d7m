@@ -1,3 +1,13 @@
+## [0.3.783] - 2026-11-08
+
+- 依赖.照 LiveContainer 引入 hook 底座 litehook 与 fishhook（vendor 落库 + project.yml 接线 + NOTICE 第 7/8 节 + 许可文本随包）.上游零包管理器依赖（无 SPM / CocoaPods），三个 submodule 里我们只需要这两个；OpenSSL 继续用现有 openssl-build 静态库，不跟它换 xcframework
+
+- 沙盒容器.新增 Engine/EscHookBridge.c / .h：litehook 与 fishhook 的 C 垫片.上游签名里的 mach_header_u（#ifdef typedef）、C 函数指针出参、struct rebinding 数组都是 Swift Clang Importer 处理不了的东西，全部关在 C 层.沿用本仓「八轮攻坚」教训：垫片零指针出参，失败原因走 esc_hook_last_error()，fishhook 的原函数地址直接用返回值给出
+
+- 沙盒容器.垫片把上游三处静默失败变成可判定：DSC 查不到符号、litehook 全局重绑未登记（用 gRebindCount 前后差判定，上游在 dladdr 定位不到替身镜像时直接 return）、KERN_PROTECTION_FAILURE 各自给出中文原因
+
+- 沙盒容器.补 litehook_get_dsc_slide 的显式原型（上游只在 .c 里定义、没写进 litehook.h）：不声明就是隐式声明按 int 返回，会把 64 位 slide 截断
+
 ## [0.3.782] - 2026-11-07
 
 - 沙盒容器.整包重签：新增 `zsign_resign_app`（遍历 .app 内所有 64 位 Mach-O 逐个就地重签，照 LiveContainer 的 ZSigner 做法，不产 _CodeSignature/CodeResources、不重打包）.证书与私钥临时文件与 ZSignAsset 只初始化一次循环复用；每个文件复用单文件签名同源的「签名区自愈 → UUID 扰动 → 换 inode → 签名 → 后置自洽校验」
