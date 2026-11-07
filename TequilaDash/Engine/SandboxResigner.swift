@@ -78,6 +78,7 @@ enum SandboxResigner {
             throw SandboxResignError.noCertificate
         }
         var errBuf = [CChar](repeating: 0, count: 512)
+        let errCapacity = Int32(errBuf.count)
         var signed: Int32 = 0
         var failed: Int32 = 0
         let rc: Int32 = material.certPem.withUnsafeBytes { certBuf -> Int32 in
@@ -95,7 +96,7 @@ enum SandboxResigner {
                                                  keyPtr, Int32(material.keyPem.count),
                                                  debugLog?.path, teamC,
                                                  &signed, &failed,
-                                                 errPtr.baseAddress, Int32(errBuf.count))
+                                                 errPtr.baseAddress, errCapacity)
                             }
                         }
                     }
