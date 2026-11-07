@@ -49,6 +49,10 @@ settings:
       - "$(SRCROOT)/ZSign"
       - "$(SRCROOT)/ZSign/common"
       - "$(SRCROOT)/openssl-build/include"
+      # litehook / fishhook（v0.3.783，照 LiveContainer 引入；容器内启动与 JITLess 的 hook 底座）
+      - "$(SRCROOT)/vendor/litehook/src"
+      - "$(SRCROOT)/vendor/litehook/external/include"
+      - "$(SRCROOT)/vendor/fishhook"
       # Asspp 本地 SAP 登录：unicorn 头由 prepare.sap.py 生成在 DERIVED_FILE_DIR/SAP 下
       - "$(DERIVED_FILE_DIR)/SAP/source/include"
     # 对齐 Theos 的 LDFLAGS：系统 framework。
@@ -179,6 +183,11 @@ targets:
         # 注：IPA 本体被 .gitignore 的 `*.ipa` 忽略，需在打包前物理放入该目录（见其 README.md）。
         type: folder
         buildPhase: resources
+      # litehook / fishhook（v0.3.783）：与 LiveContainer 同源同版本，
+      # 只做 dyld_shared_cache 符号解析 / GOT 重绑 / 函数分支改写，无其它依赖。
+      # 注意 litehook.c 会 #include "dyld_cache_format.h"，靠上面的 HEADER_SEARCH_PATHS 找到。
+      - path: vendor/litehook/src
+      - path: vendor/fishhook
       - path: vendor/BitByteData/Sources
         # 排除 vendor 占位 PrivacyInfo.xcprivacy：两份内容完全相同且都在 Sources 根目录，
         # xcodegen 会把二者都复制进 app bundle 导致 "Multiple commands produce .../PrivacyInfo.xcprivacy"。

@@ -40,3 +40,18 @@ because tunnel/applist code is adapted from StikDebug (AGPL-3.0). See LICENSE.
    GNU AGPL-3.0-or-later. This is the user-space Mach-O dylib loader
    that bypasses dyld library validation for ad-hoc signed modules.
    https://github.com/emexlab/Nyxian
+
+7. vendor/litehook/src (litehook.c, litehook.h), vendor/litehook/external/include
+   Adapted from LiveContainer/litehook (github.com/LiveContainer/litehook),
+   MIT License, Copyright (c) 2022-2024 Lars Fröder.
+   Used as the hooking substrate for in-container app launching and JITLess:
+   dyld_shared_cache symbol lookup, GOT rebinding, and function branch rewriting.
+   Copied verbatim; local edits are none.
+   License text: Resources/Licenses/litehook.txt.
+
+8. vendor/fishhook (fishhook.c, fishhook.h)
+   Adapted from facebook/fishhook (github.com/facebook/fishhook),
+   BSD 3-Clause License, Copyright (c) 2013, Facebook, Inc.
+   Used to rebind imported symbols at load time; same role it has in LiveContainer.
+   Copied verbatim; local edits are none.
+   License text: Resources/Licenses/fishhook.txt.
