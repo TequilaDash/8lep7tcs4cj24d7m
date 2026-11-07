@@ -472,25 +472,27 @@ static uint16_t TDRPPairingPort(void) {
     struct RsdHandshakeHandle *handshake = NULL;
     enum TunnelFailureKind kind = TunnelFailureNone;
     char stageBuf[64];
+    NSString *pairingPath = self._pairingFileURL.path;
     struct IdeviceFfiError *err = tunnel_create_soft(
-        _pairingFileURL.path.UTF8String, &kind, &adapter, &handshake, stageBuf, sizeof(stageBuf));
+        pairingPath.fileSystemRepresentation, &kind, &adapter, &handshake, stageBuf, sizeof(stageBuf));
     if (err) {
         if (error) {
             NSString *msg = [NSString stringWithFormat:@"%@ (%s)", TDUTF8(err->message), stageBuf];
             *error = [self _error:msg code:err->code];
         }
-        _td_log_format(TDDomainTunnel, TDLevelError, "soft tunnel failed: %s (stage %s)",
-                       TDUTF8(err->message), stageBuf);
+        NSLog(@"[TequilaDash] Soft tunnel failed (stage %s): %@ (code %d)",
+              stageBuf, TDUTF8(err->message), err->code);
         idevice_error_free(err);
         return NO;
     }
-    [self _resetTunnelStateWithProvider:YES];
+    if (_handshake) { rsd_handshake_free(_handshake); _handshake = NULL; }
+    if (_adapter) { adapter_free(_adapter); _adapter = NULL; }
+    if (_provider) { idevice_provider_free(_provider); _provider = NULL; }
     _adapter = adapter;
     _handshake = handshake;
-    _td_log(TDDomainTunnel, TDLevelInfo, "soft tunnel ready");
+    NSLog(@"[TequilaDash] Soft tunnel established");
     return YES;
 }
-
 /// 本次要依次尝试的候选对端（v0.3.636 新增）。
 ///
 /// 顺序与 Swift 侧 `LocalDevVPN.candidateTunnelPeers()` 对齐：
