@@ -76,6 +76,10 @@ enum ProfileConfigService {
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = in_port_t(RemotePairingPort.current).bigEndian
+        // 软隧道优先（Gnoix 同型，进程内 usbmuxd→lockdown→CoreDeviceProxy→jktcp）：成功即返回，不进卡点门、不依赖 utun 对端.
+        if let soft = SoftTunnelService.shared.createTunnel(label: "下载配置", pairingPath: pairingPath) {
+            return (adapter: soft.adapter, handshake: soft.handshake)
+        }
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "下载配置")
         defer { if loopbackGated { CellularGlitchCoordinator.shared.endLoopbackGate() } }

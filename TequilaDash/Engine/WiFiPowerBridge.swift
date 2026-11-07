@@ -63,6 +63,16 @@ final class WiFiPowerBridge: @unchecked Sendable {
         }
         stepLog("步骤1 配对文件 [完成]")
 
+        // 软隧道优先（Gnoix 同型，进程内 usbmuxd→lockdown→CoreDeviceProxy→jktcp）：成功即返回，不进卡点门、不依赖 utun 对端.
+        if let soft = SoftTunnelService.shared.createTunnel(label: "Wi-Fi 电源桥", pairingPath: pairingPath) {
+            stepLog("步骤2 隧道创建 [完成]（软隧道）")
+            // 所有权移交 Rust（此后 Swift 不再释放；Rust 用完自行释放）
+            pairingPath.withCString { p in
+                lua_host_set_mcinstall_handles(soft.adapter, soft.handshake, p)
+            }
+            stepLog("步骤3 adapter/handshake 所有权已移交 Rust [完成]")
+            return
+        }
         // 2) 隧道 IP
         // 蜂窝隧道支持（默认关）：开关开 + 无 Wi-Fi 时先等本地隧道就绪；其余情况为 no-op.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "Wi-Fi 电源桥")

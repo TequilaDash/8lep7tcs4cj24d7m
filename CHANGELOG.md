@@ -1,3 +1,8 @@
+## [0.3.778] - 2026-11-07
+
+- 隧道.全部服务接入软隧道优先（Gnoix 同型）：新增 SoftTunnelService 统一入口（单队列串行建立），链路 usbmuxd→lockdown→com.apple.coredevice.proxy→create_software_tunnel→RSD 握手；建立成功即跳过卡点门与 utun 对端，蜂窝/Wi-Fi 均直连可用
+- 隧道.接入范围：JIT/侧载安装/进程管理/AFC 文件/设备信息/设备信息增强/存储详情/铃声/截屏/图标清理/电池健康/崩溃日志/DDI 探测/开发者模式/设备控制/i4 工具箱/定位/配对安装/下载配置/读取描述文件/Wi-Fi 电源桥/无线配对/激活服务 共 24 处建隧道入口
+- 隧道.软隧道失败自动回退原 RPPairing 链路（配对文件→卡点门→utun 兜底），原行为不变；失败带阶段诊断（usbmuxd/start_session/cd_tunnel_handshake/software_tunnel/rsd_handshake）进隧道日志板块
 ## [0.3.777] - 2026-11-07
 
 - 网络发现.实例页照 SideStore（BonjourDiscoveryManager:223-261）改走 NWBrowser 并开启 includePeerToPeer：此前点进服务类型后实例列表恒空（NetServiceBrowser 收不到本机回环广播），现在结果集全量重放、名字行永远可见；ip:port 仍由 NSNetService 解析补齐并记账回填，重放不丢端点

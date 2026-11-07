@@ -210,6 +210,28 @@ enum LocationEngine {
     /// 从 setLocked 抽出——clear 在无活动会话时也要能建会话下发清除
     /// （App 重启后内存句柄为空，但设备 locationd 里可能残留上次注入的模拟坐标）.
     private static func connectLocked(pairingPath: String, deviceIP: String) -> Int32 {
+        // 软隧道优先（Gnoix 同型，进程内 usbmuxd→lockdown→CoreDeviceProxy→jktcp）：成功即不进卡点门、不依赖 utun 对端.
+        if let soft = SoftTunnelService.shared.createTunnel(label: "定位服务", pairingPath: pairingPath) {
+            adapter = soft.adapter
+            handshake = soft.handshake
+            TunnelDiagnostics.succeed("定位隧道", "soft")
+            if let handshakeHandle = handshake {
+                preflightChannelLocked(handshakeHandle)
+            }
+            if let remoteServerError = remote_server_connect_rsd(adapter, handshake, &remoteServer) {
+                idevice_error_free(remoteServerError)
+                cleanup()
+                return remoteServerCode
+            }
+            if let simError = location_simulation_new(remoteServer, &locationSimulation) {
+                idevice_error_free(simError)
+                cleanup()
+                return simulationCreate
+            }
+            // location_simulation_new 接管 remote server 生命周期
+            remoteServer = nil
+            return ok
+        }
         // 蜂窝隧道支持（默认关）：开关开 + 当前无 Wi-Fi 时，建隧道前有界等本地隧道就绪，
         // **不碰蜂窝开关**. 开关关 / 有 Wi-Fi 时为 no-op，不改变既有行为.
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "定位服务")
