@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // 沙盒容器 · 页面
 //
@@ -104,6 +105,24 @@ struct SandboxContainerView: View {
 
     private var totalBytes: Int64 { apps.reduce(0) { $0 + $1.sizeBytes } }
 
+    /// 每 24 个一节的分块. 与 LaunchAppsView 同一诉求（整网格一行时 LazyVGrid 在 List 行内
+    /// 被全量物化，进场瞬间几十格齐发 `.task` 会卡顿），但**不在 `ForEach` 里现算 stride + slice**：
+    /// CI 实证 `stride(from:to:by:)` + `min` + 区间下标写在同一表达式里会让类型检查超时
+    /// （SandboxContainerView.swift:149:37 unable to type-check this expression in reasonable time），
+    /// 因为格子视图本体（NavigationLink + contextMenu + 多层修饰）本身已经很重. 拆成计算属性后
+    /// ForEach 只遍历一个 `[SandboxApp]`，推断面收窄. 不用 `Date`/`Timer`，纯数组切片.
+    private var appChunks: [[SandboxApp]] {
+        let list = filteredApps
+        var chunks: [[SandboxApp]] = []
+        var index = 0
+        while index < list.count {
+            let end = Swift.min(index + 24, list.count)
+            chunks.append(Array(list[index..<end]))
+            index = end
+        }
+        return chunks
+    }
+
     var body: some View {
         List {
             Section {
@@ -145,8 +164,7 @@ struct SandboxContainerView: View {
                         .listRowSeparator(.hidden)
                     // 分块行：与 LaunchAppsView 同一处理 —— 整网格一行时 LazyVGrid 在 List 行内
                     // 会被全量物化，进场瞬间几十格齐发 .task 会卡顿.
-                    ForEach(Array(stride(from: 0, to: filteredApps.count, by: 24)), id: \.self) { start in
-                        let chunk = Array(filteredApps[start..<min(start + 24, filteredApps.count)])
+                    ForEach(Array(appChunks.enumerated()), id: \.offset) { _, chunk in
                         AppAdaptiveGrid(items: chunk, minimum: 92, spacing: 12) { app in
                             containerTile(app)
                         }

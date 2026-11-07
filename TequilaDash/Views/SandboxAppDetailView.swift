@@ -297,7 +297,7 @@ struct SandboxAppDetailView: View {
                 onChange()
                 dismiss()
                 ToastCenter.shared.show("目录已不存在，登记已清理", seconds: 3.0)
-            case .failure(let message):
+            case .failed(let message):
                 // 删不掉必须如实上报：报「已删除」而列表里还在是欺骗.
                 ToastCenter.shared.show(message, seconds: 4.0)
             }
