@@ -96,10 +96,15 @@ final class TunnelReadiness: ObservableObject {
     @Published private(set) var becameReadyAt: Date?
 
     private var started = false
-    /// utun 仍在时连续探测未命中的次数（凭证保持窗口）.
-    private var heldMissStreak = 0
-    /// 允许「探测未命中但 utun 仍在」的连续次数，超过即清凭证.
-    private static let maxHeldMisses = 2
+    /// 凭证保持截止时刻（systemUptime 秒；nil = 未进入保持窗口）.
+    ///
+    /// 旧实现是「连续未命中 2 次即清凭证」，蜂窝重开的瞬间 NWPathMonitor 会连发
+    /// 多次路径更新（Wi-Fi 掉、蜂窝起、路由重算各一次），两次抖动就能把断网窗口里
+    /// 刚建好的通路清掉 —— 下一条操作于是又弹一次卡. 改成按时间保持：只要 utun
+    /// 还在，就容它 3 秒的探测抖动，超时才判死.
+    private var heldUntilUptime: TimeInterval?
+    /// 凭证保持窗口（秒）：覆盖蜂窝重开时的路径抖动.
+    private static let holdWindowSeconds: TimeInterval = 3.0
     private var pathMonitor: NWPathMonitor?
     /// 单次探测超时（非阻塞 connect + poll）.
     private static let probeTimeout: TimeInterval = 0.5
@@ -152,12 +157,18 @@ final class TunnelReadiness: ObservableObject {
         // 都要重新弹卡.
         var gateReady = reachable
         if reachable {
-            heldMissStreak = 0
+            heldUntilUptime = nil
         } else if TunnelGate.isReady, LocalDevVPN.isConnected {
-            heldMissStreak += 1
-            gateReady = heldMissStreak < Self.maxHeldMisses
+            // 进入保持窗口时定一次截止时刻；窗口内一律保持，窗口外判死.
+            let now = ProcessInfo.processInfo.systemUptime
+            if let until = heldUntilUptime {
+                gateReady = now < until
+            } else {
+                heldUntilUptime = now + Self.holdWindowSeconds
+                gateReady = true
+            }
         } else {
-            heldMissStreak = 0
+            heldUntilUptime = nil
         }
         TunnelGate.setReady(gateReady)
         lastCheckedAt = now

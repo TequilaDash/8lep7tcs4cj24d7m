@@ -53,6 +53,9 @@ final class CellularTunnelManager: @unchecked Sendable {
     /// `LocalDevVPN.isAnyCandidateReachable` 要秒制参数，这里只做单位换算.
     private static var probeTimeout: TimeInterval { Double(probeTimeoutMs) / 1000.0 }
 
+    /// 对外暴露的同一条探测预算（秒）：门出口补发凭证时用，保证判据与 probeOnce 一致.
+    static var probeIntervalSeconds: TimeInterval { Double(probeTimeoutMs) / 1000.0 }
+
     // MARK: - 开关与判据
 
     /// 用户是否开启「Cellular隧道支持」（默认关）.

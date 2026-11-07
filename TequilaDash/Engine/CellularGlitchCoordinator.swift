@@ -289,7 +289,13 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
     }
 
     /// 通用门·出口（与 begin/await 配对，调用方用 defer 保证执行）.
-    /// 完成即收尾：立即尝试恢复蜂窝（私有 API），显示就绪卡；
+    /// 完成即收尾：先按「此刻通路真的可达」补发就绪凭证，再恢复蜂窝、显示就绪卡.
+    ///
+    /// 同步门路径（23 个建隧道调用点）此前**没有任何一处**置真 TunnelGate：
+    /// 只有 `runInWindow`（异步 `run(label:action:)` 那条）在操作成功后置真.
+    /// 于是蜂窝恢复后下一条回环操作又撞「通路未建」再弹一次卡 —— 用户主诉的
+    /// 「关完蜂窝还要再关一次」. 这里用与 `probeOnce` 同一条判据（并行探 utun 对端）
+    /// 如实补发：探不到就不置真，绝不靠「门开过」当凭证.
     func endLoopbackGate() {
         gateLock.lock()
         gateBusy = false
@@ -302,8 +308,14 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// 收尾共用：恢复蜂窝 → 就绪卡 → 网络恢复自动关卡.
+    /// 收尾共用：补发通路凭证 → 恢复蜂窝 → 就绪卡 → 网络恢复自动关卡.
+    ///
+    /// 凭证必须在**恢复蜂窝之前**发：此刻 utun 还在，探到的就是断网窗口里建好的那条通路；
+    /// 等蜂窝回来了再探，探到的可能是残影或已被系统拆掉的接口.
+    /// 探测放在这里而不是 `endLoopbackGate` 里：出口跑在调用方的 `defer`（可能是主线程），
+    /// 同步探测 0.25 秒会违反「主线程不许等待」硬规则.
     private func finishAndAutoDismiss(epoch: Int) async {
+        await markReadyIfTunnelAlive(epoch: epoch)
         _ = await CellularTunnelManager.shared.turnOnDataIfNeeded(
             shouldAbort: { [weak self] in self?.isCancelled(epoch) ?? true })
         await MainActor.run {
@@ -320,6 +332,24 @@ final class CellularGlitchCoordinator: ObservableObject, @unchecked Sendable {
                 self.modalRequest = nil
             }
         }
+    }
+
+    /// 出口补发凭证：与 `probeOnce` 同一条判据（并行探全部 utun 候选对端，同一 0.25 秒预算）.
+    ///
+    /// 同步门路径（23 个建隧道调用点）此前**没有任何一处**置真 TunnelGate：只有异步
+    /// `run(label:action:)` 那条在 action 成功后置真.于是蜂窝恢复后下一条回环操作又撞
+    /// 「通路未建」再弹一次卡 —— 用户主诉的「关完蜂窝还要再关一次」.
+    /// 这里如实补发：探不到就不置真，绝不拿「门开过」当凭证.
+    private func markReadyIfTunnelAlive(epoch: Int) async {
+        if TunnelGate.isReady { return }
+        if isCancelled(epoch) { return }
+        let budget = CellularTunnelManager.probeIntervalSeconds
+        let alive = await Task.detached(priority: .utility) {
+            LocalDevVPN.isAnyCandidateReachable(timeout: budget)
+        }.value
+        guard alive, !isCancelled(epoch) else { return }
+        TunnelGate.setReady(true)
+        TunnelDiagnostics.note("蜂窝通路", "断网窗口内建好的通路仍可达，补发就绪凭证，蜂窝恢复后不再二次卡点")
     }
 
     /// 仅恢复蜂窝，不碰 UI（cancel 路径专用：用户取消后不许再弹任何卡）.

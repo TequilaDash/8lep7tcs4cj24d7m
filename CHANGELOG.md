@@ -1,3 +1,9 @@
+## [0.3.780] - 2026-11-07
+
+- 隧道.软隧道加传输层熔断：真机隧道日志实证 iOS 沙盒禁止 App 进程 connect 62078，TCP 直连恒失败（stage=tcp_lockdown_connect，Operation not permitted os error 1）.连续两次传输层被拒即本会话停用进程内直连，不再每次操作白撞一遍；配对/协议层失败不计，仍每次重试
+- 隧道.卡点门出口补发就绪凭证：同步门路径（23 个建隧道调用点）此前没有任何一处置真 TunnelGate，蜂窝恢复后下一条回环操作会再弹一次卡.endLoopbackGate 出门口改用与 probeOnce 同一条判据（并行探 utun 对端，同一 0.25s 预算）如实补发，探不到不置真
+- 隧道.CellularTunnelManager 对外暴露 probeIntervalSeconds，门出口与周期探测共用同一预算，避免两套口径
+- 隧道.隧道就绪凭证改按时间保持（3 秒）：旧实现「连续 2 次探测未命中即清凭证」，而蜂窝重开瞬间 NWPathMonitor 会连发多次路径更新，两次抖动就能把断网窗口里刚建好的通路清掉，下一条操作于是又弹一次卡；现在只要 utun 还在就容它 3 秒抖动，超时才判死
 ## [0.3.779] - 2026-11-07
 
 - 隧道.软隧道改走回环 lockdown 直连（minimuxer/StikDebug 同型）：真机隧道日志实证软隧道全链死于 usbmuxd_connect ENOENT（iOS 沙盒没有 /var/run/usbmuxd）.新增 TCP 第 0 级链路：TcpStream 连 127.0.0.1:62078 lockdown→先试本机配对记录→失败即自配对（本机生成 host id）→start_session→start_service(com.apple.coredevice.proxy)→回环连服务端口→CoreDeviceProxy→jktcp 软件隧道→RSD 握手；usbmuxd 链降级为越狱/桌面场景后备，不再挡在真机面前
