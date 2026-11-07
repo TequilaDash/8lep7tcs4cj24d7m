@@ -1,3 +1,9 @@
+## [0.3.776] - 2026-11-07
+
+- 隧道.新增 usbmuxd 进程内软件隧道（Gnoix 同型）：idevice-ffi 新增 tunnel_create_soft，链路 usbmuxd→lockdown→CoreDeviceProxy→jktcp 软件隧道→RSD 握手，四级配对链（usbmuxd 存档/配对文件/无会话/自动配对）
+- 隧道.建链顺序改为 软件隧道→Remote Pairing→lockdown 回环，三路失败文案合并
+- 蜂窝.无预置依赖：软件隧道不依赖 utun 对端，蜂窝下无需 LocalDevVPN 兜底
+
 ## [0.3.775] - 2026-11-06
 
 ### 新增

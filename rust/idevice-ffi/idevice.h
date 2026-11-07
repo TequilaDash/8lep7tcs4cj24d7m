@@ -9158,6 +9158,15 @@ struct IdeviceFfiError *tunnel_create_usb(struct IdeviceProviderHandle *lockdown
                                           struct AdapterHandle **out_adapter,
                                           struct RsdHandshakeHandle **out_handshake);
 
+__attribute__((visibility("default")))
+struct IdeviceFfiError *tunnel_create_soft(
+    const char *lockdown_pairing_path,
+    enum TunnelFailureKind *out_failure_kind,
+    struct AdapterHandle **out_adapter,
+    struct RsdHandshakeHandle **out_handshake,
+    char *stage_buf,
+    uintptr_t stage_buf_len);
+
 /**
  * Pairs via USB CoreDeviceProxy tunnel (no SIGSTOP needed).
  *

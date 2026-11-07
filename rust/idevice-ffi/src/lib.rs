@@ -83,6 +83,9 @@ pub mod syslog_relay;
 pub mod tcp_object_stack;
 #[cfg(feature = "tunnel_tcp_stack")]
 pub mod tunnel_provider;
+
+#[cfg(all(feature = "usbmuxd", feature = "core_device_proxy", feature = "rsd"))]
+pub mod soft_tunnel;
 #[cfg(feature = "usbmuxd")]
 pub mod usbmuxd;
 pub mod util;

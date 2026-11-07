@@ -467,6 +467,30 @@ static uint16_t TDRPPairingPort(void) {
     return NO;
 }
 
+- (BOOL)_createSoftTunnel:(NSError **)error {
+    struct AdapterHandle *adapter = NULL;
+    struct RsdHandshakeHandle *handshake = NULL;
+    enum TunnelFailureKind kind = TunnelFailureNone;
+    char stageBuf[64];
+    struct IdeviceFfiError *err = tunnel_create_soft(
+        _pairingFileURL.path.UTF8String, &kind, &adapter, &handshake, stageBuf, sizeof(stageBuf));
+    if (err) {
+        if (error) {
+            NSString *msg = [NSString stringWithFormat:@"%@ (%s)", TDUTF8(err->message), stageBuf];
+            *error = [self _error:msg code:err->code];
+        }
+        _td_log_format(TDDomainTunnel, TDLevelError, "soft tunnel failed: %s (stage %s)",
+                       TDUTF8(err->message), stageBuf);
+        idevice_error_free(err);
+        return NO;
+    }
+    [self _resetTunnelStateWithProvider:YES];
+    _adapter = adapter;
+    _handshake = handshake;
+    _td_log(TDDomainTunnel, TDLevelInfo, "soft tunnel ready");
+    return YES;
+}
+
 /// 本次要依次尝试的候选对端（v0.3.636 新增）。
 ///
 /// 顺序与 Swift 侧 `LocalDevVPN.candidateTunnelPeers()` 对齐：
@@ -620,6 +644,10 @@ static uint16_t TDRPPairingPort(void) {
 }
 
 - (BOOL)_createTunnel:(NSError **)error {
+    NSError *softErr = nil;
+    if ([self _createSoftTunnel:&softErr]) {
+        return YES;
+    }
     NSError *rpErr = nil;
     if ([self _createRpTunnel:&rpErr]) {
         return YES;
@@ -628,10 +656,11 @@ static uint16_t TDRPPairingPort(void) {
     if ([self _createClassicTunnel:&classicErr]) {
         return YES;
     }
+    NSString *softText = softErr.localizedDescription ?: @"Soft tunnel did not connect";
     NSString *rpText = rpErr.localizedDescription ?: @"Remote Pairing did not connect";
     NSString *classicText = classicErr.localizedDescription ?: @"lockdown loopback did not connect";
     if (error) {
-        *error = [self _error:[NSString stringWithFormat:@"%@ (iOS 26.4+ path). %@ (iOS 18 path). Enable LocalDevVPN on 10.7.0.1. The PC is not needed after the pairing file is placed.", rpText, classicText] code:-1];
+        *error = [self _error:[NSString stringWithFormat:@"%@ (usbmuxd soft path). %@ (iOS 26.4+ path). %@ (iOS 18 path). Enable LocalDevVPN on 10.7.0.1. The PC is not needed after the pairing file is placed.", softText, rpText, classicText] code:-1];
     }
     return NO;
 }
