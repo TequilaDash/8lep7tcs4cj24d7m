@@ -1,3 +1,7 @@
+## [0.3.777] - 2026-11-07
+
+- 网络发现.实例页照 SideStore（BonjourDiscoveryManager:223-261）改走 NWBrowser 并开启 includePeerToPeer：此前点进服务类型后实例列表恒空（NetServiceBrowser 收不到本机回环广播），现在结果集全量重放、名字行永远可见；ip:port 仍由 NSNetService 解析补齐并记账回填，重放不丢端点
+
 ## [0.3.776] - 2026-11-07
 
 - 隧道.新增 usbmuxd 进程内软件隧道（Gnoix 同型）：idevice-ffi 新增 tunnel_create_soft，链路 usbmuxd→lockdown→CoreDeviceProxy→jktcp 软件隧道→RSD 握手，四级配对链（usbmuxd 存档/配对文件/无会话/自动配对）

@@ -217,7 +217,9 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     private var browsers: [NetServiceBrowser] = []
     private var domainBrowser: NetServiceBrowser?
     private var typeBrowser: NetServiceBrowser?
-    private var instanceBrowser: NetServiceBrowser?
+    private var instanceNWBrowser: NWBrowser?
+    /// NWBrowser 只给名字；NSNetService 解析出的 ip:port 记在这，结果集重放时不丢.
+    private var resolvedInstanceEndpoints: [String: (ip: String?, port: Int?)] = [:]
     private var fallbackTypeBrowsers: [NWBrowser] = []
     private var pending: [NetService] = []
     /// 事件收摊记账：原先前这里是 `asyncAfter(.now()+10)` 统一定时收摊（用户令：不许自己加秒数），
@@ -267,24 +269,67 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     // MARK: - 单类型实例浏览（三层模型的第③层，类型二级页专用）
 
-    /// 但走 NetServiceBrowser（解析后能拿到 ip:port，NWBrowser 那侧只给名字）.
+    /// 实例层照 SideStore 走 NWBrowser（能收到回环广播）；ip:port 由 NSNetService 解析补齐.
     func startInstanceBrowsing(rawType: String, domain: String) {
         stopInstanceBrowsing()
         let parts = Self.browseComponents(rawType: rawType, domain: domain)
         typeInstances = []
         instanceErrorText = nil
         isBrowsingInstances = true
-        let browser = NetServiceBrowser()
-        browser.delegate = self
-        browser.schedule(in: .main, forMode: .common)
-        browser.searchForServices(ofType: parts.type, inDomain: parts.domain)
-        instanceBrowser = browser
+        let typeNoDot = parts.type.hasSuffix(".") ? String(parts.type.dropLast()) : parts.type
+        let parameters = typeNoDot.contains("_tcp") ? NWParameters.tcp : NWParameters.udp
+        // SideStore 同款（BonjourDiscoveryManager:237）：不开 P2P 通道时部分实例
+        // （含本机 remoted 在回环上的广播）收不到，实例页会一直空.
+        parameters.includePeerToPeer = true
+        let browser = NWBrowser(for: .bonjour(type: typeNoDot, domain: parts.domain), using: parameters)
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isBrowsingInstances = false
+                self.applyInstanceResults(results, rawType: parts.type)
+            }
+        }
+        browser.stateUpdateHandler = { [weak self] state in
+            if case .failed(let err) = state {
+                DispatchQueue.main.async {
+                    self?.instanceErrorText = "实例浏览失败（\(err)）.多为宿主未声明该服务类型，不影响其它功能."
+                    self?.isBrowsingInstances = false
+                }
+            }
+        }
+        browser.start(queue: DispatchQueue.global(qos: .userInitiated))
+        instanceNWBrowser = browser
     }
 
     func stopInstanceBrowsing() {
-        instanceBrowser?.stop()
-        instanceBrowser = nil
+        instanceNWBrowser?.cancel()
+        instanceNWBrowser = nil
         isBrowsingInstances = false
+    }
+
+    /// 结果集全量重放（SideStore handleInstanceResults 同型）：每轮回调替换整表，
+    /// 已解析的 ip:port 从 resolvedInstanceEndpoints 回填，名字行永远可见.
+    private func applyInstanceResults(_ results: Set<NWBrowser.Result>, rawType: String) {
+        var rows: [DiscoveredService] = []
+        for result in results {
+            if case .service(let name, _, _, _) = result.endpoint {
+                let trimmed = name.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+                let id = trimmed + "/" + rawType
+                let known = resolvedInstanceEndpoints[id]
+                let state: DiscoveredService.State = known == nil ? .resolving : (known!.ip != nil ? .ready : .failed)
+                rows.append(DiscoveredService(id: id, name: trimmed, type: rawType, domain: "local.",
+                                              ip: known?.ip, port: known?.port, state: state))
+            }
+        }
+        rows.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        typeInstances = rows
+        for row in rows where resolvedInstanceEndpoints[row.id] == nil {
+            let svc = NetService(domain: "local.", type: rawType, name: row.name)
+            svc.delegate = self
+            pending.append(svc)
+            svc.resolve(withTimeout: 6)
+        }
     }
 
     /// 把枚举层的原始类型串拆成 NetServiceBrowser 能吃的（类型, 域）：
@@ -410,20 +455,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     // MARK: - NetServiceBrowserDelegate（主 RunLoop 回调）
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        if browser === instanceBrowser {
-            // 不污染主页面的三型列表.
-            let row = DiscoveredService(id: serviceID(service), name: service.name ?? "（未命名）",
-                                        type: service.type ?? "unknown",
-                                        domain: service.domain ?? "local.",
-                                        ip: nil, port: nil, state: .resolving)
-            if !typeInstances.contains(where: { $0.id == row.id }) {
-                typeInstances.append(row)
-            }
-            service.delegate = self
-            pending.append(service)
-            service.resolve(withTimeout: 6)
-            return
-        }
         if browser === typeBrowser {
             // meta-query：PTR 目标（如 "_airplay._tcp.local."）被 NetService 解析为
             let name = (service.name ?? "").trimmingCharacters(in: .whitespaces)
@@ -465,12 +496,6 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-        if browser === instanceBrowser {
-            let code = errorDict["NSNetServicesErrorCode"]?.intValue ?? -1
-            instanceErrorText = "该类型浏览失败（Bonjour code \(code)）.多为宿主未声明该服务类型，不影响其它功能."
-            isBrowsingInstances = false
-            return
-        }
         if browser === typeBrowser {
             // 枚举失败（LC 宿主未声明 _services._dns-sd._udp 时常见）同样是终态：记账收摊，
             // 但不报错——兜底探测可能仍有结果，本页只是观测面.
@@ -502,6 +527,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
         guard (1...65535).contains(sender.port) else { return }
         let id = serviceID(sender)
         let ip = RemotePairingPort.ipv4Address(of: sender)
+        resolvedInstanceEndpoints[id] = (ip, Int(sender.port))
         services = services.map { row in
             guard row.id == id else { return row }
             return DiscoveredService(id: row.id, name: row.name, type: row.type,
@@ -520,6 +546,7 @@ final class BonjourNetworkDiscovery: NSObject, ObservableObject, NetServiceBrows
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
         let id = serviceID(sender)
+        resolvedInstanceEndpoints[id] = (nil, nil)
         services = services.map { row in
             guard row.id == id else { return row }
             return DiscoveredService(id: row.id, name: row.name, type: row.type,
