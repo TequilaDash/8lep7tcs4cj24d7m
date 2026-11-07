@@ -1374,7 +1374,7 @@ enum FileSharingService {
     static func makeTunnel() throws -> TunnelHandles {
         // 所有回环操作统一卡点 —— 门放在闸门锁**外**，弹窗等待期间不占 tunnelGate.
         // 软隧道优先（Gnoix 同型，进程内 usbmuxd→lockdown→CoreDeviceProxy→jktcp）：成功即返回，不进卡点门、不依赖 utun 对端.
-        if let soft = SoftTunnelService.shared.createTunnel(label: "建立配对通路", pairingPath: pairingPath) {
+        if let soft = SoftTunnelService.shared.createTunnel(label: "建立配对通路", pairingPath: Self.pairingPath()) {
             return TunnelHandles(adapter: soft.adapter, handshake: soft.handshake)
         }
         let loopbackGated = CellularGlitchCoordinator.shared.beginLoopbackGate(label: "建立配对通路")
