@@ -80,6 +80,15 @@ int zsign_p12_extract(const char *p12Data, int p12Len, const char *password,
 // ZSign ad-hoc 重签名（v0.3.101：LC/Nyxian 同款引擎，编进 App；对副本就地重签）
 int zsign_adhoc_file(const char *path, const char *bundleId, const char *entXml, int entLen);
 
+// v0.3.782 沙盒容器整包重签（LC 同款：遍历 .app 内全部 64 位 Mach-O 就地重签）。
+// 返回 0=全部成功 1=部分失败 -1=证书/私钥不可用 -2=路径不是目录 -3=没有可签的 Mach-O -4=临时文件失败。
+int zsign_resign_app(const char *appPath, const char *bundleId,
+                     const char *certPem, int certLen,
+                     const char *keyPem, int keyLen,
+                     const char *dbgPath, const char *teamId,
+                     int *outSigned, int *outFailed,
+                     char *errBuf, int errBufSize);
+
 
 // 监督模式工具：通过私有 API 取已安装 App 图标（移植自 Lithium）
 @interface UIImage (TequilaDashSupervised)

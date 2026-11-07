@@ -1,3 +1,12 @@
+## [0.3.782] - 2026-11-07
+
+- 沙盒容器.整包重签：新增 `zsign_resign_app`（遍历 .app 内所有 64 位 Mach-O 逐个就地重签，照 LiveContainer 的 ZSigner 做法，不产 _CodeSignature/CodeResources、不重打包）.证书与私钥临时文件与 ZSignAsset 只初始化一次循环复用；每个文件复用单文件签名同源的「签名区自愈 → UUID 扰动 → 换 inode → 签名 → 后置自洽校验」
+
+- 沙盒容器.新增 Engine/SandboxResigner.swift：从「证书管理」取 cert/key/teamId，调 C 层整包重签，按真实返回码映射错误（证书不可用 / 路径不是目录 / 没有可签的 Mach-O / 临时文件失败 / 部分失败），不报假成功
+
+- 沙盒容器.详情页「操作」加「重签包体」按钮，结果按真实统计 Toast 上报（已重签 N 个 / 失败 N 个）
+
+- 沙盒容器.uloader 补容器内启动的两块底座：`uloader_entry_point` 解析 LC_MAIN 的 entryoff 并换算到「段 vmaddr + 段内偏移 + slide」，`uloader_run_entry` 按入口函数指针跳转.本版仍未接容器内启动（需要独立扩展宿主进程，见说明卡）
 ## [0.3.781] - 2026-11-07
 
 - 沙盒容器.新增「沙盒容器」功能（参考 LiveContainer）：主页「扩展与商店」加第三行入口，容器列表走网格卡片 + 搜索 + 导入 IPA（SandboxImportService 解包进 SandboxApps/Applications，zip-slip 与 20000 文件 / 2GB 上限已设）.本阶段只做容器管理与数据目录隔离，容器内启动需要未加密包并配合 JIT 或重签，后续版本再接

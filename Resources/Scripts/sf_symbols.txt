@@ -242,6 +242,7 @@ square.grid.2x2.fill
 square.grid.3x3
 square.stack
 square.stack.3d.up
+square.stack.3d.up.fill
 star
 star.fill
 star.slash

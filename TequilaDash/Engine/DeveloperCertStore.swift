@@ -314,6 +314,16 @@ final class DeveloperCertStore: ObservableObject {
         return rc == 0
     }
 
+    /// 证书/私钥 PEM 与 TeamID 的只读快照（v0.3.782：沙盒容器整包重签要拿原始 PEM）.
+    /// 只读文件，不改任何状态；证书缺失返回 nil。主线程与后台都可调用.
+    func certMaterial() -> (certPem: Data, keyPem: Data, teamId: String)? {
+        guard let certPem = try? Data(contentsOf: certURL),
+              let keyPem = try? Data(contentsOf: keyURL) else { return nil }
+        let team = (try? String(contentsOf: teamURL, encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (certPem, keyPem, team)
+    }
+
     /// 删除本地已导入/已签发的签名证书（LC 同款删除功能）.
     /// 仅清除本地 cert/key 文件（签名功能随之不可用），不向 Apple 吊销——
     /// Apple 侧证书状态不受影响（仍占账号名额，需要腾名额请用吊销）.

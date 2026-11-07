@@ -25,4 +25,12 @@ int uloader_symbols_with_suffix(const char *path, const char *suffix,
 /// 卸载并释放。
 void uloader_unload(void *handle);
 
+
+/// 取访客可执行入口（解析 LC_MAIN，换算成加载后地址）。失败返回 NULL 并填 errBuf。
+/// 只对 MH_EXECUTE 有意义；dylib 没有 LC_MAIN 会直接报错。
+void *uloader_entry_point(void *handle, char *errBuf, size_t errBufSize);
+
+/// 跳进访客入口（int main(int, char**, char**)）。entry 由 uloader_entry_point 给出。
+int uloader_run_entry(void *entry, int argc, char **argv, char **envp);
+
 #endif /* uloader_h */

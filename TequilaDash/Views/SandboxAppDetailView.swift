@@ -21,6 +21,7 @@ struct SandboxAppDetailView: View {
     @State private var showBrowser = false
     @State private var showShare = false
     @State private var showDeleteConfirm = false
+    @State private var resigning = false
 
     var body: some View {
         List {
@@ -132,6 +133,15 @@ struct SandboxAppDetailView: View {
                 }
                 .buttonStyle(TintedButtonStyle(tint: AppTheme.categoryDevice))
                 .padding(.bottom, 10)
+                Button {
+                    AppHaptics.tap()
+                    resignBundle()
+                } label: {
+                    Text(resigning ? "正在重签…" : "重签包体").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(TintedButtonStyle(tint: AppTheme.success))
+                .disabled(resigning)
+                .padding(.bottom, 10)
                 if dataExists {
                     Button {
                         AppHaptics.tap()
@@ -162,7 +172,12 @@ struct SandboxAppDetailView: View {
                     .font(AppFont.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("本阶段只提供容器管理与目录隔离，容器内启动需要未加密包并配合 JIT 或重签，后续版本再接.")
+                Text("重签会用「更多 → 证书管理」里的开发证书，把包体内所有 64 位 Mach-O 就地重签一遍，证书换了之后必须重签才能加载.")
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+                Text("容器内启动还没接上：需要把容器进程单独跑起来（LiveContainer 用的是独立的 App Extension 宿主），本版只做容器管理与目录隔离.")
                     .font(AppFont.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -275,6 +290,26 @@ struct SandboxAppDetailView: View {
                 ToastCenter.shared.show("可写目录已重建", seconds: 2.6)
             case .failure(let error):
                 ToastCenter.shared.show(error.localizedDescription, seconds: 4.0)
+            }
+        }
+    }
+
+    /// 整包重签. 结果按真实返回上报，签失败不许说「已重签」.
+    private func resignBundle() {
+        guard !resigning else { return }
+        resigning = true
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                Result { try SandboxResigner.resign(app) }
+            }.value
+            resigning = false
+            switch outcome {
+            case .success(let result):
+                AppHaptics.success()
+                LoginLogger.shared.log("[完成] 容器重签 \(app.displayName) \(result.summary)")
+                ToastCenter.shared.show(result.summary, seconds: 3.0)
+            case .failure(let error):
+                ToastCenter.shared.show(error.localizedDescription, seconds: 4.4)
             }
         }
     }

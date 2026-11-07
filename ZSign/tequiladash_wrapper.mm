@@ -1034,3 +1034,141 @@ extern "C" int zsign_pkcs7_sign_data(const char* certPem, int certLen,
     X509_free(cert);
     return rc;
 }
+
+// ═════════ v0.3.782：沙盒容器整包重签（LC 同款：遍历 .app 内 64 位 Mach-O 就地重签）═════════
+// 与 zsign_sign_file_with_cert 的差别：证书/私钥临时文件与 ZSignAsset 只初始化一次，循环内复用；
+// 不做主程序对照 dump、不做逐文件内核判决（诊断路径，N 个文件会拖到分钟级）。
+// 但复用同一套前置自愈 + UUID 扰动 + 换 inode + 后置自洽校验，保证每份产物与单文件签名同源。
+static bool escSignOneMachO(const std::string& path,
+                            ZSignAsset& asset,
+                            const char* bundleId,
+                            const std::function<void(const std::string&)>& diag) {
+    uint32_t d0 = 0, d1 = 0; long fsz = 0;
+    escGetSigRange(path, &d0, &d1, &fsz, /*heal*/ true, diag);
+    escChangeUUID(path, diag);
+    std::string rfErr;
+    if (!escRefreshFile(path, &rfErr)) {
+        diag("[跳过] refreshFile(before) 失败: " + rfErr + " path=" + path + "\n");
+        return false;
+    }
+    ZMachO* macho = new ZMachO();
+    if (!macho->Init(path.c_str())) {
+        delete macho;
+        diag("[失败] ZMachO::Init: " + path + "\n");
+        return false;
+    }
+    std::string info1, info256, res;
+    bool ok = macho->Sign(&asset, /*bForce*/ true, bundleId, info1, info256, res);
+    delete macho;
+    if (!ok) { diag("[失败] Sign: " + path + "\n"); return false; }
+    std::string rfErr2;
+    if (!escRefreshFile(path, &rfErr2)) {
+        diag("[失败] refreshFile(after): " + rfErr2 + " path=" + path + "\n");
+        return false;
+    }
+    uint32_t e0 = 0, e1 = 0; long fsz2 = 0;
+    if (escGetSigRange(path, &e0, &e1, &fsz2, /*heal*/ false, diag)) {
+        if ((uint64_t)e0 + (uint64_t)e1 > (uint64_t)fsz2) {
+            diag("[失败] 签名区越界（blob 声明超出文件）: " + path + "\n");
+            return false;
+        }
+    }
+    return true;
+}
+
+// 整包重签：appPath 必须是 .app 目录。返回 0=全部成功 1=部分失败 -1=证书/私钥不可用
+// -2=路径不是目录 -3=没有可签的 Mach-O -4=临时文件失败。
+// outSigned/outFailed 可为 NULL。errBuf 收第一条失败原因（UTF-8）。
+extern "C" int zsign_resign_app(const char* appPath,
+                                const char* bundleId,
+                                const char* certPem, int certLen,
+                                const char* keyPem, int keyLen,
+                                const char* dbgPath,
+                                const char* teamId,
+                                int* outSigned, int* outFailed,
+                                char* errBuf, int errBufSize) {
+    if (outSigned) *outSigned = 0;
+    if (outFailed) *outFailed = 0;
+    if (errBuf && errBufSize > 0) errBuf[0] = 0;
+    auto setErr = [errBuf, errBufSize](const std::string& m) {
+        if (errBuf && errBufSize > 0) {
+            snprintf(errBuf, (size_t)errBufSize, "%s", m.c_str());
+        }
+    };
+    if (!appPath || !bundleId || !certPem || !keyPem) { setErr("参数为空"); return -1; }
+    auto diagWrite = [dbgPath](const std::string& text) {
+        if (!dbgPath) return;
+        FILE* f = fopen(dbgPath, "a");
+        if (!f) return;
+        fwrite(text.data(), 1, text.size(), f);
+        fclose(f);
+    };
+    diagWrite("\n=== 整包重签开始 ===\n");
+    diagWrite(std::string("app=") + appPath + "\n");
+    diagWrite(std::string("bundleId=") + bundleId + " teamId=" + (teamId ? teamId : "(null)") + "\n");
+    NSMutableArray<NSString*>* targets = [NSMutableArray array];
+    @autoreleasepool {
+        NSString* root = [NSString stringWithUTF8String:appPath];
+        NSFileManager* fm = NSFileManager.defaultManager;
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:root isDirectory:&isDir] || !isDir) { setErr("路径不是目录"); return -2; }
+        NSDirectoryEnumerator* en = [fm enumeratorAtPath:root];
+        for (NSString* rel in en) {
+            if ([rel containsString:@"/_CodeSignature/"] || [rel hasSuffix:@"/_CodeSignature"]) continue;
+            if ([rel containsString:@".dSYM"]) continue;
+            NSString* full = [root stringByAppendingPathComponent:rel];
+            struct stat st;
+            if (0 != lstat(full.fileSystemRepresentation, &st)) continue;
+            if (!S_ISREG(st.st_mode)) continue;   // 跳过目录/符号链接/设备
+            if (!is_64bit_macho(full.fileSystemRepresentation)) continue;
+            [targets addObject:full];
+        }
+    }
+    if (targets.count == 0) { diagWrite("没有可签的 Mach-O\n"); setErr("没有可签的 Mach-O"); return -3; }
+    NSString* tmpDir = NSTemporaryDirectory();
+    if (!tmpDir) { setErr("NSTemporaryDirectory 为空"); return -4; }
+    char certTpl[512], keyTpl[512];
+    snprintf(certTpl, sizeof(certTpl), "%sesc-ipa-cert-XXXXXX.pem", tmpDir.fileSystemRepresentation);
+    snprintf(keyTpl,  sizeof(keyTpl),  "%sesc-ipa-key-XXXXXX.pem",  tmpDir.fileSystemRepresentation);
+    int cfd = mkstemp(certTpl), kfd = mkstemp(keyTpl);
+    if (cfd < 0 || kfd < 0) {
+        if (cfd >= 0) close(cfd);
+        if (kfd >= 0) close(kfd);
+        setErr("mkstemp 失败");
+        return -4;
+    }
+    bool wok = write(cfd, certPem, certLen) == certLen && write(kfd, keyPem, keyLen) == keyLen;
+    close(cfd); close(kfd);
+    if (!wok) { unlink(certTpl); unlink(keyTpl); setErr("临时证书写入失败"); return -4; }
+    ZSignAsset asset;
+    bool inited = asset.Init(certTpl, keyTpl, "", "", "", /*bAdhoc*/ false,
+                             /*bSHA256Only*/ false, /*bSingleBinary*/ false);
+    if (!inited) {
+        for (auto& lg : ZLog::logs) diagWrite("  [zlog] " + lg + "\n");
+        unlink(certTpl); unlink(keyTpl);
+        setErr("ZSignAsset::Init 失败（证书/私钥不可用）");
+        return -1;
+    }
+    diagWrite(std::string("待签文件数=") + std::to_string((int)targets.count) + "\n");
+    int signedCount = 0, failedCount = 0;
+    std::string firstErr;
+    for (NSString* full in targets) {
+        ZLog::logs.clear();
+        std::string p = full.fileSystemRepresentation;
+        bool ok = escSignOneMachO(p, asset, bundleId, diagWrite);
+        for (auto& lg : ZLog::logs) diagWrite("  [zlog] " + lg + "\n");
+        if (ok) {
+            signedCount++;
+        } else {
+            failedCount++;
+            if (firstErr.empty()) firstErr = p;
+        }
+    }
+    unlink(certTpl); unlink(keyTpl);
+    if (outSigned) *outSigned = signedCount;
+    if (outFailed) *outFailed = failedCount;
+    if (failedCount > 0) setErr("有 " + std::to_string(failedCount) + " 个文件签名失败，首个: " + firstErr);
+    diagWrite("=== 整包重签结束 成功=" + std::to_string(signedCount)
+              + " 失败=" + std::to_string(failedCount) + " ===\n");
+    return failedCount == 0 ? 0 : 1;
+}

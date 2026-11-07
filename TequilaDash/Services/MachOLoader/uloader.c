@@ -889,3 +889,49 @@ void uloader_unload(void *handle) {
     if (img->fd >= 0) close(img->fd);
     free(img);
 }
+
+// ---- 访客可执行入口（v0.3.782：沙盒容器启动器用）----
+// LC_MAIN 的 entryoff 是「相对 Mach-O 头」的**文件偏移**，不是 vmaddr。
+// 必须换算成「所在段的 vmaddr + 段内偏移 + slide」才是加载后的真实地址。
+void *uloader_entry_point(void *handle, char *errBuf, size_t errBufSize) {
+    struct uloader_image *img = (struct uloader_image *)handle;
+    if (!img || !img->header) {
+        if (errBuf) snprintf(errBuf, errBufSize, "句柄为空");
+        return NULL;
+    }
+    const struct mach_header_64 *mh = (const struct mach_header_64 *)img->header;
+    const uint8_t *ptr = img->header + sizeof(struct mach_header_64);
+    uint64_t entryoff = 0;
+    bool found = false;
+    for (uint32_t i = 0; i < mh->ncmds; i++) {
+        const struct load_command *lc = (const struct load_command *)ptr;
+        if (lc->cmd == LC_MAIN) {
+            const struct entry_point_command *ep = (const struct entry_point_command *)ptr;
+            entryoff = ep->entryoff;
+            found = true;
+            break;
+        }
+        ptr += lc->cmdsize;
+    }
+    if (!found || entryoff == 0) {
+        if (errBuf) snprintf(errBuf, errBufSize, "没有 LC_MAIN（不是可执行文件，或入口为 0）");
+        return NULL;
+    }
+    for (uint32_t i = 0; i < img->segCount; i++) {
+        uint64_t segOff = img->segFileOffs[i];
+        uint64_t segSize = img->segVmSizes[i];
+        if (entryoff < segOff || entryoff >= segOff + segSize) continue;
+        uint64_t addr = img->segVmAddrs[i] + (entryoff - segOff) + (uint64_t)img->slide;
+        return (void *)(uintptr_t)addr;
+    }
+    if (errBuf) snprintf(errBuf, errBufSize, "入口偏移 %llu 不落在任何段内", (unsigned long long)entryoff);
+    return NULL;
+}
+
+// 跳进访客入口。签名形态与 LC 一致：int main(int argc, char **argv, char **envp)。
+// 注意：本函数**不返回**的情况属正常（访客 main 自己 exit）；返回即访客主动退出。
+int uloader_run_entry(void *entry, int argc, char **argv, char **envp) {
+    if (!entry) return -1;
+    int (*fn)(int, char **, char **) = (int (*)(int, char **, char **))entry;
+    return fn(argc, argv, envp);
+}
