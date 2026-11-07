@@ -134,64 +134,7 @@ struct SandboxContainerView: View {
 
     var body: some View {
         List {
-            Section {
-                heroCard
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-
-            if isLoading && apps.isEmpty {
-                AppLoadingRow(title: "正在读取容器目录…", level: .page)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else if apps.isEmpty {
-                AppStateSection(state: .empty("还没有容器应用",
-                                              message: "点右上角「导入」选择一个未加密的 IPA. 加密包（App Store 直接下载的那种）装不进来.",
-                                              icon: "square.stack.3d.up"))
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else if filteredApps.isEmpty {
-                AppStateSection(state: .empty("没有匹配的应用",
-                                              message: "换名称或 Bundle ID 重试.",
-                                              icon: "magnifyingglass"))
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else {
-                Section {
-                    AppSectionHeader("容器应用",
-                                     subtitle: "共 \(filteredApps.count) 个",
-                                     symbol: "app.grid.3x3",
-                                     tint: AppModule.store.tint)
-                        .padding(.horizontal, AppTheme.pageInset)
-                        .padding(.top, 4)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                    // 分块行：与 LaunchAppsView 同一处理 —— 整网格一行时 LazyVGrid 在 List 行内
-                    // 会被全量物化，进场瞬间几十格齐发 .task 会卡顿.
-                    ForEach(chunkStarts, id: \.self) { start in
-                        SandboxAppGridRow(chunk: chunk(at: start),
-                                          onDelete: { deleteTarget = $0 },
-                                          onDetailChange: { Task { await reload() } })
-                            .padding(.horizontal, AppTheme.pageInset)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                    }
-                    Text("容器包体放在 Documents/SandboxApps/Applications，每个应用的可写目录独立放在 Data/Application. 覆盖导入会保留已生成的可写目录.")
-                        .font(AppFont.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, AppTheme.pageInset + 4)
-                        .padding(.bottom, 32)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-            }
+            content
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -249,6 +192,100 @@ struct SandboxContainerView: View {
         .toastHost()
     }
 
+    // MARK: - List 内容
+
+    /// 整条 List 的内容. 每个分支各自是一个独立计算属性，`body` 里只留一次属性引用 ——
+    /// CI 三次实证（99f27c7 → :149:37、2140ad9 → :168:81、8aedc22 → :136:14）只要分支里
+    /// 出现「视图构造 + 多层 listRow 修饰」的组合，整条 `body` 就 `unable to type-check
+    /// this expression in reasonable time`. 把每段抽出去之后推断面被切成 5 份，各自过.
+    @ViewBuilder
+    private var content: some View {
+        heroSection
+        stateSection
+        gridSection
+    }
+
+    private var heroSection: some View {
+        Section {
+            heroCard.rowInList
+        }
+    }
+
+    @ViewBuilder
+    private var stateSection: some View {
+        if isLoading && apps.isEmpty {
+            loadingRow
+        } else if apps.isEmpty {
+            emptyRow
+        } else if filteredApps.isEmpty {
+            noMatchRow
+        }
+    }
+
+    private var loadingRow: some View {
+        AppLoadingRow(title: "正在读取容器目录…", level: .page).rowInList
+    }
+
+    private var emptyRow: some View {
+        AppStateSection(state: .empty("还没有容器应用",
+                                      message: "点右上角「导入」选择一个未加密的 IPA. 加密包（App Store 直接下载的那种）装不进来.",
+                                      icon: "square.stack.3d.up")).rowInList
+    }
+
+    private var noMatchRow: some View {
+        AppStateSection(state: .empty("没有匹配的应用",
+                                      message: "换名称或 Bundle ID 重试.",
+                                      icon: "magnifyingglass")).rowInList
+    }
+
+    @ViewBuilder
+    private var gridSection: some View {
+        if !apps.isEmpty && !filteredApps.isEmpty {
+            Section {
+                gridHeader
+                gridRows
+                gridFooter
+            }
+        }
+    }
+
+    private var gridHeader: some View {
+        AppSectionHeader("容器应用",
+                         subtitle: "共 \(filteredApps.count) 个",
+                         symbol: "app.grid.3x3",
+                         tint: AppModule.store.tint)
+            .padding(.horizontal, AppTheme.pageInset)
+            .padding(.top, 4)
+            .rowInList
+    }
+
+    private var gridRows: some View {
+        ForEach(chunkStarts, id: \.self) { start in
+            gridRow(at: start)
+        }
+    }
+
+    private func gridRow(at start: Int) -> some View {
+        SandboxAppGridRow(chunk: chunk(at: start),
+                          onDelete: { app in deleteTarget = app },
+                          onDetailChange: { Task { await reload() } })
+            .padding(.horizontal, AppTheme.pageInset)
+            .rowInList
+    }
+
+    private var gridFooter: some View {
+        Text(gridFooterText)
+            .font(AppFont.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, AppTheme.pageInset + 4)
+            .padding(.bottom, 32)
+            .rowInList
+    }
+
+    private var gridFooterText: String {
+        "容器包体放在 Documents/SandboxApps/Applications，每个应用的可写目录独立放在 Data/Application. 覆盖导入会保留已生成的可写目录."
+    }
+
     private var heroCard: some View {
         AppHeroHeader(
             title: "沙盒容器",
@@ -277,6 +314,27 @@ struct SandboxContainerView: View {
         }).value
         apps = scanned
         isLoading = false
+    }
+
+    /// 删除容器（包体 + 可写目录）. 结果按 `RemoveResult` 真实分支上报，删不掉不许说「已删除」.
+    private func remove(_ app: SandboxApp) {
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                SandboxContainerStore.remove(app)
+            }.value
+            switch outcome {
+            case .removed:
+                AppHaptics.success()
+                SandboxIconLoader.shared.forget(app.id)
+                await reload()
+                ToastCenter.shared.show("已删除 \(app.displayName)", seconds: 3.0)
+            case .notFound:
+                await reload()
+                ToastCenter.shared.show("容器已经不在了", seconds: 3.0)
+            case .failed(let message):
+                ToastCenter.shared.show("删除失败：\(message)", seconds: 4.0)
+            }
+        }
     }
 
     private func importOne(_ url: URL) {
@@ -374,5 +432,18 @@ struct SandboxAppTile: View {
         .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
             .fill(AppSurface.card))
         .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+    }
+}
+
+// MARK: - 行内修饰
+
+/// List 行三件套（无内缩 / 透明底 / 无分隔线）. 抽成一个扩展是为了让每个分支的
+/// 表达式只剩「一次构造 + 一次属性引用」，把类型推断面压到最小（见 `content` 上方注释）.
+extension View {
+    var rowInList: some View {
+        self
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
