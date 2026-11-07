@@ -105,22 +105,31 @@ struct SandboxContainerView: View {
 
     private var totalBytes: Int64 { apps.reduce(0) { $0 + $1.sizeBytes } }
 
-    /// 每 24 个一节的分块. 与 LaunchAppsView 同一诉求（整网格一行时 LazyVGrid 在 List 行内
-    /// 被全量物化，进场瞬间几十格齐发 `.task` 会卡顿），但**不在 `ForEach` 里现算 stride + slice**：
-    /// CI 实证 `stride(from:to:by:)` + `min` + 区间下标写在同一表达式里会让类型检查超时
-    /// （SandboxContainerView.swift:149:37 unable to type-check this expression in reasonable time），
-    /// 因为格子视图本体（NavigationLink + contextMenu + 多层修饰）本身已经很重. 拆成计算属性后
-    /// ForEach 只遍历一个 `[SandboxApp]`，推断面收窄. 不用 `Date`/`Timer`，纯数组切片.
-    private var appChunks: [[SandboxApp]] {
-        let list = filteredApps
-        var chunks: [[SandboxApp]] = []
+    /// 分块的**下标起点**（每 24 个一节）.
+    ///
+    /// 与 LaunchAppsView 同一诉求：整网格塞进一个 List 行时 LazyVGrid 会被全量物化，
+    /// 进场瞬间几十格齐发 `.task` 会卡顿（2026-11-01 用户报告），所以照样分节.
+    /// 但**不在 ForEach 里现算** `stride(from:to:by:)` + `min` + 区间下标：CI 两次实证
+    /// （99f27c7 → :149:37、2140ad9 → :168:81）`unable to type-check this expression in
+    /// reasonable time` —— 格子视图本体（NavigationLink + contextMenu + 多层修饰）本身很重，
+    /// 再叠切片就让整条表达式进了推断爆炸区. 这里只暴露 Int 起点数组
+    /// （`[[SandboxApp]]` 不是 Identifiable，不能直接当 ForEach 数据源），切片交给
+    /// `chunk(at:)`，网格交给独立子视图 `SandboxAppGridRow`，三处各自单独过类型检查.
+    private var chunkStarts: [Int] {
+        var starts: [Int] = []
         var index = 0
-        while index < list.count {
-            let end = Swift.min(index + 24, list.count)
-            chunks.append(Array(list[index..<end]))
-            index = end
+        let total = filteredApps.count
+        while index < total {
+            starts.append(index)
+            index += 24
         }
-        return chunks
+        return starts
+    }
+
+    private func chunk(at start: Int) -> [SandboxApp] {
+        let list = filteredApps
+        let end = Swift.min(start + 24, list.count)
+        return Array(list[start..<end])
     }
 
     var body: some View {
@@ -164,14 +173,14 @@ struct SandboxContainerView: View {
                         .listRowSeparator(.hidden)
                     // 分块行：与 LaunchAppsView 同一处理 —— 整网格一行时 LazyVGrid 在 List 行内
                     // 会被全量物化，进场瞬间几十格齐发 .task 会卡顿.
-                    ForEach(Array(appChunks.enumerated()), id: \.offset) { _, chunk in
-                        AppAdaptiveGrid(items: chunk, minimum: 92, spacing: 12) { app in
-                            containerTile(app)
-                        }
-                        .padding(.horizontal, AppTheme.pageInset)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                    ForEach(chunkStarts, id: \.self) { start in
+                        SandboxAppGridRow(chunk: chunk(at: start),
+                                          onDelete: { deleteTarget = $0 },
+                                          onDetailChange: { Task { await reload() } })
+                            .padding(.horizontal, AppTheme.pageInset)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
                     Text("容器包体放在 Documents/SandboxApps/Applications，每个应用的可写目录独立放在 Data/Application. 覆盖导入会保留已生成的可写目录.")
                         .font(AppFont.caption)
@@ -259,43 +268,6 @@ struct SandboxContainerView: View {
         return "\(ready) / \(apps.count)"
     }
 
-    /// 网格里的一格：图标 + 名称 + 版本，点击进详情，长按删除.
-    private func containerTile(_ app: SandboxApp) -> some View {
-        NavigationLink {
-            SandboxAppDetailView(app: app) { Task { await reload() } }
-        } label: {
-            VStack(spacing: 8) {
-                SandboxAppIconView(bundleID: app.id, size: 60)
-                Text(app.displayName)
-                    .font(AppFont.caption)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                Text(app.bundleVersion ?? app.id)
-                    .font(AppFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(AppSurface.card))
-            .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .appPressable(scale: 0.94)
-        .contextMenu {
-            Button(role: .destructive) {
-                deleteTarget = app
-            } label: {
-                Label("删除容器", systemImage: "trash")
-            }
-        }
-    }
-
     // MARK: - 动作
 
     private func reload() async {
@@ -334,3 +306,73 @@ struct SandboxContainerView: View {
     }
 }
 
+// MARK: - 网格子视图
+
+/// 一节网格（最多 24 格）.
+///
+/// 独立成类型只为把类型检查面切开：CI 两次实证 `AppAdaptiveGrid(items: chunk) { containerTile($0) }`
+/// 与外层 List / ForEach / 修饰符写在同一个 `body` 里会 `unable to type-check this expression in
+/// reasonable time`（99f27c7 → :149:37、2140ad9 → :168:81）. 放进自己的 `body` 后，
+/// 外层只剩一个 `SandboxAppGridRow(...)` 调用，推断深度立刻回落.
+struct SandboxAppGridRow: View {
+    let chunk: [SandboxApp]
+    var onDelete: (SandboxApp) -> Void = { _ in }
+    var onDetailChange: () -> Void = {}
+
+    var body: some View {
+        AppAdaptiveGrid(items: chunk, minimum: 92, spacing: 12) { app in
+            SandboxAppTile(app: app, onDelete: onDelete, onDetailChange: onDetailChange)
+        }
+    }
+}
+
+/// 网格里的一格：图标 + 名称 + 版本，点击进详情，长按删除.
+///
+/// 同上一条理由独立成类型 —— `NavigationLink` 的 destination 泛型 + `contextMenu` + 
+/// `appPressable` 叠在一起就是最重的那一段.
+struct SandboxAppTile: View {
+    let app: SandboxApp
+    var onDelete: (SandboxApp) -> Void
+    var onDetailChange: () -> Void
+
+    var body: some View {
+        NavigationLink {
+            SandboxAppDetailView(app: app, onChange: onDetailChange)
+        } label: {
+            tileLabel
+        }
+        .buttonStyle(.plain)
+        .appPressable(scale: 0.94)
+        .contextMenu {
+            Button(role: .destructive) {
+                onDelete(app)
+            } label: {
+                Label("删除容器", systemImage: "trash")
+            }
+        }
+    }
+
+    /// 图标 + 两行文字. 单独抽出来，`label:` 闭包就只是一次属性引用.
+    private var tileLabel: some View {
+        VStack(spacing: 8) {
+            SandboxAppIconView(bundleID: app.id, size: 60)
+            Text(app.displayName)
+                .font(AppFont.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            Text(app.bundleVersion ?? app.id)
+                .font(AppFont.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+            .fill(AppSurface.card))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+    }
+}
